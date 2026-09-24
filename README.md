@@ -61,6 +61,10 @@ expected to retry **against a different replica**.
       |      termination: passthrough (TCP + SNI), :443 -> Svc :27028
       |      timeout tunnel = 1h (edge/reencrypt: no HTTP/2, 30s cut)
       |      Route host MUST equal externalHostname
+      |
+      |   EITHER WAY the entry is L4: one TCP connection lands on ONE
+      |   Envoy pod. That is fine - Envoy is where streams are split.
+      |   It is NOT fine if Envoy is bypassed (see below).
       v
   Service mongot-grpc-lb ................................ you own this
     type: LoadBalancer, selector app=<name>-search-lb-0, port 27028
@@ -150,6 +154,7 @@ Plus a user holding the built-in **`searchCoordinator`** role (MongoDB 8.2+).
 |---|---|---|
 | Ports | **any** — 27028, 443, anything | **80/443 only** |
 | Data path | client → VIP → Envoy | client → router (HAProxy) → Svc → Envoy |
+| Stream splitting | **at Envoy** — entry is L4 either way | **at Envoy** — the Route cannot split streams |
 | Termination | TLS ends at Envoy | must be **passthrough** |
 | Timeout | none imposed | `timeout tunnel`, default **1h** |
 | SNI | not required | Route host **must** equal `externalHostname` |
@@ -162,6 +167,50 @@ Passthrough uses `timeout tunnel` instead, and its 1h default comfortably covers
 
 **A passthrough Route is a pipe, not a balancer.** Being pure TCP it cannot split gRPC
 streams — it must sit *in front of* Envoy, never instead of it.
+
+---
+
+## The failure that produces no error
+
+<!-- markdownlint-disable MD033 -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mongot-openshift/l4-bypass.dark.png">
+  <source srcset="docs/diagrams/mongot-openshift/l4-bypass.light.png">
+  <img alt="Pointing the entry Service at the mongot headless Service instead of the Envoy pods still serves queries successfully, but sends every one of them to a single mongot while the others idle." src="docs/diagrams/mongot-openshift/l4-bypass.light.png">
+</picture>
+<!-- markdownlint-enable MD033 -->
+
+
+The entry point — VIP or Route — is **L4**. One TCP connection lands on exactly one
+backend pod. That is harmless here **only because Envoy sits behind it**:
+
+```text
+  mongod member --- 1 long-lived TCP conn ---> [ entry ] ---> ONE Envoy pod
+                                                                  |
+                                                    splits HTTP/2 streams
+                                                                  v
+                                                          mongot-1 / -2 / -3
+```
+
+Two consequences worth stating explicitly:
+
+- **Envoy replicas give availability, not load sharing within a connection.** A single
+  `mongod` member's connection uses one Envoy pod for its lifetime. With a 3-member
+  replica set each member opens its own connection, so replicas *do* spread load across
+  members. Scale Envoy for restart tolerance, not for throughput on one connection.
+
+- **If Envoy is ever bypassed, you silently revert to L4 pinning.** Point the Route or
+  the `LoadBalancer` Service at the `mongot` headless Service instead of the Envoy pods
+  and everything still works — queries succeed, nothing errors, and **one `mongot` serves
+  all of them** while the other two sit idle holding warm indexes.
+
+This is the whole reason the vendor asks for an L7 proxy, and it is invisible in every
+health check. The only way to see it is in Envoy's access logs: run a series of queries
+and confirm the selected upstream address **changes**. A `Service` with three ready
+endpoints proves nothing.
+
+Guard it in review: the entry Service selector must be `app=<name>-search-lb-<idx>`
+(the Envoy pods), never `<name>-search-<idx>-svc` (the `mongot` pods).
 
 ---
 

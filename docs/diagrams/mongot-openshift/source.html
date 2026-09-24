@@ -493,4 +493,70 @@ a { color: var(--remote); }
       <figcaption>The operator owns Envoy, the headless Service and the <code>mongot</code> StatefulSet. You own the entry point and the <code>LoadBalancer</code> Service, because <code>ManagedLBConfig</code> has no Service-type field and the operator's own proxy Service is <code>ClusterIP</code>-only.</figcaption>
     </figure>
   </section>
+
+  <section>
+    <h2>The wiring mistake that produces no error</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 400" role="img" aria-label="Pointing the entry Service at the mongot headless Service instead of the Envoy pods still serves queries successfully, but sends every one of them to a single mongot while the others idle.">
+          <defs><marker id="ah6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
+
+            <text x="30" y="30" font-weight="600" fill="var(--remote)">CORRECT — entry selects the Envoy pods</text>
+            <rect x="30" y="42" width="212" height="66" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="46" y="63" font-weight="600" fill="var(--host)">entry Service</text>
+            <text x="46" y="81" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--host)">selector:</text>
+            <text x="46" y="97" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--host)">app=mongot-search-lb-0</text>
+            <line x1="242" y1="75" x2="278" y2="75" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah6)"/>
+            <rect x="282" y="42" width="170" height="66" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="2"/>
+            <text x="367" y="66" text-anchor="middle" font-weight="600" fill="var(--remote)">Envoy — L7</text>
+            <text x="367" y="86" text-anchor="middle" font-size="11.5" fill="var(--remote)">splits HTTP/2 streams</text>
+            <text x="367" y="101" text-anchor="middle" font-size="11" fill="var(--muted)">one conn in, N streams out</text>
+            <line x1="452" y1="75" x2="488" y2="75" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah6)"/>
+            <g>
+              <rect x="494" y="46" width="146" height="58" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+              <text x="567" y="70" text-anchor="middle" font-weight="600" fill="var(--remote)">mongot-1</text>
+              <text x="567" y="89" text-anchor="middle" font-size="11.5" fill="var(--remote)">serving</text>
+              <rect x="650" y="46" width="146" height="58" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+              <text x="723" y="70" text-anchor="middle" font-weight="600" fill="var(--remote)">mongot-2</text>
+              <text x="723" y="89" text-anchor="middle" font-size="11.5" fill="var(--remote)">serving</text>
+              <rect x="806" y="46" width="146" height="58" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+              <text x="879" y="70" text-anchor="middle" font-weight="600" fill="var(--remote)">mongot-3</text>
+              <text x="879" y="89" text-anchor="middle" font-size="11.5" fill="var(--remote)">serving</text>
+            </g>
+            <text x="30" y="132" fill="var(--remote)">Access log shows the selected upstream address <tspan font-weight="600">changing</tspan> across queries.</text>
+
+            <line x1="30" y1="156" x2="950" y2="156" stroke="var(--rule)" stroke-width="1"/>
+
+            <text x="30" y="188" font-weight="600" fill="var(--gap)">WRONG — entry selects the mongot pods · succeeds anyway</text>
+            <rect x="30" y="200" width="212" height="66" rx="8" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.5"/>
+            <text x="46" y="221" font-weight="600" fill="var(--gap)">entry Service</text>
+            <text x="46" y="239" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--gap)">selector:</text>
+            <text x="46" y="255" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--gap)">mongot-search-0-svc</text>
+            <line x1="242" y1="233" x2="488" y2="233" stroke="var(--gap)" stroke-width="1.5" marker-end="url(#ah6)"/>
+            <rect x="282" y="208" width="170" height="26" rx="6" fill="var(--none-wash)" stroke="var(--none)" stroke-dasharray="4 3"/>
+            <text x="367" y="226" text-anchor="middle" font-size="11.5" fill="var(--none)">Envoy bypassed</text>
+            <g>
+              <rect x="494" y="204" width="146" height="58" rx="6" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="2"/>
+              <text x="567" y="228" text-anchor="middle" font-weight="600" fill="var(--gap)">mongot-1</text>
+              <text x="567" y="247" text-anchor="middle" font-size="11.5" fill="var(--gap)">ALL queries</text>
+              <rect x="650" y="204" width="146" height="58" rx="6" fill="var(--none-wash)" stroke="var(--none)" stroke-dasharray="4 3"/>
+              <text x="723" y="228" text-anchor="middle" font-weight="600" fill="var(--none)">mongot-2</text>
+              <text x="723" y="247" text-anchor="middle" font-size="11.5" fill="var(--none)">idle</text>
+              <rect x="806" y="204" width="146" height="58" rx="6" fill="var(--none-wash)" stroke="var(--none)" stroke-dasharray="4 3"/>
+              <text x="879" y="228" text-anchor="middle" font-weight="600" fill="var(--none)">mongot-3</text>
+              <text x="879" y="247" text-anchor="middle" font-size="11.5" fill="var(--none)">idle</text>
+            </g>
+
+            <rect x="30" y="286" width="922" height="96" rx="8" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.5"/>
+            <text x="46" y="308" font-weight="600" fill="var(--gap)">Why this is dangerous rather than merely wrong</text>
+            <text x="46" y="328" fill="var(--gap)">Queries succeed. Pods are Ready. The Service has three healthy endpoints. Every health check passes.</text>
+            <text x="46" y="348" fill="var(--gap)">One TCP connection can only reach one pod — without Envoy there is nothing to split the HTTP/2 streams.</text>
+            <text x="46" y="368" fill="var(--muted)">Only proof: run repeated queries and confirm Envoy’s access log reports a changing upstream address.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>The entry point is L4 in both designs &mdash; a VIP and a passthrough Route both pin one TCP connection to one pod. That is harmless <em>because</em> Envoy sits behind it. Wire the entry straight to <code>mongot</code> and the deployment looks perfectly healthy while two of three replicas serve nothing.</figcaption>
+    </figure>
+  </section>
 </div>
