@@ -370,28 +370,131 @@ the source of truth is always MongoDB.
 
 ## Commands used in this document
 
+Each one answers a specific question. Run them against the live deployment; none of them
+modify anything except `sync-probe.sh`, which cleans up after itself.
+
+### Which `mongot` pod answered a query?
+
 ```bash
-# how a search is executed
-db.incidents.explain().aggregate([{ $search: { ... } }])
-
-# the sync phases and their counters
-oc exec -n mongodb-poc <toolbox> -- \
-  curl -s http://mongot-search-0-0.mongot-search-0-svc:9946/metrics \
-  | grep -E 'initialsync|change_stream|replicationOptime'
-
-# where mongot syncs from, and how it authenticates
-oc get cm mongot-search-0-config -n mongodb-poc -o jsonpath='{.data.config\.yml}'
-
-# write-to-searchable latency, and replica convergence
-./app/sync-probe.sh -n 3
-./app/sync-probe.sh -r
-
-# what each replica stores
-./app/index-storage.sh
-
-# which pod answered a given query
 ./app/trace-query.sh "CrashLoopBackOff"
 ```
+
+```text
+text search "CrashLoopBackOff"  index=incidents_text
+entry grpc-search.apps-crc.testing:443  ->  Envoy  ->  3 mongot pods
+
+query 1
+    INC-1002  CrashLoopBackOff after a config change  [scheduling]  2.545
+    served by: mongot-search-0-1 (10.217.1.37)  OK  20ms
+
+──────────────────────────────────────────────
+who answered (1 gRPC requests over 1 query)
+  mongot-search-0-1       1  100%  #################################
+  only 1 of 3 pods answered
+```
+
+Runs one `$search` and reports the pod that served it, its IP, the gRPC status and the
+upstream duration. The `entry` line shows which path the query took, so it doubles as a check
+of whether you are on the Route or the MetalLB VIP.
+
+**Why it exists.** Nothing in a normal `$search` tells you which pod answered — the
+application talks only to MongoDB. Without this you cannot distinguish a healthy three-way
+spread from one pod quietly serving everything, which is the
+[failure that produces no error](README.md#the-failure-that-produces-no-error).
+
+`only 1 of 3 pods answered` is correct for a single query: one request goes to one pod. Use
+`-n 12` to see all three.
+
+| Variant | What it gives you |
+|---|---|
+| `-n 12 "pods"` | twelve queries plus a census across the pods |
+| `-m vector -d performance` | a `$vectorSearch` by failure domain instead of text |
+| `-n 12 -q "pods"` | the census only, without per-query detail |
+| `FLUSH_WAIT=25 ...` | longer patience on a slower cluster |
+
+**Expect a few seconds of wall clock per query** even though the search itself is ~20 ms.
+Attribution comes from Envoy's access log, which buffers on a 10 s flush interval (measured
+at 9 s here), so the script polls against a deadline waiting for the line to appear. That is
+the tool waiting, not the search being slow.
+
+### How is a `$search` actually executed?
+
+```javascript
+db.incidents.explain().aggregate([
+  { $search: { index: "incidents_text", text: { query: "pods", path: { wildcard: "*" } } } }
+])
+```
+
+Prints the three stages mongod rewrites `$search` into. This is the evidence behind
+[Part 1](#part-1--what-happens-when-you-run-search) — you see `$_internalSearchIdLookup` and
+its `{$match:{_id:{$eq: ...}}}` subPipeline for yourself.
+
+### What sync phases is `mongot` running, and how far along?
+
+```bash
+TB=$(oc get pods -n mongodb-poc -l app=mongot-toolbox -o jsonpath='{.items[0].metadata.name}')
+oc exec -n mongodb-poc "$TB" -- \
+  curl -s http://mongot-search-0-0.mongot-search-0-svc:9946/metrics \
+  | grep -E 'initialsync|change_stream|replicationOptime'
+```
+
+The counters behind Parts 2 and 3. `initialsync_dispatcher_collectionScan_total` counts
+completed scans, `change_stream_sync_dispatcher_executor_completed_tasks_total` should climb
+continuously in steady state, and `replicationOptimeUpdater` shows the applied oplog position
+being recorded. **A change-stream counter that stops climbing while writes continue is the
+signal that replication has stalled.**
+
+### Where does `mongot` sync from, and as whom?
+
+```bash
+oc get cm mongot-search-0-config -n mongodb-poc -o jsonpath='{.data.config\.yml}'
+```
+
+Shows `syncSource.replicaSet.hostAndPort` and `scramAuth`. Use it to confirm the sync leg
+points at MongoDB directly and not at Envoy — there should be no proxy address in the file.
+
+### How long does a write take to become searchable?
+
+```bash
+./app/sync-probe.sh -n 3
+```
+
+Inserts a uniquely tagged document, updates it, deletes it, and times each step until the
+change is visible. Repeats `-n` times and prints min / median / max. The corpus is left
+exactly as it was found.
+
+**Read the delete figure carefully.** It is ~6 ms because the `_id` lookup in mongod fails,
+not because the index updated. See [Part 6](#part-6--how-long-does-a-write-take-to-become-searchable).
+
+### Do the replicas agree right after a write?
+
+```bash
+./app/sync-probe.sh -r
+```
+
+```text
+001001001001001001001001001001
+10 of 30 searches saw the new document
+all replicas agreed after 1757 ms
+```
+
+Uses `$searchMeta`, which counts inside mongot without mongod's `_id` lookup, so each call
+reads whichever replica Envoy picked. A repeating period equal to the replica count is round
+robin; the zeros are replicas that have not applied the write yet. The number that matters is
+the convergence time, not the exact pattern.
+
+### What does each replica actually store?
+
+```bash
+./app/index-storage.sh
+```
+
+Lists the index directories on every pod and checks they match, cross-checks the format
+version in the directory name against `mongot_configState_indexesInCatalog`, shows the Lucene
+files inside one index, and breaks the volume down per directory.
+
+**Use it before blaming the index for a full PVC** — `diagnostic.data` is usually the larger
+share by far.
 
 ## Sources
 
