@@ -568,10 +568,11 @@ what you put here. Running on names requires the set to *advertise* names.
 | Path | What |
 |---|---|
 | `README.md` | this page — the architecture |
+| [`TLS.md`](TLS.md) | **TLS setup: cert-manager, enterprise signer, or your own CSRs — plus the working Route** |
 | [`TESTING.md`](TESTING.md) | **sample data → load → query → prove the load balancing** |
 | [`DEPLOYMENT.md`](DEPLOYMENT.md) | full walkthrough, reproduced on a laptop, with every command and measurement |
 | [`mongoT-setup.md`](mongoT-setup.md) | design decisions and findings from building it |
-| `manifests/` | OLM subscriptions, MetalLB config, the `MongoDBSearch` CR, the `LoadBalancer` Service |
+| `manifests/` | OLM subscriptions, MetalLB, the `MongoDBSearch` CR, the `LoadBalancer` Service, certificates, the Route |
 | `mongodb/` | Compose stack for the external replica set, parameterised by `ADVERTISED_HOST` |
 | `mongodb/data/` | sample documents and index definitions |
 | `mongodb/scripts/` | `load-data.sh`, `verify-search.sh` and the bootstrap scripts |
@@ -589,6 +590,6 @@ what you put here. Running on names requires the set to *advertise* names.
 | `mongot` ×3 | ready, one PVC each |
 | MetalLB VIP | assigned, Envoy answering |
 | External replica set | 3 members, `PRIMARY` + 2 `SECONDARY` |
-| **TLS** | **not enabled** — plaintext h2c on every leg |
+| **TLS** | ✅ **verified** on both entry paths — see [TLS.md](TLS.md) |
 | **`$search` query** | ✅ **verified** — returns correct results with relevance scores |
 | **Stream distribution** | ✅ **measured** — 41 queries spread **13 / 14 / 14** across three `mongot` |

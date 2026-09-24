@@ -1,0 +1,29 @@
+# Passthrough Route entry - the alternative to a MetalLB VIP, and the shape that fits
+# an F5 fronting the OpenShift infra nodes.
+#
+# VERIFIED serving $search and $vectorSearch with TLS, distributing 13/13/14 across
+# three mongot. Requires TLS: passthrough selects the backend by SNI, and SNI exists
+# only inside a TLS ClientHello. Against a plaintext Envoy this returns DPE/400.
+#
+# Note it targets the OPERATOR's own proxy Service - with a Route you need neither
+# MetalLB nor a hand-written LoadBalancer Service.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: mongot-grpc
+  namespace: mongodb-poc
+spec:
+  # MUST equal spec.clusters[].loadBalancer.managed.externalHostname, because mongod
+  # sends it as SNI, the router selects this Route by it, and Envoy matches its
+  # filter chain on it. It must also be a SAN on the Envoy server certificate.
+  host: grpc-search.apps-crc.testing
+  to:
+    kind: Service
+    name: mongot-search-0-proxy-svc     # operator-owned, ClusterIP
+    weight: 100
+  port:
+    targetPort: 27028                   # the numeric port, not a port name
+  tls:
+    termination: passthrough            # NOT edge (no HTTP/2) and not reencrypt
+                                        # (timeout server = 30s cuts search cursors)
+  wildcardPolicy: None
