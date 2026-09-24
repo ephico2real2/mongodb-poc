@@ -568,13 +568,15 @@ what you put here. Running on names requires the set to *advertise* names.
 | Path | What |
 |---|---|
 | `README.md` | this page — the architecture |
+| [`DEMO.md`](DEMO.md) | **start here** — run the demo end to end, with expected output at every step |
 | [`TLS.md`](TLS.md) | **TLS setup: cert-manager, enterprise signer, or your own CSRs — plus the working Route** |
 | [`TESTING.md`](TESTING.md) | **sample data → load → query → prove the load balancing** |
 | [`DEPLOYMENT.md`](DEPLOYMENT.md) | full walkthrough, reproduced on a laptop, with every command and measurement |
 | [`mongoT-setup.md`](mongoT-setup.md) | design decisions and findings from building it |
 | `manifests/` | OLM subscriptions, MetalLB, the `MongoDBSearch` CR, the `LoadBalancer` Service, certificates, the Route |
 | `mongodb/` | Compose stack for the external replica set, parameterised by `ADVERTISED_HOST` |
-| `mongodb/data/` | sample documents and index definitions |
+| `mongodb/data/` | 24 curated documents + a 20,000-document generated corpus |
+| `app/` | a search CLI that talks only to MongoDB |
 | `mongodb/scripts/` | `load-data.sh`, `verify-search.sh` and the bootstrap scripts |
 | `docs/diagrams/` | figure sources and rendered PNGs |
 | `docs/screenshots/` | console evidence: pods, Services, the Route |
