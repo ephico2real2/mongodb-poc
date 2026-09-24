@@ -12,7 +12,7 @@ objects on CRC 4.22 on 2026-09-24 — not from the specification, and not from m
 |---|---|
 | Figure source | [`docs/diagrams/grpc-through-envoy/source.html`](docs/diagrams/grpc-through-envoy/source.html) |
 | Rendered | `request-path.{light,dark}.png`, `movement.{light,dark}.png` |
-| Re-render | see [Diagram sources](#diagram-sources) |
+| Re-render | edit `source.html` and re-render both figures; never edit a PNG |
 
 ---
 
@@ -147,22 +147,3 @@ C. a 90s load, 19,457 queries           0-0: 37.1%   0-1: 31.3%   0-2: 31.6%
 - **Anything about the reverse sync leg's balancing.** Each `mongot` opens its own change
   stream directly to the replica set; it does not pass through Envoy.
 
----
-
-## Diagram sources
-
-```bash
-python3 ~/.claude/skills/visual/render.py \
-  docs/diagrams/grpc-through-envoy/source.html \
-  docs/diagrams/grpc-through-envoy \
-  request-path,movement
-```
-
-`render.py` names the outputs **in DOM order**, so the name list must match the order the
-figures appear in `source.html` — passing them in the wrong order silently writes each PNG
-under the other's name, and the only symptom is that the file sizes look swapped.
-
-The page, the PNGs, the `<picture>` embed and the ```text``` twin beneath each figure all
-change together. When a value in a figure stops being true, the figure is wrong, not stale —
-re-read the running object, update `source.html`, re-render, and update the twin and the
-`aria-label` in the same commit.

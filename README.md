@@ -42,6 +42,10 @@ across the `mongot` pods.
 |---|---|
 | [mongoT-setup.md](mongoT-setup.md) | the original design notes and findings |
 
+Every figure in these documents is generated from hand-authored SVG in
+`docs/diagrams/*/source.html`. Edit the source and re-render; never edit a PNG, and never let
+a figure disagree with the text beside it.
+
 Three commands worth knowing before anything else:
 
 ```bash
@@ -1123,34 +1127,3 @@ what you put here. Running on names requires the set to *advertise* names.
 | **`$search` query** | ✅ **verified** — returns correct results with relevance scores |
 | **Stream distribution** | ✅ **measured** — 41 queries spread **13 / 14 / 14** across three `mongot` |
 
----
-
-## Diagram sources
-
-The figures in this repository are generated, not hand-placed images. Two pages hold them:
-
-```bash
-# the request path (2 figures) - see REQUEST-PATH.md
-python3 ~/.claude/skills/visual/render.py \
-  docs/diagrams/grpc-through-envoy/source.html \
-  docs/diagrams/grpc-through-envoy \
-  request-path,movement
-
-# the architecture set (10 figures) - embedded throughout this page
-python3 ~/.claude/skills/visual/render.py \
-  docs/diagrams/mongot-openshift/source.html \
-  docs/diagrams/mongot-openshift \
-  network-layout,grpc-path,failure-domains,end-to-end,architecture,l4-bypass,before-route-single,after-metallb-three,architecture-proposed,architecture-route-f5
-```
-
-**`render.py` assigns names in DOM order, not alphabetically.** The name list must match the
-order the figures appear in `source.html`; pass them in the wrong order and it silently writes
-each PNG under another's name, with no error — the only symptom is that the file sizes look
-shuffled. In the architecture set `architecture` is the **fifth** figure, not the first, which
-is exactly how this went wrong twice. The orders above were verified by re-rendering to
-placeholder names and byte-matching against the committed PNGs.
-
-The page, the PNGs, the `<picture>` embed and the ```text``` twin beneath each figure all
-change together. When a value in a figure stops being true, the figure is *wrong*, not stale:
-re-read the running object, update `source.html`, re-render, and update the twin and the
-`aria-label` in the same commit.

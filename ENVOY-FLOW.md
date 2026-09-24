@@ -247,15 +247,3 @@ being headless and the L7 tier has quietly become a pass-through.
 The test suite asserts the ones that are cheap to check; `./test/run.sh tls` and
 `./test/run.sh distribution` cover the first, fourth and fifth rows.
 
----
-
-## Diagram sources
-
-```bash
-python3 ~/.claude/skills/visual/render.py \
-  docs/diagrams/envoy-flow/source.html \
-  docs/diagrams/envoy-flow \
-  request-lifecycle,headless-vs-clusterip
-```
-
-Names are assigned in **DOM order**; see [Diagram sources](README.md#diagram-sources).

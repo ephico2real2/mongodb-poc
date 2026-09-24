@@ -10,3 +10,6 @@ evidence/
 *.srl
 __pycache__/
 .DS_Store
+
+# local only - references personal tooling paths
+DIAGRAMS.md
