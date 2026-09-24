@@ -14,11 +14,6 @@ full size, or to read the SVG source:
 | Figure 1, how a search executes | [`search-execution.light.png`](docs/diagrams/search-and-sync/search-execution.light.png) · [dark](docs/diagrams/search-and-sync/search-execution.dark.png) |
 | Figure 2, how the index syncs | [`index-sync.light.png`](docs/diagrams/search-and-sync/index-sync.light.png) · [dark](docs/diagrams/search-and-sync/index-sync.dark.png) |
 | Source | [`docs/diagrams/search-and-sync/source.html`](docs/diagrams/search-and-sync/source.html) |
-| Interactive page | <https://claude.ai/artifact/BH7FeVGsr7T6PBhDCJ3o99> |
-
-> The interactive page is **private to the account that published it**. If you cannot open it,
-> that is expected — use the PNGs above, which are the copy of record and are versioned with
-> this document.
 
 **The two questions this answers**
 
