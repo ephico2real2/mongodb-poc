@@ -42,7 +42,7 @@ across the `mongot` pods.
 | Doc | What it covers |
 |---|---|
 | [mongoT-setup.md](mongoT-setup.md) | the original design notes and findings |
-| [`modernize/`](modernize/README.md) | a second demo: Envoy fronting a **gRPC-only** service so a browser kiosk can call it over REST |
+| [`envoy-grpc-modernization`](https://github.com/ephico2real2/envoy-grpc-modernization) | moved to its own repository: Envoy fronting a **gRPC-only** service so a browser kiosk can call it over REST, plus metrics and autoscaling labs |
 
 Every figure in these documents is generated from hand-authored SVG in
 `docs/diagrams/*/source.html`. Edit the source and re-render; never edit a PNG, and never let
