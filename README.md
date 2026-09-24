@@ -437,7 +437,7 @@ Plus a user holding the built-in **`searchCoordinator`** role (MongoDB 8.2+).
 
 ## Entry point: VIP or Route
 
-|  | **A · MetalLB VIP** | **B · OpenShift Route** |
+|  | **Path 1 · MetalLB VIP** | **Path 2 · OpenShift Route** |
 |---|---|---|
 | Ports | **any** — the Service maps `port`→`targetPort` | **80/443 only** |
 | Data path | client → VIP → Envoy | client → router (HAProxy) → Svc → Envoy |

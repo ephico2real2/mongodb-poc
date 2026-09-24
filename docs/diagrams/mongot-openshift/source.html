@@ -438,17 +438,17 @@ a { color: var(--remote); }
             <rect x="30" y="200" width="920" height="512" rx="10" fill="none" stroke="var(--remote)" stroke-width="1.8" stroke-dasharray="7 5"/>
             <text x="48" y="222" font-weight="600" fill="var(--remote)">OpenShift cluster</text>
 
-            <text x="490" y="222" text-anchor="middle" font-size="12" font-weight="600" fill="var(--muted)">ENTRY &#8212; choose one</text>
+            <text x="490" y="222" text-anchor="middle" font-size="12" font-weight="600" fill="var(--muted)">ENTRY &#8212; two supported paths, pick one</text>
             <rect x="56" y="232" width="420" height="96" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
-            <text x="72" y="253" font-weight="600" fill="var(--remote)">A · MetalLB VIP &#8212; recommended</text>
+            <text x="72" y="253" font-weight="600" fill="var(--remote)">Path 1 · MetalLB VIP</text>
             <text x="72" y="271" fill="var(--remote)">Service type LoadBalancer, any port</text>
             <text x="72" y="289" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--remote)">VIP:27028 → Envoy. No HAProxy in path.</text>
             <text x="72" y="309" font-size="12" fill="var(--muted)">F5 optional: point a plain L4 VIP at it.</text>
-            <text x="72" y="323" font-size="12" fill="var(--muted)">No 80/443 constraint, no SNI coupling.</text>
+            <text x="72" y="323" font-size="12" fill="var(--muted)">Any port. No 80/443 constraint.</text>
 
             <rect x="504" y="232" width="420" height="96" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
-            <text x="520" y="253" font-weight="600" fill="var(--host)">B · OpenShift Route &#8212; 80/443 only</text>
-            <text x="520" y="271" fill="var(--host)">termination: passthrough (TCP + SNI)</text>
+            <text x="520" y="253" font-weight="600" fill="var(--host)">Path 2 · OpenShift Route</text>
+            <text x="520" y="271" fill="var(--host)">passthrough (TCP + SNI). 80/443 only.</text>
             <text x="520" y="289" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--host)">:443 → Svc :27028. timeout tunnel = 1h.</text>
             <text x="520" y="309" font-size="12" fill="var(--gap)">edge/reencrypt: no HTTP/2 or 30s cut — avoid.</text>
             <text x="520" y="323" font-size="12" fill="var(--muted)">Route host MUST equal externalHostname.</text>
@@ -457,8 +457,8 @@ a { color: var(--remote); }
             <line x1="714" y1="328" x2="550" y2="352" stroke="var(--host)" stroke-width="1.4" marker-end="url(#ah5)"/>
 
             <rect x="290" y="356" width="400" height="52" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
-            <text x="490" y="377" text-anchor="middle" font-weight="600" fill="var(--host)">Service mongot-grpc-lb &#8212; you own this</text>
-            <text x="490" y="395" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--host)">selector app=&lt;name&gt;-search-lb-0 · port 27028</text>
+            <text x="490" y="377" text-anchor="middle" font-weight="600" fill="var(--host)">a Service selecting Envoy &#8212; you own this</text>
+            <text x="490" y="395" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--host)">Path 1: LoadBalancer · Path 2: headless · :27028</text>
             <line x1="490" y1="408" x2="490" y2="428" stroke="currentColor" stroke-width="1.4" marker-end="url(#ah5)"/>
 
             <rect x="290" y="432" width="400" height="70" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="2"/>
