@@ -86,6 +86,72 @@ WHICH MONGOT SERVED THIS QUERY
 
 That alternation **is** the load balancing — one request at a time, visible.
 
+### Linkable queries
+
+The GUI reads its state from the query string, so a search is a URL you can paste into a
+ticket, a runbook or a chat message and have someone land on the same result:
+
+```text
+https://mongot-gui-mongodb-poc.apps-crc.testing/?q=the&mode=text
+https://mongot-gui-mongodb-poc.apps-crc.testing/?q=detective&mode=vector
+```
+
+| Parameter | Values | Default |
+|---|---|---|
+| `q` | any string | empty — the page renders with no query run |
+| `mode` | `text` or `vector` | `text`; **anything that is not exactly `vector` is treated as text** |
+
+There is also `/healthz`, which returns `ok` and runs no query. It is what the Deployment's
+`readinessProbe` hits (`httpGet: { path: /healthz, port: 8080 }`) — so it must stay cheap.
+
+What each mode issues, from `app/gui/server.py`:
+
+```text
+mode=text     $search       index "default",      path {wildcard: "*"}
+mode=vector   $vectorSearch index "vector_index", path "plot_embedding",
+                            numCandidates 200, limit 8
+```
+
+The pod attribution panel follows the mode, reading
+`mongot_command_searchCommandTotalLatency_seconds_count` for text and
+`...vectorSearchCommandTotalLatency_seconds_count` for vector. Using the wrong counter is why
+a vector query can look like it served nothing — see [TESTING.md](TESTING.md).
+
+**It searches the film corpus**, `sample_mflix.movies` — not `platform_ops.incidents`. The
+incident corpus from [USECASE.md](USECASE.md) is queried through
+`app/trace-query.sh`, not this GUI. Both are overridable by the `DB` and `COLL` environment
+variables in `manifests/95-search-gui.yaml`.
+
+### One honest limit of `mode=vector`
+
+This GUI has **no embedding model**. Vector mode looks the query up in a small hand-written
+table and falls back to a uniform vector when it misses:
+
+```python
+vec = THEMES.get(q.lower().strip(), [0.2, 0.2, 0.2, 0.2, 0.2])
+```
+
+The table knows exactly ten words, mapping to five themes:
+
+| Query | Theme |
+|---|---|
+| `underdog`, `karate` | the Karate Kid axis |
+| `americana`, `baseball` | small-town Americana |
+| `creature`, `horror` | creature features |
+| `space`, `astronaut` | science fiction |
+| `noir`, `detective` | film noir |
+
+Anything else — `?q=the&mode=vector`, for example — returns `[0.2, 0.2, 0.2, 0.2, 0.2]`, which
+is equidistant from every theme. **It does not fail. It returns eight results in a
+meaningless order**, and the pod-attribution panel still works, because the request really did
+travel `mongod` → Envoy → `mongot` and come back.
+
+That is fine for what this GUI is for — showing one request landing on one pod — but the
+*ranking* in vector mode is only meaningful for those ten words. Real semantic search needs an
+embedding model; the hand-set vectors in `mongodb/data/incidents.json` are the same
+simplification, documented in [USECASE.md](USECASE.md).
+
+
 ### How it works, and why that matters
 
 **The app connects only to MongoDB.** Its single data dependency is `MONGO_URI`,
