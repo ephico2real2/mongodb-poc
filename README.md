@@ -1,0 +1,290 @@
+# MongoDB Search (`mongot`) on OpenShift, fronted by Envoy
+
+Reference architecture for running **MongoDB Search on OpenShift against a MongoDB
+replica set that lives outside the cluster**, with an L7 proxy load-balancing gRPC
+across the `mongot` pods.
+
+> **Scope.** This page is the architecture. It says nothing about where it is running.
+> A complete, reproducible walkthrough on a single laptop — including the network
+> stitching that only a laptop needs — lives in **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+
+---
+
+## The one constraint everything follows from
+
+`mongod` opens **a single, long-lived TCP connection** to `mongot` and multiplexes every
+search query over it as HTTP/2 streams.
+
+A Kubernetes `Service`, a classic load balancer, or an F5 VIP in L4 mode all balance
+**connections**. Given one connection, they pick one pod and send everything there — the
+other replicas stay idle and add nothing but cost.
+
+An **L7 proxy understands HTTP/2** and distributes **individual gRPC streams**, keeping
+each stream on one pod only for the life of that query cursor. That is why MongoDB
+requires a proxy in front of more than one `mongot`, and why the Operator refuses a
+`MongoDBSearch` with `replicas > 1` and no load balancer.
+
+`mongot` also sheds load by returning gRPC `RESOURCE_EXHAUSTED`, which the proxy is
+expected to retry **against a different replica**.
+
+---
+
+## Architecture
+
+<!-- markdownlint-disable MD033 -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mongot-openshift/architecture.dark.png">
+  <source srcset="docs/diagrams/mongot-openshift/architecture.light.png">
+  <img alt="An external MongoDB replica set reaches mongot pods inside OpenShift through one L7 hop, Envoy, entered either by a MetalLB VIP or a passthrough Route on 443." src="docs/diagrams/mongot-openshift/architecture.light.png">
+</picture>
+<!-- markdownlint-enable MD033 -->
+
+```text
+  Applications
+      |  MongoDB wire protocol - apps never talk to mongot
+      v
+  MongoDB replica set - OUTSIDE OpenShift
+    mongod-1.corp:27017 / mongod-2.corp:27017 / mongod-3.corp:27017
+    mongotHost = grpc-search.corp.example:27028
+      |
+      |  ONE long-lived HTTP/2 connection  <-- why L7 is mandatory
+      v
+  ============ OpenShift cluster ==========================================
+      |
+      |  ENTRY - choose one
+      |
+      |   A) MetalLB VIP           Service type LoadBalancer, ANY port
+      |      (recommended)         VIP:27028 -> Envoy, no HAProxy in path
+      |                            F5 optional, plain L4 in front
+      |
+      |   B) OpenShift Route       80/443 ONLY
+      |      termination: passthrough (TCP + SNI), :443 -> Svc :27028
+      |      timeout tunnel = 1h (edge/reencrypt: no HTTP/2, 30s cut)
+      |      Route host MUST equal externalHostname
+      v
+  Service mongot-grpc-lb ................................ you own this
+    type: LoadBalancer, selector app=<name>-search-lb-0, port 27028
+      v
+  Envoy xN .............................................. operator-owned
+    the ONLY L7. splits gRPC streams. STRICT_DNS + ROUND_ROBIN.
+    retry on connect-failure,refused-stream,unavailable,reset,
+    resource-exhausted -> previous_hosts predicate -> a DIFFERENT pod
+      v
+  <name>-search-0-svc (headless) ........................ operator-owned
+    clusterIP: None -> DNS returns every mongot pod IP
+      v
+  mongot x3 (StatefulSet) ............................... operator-owned
+    one PVC per replica, indexes rebuilt from the source
+      |
+      +--> sync leg: mongot pulls from the replica set DIRECTLY
+           SCRAM as searchCoordinator. Does NOT cross Envoy.
+  =========================================================================
+```
+
+### Order of deployment
+
+1. **MongoDB replica set** running and reachable from the cluster network.
+2. **MCK** (MongoDB Controllers for Kubernetes) — provides `MongoDBSearch`.
+3. **MetalLB** — only if entering by VIP rather than Route.
+4. **cert-manager** — only if TLS is on.
+5. **Secrets**: the sync-source password; the TLS Secrets if TLS is on.
+6. **`MongoDBSearch`** — this creates `mongot`, Envoy, the headless Service and the
+   operator's own `ClusterIP` proxy Service.
+7. **Your `LoadBalancer` Service** (or `Route`) pointing at the Envoy pods.
+8. **Configure the external `mongod`** — the Operator never touches it.
+
+---
+
+## The two things you own
+
+Everything else is operator-managed. These two are not:
+
+**1. The entry point.** `ManagedLBConfig` has no Service-type field, and the Operator
+hardcodes its proxy Service to `ClusterIP`:
+
+```go
+serviceBuilder.SetServiceType(corev1.ServiceTypeClusterIP)   // no override exists
+```
+
+So a `LoadBalancer` Service (or a `Route`) selecting the Envoy pods is the only way in:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongot-grpc-lb
+  annotations:
+    metallb.universe.tf/address-pool: mongot-pool
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app: mongot-search-lb-0          # <MongoDBSearch name>-search-lb-<clusterIndex>
+  ports:
+  - { name: grpc, port: 27028, targetPort: 27028, protocol: TCP }
+```
+
+Two cautions: it has **no `ownerReference`**, so it outlives the CR and is never
+reconciled; and the selector is an Operator-internal name, so renaming the CR silently
+blackholes traffic.
+
+**2. The external `mongod` configuration.** The Operator does not manage a `mongod` it
+did not create, so these are yours to set:
+
+```
+setParameter:
+  mongotHost:                                      grpc-search.corp.example:27028
+  searchIndexManagementHostAndPort:                grpc-search.corp.example:27028
+  useGrpcForSearch:                                true
+  skipAuthenticationToSearchIndexManagementServer: false
+  searchTLSMode:                                   requireTLS   # or disabled
+```
+
+Plus a user holding the built-in **`searchCoordinator`** role (MongoDB 8.2+).
+
+---
+
+## Entry point: VIP or Route
+
+|  | **A · MetalLB VIP** | **B · OpenShift Route** |
+|---|---|---|
+| Ports | **any** — 27028, 443, anything | **80/443 only** |
+| Data path | client → VIP → Envoy | client → router (HAProxy) → Svc → Envoy |
+| Termination | TLS ends at Envoy | must be **passthrough** |
+| Timeout | none imposed | `timeout tunnel`, default **1h** |
+| SNI | not required | Route host **must** equal `externalHostname` |
+| F5 | optional, plain L4 | L4/fastL4 — **never an HTTP profile** |
+
+**Avoid `edge` and `reencrypt`.** Edge does not support HTTP/2 at all, so gRPC breaks;
+both use `timeout server`, default **30s**, which severs long-running search cursors.
+Passthrough uses `timeout tunnel` instead, and its 1h default comfortably covers the
+300s per-stream budget Envoy is configured with.
+
+**A passthrough Route is a pipe, not a balancer.** Being pure TCP it cannot split gRPC
+streams — it must sit *in front of* Envoy, never instead of it.
+
+---
+
+## Certificates
+
+TLS in managed mode is **all-or-nothing**: setting `spec.security.tls` turns it on for
+*both* legs (client→Envoy and Envoy→`mongot`). It is not per-leg.
+
+With `spec.security.tls.certsSecretPrefix: <prefix>` the Operator expects these to exist,
+by name — cert-manager `Certificate` resources producing standard `kubernetes.io/tls`
+Secrets:
+
+| Secret | Role | Required SANs |
+|---|---|---|
+| `<prefix>-<name>-search-lb-<idx>-cert` | Envoy **server** cert, faces `mongod` | **`externalHostname`** (and the Route host, if used) |
+| `<prefix>-<name>-search-lb-<idx>-client-cert` | Envoy **client** cert, Envoy → `mongot` | — |
+| `<prefix>-<name>-search-cert` | `mongot` **server** cert | the `mongot` Service FQDNs |
+
+For the **sync leg** (`mongot` → `mongod`), which never crosses Envoy:
+
+| Field | Holds | Purpose |
+|---|---|---|
+| `spec.source.external.tls.ca` | ConfigMap with `ca.crt` | so `mongot` trusts the external `mongod` |
+| `spec.source.tls.clientCertificateSecretRef` | Secret with `tls.crt`/`tls.key` | mTLS to `mongod`, alongside SCRAM |
+
+And outside the cluster, the `mongod` members need their own server certificate and the
+CA that signed Envoy's.
+
+Known limits worth designing around: `mongot` validates that a client certificate is
+signed by a trusted CA but **does not validate hostname or SAN**; certificates are read
+only at startup, so rotation requires a restart; minimum TLS 1.2; no FIPS.
+
+---
+
+## The `MongoDBSearch` resource
+
+This is the live resource from the reference deployment. TLS is deliberately **not** set
+here — that is a Phase-A choice, not an oversight:
+
+```yaml
+apiVersion: mongodb.com/v1
+kind: MongoDBSearch
+metadata:
+  name: mongot
+  namespace: mongodb-poc
+spec:
+  version: "1.70.1"
+
+  source:                                    # external: the Operator manages no mongod
+    external:
+      hostAndPorts:                          # SEED list only - see note below
+      - "mongod-1.corp:27017"
+      - "mongod-2.corp:27017"
+      - "mongod-3.corp:27017"
+    username: search-sync-source
+    passwordSecretRef:
+      name: mongot-search-sync-source-password
+
+  clusters:
+  - replicas: 3                              # mongot pods; >1 REQUIRES a load balancer
+    resourceRequirements:                    # defaults are 2 CPU / 4Gi PER replica
+      requests: { cpu: "200m", memory: "1Gi" }
+      limits:   { cpu: "1",    memory: "2Gi" }
+    persistence:
+      single:
+        storage: 2Gi
+        storageClass: <your-storage-class>
+    loadBalancer:
+      managed:                               # the Operator deploys + configures Envoy
+        externalHostname: grpc-search.corp.example   # bare FQDN - SNI match + cert SAN
+        replicas: 2                          # default is 1; use >=2 in production
+        retryPolicy:
+          numRetries: 2
+          perTryTimeout: 60s
+```
+
+To enable TLS, add:
+
+```yaml
+  security:
+    tls:
+      certsSecretPrefix: lab                 # turns TLS on for BOTH legs
+```
+
+**`hostAndPorts` is a seed list, not the traffic path.** The driver connects to a seed,
+reads the replica-set configuration, then uses the **advertised** member hostnames for
+everything afterwards. If the set advertises IPs, `mongot` will use IPs regardless of
+what you put here. Running on names requires the set to *advertise* names.
+
+---
+
+## Scaling
+
+| Change | How | Notes |
+|---|---|---|
+| More `mongot` | `spec.clusters[].replicas` | Envoy uses `STRICT_DNS` over the headless Service, so new pods are picked up on re-resolve. Each gets a PVC. |
+| More Envoy | `loadBalancer.managed.replicas` | Default **1** — a rolling restart then severs every in-flight cursor. Use ≥2. |
+| Readiness gate | `minMongotReadyReplicas` | How many `mongot` must be ready before Envoy is promoted. |
+| More DB members | on the replica set | Keep the member count odd for quorum. |
+
+---
+
+## Repository layout
+
+| Path | What |
+|---|---|
+| `README.md` | this page — the architecture |
+| [`DEPLOYMENT.md`](DEPLOYMENT.md) | full walkthrough, reproduced on a laptop, with every command and measurement |
+| [`mongoT-setup.md`](mongoT-setup.md) | design decisions and findings from building it |
+| `manifests/` | OLM subscriptions, MetalLB config, the `MongoDBSearch` CR, the `LoadBalancer` Service |
+| `mongodb/` | Compose stack for the external replica set, parameterised by `ADVERTISED_HOST` |
+| `docs/diagrams/` | figure sources and rendered PNGs |
+
+---
+
+## Status
+
+| Component | State |
+|---|---|
+| MCK 1.12.0, `mongot` 1.70.1 | deployed via OLM |
+| Envoy, managed | running, `STRICT_DNS` over the headless Service |
+| `mongot` ×3 | ready, one PVC each |
+| MetalLB VIP | assigned, Envoy answering |
+| External replica set | 3 members, `PRIMARY` + 2 `SECONDARY` |
+| **TLS** | **not enabled** — plaintext h2c on every leg |
+| **`$search` query** | **not yet run** — the path is proven wired and reachable, not proven to return results |

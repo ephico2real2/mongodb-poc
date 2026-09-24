@@ -1,4 +1,9 @@
-# MongoDB Search (mongot) on OpenShift with an external MongoDB replica set
+# Deployment walkthrough — reproducing the architecture on one laptop
+
+> **The architecture is in [README.md](README.md).** This document is the
+> laptop reproduction: every command, every measurement, and the network stitching
+> that only a single-machine setup requires. Nothing here is part of the target design.
+
 
 Reproduces, on a single MacBook, the architecture MongoDB's vendor team specifies:
 **an L7 proxy (Envoy) load-balancing gRPC across 3 `mongot` pods**, with MongoDB
@@ -498,13 +503,13 @@ rs0                                   PRIMARY + 2 SECONDARY, health=1
 
 ## Diagram sources
 
-The four figures are hand-authored inline SVG in `docs/diagrams/mongot-openshift/source.html`,
+The five figures are hand-authored inline SVG in `docs/diagrams/mongot-openshift/source.html`,
 rendered to light and dark PNGs at 2x:
 
 ```sh
 python3 ~/.claude/skills/visual/render.py \
   docs/diagrams/mongot-openshift/source.html \
-  docs/diagrams/mongot-openshift network-layout,grpc-path,failure-domains,end-to-end
+  docs/diagrams/mongot-openshift architecture,network-layout,grpc-path,failure-domains,end-to-end
 ```
 
 The page, the PNGs and the ASCII twin above change together. Solid shapes are shipped
