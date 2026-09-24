@@ -1,0 +1,44 @@
+# Phase A: prove the operator deploys and configures Envoy in front of 3 mongot pods.
+# No spec.security.tls yet -> plaintext h2c end to end, and NO SNI filter-chain match
+# (buildFilterChain only sets FilterChainMatch.ServerNames when tlsEnabled).
+# externalHostname is still required by the validator for an external source.
+# The sync-source password Secret is deliberately NOT in git. Create it out of band,
+# using the same value as SEARCH_PASSWORD in mongodb/.env:
+#
+#   oc create secret generic mongot-search-sync-source-password \
+#     -n mongodb-poc --from-literal=password='<SEARCH_PASSWORD>'
+#
+# The name follows the operator default {name}-{username}-password.
+apiVersion: mongodb.com/v1
+kind: MongoDBSearch
+metadata:
+  name: mongot
+  namespace: mongodb-poc
+spec:
+  version: "1.70.1"
+  source:
+    external:
+      hostAndPorts:
+      - "192.168.64.4:27017"
+      - "192.168.64.4:27018"
+      - "192.168.64.4:27019"
+    username: search-sync-source
+    passwordSecretRef:
+      name: mongot-search-sync-source-password
+  clusters:
+  - replicas: 3
+    # CRC has ~7GiB allocatable headroom; defaults are 2 CPU / 4Gi PER mongot.
+    resourceRequirements:
+      requests: { cpu: "200m", memory: "1Gi" }
+      limits:   { cpu: "1",    memory: "2Gi" }
+    persistence:
+      single:
+        storage: 2Gi
+        storageClass: crc-csi-hostpath-provisioner
+    loadBalancer:
+      managed:
+        externalHostname: grpc-search.crc.testing
+        replicas: 2
+        retryPolicy:
+          numRetries: 2
+          perTryTimeout: 60s

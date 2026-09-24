@@ -1,0 +1,27 @@
+apiVersion: metallb.io/v1beta1
+kind: MetalLB
+metadata:
+  name: metallb
+  namespace: metallb-system
+---
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: mongot-pool
+  namespace: metallb-system
+spec:
+  # CRC node's br-ex subnet (gvisor-tap-vsock). Clear of .1 gateway, .2 node, .254 host alias.
+  addresses:
+  - 192.168.127.100-192.168.127.120
+  autoAssign: false
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: mongot-l2
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+  - mongot-pool
+  interfaces:
+  - br-ex

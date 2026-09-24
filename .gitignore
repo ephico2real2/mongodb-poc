@@ -1,0 +1,12 @@
+# Real credentials live here; commit .env.example instead.
+mongodb/.env
+# Local secret material, evidence and renders you may not want to publish.
+secrets/
+evidence/
+*.pem
+*.key
+*.crt
+*.csr
+*.srl
+__pycache__/
+.DS_Store

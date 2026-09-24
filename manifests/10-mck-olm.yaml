@@ -1,0 +1,24 @@
+# MCK via OLM. Verified against this cluster:
+#   packagemanifest mongodb-kubernetes -> catalog certified-operators, channel stable,
+#   currentCSV mongodb-kubernetes.v1.12.0, installModes OwnNamespace+SingleNamespace+AllNamespaces.
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: mongodb-poc-og
+  namespace: mongodb-poc
+spec:
+  targetNamespaces:
+  - mongodb-poc
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: mongodb-kubernetes
+  namespace: mongodb-poc
+spec:
+  channel: stable
+  name: mongodb-kubernetes
+  source: certified-operators
+  sourceNamespace: openshift-marketplace
+  installPlanApproval: Automatic
+  startingCSV: mongodb-kubernetes.v1.12.0

@@ -1,0 +1,19 @@
+# The operator hardcodes its proxy Service to ClusterIP with no override,
+# so this is our own LoadBalancer Service selecting the managed Envoy pods.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongot-grpc-lb
+  namespace: mongodb-poc
+  annotations:
+    metallb.universe.tf/address-pool: mongot-pool
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app: mongot-search-lb-0        # <MongoDBSearch name>-search-lb-<clusterIndex>
+  ports:
+  - name: grpc
+    port: 27028
+    targetPort: 27028              # EnvoyDefaultProxyPort
+    protocol: TCP

@@ -1,0 +1,103 @@
+# 3-member MongoDB replica set, HA, for an EXTERNAL-to-Kubernetes mongot POC.
+#
+# network_mode: host + three distinct ports is deliberate. Members talk to each
+# other using the addresses advertised in the rs config; on a bridge network with
+# published ports that becomes hairpin NAT. Host networking keeps member-to-member
+# traffic direct and makes ADVERTISED_HOST the single knob for moving networks.
+name: mongodb-poc
+
+x-mongod: &mongod
+  image: ${MONGO_IMAGE}
+  user: "${MONGO_UID}:${MONGO_GID}"
+  entrypoint: [mongod]          # bypass the image's python entrypoint: predictable args
+  network_mode: host
+  restart: unless-stopped
+  stop_grace_period: 30s
+  depends_on:
+    keyfile-init:
+      condition: service_completed_successfully
+
+services:
+  # One-shot: generate the replica-set internal-auth keyfile with the 0400 perms
+  # mongod demands, owned by the runtime uid. Idempotent.
+  keyfile-init:
+    image: ${MONGO_IMAGE}
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        if [ ! -s /run/lab/keyfile ]; then
+          openssl rand -base64 756 > /run/lab/keyfile
+          echo "generated keyfile"
+        else
+          echo "keyfile already present, leaving it alone"
+        fi
+        chown ${MONGO_UID}:${MONGO_GID} /run/lab/keyfile
+        chmod 400 /run/lab/keyfile
+    volumes:
+      - runtime:/run/lab
+    restart: "no"
+
+  mongo1:
+    <<: *mongod
+    container_name: mongo1
+    command:
+      - --replSet=${REPLSET}
+      - --bind_ip_all
+      - --port=${PORT1}
+      - --dbpath=/data/db
+      - --keyFile=/run/lab/keyfile
+      - --wiredTigerCacheSizeGB=${WT_CACHE_GB}
+      - --setParameter=mongotHost=${MONGOT_ENDPOINT}
+      - --setParameter=searchIndexManagementHostAndPort=${MONGOT_ENDPOINT}
+      - --setParameter=useGrpcForSearch=true
+      - --setParameter=skipAuthenticationToSearchIndexManagementServer=false
+      - --setParameter=searchTLSMode=disabled
+    volumes:
+      - db1:/data/db
+      - runtime:/run/lab:ro
+
+  mongo2:
+    <<: *mongod
+    container_name: mongo2
+    command:
+      - --replSet=${REPLSET}
+      - --bind_ip_all
+      - --port=${PORT2}
+      - --dbpath=/data/db
+      - --keyFile=/run/lab/keyfile
+      - --wiredTigerCacheSizeGB=${WT_CACHE_GB}
+      - --setParameter=mongotHost=${MONGOT_ENDPOINT}
+      - --setParameter=searchIndexManagementHostAndPort=${MONGOT_ENDPOINT}
+      - --setParameter=useGrpcForSearch=true
+      - --setParameter=skipAuthenticationToSearchIndexManagementServer=false
+      - --setParameter=searchTLSMode=disabled
+    volumes:
+      - db2:/data/db
+      - runtime:/run/lab:ro
+
+  mongo3:
+    <<: *mongod
+    container_name: mongo3
+    command:
+      - --replSet=${REPLSET}
+      - --bind_ip_all
+      - --port=${PORT3}
+      - --dbpath=/data/db
+      - --keyFile=/run/lab/keyfile
+      - --wiredTigerCacheSizeGB=${WT_CACHE_GB}
+      - --setParameter=mongotHost=${MONGOT_ENDPOINT}
+      - --setParameter=searchIndexManagementHostAndPort=${MONGOT_ENDPOINT}
+      - --setParameter=useGrpcForSearch=true
+      - --setParameter=skipAuthenticationToSearchIndexManagementServer=false
+      - --setParameter=searchTLSMode=disabled
+    volumes:
+      - db3:/data/db
+      - runtime:/run/lab:ro
+
+volumes:
+  db1: {}
+  db2: {}
+  db3: {}
+  runtime: {}
