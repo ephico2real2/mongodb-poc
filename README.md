@@ -19,6 +19,7 @@ across the `mongot` pods.
 | this page | the architecture, and the one constraint everything follows from |
 | [REQUEST-PATH.md](REQUEST-PATH.md) | the path a request takes, as diagrams, with every label sourced |
 | [ENVOY-FLOW.md](ENVOY-FLOW.md) | the Envoy config itself — what each line does, and why it balances across **pods**, not a Service |
+| [SYNC.md](SYNC.md) | how a `$search` executes, and how the `mongot` index stays in sync |
 | [USECASE.md](USECASE.md) | what a search tier buys you that a keyword index does not |
 
 **Build it**
@@ -1109,12 +1110,14 @@ what you put here. Running on names requires the set to *advertise* names.
 | `test/run.sh` | 61 assertions across 8 suites |
 | `app/trace-query.sh` | run a search and name the `mongot` pod that answered |
 | `app/entry-path.sh` | prove whether traffic enters via the Route or the MetalLB VIP |
+| `app/sync-probe.sh` | measure write-to-searchable latency, and replica convergence |
+| `app/index-storage.sh` | show what each `mongot` replica stores on its volume |
 | `app/search-cli.sh`, `app/gui/` | a search CLI and a web GUI showing which `mongot` answered |
 | `mongodb/` | Compose stack for the external replica set, parameterised by `ADVERTISED_HOST` |
 | `mongodb/data/` | 24 curated films, a 20,000-film generated corpus, and 20 platform incidents |
 | `mongodb/scripts/` | loaders, `verify-search.sh`, `load-test.sh`, bootstrap scripts |
 | `docs/envoy/` | `bootstrap.json`, `cds.json`, `lds.json` as read from the running proxy |
-| `docs/diagrams/` | 3 figure sources and 28 rendered PNGs |
+| `docs/diagrams/` | 4 figure sources and 32 rendered PNGs |
 | `docs/screenshots/` | 15 captures: pods, Services, the Route, the CR, alert rules, three metrics views, and five GUI searches |
 
 ---

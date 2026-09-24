@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Search And Sync</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{--ground:#f5f6f8;--surface:#ffffff;--ink:#18212c;--muted:#58636f;--rule:#d7dce3;
+--host:#a55a0b;--host-wash:#fbf1e4;--remote:#0e6f68;--remote-wash:#e3f3f1;
+--gap:#b3261e;--gap-wash:#fbe9e7;--none:#6b7684;--none-wash:#eef0f3;
+--font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+--font-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;
+--ground:#0e131a;--surface:#151c25;--ink:#e5e9ef;--muted:#9aa5b3;--rule:#2a3440;
+--host:#f0a53c;--host-wash:#2a2014;--remote:#3fcfc0;--remote-wash:#122a28;
+--gap:#f2857c;--gap-wash:#2d1614;--none:#9aa5b3;--none-wash:#1b232d}}
+:root[data-theme="dark"]{color-scheme:dark;--ground:#0e131a;--surface:#151c25;--ink:#e5e9ef;--muted:#9aa5b3;--rule:#2a3440;
+--host:#f0a53c;--host-wash:#2a2014;--remote:#3fcfc0;--remote-wash:#122a28;--gap:#f2857c;--gap-wash:#2d1614;--none:#9aa5b3;--none-wash:#1b232d}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.55;margin:0}
+.page{max-width:1060px;margin:0 auto;padding-inline:16px;padding-block:40px 72px;display:grid;gap:44px}
+header{display:grid;gap:10px}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{font-size:clamp(26px,4vw,36px);line-height:1.15;margin:0;font-weight:700;text-wrap:balance}
+h2{font-size:20px;margin:0 0 6px;font-weight:600}
+p{margin:0;max-width:72ch}.lede{font-size:17px;max-width:70ch}
+code{font-family:var(--font-mono);font-size:.9em;overflow-wrap:anywhere}
+section{display:grid;gap:14px}figure{margin:0;display:grid;gap:10px}
+.fig-scroll{overflow-x:auto;background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:12px}
+.fig-scroll svg{display:block;width:100%;min-width:760px;height:auto;color:var(--ink)}
+figcaption{font-size:13.5px;color:var(--muted);max-width:80ch}
+a{color:var(--remote)}:focus-visible{outline:2px solid var(--remote);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div class="eyebrow">mongodb-poc · search and sync · 2026-09-24</div>
+    <h1>What runs during a search, and how the index keeps up</h1>
+    <p class="lede"><code>mongot</code> is not a MongoDB replica. It is a Lucene index with its own storage, built by reading MongoDB and kept current by a change stream. A search is split across both processes: mongot returns <code>_id</code>s, mongod returns the documents.</p>
+  </header>
+
+  <section>
+    <h2>One <code>$search</code>, two processes</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1000 536" role="img" aria-label="An application runs an aggregate with a dollar-search stage against mongod. mongod rewrites it into three stages, shown by explain: internalSearchMongotRemote, which travels through Envoy to one mongot pod and returns matching document ids with relevance scores; internalSearchIdLookup, which matches each of those ids back against the collection inside mongod to fetch the real documents; and the rest of the pipeline. The score comes from mongot and the document body comes from MongoDB, which is why a document deleted in MongoDB vanishes from results immediately even while mongot still holds its id.">
+          <defs>
+            <marker id="ss-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+            <marker id="ss-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--remote)"/></marker>
+            <marker id="ss-hs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--host)"/></marker>
+          </defs>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+
+            <rect x="16" y="40" width="190" height="60" rx="8" fill="var(--none-wash)" stroke="var(--none)" stroke-width="1.4"/>
+            <text x="30" y="62" font-weight="600">application</text>
+            <text x="30" y="80" font-size="11.5" fill="var(--muted)">connects to MongoDB only</text>
+            <text x="30" y="95" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">aggregate([{$search:...}])</text>
+
+            <line x1="206" y1="70" x2="256" y2="70" stroke="currentColor" stroke-width="1.6" marker-end="url(#ss-ah)"/>
+
+            <rect x="258" y="26" width="480" height="300" rx="10" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.8"/>
+            <text x="276" y="50" font-weight="600" fill="var(--host)">mongod &#183; rewrites $search into three stages</text>
+            <text x="276" y="68" font-size="11" fill="var(--muted)">visible with db.coll.explain().aggregate([...])</text>
+
+            <rect x="276" y="82" width="444" height="70" rx="7" fill="var(--surface)" stroke="var(--remote)" stroke-width="1.6"/>
+            <text x="292" y="103" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--remote)">1. $_internalSearchMongotRemote</text>
+            <text x="292" y="122" font-size="11.5">sends the query out to mongot</text>
+            <text x="292" y="140" font-size="11.5" font-weight="600" fill="var(--remote)">receives back: _id list + relevance scores</text>
+
+            <rect x="276" y="164" width="444" height="76" rx="7" fill="var(--surface)" stroke="var(--host)" stroke-width="1.6"/>
+            <text x="292" y="185" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--host)">2. $_internalSearchIdLookup</text>
+            <text x="292" y="204" font-family="IBM Plex Mono, monospace" font-size="10.5">subPipeline: [{$match:{_id:{$eq: ...}}}]</text>
+            <text x="292" y="222" font-size="11.5" font-weight="600" fill="var(--host)">fetches the real documents from the collection</text>
+            <text x="292" y="236" font-size="11" fill="var(--muted)">inside mongod &#183; mongot is not involved</text>
+
+            <rect x="276" y="252" width="444" height="56" rx="7" fill="none" stroke="var(--muted)" stroke-width="1.2"/>
+            <text x="292" y="273" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600">3. $limit, $project, $sort ...</text>
+            <text x="292" y="292" font-size="11.5" fill="var(--muted)">the rest of your pipeline, on real documents</text>
+
+            <path d="M720,117 H790 V150" fill="none" stroke="var(--remote)" stroke-width="1.6" marker-end="url(#ss-ok)"/>
+            <rect x="770" y="152" width="214" height="52" rx="8" fill="var(--none-wash)" stroke="var(--none)" stroke-width="1.4"/>
+            <text x="784" y="172" font-weight="600">Envoy &#183; the L7 hop</text>
+            <text x="784" y="190" font-size="11" fill="var(--muted)">round robin, one pod per request</text>
+
+            <path d="M877,204 V236" fill="none" stroke="var(--remote)" stroke-width="1.6" marker-end="url(#ss-ok)"/>
+            <rect x="770" y="238" width="214" height="88" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.8"/>
+            <text x="784" y="259" font-weight="600" fill="var(--remote)">mongot &#215;3</text>
+            <text x="784" y="277" font-size="11.5">a Lucene index, not your data</text>
+            <text x="784" y="295" font-size="11.5" font-weight="600">returns _ids + scores</text>
+            <text x="784" y="313" font-size="11" fill="var(--muted)">never returns document bodies</text>
+
+            <line x1="256" y1="196" x2="206" y2="196" stroke="currentColor" stroke-width="1.6" marker-end="url(#ss-ah)"/>
+            <rect x="16" y="168" width="190" height="56" rx="8" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="30" y="189" font-weight="600">documents + score</text>
+            <text x="30" y="207" font-size="11" fill="var(--muted)">$meta: "searchScore"</text>
+
+            <rect x="16" y="360" width="968" height="96" rx="8" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.5"/>
+            <text x="32" y="382" font-weight="600" fill="var(--gap)">why this split explains two things people find confusing</text>
+            <text x="32" y="403" font-size="12">&#183; the relevance score comes from mongot, the document body from MongoDB &#8212; that is why the score is a $meta projection, not a field</text>
+            <text x="32" y="423" font-size="12">&#183; a document deleted in MongoDB vanishes from results at once, even while mongot still holds its _id: stage 2 simply finds nothing</text>
+            <text x="32" y="443" font-size="12" fill="var(--muted)">measured on this cluster: delete appears to take ~6 ms, which is the lookup failing, not the index updating</text>
+
+            <text x="16" y="490" fill="var(--muted)">Stage names and the subPipeline were read from db.incidents.explain().aggregate([{$search: ...}]) on the running cluster.</text>
+            <text x="16" y="512" fill="var(--remote)" font-weight="600">mongot holds an index and returns _ids. MongoDB holds the documents. Neither can answer a search alone.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption><code>explain()</code> shows mongod rewriting <code>$search</code> into <code>$_internalSearchMongotRemote</code> followed by <code>$_internalSearchIdLookup</code>, whose subPipeline is literally <code>{$match:{_id:{$eq: ...}}}</code>. Everything else about MongoDB Search follows from that split.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>How the index is built, and how it keeps up</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1000 648" role="img" aria-label="Each mongot replica runs its own two-phase replication. Phase one is initial sync: it scans the collection in id order from one replica set member and writes Lucene segments to its own persistent volume. Phase two is steady state: it holds an open change stream, applies insert, update and delete events, and records how far through the oplog it has applied so a restart resumes instead of rescanning. All three replicas do this independently and in parallel, so immediately after a write one replica can have a document while the others do not; on this cluster they converged after about one and a half seconds. The sync connection goes straight from each mongot to the replica set and does not pass through Envoy.">
+          <defs>
+            <marker id="sy-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+            <marker id="sy-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--remote)"/></marker>
+          </defs>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+
+            <rect x="330" y="20" width="340" height="72" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.6"/>
+            <text x="346" y="42" font-weight="600" fill="var(--host)">MongoDB replica set &#183; the source of truth</text>
+            <text x="346" y="61" font-size="11.5">collection documents + the oplog</text>
+            <text x="346" y="79" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">auth: SCRAM &#183; role searchCoordinator</text>
+            <text x="16" y="40" font-size="11" fill="var(--host)">three independent</text>
+            <text x="16" y="56" font-size="11" fill="var(--host)">connections, one per</text>
+            <text x="16" y="72" font-size="11" fill="var(--host)">replica &#8212; straight to the</text>
+            <text x="16" y="88" font-size="11" fill="var(--host)">replica set, NOT via Envoy</text>
+            <text x="690" y="48" font-size="11" fill="var(--muted)">each replica runs BOTH</text>
+            <text x="690" y="64" font-size="11" fill="var(--muted)">phases on its own.</text>
+            <text x="690" y="80" font-size="11" fill="var(--muted)">Nothing is shared between</text>
+            <text x="690" y="96" font-size="11" fill="var(--muted)">the pods.</text>
+
+            
+
+            <g>
+              <rect x="16" y="132" width="308" height="300" rx="9" fill="none" stroke="var(--remote)" stroke-width="1.5"/>
+              <text x="32" y="154" font-weight="600" fill="var(--remote)">mongot-search-0-0</text>
+
+              <rect x="32" y="166" width="276" height="104" rx="7" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.4"/>
+              <text x="46" y="186" font-weight="600" font-size="12">phase 1 &#183; initial sync</text>
+              <text x="46" y="204" font-size="11">scan the collection in _id order</text>
+              <text x="46" y="220" font-family="IBM Plex Mono, monospace" font-size="10">scan_type="id_order"</text>
+              <text x="46" y="238" font-size="11">build Lucene segments from scratch</text>
+              <text x="46" y="256" font-size="10.5" fill="var(--muted)">BufferlessInitialSyncManager</text>
+
+              <path d="M170,270 V288" fill="none" stroke="var(--remote)" stroke-width="1.5" marker-end="url(#sy-ok)"/>
+
+              <rect x="32" y="290" width="276" height="126" rx="7" fill="var(--surface)" stroke="var(--remote)" stroke-width="1.4"/>
+              <text x="46" y="310" font-weight="600" font-size="12">phase 2 &#183; steady state</text>
+              <text x="46" y="328" font-size="11">an open change stream, applied as</text>
+              <text x="46" y="343" font-size="11">events arrive</text>
+              <text x="46" y="362" font-size="11">record the oplog position applied</text>
+              <text x="46" y="377" font-size="10.5" fill="var(--muted)">replicationOptimeUpdater</text>
+              <text x="46" y="396" font-size="11" fill="var(--muted)">so a restart resumes, not rescans</text>
+              <text x="46" y="410" font-size="10.5" fill="var(--muted)">ChangeStreamManager</text>
+            </g>
+
+            <rect x="340" y="132" width="308" height="300" rx="9" fill="none" stroke="var(--none)" stroke-width="1.2" stroke-dasharray="6 4"/>
+            <text x="356" y="154" font-weight="600" fill="var(--muted)">mongot-search-0-1</text>
+            <text x="356" y="178" font-size="11.5" fill="var(--muted)">the same two phases, its own</text>
+            <text x="356" y="196" font-size="11.5" fill="var(--muted)">change stream, its own PVC,</text>
+            <text x="356" y="214" font-size="11.5" fill="var(--muted)">its own Lucene segments</text>
+
+            <rect x="664" y="132" width="308" height="300" rx="9" fill="none" stroke="var(--none)" stroke-width="1.2" stroke-dasharray="6 4"/>
+            <text x="680" y="154" font-weight="600" fill="var(--muted)">mongot-search-0-2</text>
+            <text x="680" y="178" font-size="11.5" fill="var(--muted)">identical index IDs on all three</text>
+            <text x="680" y="196" font-size="11.5" fill="var(--muted)">replicas, committed on their own</text>
+            <text x="680" y="214" font-size="11.5" fill="var(--muted)">schedules</text>
+
+            <path d="M420,92 V110 H170 V132" fill="none" stroke="var(--host)" stroke-width="1.4" marker-end="url(#sy-ah)"/>
+            <path d="M500,92 V132" fill="none" stroke="var(--host)" stroke-width="1.4" marker-end="url(#sy-ah)"/>
+            <path d="M580,92 V110 H818 V132" fill="none" stroke="var(--host)" stroke-width="1.4" marker-end="url(#sy-ah)"/>
+            
+
+            <rect x="16" y="448" width="472" height="96" rx="8" fill="var(--surface)" stroke="var(--rule)" stroke-width="1.3"/>
+            <text x="32" y="470" font-weight="600">on disk, per replica</text>
+            <text x="32" y="490" font-family="IBM Plex Mono, monospace" font-size="10.5">&lt;indexId&gt;_f6_u0_a0/ _0.cfs _0.cfe _0.si segments_N</text>
+            <text x="32" y="509" font-size="11.5">a Lucene index, not a copy of the documents</text>
+            <text x="32" y="528" font-size="11" fill="var(--muted)">measured: ~5 MB of index, ~34 MB of diagnostic.data</text>
+
+            <rect x="500" y="448" width="484" height="96" rx="8" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.5"/>
+            <text x="516" y="470" font-weight="600" fill="var(--gap)">the consequence teams trip over</text>
+            <text x="516" y="490" font-size="11.5">right after a write, replicas disagree for a moment</text>
+            <text x="516" y="509" font-family="IBM Plex Mono, monospace" font-size="11">001001001001001001 &#8230; 10 of 30 searches</text>
+            <text x="516" y="528" font-size="11" fill="var(--muted)">period 3 = three replicas &#183; converged after ~1.7 s</text>
+
+            <text x="16" y="580" fill="var(--muted)">Phase names, scan_type and the optime updater were read from mongot's own metrics and log class names on the running cluster.</text>
+            <text x="16" y="602" fill="var(--remote)" font-weight="600">The index is derived data. Losing a mongot volume costs an initial sync, never data &#8212; MongoDB remains the source of truth.</text>
+            <text x="16" y="624" fill="var(--muted)">Read-your-writes is not guaranteed across replicas: immediately after writing, the same query may hit a replica that has not applied it yet.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>Two phases per index, per replica: a collection scan in <code>_id</code> order, then an open change stream with the applied oplog position recorded so a restart resumes. All three replicas do this independently, which is why they briefly disagree after a write.</figcaption>
+    </figure>
+  </section>
+</div>
+</body>
+</html>
