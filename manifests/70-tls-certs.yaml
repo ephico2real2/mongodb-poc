@@ -8,8 +8,19 @@
 #   <prefix>-<name>-search-cert                   mongot server cert
 # Here prefix=lab, name=mongot, idx=0.
 ---
-# Envoy's server certificate. The SAN MUST cover externalHostname, which must also
-# equal the Route host - mongod sends it as SNI and Envoy matches the filter chain on it.
+# Envoy's server certificate.
+#
+# ONE certificate serves BOTH entry paths, because both terminate on the same Envoy and
+# every L4 hop in front of it (the passthrough Route here, an F5 passthrough VIP in an
+# enterprise) forwards the ClientHello untouched. The hostname identifies the SERVICE;
+# the entry path is chosen by IP:port.
+#
+#   grpc-search.apps-crc.testing:443     -> router (HAProxy) -> Envoy      Lab 2
+#   grpc-search.apps-crc.testing:27028   -> forwarder -> MetalLB VIP -> Envoy   Lab 1
+#
+# The CN/first SAN MUST equal spec.clusters[].loadBalancer.managed.externalHostname, and
+# must also equal the Route host: mongod sends it as SNI, the router selects the Route by
+# it, and Envoy matches its one filter chain on it.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata: { name: lab-mongot-search-lb-0-cert, namespace: mongodb-poc }
@@ -17,11 +28,24 @@ spec:
   secretName: lab-mongot-search-lb-0-cert
   commonName: grpc-search.apps-crc.testing
   dnsNames:
-  - grpc-search.apps-crc.testing            # the Route record        (:443 -> router)
-  - vip-grpc-search.apps-crc.testing        # the MetalLB VIP record  (:27028 -> VIP)
+  # The one name Envoy actually matches. Used by BOTH labs, on different ports.
+  - grpc-search.apps-crc.testing
+  # A SPARE SAN, kept so the certificate is ready if the VIP is ever split onto its own
+  # name and its own MongoDBSearch. Do NOT set it as mongotHost today: a ReplicaSet source
+  # gets exactly ONE SNI name. Verified behaviour if you do - on :27028 Envoy closes the
+  # handshake and serves no certificate; on :443 the OpenShift router answers with its own
+  # default wildcard cert and no ALPN, so TLS "works" but never reaches Envoy.
+  - vip-grpc-search.apps-crc.testing
+  # The in-cluster name, which is what the operator would use if externalHostname were unset.
   - mongot-search-0-proxy-svc.mongodb-poc.svc.cluster.local
+  # IP SANs are for completeness, not function. A client that dials an IP sends NO SNI, so
+  # no filter chain matches and the connection closes before the certificate is ever
+  # validated. They are here so `openssl s_client -connect <ip> -servername <name>` and
+  # IP-based probes do not additionally fail certificate validation.
   ipAddresses:
-  - 192.168.127.100                          # the VIP itself
+  - 192.168.127.100    # the MetalLB VIP itself
+  - 192.168.64.1       # what both records resolve to from the mongod containers (bridge100)
+  - 192.168.127.2      # what *.apps-crc.testing resolves to INSIDE the cluster (br-ex)
   usages: [server auth, digital signature, key encipherment]
   issuerRef: { name: enterprise-ca, kind: ClusterIssuer, group: cert-manager.io }
 ---

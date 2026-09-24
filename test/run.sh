@@ -121,6 +121,37 @@ if want entry; then suite "entry path"
     "$(docker exec -i mongo1 mongosh "mongodb://${ROOT_USER}:${ROOT_PASSWORD}@localhost:${PORT1}/admin?directConnection=true" \
         --quiet --eval 'print(db.adminCommand({getCmdLineOpts:1}).parsed.setParameter.useGrpcForSearch||"")' 2>/dev/null | tr -d '\r')"
 
+  # Both entry paths terminate on the SAME Envoy and share ONE certificate, because a
+  # ReplicaSet source gets exactly one SNI name. Verify each path end to end at the TLS
+  # layer, and that a non-matching SNI is genuinely refused rather than quietly accepted.
+  EH=$(oc get mongodbsearch mongot -n "$NS" \
+        -o jsonpath='{.spec.clusters[0].loadBalancer.managed.externalHostname}' 2>/dev/null)
+  VIPPORT=$(oc get svc mongot-grpc-lb -n "$NS" -o jsonpath='{.spec.ports[0].port}' 2>/dev/null)
+  tls_cn() {  # host:port SNI -> the CN served, or empty if no certificate was served
+    echo | openssl s_client -connect "$1" -servername "$2" -alpn h2 2>/dev/null \
+      | sed -n 's/.*subject=CN *= *\([^ ,]*\).*/\1/p' | head -1
+  }
+  if [ -n "$EH" ]; then
+    assert_eq "Route path serves the Envoy certificate" "$EH" "$(tls_cn "$EH:443" "$EH")"
+    if [ -n "$VIPPORT" ]; then
+      assert_eq "MetalLB VIP path serves the SAME certificate" "$EH" "$(tls_cn "$EH:$VIPPORT" "$EH")"
+    else
+      skip "MetalLB VIP path serves the SAME certificate" "mongot-grpc-lb absent"
+    fi
+    # The spare SAN must NOT work as an SNI: on the VIP path Envoy closes the handshake
+    # and serves nothing. (On :443 the router answers with its own wildcard cert instead,
+    # which is why this is asserted against the VIP path, not the Route.)
+    SPARE="vip-$EH"
+    if [ -n "$VIPPORT" ]; then
+      assert_eq "a non-matching SNI is refused by Envoy" "" "$(tls_cn "$EH:$VIPPORT" "$SPARE")"
+    else
+      skip "a non-matching SNI is refused by Envoy" "mongot-grpc-lb absent"
+    fi
+    assert_contains "the spare VIP SAN is on the certificate" "$SPARE" \
+      "$(oc get secret "${PFX:-lab}-mongot-search-lb-0-cert" -n "$NS" -o jsonpath='{.data.tls\.crt}' 2>/dev/null \
+         | base64 -d 2>/dev/null | openssl x509 -noout -ext subjectAltName 2>/dev/null)"
+  fi
+
   EIPS=$(oc get pods -n "$NS" -l app=mongot-search-lb-0 -o jsonpath='{range .items[*]}{.status.podIP}{"\n"}{end}' | grep .)
   RP=$(oc get pods -n openshift-ingress -l ingresscontroller.operator.openshift.io/deployment-ingresscontroller=default -o name 2>/dev/null | head -1)
   RC=0

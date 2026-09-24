@@ -1,0 +1,122 @@
+# Phase B: the same managed Envoy as 20-search-managed-envoy.yaml, with TLS on.
+#
+# This file reconciles what is actually running. Apply it in place of Phase A once the
+# certificates in 65-enterprise-ca.yaml and 70-tls-certs.yaml exist.
+#
+# ---------------------------------------------------------------------------------
+# ONE HOSTNAME, TWO ENTRY PATHS
+# ---------------------------------------------------------------------------------
+# externalHostname is the SNI name Envoy matches, and a ReplicaSet source gets exactly
+# ONE of them. From the operator (mongodbsearchenvoy_controller.go, buildReplicaSetRouteForCluster):
+#
+#     sniHostname := "<proxy-svc>.<ns>.svc.cluster.local"
+#     if endpoint := search.GetManagedLBEndpointForCluster(clusterName); endpoint != "" {
+#         sniHostname = endpoint        // externalHostname REPLACES it - it does not add
+#     }
+#
+# buildRoutesForCluster returns one route for a replica set, buildLDSJSON makes one filter
+# chain per route, and buildFilterChain sets ServerNames to a ONE-element list. There is a
+# routerHostname field, but the CRD says it is ignored for ReplicaSet sources (sharded only).
+#
+# So a second FQDN for the second entry path is not possible here - and it is not wanted.
+# Both paths terminate on the SAME Envoy, and every L4 hop between client and Envoy
+# (an F5 passthrough VIP, an OpenShift passthrough Route) forwards the ClientHello
+# untouched. The hostname is the SERVICE's identity; the entry path is chosen by IP:port.
+# That is how an enterprise does it: one FQDN per service per environment, and moving to a
+# different VIP is a DNS change, not a new name.
+#
+#   Lab 1, MetalLB VIP :   mongotHost = grpc-search.apps-crc.testing:27028
+#                          -> 192.168.64.1:27028 -> gvproxy forwarder -> VIP 192.168.127.100
+#   Lab 2, OpenShift Route: mongotHost = grpc-search.apps-crc.testing:443
+#                          -> 192.168.64.1:443   -> router (HAProxy) -> Envoy
+#
+# BOTH work at the same time. Switch labs by changing the PORT in mongodb/.env
+# (MONGOT_ENDPOINT) and restarting the replica set - this CR does not change.
+#
+# vip-grpc-search.apps-crc.testing exists as a spare SAN on the certificate only. Using it
+# as mongotHost sends an SNI Envoy does not match. What happens next differs by path, and
+# both were verified with openssl s_client:
+#
+#   VIP path (:27028)   straight to Envoy. No filter chain matches, Envoy closes the
+#                       connection during the handshake and serves NO certificate:
+#                       "unexpected eof while reading".
+#   Route path (:443)   the OpenShift router sees an SNI matching no Route, so it answers
+#                       with its OWN default wildcard certificate (CN=*.apps-crc.testing)
+#                       and NO ALPN. The handshake "succeeds" against the router and never
+#                       reaches Envoy at all - the more confusing of the two failures,
+#                       because a naive check sees a valid TLS connection.
+#
+# ---------------------------------------------------------------------------------
+# The sync-source password Secret is deliberately NOT in git. Create it out of band,
+# using the same value as SEARCH_PASSWORD in mongodb/.env:
+#
+#   oc create secret generic mongot-search-sync-source-password \
+#     -n mongodb-poc --from-literal=password='<SEARCH_PASSWORD>'
+apiVersion: mongodb.com/v1
+kind: MongoDBSearch
+metadata:
+  name: mongot
+  namespace: mongodb-poc
+spec:
+  version: "1.70.1"
+
+  security:
+    tls:
+      # The operator DERIVES the Secret names from this prefix and the CR name:
+      #   lab-mongot-search-lb-0-cert          Envoy server cert  (faces mongod)
+      #   lab-mongot-search-lb-0-client-cert   Envoy -> mongot client cert
+      #   lab-mongot-search-cert               mongot server cert
+      # They are not free choice - see manifests/70-tls-certs.yaml.
+      certsSecretPrefix: lab
+
+  source:
+    external:
+      hostAndPorts:
+      - "192.168.64.4:27017"
+      - "192.168.64.4:27018"
+      - "192.168.64.4:27019"
+      # REQUIRED, and not only for the sync leg. mongodbsearchenvoy_controller.go gates
+      # Envoy's certificate volume mounts on this being set:
+      #
+      #     if tlsEnabled && tlsCfg != nil { /* mount envoy-server-cert, -client-cert, ca-cert */ }
+      #
+      # Set security.tls without it and the Envoy pods come up Ready with NO certificates
+      # mounted, and every connection fails at the handshake. This is the coupling defect.
+      tls:
+        ca:
+          name: external-mongod-ca
+    username: search-sync-source
+    passwordSecretRef:
+      name: mongot-search-sync-source-password
+
+  clusters:
+  - replicas: 3
+    # CRC has ~7GiB allocatable headroom; defaults are 2 CPU / 4Gi PER mongot.
+    resourceRequirements:
+      requests: { cpu: "200m", memory: "1Gi" }
+      limits:   { cpu: "1",    memory: "2Gi" }
+    persistence:
+      single:
+        storage: 2Gi
+        storageClass: crc-csi-hostpath-provisioner
+    loadBalancer:
+      managed:
+        # The SNI name Envoy matches. Must equal the Route host AND be a SAN on
+        # lab-mongot-search-lb-0-cert. See the note at the top of this file.
+        externalHostname: grpc-search.apps-crc.testing
+        # A second replica is restart tolerance, not throughput: mongod holds ONE
+        # long-lived connection, and whichever L4 hop is in front pins it to one Envoy.
+        replicas: 2
+        retryPolicy:
+          numRetries: 2
+          perTryTimeout: 60s
+
+  observability:
+    prometheus:
+      mode: enabled
+      port: 9946
+    metricsForwarder:
+      mode: auto
+      resourceRequirements:
+        requests: { cpu: "100m", memory: "128Mi" }
+        limits:   { cpu: "250m", memory: "256Mi" }

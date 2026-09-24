@@ -45,7 +45,7 @@ across the `mongot` pods.
 Three commands worth knowing before anything else:
 
 ```bash
-./test/run.sh                      # 47 assertions across 8 suites, exit code
+./test/run.sh                      # 51 assertions across 8 suites, exit code
 ./app/entry-path.sh                # is mongod using the Route, or the MetalLB VIP?
 ./app/trace-query.sh -n 6 "pods"   # which mongot pod answered each query
 ```
@@ -366,6 +366,88 @@ Passthrough uses `timeout tunnel` instead, and its 1h default comfortably covers
 
 **A passthrough Route is a pipe, not a balancer.** Being pure TCP it cannot split gRPC
 streams — it must sit *in front of* Envoy, never instead of it.
+
+### One hostname, two entry paths
+
+A tempting instinct is to give each entry path its own FQDN — `vip-grpc-search...` for the
+MetalLB VIP and `grpc-search...` for the Route. **Don't.** Two reasons, one technical and one
+about how this is actually run in production.
+
+**The operator gives a replica-set source exactly one SNI name.** From
+`mongodbsearchenvoy_controller.go`:
+
+```go
+sniHostname := fmt.Sprintf("%s.%s.svc.cluster.local", sniServiceName, namespace)
+if endpoint := search.GetManagedLBEndpointForCluster(clusterName); endpoint != "" {
+    sniHostname = endpoint      // externalHostname REPLACES it - it does not add
+}
+```
+
+`buildRoutesForCluster` returns one route for a replica set, `buildLDSJSON` builds one filter
+chain per route, and `buildFilterChain` sets `ServerNames` to a **one-element** list. There is
+a `routerHostname` field in the CRD, but it is documented as *ignored for ReplicaSet sources* —
+it exists for sharded clusters.
+
+**And a second name would be wrong anyway.** Both paths terminate on the same Envoy, and every
+L4 hop in front of it — a passthrough Route here, an F5 passthrough VIP in an enterprise —
+forwards the ClientHello untouched. The hostname is the **service's identity**; the entry path
+is chosen by IP and port. That is the enterprise pattern: one FQDN per service per environment,
+and moving traffic to a different VIP is a DNS change, not a new name. Separate FQDNs are for
+separate environments or genuinely separate backends, not for two doors into one service.
+
+So both labs use the same `externalHostname` and the same certificate, and differ only in the
+port they dial:
+
+| | Lab 1 — MetalLB VIP | Lab 2 — OpenShift Route |
+|---|---|---|
+| `mongotHost` | `grpc-search.apps-crc.testing:27028` | `grpc-search.apps-crc.testing:443` |
+| resolves to | `192.168.64.1` | `192.168.64.1` |
+| then | gvproxy forwarder → VIP `192.168.127.100` | router (HAProxy) → Envoy |
+| `externalHostname` | `grpc-search.apps-crc.testing` | *unchanged* |
+| certificate | *the same one* | *the same one* |
+
+**Both work at the same time.** Switching labs means changing `MONGOT_ENDPOINT` in
+`mongodb/.env` and restarting the replica set — the `MongoDBSearch` CR does not change:
+
+```bash
+# Lab 1 - the MetalLB VIP
+MONGOT_ENDPOINT=grpc-search.apps-crc.testing:27028
+# Lab 2 - the OpenShift Route
+MONGOT_ENDPOINT=grpc-search.apps-crc.testing:443
+```
+
+Verified with `openssl s_client`, both serving `CN=grpc-search.apps-crc.testing` and ALPN `h2`:
+
+```text
+:443    SNI grpc-search.apps-crc.testing   -> CN=grpc-search.apps-crc.testing  ALPN h2
+:27028  SNI grpc-search.apps-crc.testing   -> CN=grpc-search.apps-crc.testing  ALPN h2
+```
+
+### What a wrong SNI actually does — and it differs by path
+
+`vip-grpc-search.apps-crc.testing` is kept as a **spare SAN** on the certificate, so the cert is
+ready if the VIP is ever split onto its own name and its own `MongoDBSearch`. Using it as
+`mongotHost` today fails, and the two paths fail *differently*:
+
+```text
+:27028  SNI vip-grpc-search...  -> Envoy closes the handshake, serves NO certificate
+                                   ("unexpected eof while reading")
+
+:443    SNI vip-grpc-search...  -> the OpenShift router matches no Route, answers with its
+                                   OWN default wildcard cert (CN=*.apps-crc.testing) and
+                                   NO ALPN. TLS "succeeds" and never reaches Envoy.
+```
+
+The Route case is the nastier one: a naive check sees a completed TLS handshake and concludes
+the path is healthy, when the request never got near the search tier. `./test/run.sh entry`
+asserts the refusal against the **VIP** path for exactly that reason.
+
+**IP SANs are for completeness, not function.** A client that dials an IP sends no SNI at all,
+so no filter chain matches and the connection closes before the certificate is examined. The
+three IPs on the cert (`192.168.127.100` the VIP, `192.168.64.1` what the records resolve to
+from the mongod containers, `192.168.127.2` what `*.apps-crc.testing` resolves to in-cluster)
+are there so IP-based probes don't *additionally* fail certificate validation.
+
 
 ### Which one is actually in use?
 

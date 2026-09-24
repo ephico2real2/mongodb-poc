@@ -4,6 +4,15 @@
 # (/clusters and /config_dump return 403), so exposing it is far less dangerous than
 # exposing a stock Envoy admin port - but it is still an admin surface. ClusterIP only:
 # reach it with `oc port-forward`, do NOT give it a VIP or a Route.
+#
+# WHY NOT HEADLESS. It was suggested that this be clusterIP: None so each Envoy could be
+# addressed individually. It would not help. Stable per-pod DNS (<pod>.<svc>) requires a
+# StatefulSet, and the operator runs Envoy as a DEPLOYMENT - pod names are random, so
+# headless would yield two A records you cannot address by name. Either way the correct
+# way to read a SPECIFIC replica is by pod IP, which is what verify-search.sh,
+# load-test.sh and test/run.sh all do. Scraping this Service round-robins, and since only
+# one Envoy replica carries the connection, a scrape landing on the idle one reads zero -
+# that trap is documented in TESTING.md rather than papered over with a Service type.
 apiVersion: v1
 kind: Service
 metadata:

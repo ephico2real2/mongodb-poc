@@ -130,6 +130,13 @@ curl -X POST http://192.168.127.254/services/forwarder/expose \
 
 ## Data path
 
+> **Lab 1 (MetalLB VIP) and Lab 2 (OpenShift Route) share one hostname and one certificate**,
+> and differ only in the port `mongotHost` dials. A replica-set source gets exactly one SNI
+> name from the operator, and both paths terminate on the same Envoy, so a second FQDN is
+> neither possible nor wanted. See
+> [One hostname, two entry paths](README.md#one-hostname-two-entry-paths).
+
+
 <!-- markdownlint-disable MD033 -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mongot-openshift/grpc-path.dark.png">

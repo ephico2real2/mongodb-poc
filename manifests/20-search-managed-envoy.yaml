@@ -1,4 +1,6 @@
-# Phase A: prove the operator deploys and configures Envoy in front of 3 mongot pods.
+# Phase A (LAB 1, plaintext): prove the operator deploys and configures Envoy in front of
+# 3 mongot pods. Once this works, move to manifests/20-tls-search-managed-envoy.yaml,
+# which is the same deployment with TLS on and is what is actually running.
 # No spec.security.tls yet -> plaintext h2c end to end, and NO SNI filter-chain match
 # (buildFilterChain only sets FilterChainMatch.ServerNames when tlsEnabled).
 # externalHostname is still required by the validator for an external source.
@@ -37,7 +39,11 @@ spec:
         storageClass: crc-csi-hostpath-provisioner
     loadBalancer:
       managed:
-        externalHostname: grpc-search.crc.testing
+        # Required by the validator for an external source even in plaintext, where it is
+        # otherwise inert: buildFilterChain only sets FilterChainMatch.ServerNames when TLS
+        # is enabled, so nothing matches on it yet. Keep it identical to the TLS variant so
+        # moving to Phase B is a one-file swap and not a rename.
+        externalHostname: grpc-search.apps-crc.testing
         replicas: 2
         retryPolicy:
           numRetries: 2
