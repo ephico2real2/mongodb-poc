@@ -457,14 +457,42 @@ ready if the VIP is ever split onto its own name and its own `MongoDBSearch`. Us
 :27028  SNI vip-grpc-search...  -> Envoy closes the handshake, serves NO certificate
                                    ("unexpected eof while reading")
 
-:443    SNI vip-grpc-search...  -> the OpenShift router matches no Route, answers with its
-                                   OWN default wildcard cert (CN=*.apps-crc.testing) and
-                                   NO ALPN. TLS "succeeds" and never reaches Envoy.
+:443    SNI vip-grpc-search...  -> the router's DEFAULT certificate (CN=*.apps-crc.testing)
+                                   and NO ALPN. TLS "succeeds" and never reaches Envoy.
 ```
 
-The Route case is the nastier one: a naive check sees a completed TLS handshake and concludes
-the path is healthy, when the request never got near the search tier. `./test/run.sh entry`
-asserts the refusal against the **VIP** path for exactly that reason.
+**The `:443` case needs stating carefully, because it is easy to misread.** A passthrough
+Route is a pure TCP pipe and the router takes **no part** in its TLS negotiation — that is
+true, and it is the whole reason this design works. What happens with an unmatched SNI is
+that *the connection is never classified as passthrough traffic in the first place*. From the
+router's own frontend:
+
+```haproxy
+frontend public_ssl
+  acl sni             req.ssl_sni -m found
+  acl sni_passthrough req.ssl_sni,lower,map_reg(.../os_sni_passthrough.map) -m found
+  use_backend %[req.ssl_sni,lower,map_reg(.../os_tcp_be.map)] if sni sni_passthrough
+  use_backend be_sni if sni          # SNI present, NOT passthrough -> termination flow
+  default_backend be_no_sni          # no SNI at all               -> termination flow
+
+backend be_sni -> fe_sni:
+  bind ... ssl crt <DefaultCertificate> crt-list .../cert_config.map accept-proxy no-alpn
+```
+
+Only names present in `os_sni_passthrough.map` take the TCP path. On this cluster that map
+holds three entries — `oauth-openshift`, `grpc-search` and the ingress canary — and
+`vip-grpc-search` is not one of them. So the connection falls to `be_sni`, the flow shared
+with `edge` and `reencrypt` routes, which binds the router's default certificate. The
+`no-alpn` on that bind line is exactly why the probe reports no ALPN.
+
+Port 443 is shared between the passthrough and terminating flows; **the map is what makes a
+connection passthrough.** Red Hat documents the sibling case in the same terms: *"Any non-SNI
+traffic received on port 443 is handled with TLS termination and a default certificate."*
+
+This is the nastier of the two failures: a naive check sees a completed TLS handshake and
+concludes the path is healthy, when the request never got near the search tier.
+`./test/run.sh entry` asserts the refusal against the **VIP** path for exactly that reason —
+there, Envoy itself answers, so the refusal is unambiguous.
 
 **IP SANs are for completeness, not function.** A client that dials an IP sends no SNI at all,
 so no filter chain matches and the connection closes before the certificate is examined. The

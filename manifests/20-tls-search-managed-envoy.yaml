@@ -40,11 +40,23 @@
 #   VIP path (:27028)   straight to Envoy. No filter chain matches, Envoy closes the
 #                       connection during the handshake and serves NO certificate:
 #                       "unexpected eof while reading".
-#   Route path (:443)   the OpenShift router sees an SNI matching no Route, so it answers
-#                       with its OWN default wildcard certificate (CN=*.apps-crc.testing)
-#                       and NO ALPN. The handshake "succeeds" against the router and never
-#                       reaches Envoy at all - the more confusing of the two failures,
-#                       because a naive check sees a valid TLS connection.
+#   Route path (:443)   the connection is never classified as passthrough at all, so it
+#                       never becomes this Route's traffic. A passthrough Route is a pure
+#                       TCP pipe and the router takes NO part in its TLS - but that only
+#                       applies to SNI names in os_sni_passthrough.map. From the router's
+#                       own frontend:
+#
+#                         acl sni_passthrough req.ssl_sni,lower,map_reg(os_sni_passthrough.map) -m found
+#                         use_backend %[...os_tcp_be.map] if sni sni_passthrough   # TCP, no termination
+#                         use_backend be_sni if sni                                # termination flow
+#                         default_backend be_no_sni                                # termination flow
+#
+#                       be_sni binds "ssl crt <DefaultCertificate> ... no-alpn", so an
+#                       unmatched name gets the router's default certificate and no ALPN.
+#                       Port 443 is shared between the passthrough and terminating flows;
+#                       the map is what makes a connection passthrough. This is the more
+#                       confusing failure: a naive check sees a completed TLS handshake,
+#                       but the request never reached the search tier.
 #
 # ---------------------------------------------------------------------------------
 # The sync-source password Secret is deliberately NOT in git. Create it out of band,

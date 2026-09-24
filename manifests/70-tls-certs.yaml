@@ -33,8 +33,10 @@ spec:
   # A SPARE SAN, kept so the certificate is ready if the VIP is ever split onto its own
   # name and its own MongoDBSearch. Do NOT set it as mongotHost today: a ReplicaSet source
   # gets exactly ONE SNI name. Verified behaviour if you do - on :27028 Envoy closes the
-  # handshake and serves no certificate; on :443 the OpenShift router answers with its own
-  # default wildcard cert and no ALPN, so TLS "works" but never reaches Envoy.
+  # handshake and serves no certificate. On :443 the name is absent from the router's
+  # os_sni_passthrough.map, so the connection is never classified as passthrough traffic
+  # and falls into the shared termination flow (be_sni), which binds the router's default
+  # certificate with no-alpn. TLS "works" and never reaches Envoy.
   - vip-grpc-search.apps-crc.testing
   # The in-cluster name, which is what the operator would use if externalHostname were unset.
   - mongot-search-0-proxy-svc.mongodb-poc.svc.cluster.local
