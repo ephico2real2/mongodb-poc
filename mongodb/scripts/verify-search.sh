@@ -48,6 +48,18 @@ const r=d.$COLL.aggregate([{\$vectorSearch:{index:'vector_index',path:'plot_embe
 if(!r.length||r[0].title!=='The Karate Kid'){print('  FAIL: '+JSON.stringify(r));quit(1);}
 r.forEach(x=>print('  PASS  '+x.title+'  score='+x.score.toFixed(4)));"
 
+echo "=== 2b. correctness: \$vectorSearch WITH filter ==="
+docker exec -i mongo1 mongosh "$URI" --quiet --eval "
+const d=db.getSiblingDB('$DB');
+// creature-horror vector, but restricted to 1980+. Jaws (1975) is the nearest
+// match overall, so its ABSENCE is what proves the filter field is live.
+const r=d.$COLL.aggregate([{\$vectorSearch:{index:'vector_index',path:'plot_embedding',
+  queryVector:[0.0,0.0,0.90,0.0,0.0],numCandidates:50,limit:3,filter:{year:{\$gte:1980}}}},
+  {\$project:{title:1,year:1}}]).toArray();
+if(r.some(x=>x.year<1980)){print('  FAIL: filter leaked '+JSON.stringify(r));quit(1);}
+if(!r.length){print('  FAIL: no results');quit(1);}
+print('  PASS  filter year>=1980 -> '+r.map(x=>x.title+' ('+x.year+')').join(', '));"
+
 echo "=== 3. counters BEFORE (via toolbox, StatefulSet DNS) ==="
 BEFORE=$(counters); echo "$BEFORE" | sed 's/^/  /'
 

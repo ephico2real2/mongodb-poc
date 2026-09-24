@@ -1,17 +1,338 @@
 [
-  { "_id": 1, "title": "The Karate Kid",  "year": 1984, "genre": "drama",
+  {
+    "_id": 1,
+    "title": "The Karate Kid",
+    "year": 1984,
+    "genre": "drama",
     "plot": "A bullied boy learns karate from a wise handyman.",
-    "plot_embedding": [0.9, 0.1, 0.0, 0.1, 0.0] },
-  { "_id": 2, "title": "Rocky",           "year": 1976, "genre": "drama",
+    "plot_embedding": [
+      0.95,
+      0.1,
+      0.0,
+      0.05,
+      0.0
+    ]
+  },
+  {
+    "_id": 2,
+    "title": "Rocky",
+    "year": 1976,
+    "genre": "drama",
     "plot": "An underdog boxer gets a shot at the heavyweight title.",
-    "plot_embedding": [0.8, 0.2, 0.1, 0.0, 0.0] },
-  { "_id": 3, "title": "Jaws",            "year": 1975, "genre": "thriller",
+    "plot_embedding": [
+      0.9,
+      0.25,
+      0.05,
+      0.0,
+      0.05
+    ]
+  },
+  {
+    "_id": 3,
+    "title": "Jaws",
+    "year": 1975,
+    "genre": "thriller",
     "plot": "A great white shark terrorises a seaside town.",
-    "plot_embedding": [0.0, 0.1, 0.9, 0.0, 0.1] },
-  { "_id": 4, "title": "Alien",           "year": 1979, "genre": "thriller",
+    "plot_embedding": [
+      0.0,
+      0.1,
+      0.92,
+      0.05,
+      0.1
+    ]
+  },
+  {
+    "_id": 4,
+    "title": "Alien",
+    "year": 1979,
+    "genre": "sci-fi",
     "plot": "A creature stalks the crew of a spaceship.",
-    "plot_embedding": [0.0, 0.0, 0.8, 0.2, 0.1] },
-  { "_id": 5, "title": "Field of Dreams", "year": 1989, "genre": "drama",
+    "plot_embedding": [
+      0.0,
+      0.0,
+      0.8,
+      0.55,
+      0.1
+    ]
+  },
+  {
+    "_id": 5,
+    "title": "Field of Dreams",
+    "year": 1989,
+    "genre": "drama",
     "plot": "A farmer builds a baseball field in his cornfield.",
-    "plot_embedding": [0.2, 0.9, 0.0, 0.0, 0.1] }
+    "plot_embedding": [
+      0.15,
+      0.93,
+      0.0,
+      0.0,
+      0.05
+    ]
+  },
+  {
+    "_id": 6,
+    "title": "Raging Bull",
+    "year": 1980,
+    "genre": "drama",
+    "plot": "A boxer's rage destroys his life outside the ring.",
+    "plot_embedding": [
+      0.85,
+      0.2,
+      0.05,
+      0.0,
+      0.25
+    ]
+  },
+  {
+    "_id": 7,
+    "title": "The Wrestler",
+    "year": 2008,
+    "genre": "drama",
+    "plot": "An ageing wrestler chases one last match.",
+    "plot_embedding": [
+      0.88,
+      0.22,
+      0.02,
+      0.0,
+      0.08
+    ]
+  },
+  {
+    "_id": 8,
+    "title": "Cool Runnings",
+    "year": 1993,
+    "genre": "comedy",
+    "plot": "A Jamaican bobsled team competes at the Winter Olympics.",
+    "plot_embedding": [
+      0.72,
+      0.45,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  {
+    "_id": 9,
+    "title": "Moneyball",
+    "year": 2011,
+    "genre": "drama",
+    "plot": "A manager rebuilds a baseball team using statistics.",
+    "plot_embedding": [
+      0.3,
+      0.9,
+      0.0,
+      0.05,
+      0.05
+    ]
+  },
+  {
+    "_id": 10,
+    "title": "The Natural",
+    "year": 1984,
+    "genre": "drama",
+    "plot": "A gifted batter returns to baseball after years away.",
+    "plot_embedding": [
+      0.25,
+      0.92,
+      0.0,
+      0.0,
+      0.05
+    ]
+  },
+  {
+    "_id": 11,
+    "title": "Bull Durham",
+    "year": 1988,
+    "genre": "comedy",
+    "plot": "Minor league baseball players chase the big leagues.",
+    "plot_embedding": [
+      0.28,
+      0.88,
+      0.0,
+      0.0,
+      0.02
+    ]
+  },
+  {
+    "_id": 12,
+    "title": "The Thing",
+    "year": 1982,
+    "genre": "thriller",
+    "plot": "A shape-shifting creature infiltrates an Antarctic base.",
+    "plot_embedding": [
+      0.0,
+      0.0,
+      0.9,
+      0.35,
+      0.12
+    ]
+  },
+  {
+    "_id": 13,
+    "title": "Predator",
+    "year": 1987,
+    "genre": "sci-fi",
+    "plot": "A commando team is hunted by an alien creature.",
+    "plot_embedding": [
+      0.2,
+      0.0,
+      0.82,
+      0.45,
+      0.08
+    ]
+  },
+  {
+    "_id": 14,
+    "title": "Aliens",
+    "year": 1986,
+    "genre": "sci-fi",
+    "plot": "Marines face a hive of creatures on a colony world.",
+    "plot_embedding": [
+      0.15,
+      0.0,
+      0.78,
+      0.6,
+      0.06
+    ]
+  },
+  {
+    "_id": 15,
+    "title": "Blade Runner",
+    "year": 1982,
+    "genre": "sci-fi",
+    "plot": "A detective hunts synthetic humans in a rain-soaked city.",
+    "plot_embedding": [
+      0.0,
+      0.0,
+      0.15,
+      0.85,
+      0.6
+    ]
+  },
+  {
+    "_id": 16,
+    "title": "2001: A Space Odyssey",
+    "year": 1968,
+    "genre": "sci-fi",
+    "plot": "A voyage to Jupiter is undone by a sentient computer.",
+    "plot_embedding": [
+      0.0,
+      0.0,
+      0.05,
+      0.95,
+      0.05
+    ]
+  },
+  {
+    "_id": 17,
+    "title": "Apollo 13",
+    "year": 1995,
+    "genre": "drama",
+    "plot": "A crippled spacecraft must be brought home.",
+    "plot_embedding": [
+      0.3,
+      0.2,
+      0.0,
+      0.88,
+      0.0
+    ]
+  },
+  {
+    "_id": 18,
+    "title": "The Martian",
+    "year": 2015,
+    "genre": "sci-fi",
+    "plot": "A stranded astronaut grows food to survive on Mars.",
+    "plot_embedding": [
+      0.35,
+      0.15,
+      0.0,
+      0.9,
+      0.0
+    ]
+  },
+  {
+    "_id": 19,
+    "title": "Chinatown",
+    "year": 1974,
+    "genre": "noir",
+    "plot": "A detective uncovers corruption over a city's water.",
+    "plot_embedding": [
+      0.0,
+      0.05,
+      0.05,
+      0.0,
+      0.93
+    ]
+  },
+  {
+    "_id": 20,
+    "title": "The Maltese Falcon",
+    "year": 1941,
+    "genre": "noir",
+    "plot": "A detective chases a priceless statuette.",
+    "plot_embedding": [
+      0.0,
+      0.0,
+      0.05,
+      0.0,
+      0.95
+    ]
+  },
+  {
+    "_id": 21,
+    "title": "L.A. Confidential",
+    "year": 1997,
+    "genre": "noir",
+    "plot": "Three detectives uncover police corruption.",
+    "plot_embedding": [
+      0.05,
+      0.05,
+      0.05,
+      0.0,
+      0.92
+    ]
+  },
+  {
+    "_id": 22,
+    "title": "Heat",
+    "year": 1995,
+    "genre": "crime",
+    "plot": "A detective pursues a disciplined crew of thieves.",
+    "plot_embedding": [
+      0.1,
+      0.05,
+      0.05,
+      0.05,
+      0.85
+    ]
+  },
+  {
+    "_id": 23,
+    "title": "Seabiscuit",
+    "year": 2003,
+    "genre": "drama",
+    "plot": "An undersized racehorse becomes a national symbol.",
+    "plot_embedding": [
+      0.6,
+      0.7,
+      0.0,
+      0.0,
+      0.02
+    ]
+  },
+  {
+    "_id": 24,
+    "title": "Remember the Titans",
+    "year": 2000,
+    "genre": "drama",
+    "plot": "A football coach unites a newly integrated team.",
+    "plot_embedding": [
+      0.65,
+      0.62,
+      0.0,
+      0.0,
+      0.0
+    ]
+  }
 ]

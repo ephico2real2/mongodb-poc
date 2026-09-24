@@ -1,0 +1,48 @@
+# A dedicated enterprise CA for this POC, mirroring the cluster's existing convention:
+#   <prefix>-selfsigned-bootstrap  ClusterIssuer, selfSigned - bootstraps the root only
+#   <prefix>-enterprise-root-ca    Certificate (isCA) in the cert-manager namespace
+#   <prefix>-enterprise-ca         ClusterIssuer signing from that root
+#
+# Deliberately NOT reusing the cluster's ldap-enterprise-ca: that CA belongs to another
+# workload, and sharing a signing identity across unrelated systems means rotating one
+# forces rotation of the other.
+#
+# The root Secret MUST live in the cert-manager namespace: the operator runs with
+# --cluster-resource-namespace=$(POD_NAMESPACE), which is where a ClusterIssuer looks
+# up its ca.secretName.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: enterprise-selfsigned-bootstrap
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: enterprise-root-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: Enterprise Root CA
+  subject:
+    organizations: ["Enterprise POC"]
+  secretName: enterprise-root-ca
+  duration: 43800h      # 5 years - a root, not a leaf
+  renewBefore: 8760h    # 1 year
+  privateKey:
+    algorithm: RSA
+    size: 4096
+    encoding: PKCS8
+  issuerRef:
+    name: enterprise-selfsigned-bootstrap
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: enterprise-ca
+spec:
+  ca:
+    secretName: enterprise-root-ca

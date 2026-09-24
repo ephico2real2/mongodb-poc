@@ -100,7 +100,24 @@ certificate are fine for clients that address it differently, but only the
 
 ## 5. Option A — cert-manager
 
-What this repository uses. See `manifests/70-tls-certs.yaml`.
+What this repository uses: a **dedicated** enterprise CA
+(`manifests/65-enterprise-ca.yaml`), with the workload certificates in
+`manifests/70-tls-certs.yaml`.
+
+It deliberately does **not** reuse the cluster's existing `ldap-enterprise-ca`. That CA
+belongs to another workload, and sharing a signing identity across unrelated systems
+means rotating one forces rotation of the other. The naming follows the same convention:
+
+| Object | Kind | Role |
+|---|---|---|
+| `enterprise-selfsigned-bootstrap` | `ClusterIssuer` | bootstraps the root, nothing else |
+| `enterprise-root-ca` | `Certificate` in **`cert-manager`** | the root — RSA 4096, 5 years |
+| `enterprise-ca` | `ClusterIssuer` | signs every workload certificate |
+
+The root Secret **must** live in the `cert-manager` namespace: the operator runs with
+`--cluster-resource-namespace=$(POD_NAMESPACE)`, which is where a `ClusterIssuer`
+resolves `ca.secretName`. Put it in the workload namespace and the issuer never
+becomes Ready.
 
 ```yaml
 apiVersion: cert-manager.io/v1
@@ -379,6 +396,23 @@ PEM, so new content produces a new filename, a new pod spec and a rolling restar
 `clusters[].replicas >= 2` and `loadBalancer.managed.replicas >= 2` that is absorbed for
 new streams — in-flight streams on a restarting pod still break, because a response
 already begun cannot be retried.
+
+**Envoy does not reload certificates — and nothing tells you.** `mongot` gets a rolling
+restart automatically, because the operator's copy is a hash-named PEM and new content
+changes the pod spec. **Envoy mounts the Secret directly**, so a rotated certificate
+leaves it serving the old one indefinitely while every status stays green. Observed
+during a live CA rotation here: `mongod` had already been given the new root, Envoy was
+still presenting a certificate from the retired CA, and the only symptom was
+`Failed to establish connectivity of gRPC channel before deadline`. Restart it
+explicitly as the last step of any rotation:
+
+```bash
+oc rollout restart deploy/<name>-search-lb-<idx> -n <ns>
+```
+
+**Order matters in a rotation.** Distribute the new trust anchor everywhere *first*, then
+swap leaves, then restart Envoy — and expect propagation lag: immediately after a rollout
+an `s_client` check can still show the old certificate for a few seconds.
 
 **CA rotation is a different, harder operation** than leaf renewal. Distribute the new
 trust bundle to every consumer *first* — `mongot`, Envoy, and every external `mongod` —
