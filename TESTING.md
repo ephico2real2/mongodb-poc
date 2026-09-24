@@ -57,7 +57,7 @@ so the suite degrades cleanly when an optional piece (the toolbox pod, Thanos) i
   PASS  no non-OK gRPC status in the last 10m                0
 
 ────────────────────────────────────────────────────────
-  51 passed   0 failed   0 skipped
+  55 passed   0 failed   0 skipped
 ```
 
 ### What each suite is actually guarding
@@ -67,7 +67,7 @@ so the suite degrades cleanly when an optional piece (the toolbox pod, Thanos) i
 | `platform` | the entry Service pointed at the **mongot** pods instead of Envoy — the silent L7 bypass |
 | `data` | a corpus that loaded but whose indexes never became `queryable` |
 | `search` | recall regressions, and filters that are silently ignored rather than applied |
-| `entry` | the replica set disagreeing on `mongotHost`; a Route flipped off `passthrough`; an entry path that stops serving the Envoy certificate; a non-matching SNI being quietly accepted |
+| `entry` | the replica set disagreeing on `mongotHost`; a Route flipped off `passthrough` or given key material; TLS silently moving off the operator-owned Envoy; the ingress wildcard being served instead of the enterprise certificate; a non-matching SNI quietly accepted |
 | `attribution` | one pod serving everything while all three report Ready |
 | `alerts` | a `PrometheusRule` that was applied but never loaded |
 | `distribution` | round robin degrading to a single pod under load |

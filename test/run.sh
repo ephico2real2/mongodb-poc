@@ -147,6 +147,22 @@ if want entry; then suite "entry path"
     else
       skip "a non-matching SNI is refused by Envoy" "mongot-grpc-lb absent"
     fi
+    # The Route is passthrough: it holds no key material and cannot terminate TLS.
+    assert_eq "the Route carries no key material (cannot terminate)" "" \
+      "$(oc get route mongot-grpc -n "$NS" -o jsonpath='{.spec.tls.certificate}{.spec.tls.key}' 2>/dev/null)"
+    # TLS terminates on the component the MongoDBSearch CR owns, not on the router.
+    assert_contains "the terminating Deployment is owned by MongoDBSearch" "MongoDBSearch" \
+      "$(oc get deploy mongot-search-lb-0 -n "$NS" -o jsonpath='{.metadata.ownerReferences[*].kind}' 2>/dev/null)"
+    # And the certificate served is the enterprise-CA one - never the ingress wildcard.
+    SERVED=$(echo | openssl s_client -connect "$EH:443" -servername "$EH" -alpn h2 2>/dev/null \
+             | openssl x509 -noout -issuer 2>/dev/null)
+    assert_contains "the served cert is issued by the enterprise CA" "Enterprise Root CA" "$SERVED"
+    SUBJ=$(echo | openssl s_client -connect "$EH:443" -servername "$EH" -alpn h2 2>/dev/null \
+           | openssl x509 -noout -subject 2>/dev/null)
+    case "$SUBJ" in
+      *"CN = *."*|*"CN=*."*) no "the served cert is not a wildcard" "$SUBJ";;
+      *) ok "the served cert is not a wildcard" "${SUBJ#subject=}";;
+    esac
     assert_contains "the spare VIP SAN is on the certificate" "$SPARE" \
       "$(oc get secret "${PFX:-lab}-mongot-search-lb-0-cert" -n "$NS" -o jsonpath='{.data.tls\.crt}' 2>/dev/null \
          | base64 -d 2>/dev/null | openssl x509 -noout -ext subjectAltName 2>/dev/null)"

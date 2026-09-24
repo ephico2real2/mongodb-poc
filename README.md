@@ -45,7 +45,7 @@ across the `mongot` pods.
 Three commands worth knowing before anything else:
 
 ```bash
-./test/run.sh                      # 51 assertions across 8 suites, exit code
+./test/run.sh                      # 55 assertions across 8 suites, exit code
 ./app/entry-path.sh                # is mongod using the Route, or the MetalLB VIP?
 ./app/trace-query.sh -n 6 "pods"   # which mongot pod answered each query
 ```
@@ -422,6 +422,30 @@ Verified with `openssl s_client`, both serving `CN=grpc-search.apps-crc.testing`
 :443    SNI grpc-search.apps-crc.testing   -> CN=grpc-search.apps-crc.testing  ALPN h2
 :27028  SNI grpc-search.apps-crc.testing   -> CN=grpc-search.apps-crc.testing  ALPN h2
 ```
+
+### Where TLS terminates, and what never touches this path
+
+Before the failure modes, the normal path stated plainly:
+
+- The Route is **`passthrough`** and carries **no** `spec.tls.certificate` or `spec.tls.key`.
+  The router holds no key material for it and **cannot** terminate it — it forwards the
+  ClientHello and the encrypted stream straight through.
+- TLS terminates at **Envoy**, which is a component the `MongoDBSearch` CR deploys:
+  `Deployment mongot-search-lb-0`, `ownerReferences: MongoDBSearch/mongot`, created from
+  `spec.clusters[].loadBalancer.managed`. It mounts the key itself as `envoy-server-cert`.
+- The certificate it presents is the **enterprise-CA one**, not a wildcard:
+
+  ```text
+  subject = CN=grpc-search.apps-crc.testing
+  issuer  = O=Enterprise POC, CN=Enterprise Root CA
+  ```
+
+- **The OpenShift router's default wildcard is never involved.** It lives in
+  `router-certs-default` in `openshift-ingress` and serves the cluster's `edge` routes. On a
+  passthrough Route it plays no part.
+
+The one situation in which you will see that wildcard is the misconfiguration below — and
+seeing it is the signal that traffic never reached the search tier at all.
 
 ### What a wrong SNI actually does — and it differs by path
 
