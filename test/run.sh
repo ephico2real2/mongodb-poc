@@ -147,6 +147,33 @@ if want entry; then suite "entry path"
     else
       skip "a non-matching SNI is refused by Envoy" "mongot-grpc-lb absent"
     fi
+    # The Route must target a Service we own. The operator's mongot-search-0-proxy-svc
+    # works too, but it is owner-referenced by the CR and named after it, so the ingress
+    # contract would break when the CR is renamed or recreated.
+    assert_eq "the Route targets our own Service" "mongot-search-lb" \
+      "$(oc get route mongot-grpc -n "$NS" -o jsonpath='{.spec.to.name}' 2>/dev/null)"
+    assert_eq "that Service selects the Envoy pods" \
+      "$(oc get pods -n "$NS" -l app=mongot-search-lb-0 --no-headers 2>/dev/null | wc -l | tr -d ' ')" \
+      "$(oc get endpointslice -n "$NS" -l kubernetes.io/service-name=mongot-search-lb \
+          -o jsonpath='{range .items[*].endpoints[*]}{.conditions.ready}{"\n"}{end}' 2>/dev/null | grep -c true)"
+    # Every Envoy replica must be reachable through BOTH entry Services. The label
+    # app=<name>-search-lb-<clusterIndex> carries the CLUSTER index, not a replica index,
+    # so raising loadBalancer.managed.replicas adds pods under the same label. This
+    # asserts that rather than assuming it.
+    NREPL=$(oc get mongodbsearch mongot -n "$NS" \
+             -o jsonpath='{.spec.clusters[0].loadBalancer.managed.replicas}' 2>/dev/null)
+    NREPL=${NREPL:-1}
+    assert_eq "Envoy Deployment runs the declared replica count" "$NREPL" \
+      "$(oc get deploy mongot-search-lb-0 -n "$NS" -o jsonpath='{.status.readyReplicas}' 2>/dev/null)"
+    for svc in mongot-search-lb mongot-grpc-lb; do
+      got=$(oc get endpointslice -n "$NS" -l kubernetes.io/service-name=$svc \
+             -o jsonpath='{range .items[*].endpoints[*]}{.conditions.ready}{"\n"}{end}' 2>/dev/null | grep -c true)
+      if [ -z "$(oc get svc "$svc" -n "$NS" --no-headers 2>/dev/null)" ]; then
+        skip "$svc reaches every Envoy replica" "Service absent"
+      else
+        assert_eq "$svc reaches every Envoy replica" "$NREPL" "$got"
+      fi
+    done
     # The Route is passthrough: it holds no key material and cannot terminate TLS.
     assert_eq "the Route carries no key material (cannot terminate)" "" \
       "$(oc get route mongot-grpc -n "$NS" -o jsonpath='{.spec.tls.certificate}{.spec.tls.key}' 2>/dev/null)"

@@ -11,6 +11,10 @@ spec:
   type: LoadBalancer
   externalTrafficPolicy: Local
   selector:
+    # The trailing index is the CLUSTER index, not a replica index. Raising
+    # loadBalancer.managed.replicas adds pods under this same label and needs no change
+    # here; a second spec.clusters[] entry would create mongot-search-lb-1 and need its
+    # own Service. See manifests/30-envoy-direct-service.yaml for the detail.
     app: mongot-search-lb-0        # <MongoDBSearch name>-search-lb-<clusterIndex>
   ports:
   - name: grpc

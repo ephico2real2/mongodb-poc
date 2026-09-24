@@ -45,7 +45,7 @@ across the `mongot` pods.
 Three commands worth knowing before anything else:
 
 ```bash
-./test/run.sh                      # 55 assertions across 8 suites, exit code
+./test/run.sh                      # 60 assertions across 8 suites, exit code
 ./app/entry-path.sh                # is mongod using the Route, or the MetalLB VIP?
 ./app/trace-query.sh -n 6 "pods"   # which mongot pod answered each query
 ```
@@ -252,8 +252,10 @@ the OpenShift infra nodes. Same Envoy, same `mongot` — only the way in differs
               edge: no HTTP/2 . reencrypt: 30s cuts cursors
                               |
                               v
-              <name>-search-0-proxy-svc :27028
-              operator-owned ClusterIP - you write nothing
+              mongot-search-lb :27028
+              a ClusterIP you own - endpoint selector only
+              (the operator's <name>-search-<idx>-proxy-svc works
+               too, but is deleted with the CR and named after it)
                               |
                               v
               Envoy x2  -  the only L7 . MCK-managed
@@ -282,6 +284,87 @@ and because `mongod` must send a hostname as SNI, **`mongotHost` cannot be an IP
 
 Manifest: `manifests/80-route-passthrough.yaml`. Verified serving `$search` and
 `$vectorSearch` with TLS, distributing **13 / 13 / 14** of 40 across three `mongot`.
+
+
+## Behind a custom F5
+
+The lab reaches the Route through a gvproxy forwarder. In an enterprise the same Route sits
+behind an F5 VIP fronting the infra nodes. Nothing about the cluster side changes.
+
+```text
+  mongod
+    |  TLS, SNI = grpc-search.<domain>
+    v
+  F5 VIP                    passthrough / L4 - does NOT terminate TLS
+    |                       fastL4 or standard TCP virtual server
+    |                       no client-SSL profile, no server-SSL profile
+    v
+  OpenShift infra nodes :443
+    |
+  passthrough Route         selected by SNI - does NOT terminate TLS
+    |                       holds no spec.tls.certificate or spec.tls.key
+    v
+  Service mongot-search-lb  endpoint selector only; HAProxy dials the pod IPs
+    |
+    v
+  Envoy  :27028             <-- TLS TERMINATES HERE, and only here
+    |                           certificate from the MongoDBSearch CR
+    |                           (security.tls.certsSecretPrefix)
+    v
+  mongot x3                 second mutual-TLS leg, Envoy -> pods
+```
+
+**TLS is terminated exactly once, at Envoy.** Neither the F5 nor the router decrypts. Both
+are L4 hops that forward the ClientHello untouched, which is what lets a single certificate —
+held by the workload, not by the ingress — serve the whole path.
+
+### What the F5 virtual server needs
+
+| Setting | Value | Why |
+|---|---|---|
+| Profile | `fastL4`, or standard TCP | An HTTP profile parses the stream and breaks gRPC |
+| Client-SSL profile | **none** | Adding one terminates TLS at the F5 and the SNI is lost |
+| Server-SSL profile | **none** | The F5 must not re-originate TLS |
+| Persistence | source address, or none | One `mongod` holds one connection; there is nothing to persist across |
+| Idle timeout | ≥ 300s | Envoy's `stream_idle_timeout` and route `timeout` are both 300s |
+| Health monitor | TCP | An HTTPS monitor would require the F5 to terminate |
+| Pool members | infra nodes, port 443 | The Route is selected by SNI at the router |
+
+This is a **dedicated VIP with its own FQDN**, not the default wildcard VIP. Wildcard VIPs
+commonly carry an HTTP profile and a client-SSL profile, both of which break this path.
+
+### The SNI risk on this path, and how to check for it
+
+Port 443 on the infra nodes is shared between the passthrough and terminating flows, and the
+router decides which by looking the SNI up in `os_sni_passthrough.map`. A name that is not in
+that map does not fail — it is served by the router's own default certificate. On an F5 path
+the practical consequence is:
+
+> A typo'd or stale SNI produces a **successful TLS handshake carrying the wrong certificate**,
+> not a connection failure. A health check that only asserts "TLS connects" stays green while
+> no traffic reaches the search tier.
+
+So check the certificate, not the handshake:
+
+```bash
+HOST=grpc-search.apps-crc.testing
+echo | openssl s_client -connect "$HOST:443" -servername "$HOST" -alpn h2 2>/dev/null \
+  | openssl x509 -noout -subject -issuer
+```
+
+```text
+subject=CN=grpc-search.apps-crc.testing
+issuer=O=Enterprise POC, CN=Enterprise Root CA
+```
+
+Two things make this unambiguous. The subject must be your name, not a wildcard; and the
+handshake must negotiate **ALPN `h2`** — the router's terminating flow binds with `no-alpn`,
+so a missing ALPN means the connection never reached Envoy.
+
+`./test/run.sh entry` asserts both, plus that the served certificate is issued by the
+enterprise CA rather than the ingress default.
+
+---
 
 ## The two things you own
 
@@ -718,6 +801,7 @@ The Services view shows the whole wiring in one frame:
 | Service | Location | Selector | Whose |
 |---|---|---|---|
 | `mongot-grpc-lb` | **192.168.127.100** — the MetalLB VIP | `app=mongot-search-lb-0` | yours |
+| `mongot-search-lb` | ClusterIP — **what the Route targets** | `app=mongot-search-lb-0` | yours |
 | `mongot-search-0-proxy-svc` | `10.217.5.138:27028` — ClusterIP | `app=mongot-search-lb-0` | operator |
 | `mongot-search-0-svc` | **None** — headless | `app=mongot-search-0-svc` | operator |
 | `mongot-envoy-stats` | `10.217.4.46:9901` | `app=mongot-search-lb-0` | yours |
@@ -733,9 +817,14 @@ None`) — which is what lets DNS return every pod IP for Envoy to fan out acros
 <img alt="OpenShift console Routes list showing mongot-grpc with status Accepted, pointing at the operator's proxy Service." src="docs/screenshots/console-route.jpg">
 <!-- markdownlint-enable MD033 -->
 
-A passthrough `Route` pointed at the operator's own proxy Service. Note it can target
-`mongot-search-0-proxy-svc` directly — **with a Route you need neither MetalLB nor the
-hand-written `LoadBalancer` Service.**
+A passthrough `Route`. **With a Route you need neither MetalLB nor a `LoadBalancer`
+Service** — a plain `ClusterIP` is enough, because HAProxy reads the Service's
+EndpointSlices and dials the Envoy pod IPs directly.
+
+It targets `mongot-search-lb` ([`30-envoy-direct-service.yaml`](manifests/30-envoy-direct-service.yaml)),
+a Service we own. The operator's `mongot-search-0-proxy-svc` works identically, but it is
+garbage-collected with the `MongoDBSearch` CR and named after it, so the ingress contract
+would follow operator internals. *The console capture above predates that switch.*
 
 It reports **`Accepted`**, green and healthy. Traffic through it nevertheless fails:
 
@@ -1000,10 +1089,12 @@ what you put here. Running on names requires the set to *advertise* names.
 
 | Path | What |
 |---|---|
-| `manifests/` | 15 files: OLM subscriptions, MetalLB, the CA and certificates, the Route, ServiceMonitors, alerts |
+| `manifests/` | 16 files: OLM subscriptions, MetalLB, the CA and certificates, the Route, ServiceMonitors, alerts |
 | `manifests/20-search-managed-envoy.yaml` | Lab 1 — the `MongoDBSearch` CR, plaintext |
 | `manifests/20-tls-search-managed-envoy.yaml` | Lab 2 — the same CR with TLS, including `source.external.tls.ca` |
-| `test/run.sh` | 55 assertions across 8 suites |
+| `manifests/30-envoy-direct-service.yaml` | ClusterIP Service the Route targets — for a laptop or an F5 passthrough VIP |
+| `manifests/30-envoy-lb-service.yaml` | `LoadBalancer` Service for the MetalLB VIP entry path |
+| `test/run.sh` | 60 assertions across 8 suites |
 | `app/trace-query.sh` | run a search and name the `mongot` pod that answered |
 | `app/entry-path.sh` | prove whether traffic enters via the Route or the MetalLB VIP |
 | `app/search-cli.sh`, `app/gui/` | a search CLI and a web GUI showing which `mongot` answered |

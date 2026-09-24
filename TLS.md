@@ -343,8 +343,10 @@ spec:
   host: grpc-search.apps-crc.testing    # == externalHostname == a SAN on the Envoy cert
   to:
     kind: Service
-    name: mongot-search-0-proxy-svc     # the OPERATOR's Service - no MetalLB,
-    weight: 100                         # no hand-written LoadBalancer Service needed
+    name: mongot-search-lb              # a ClusterIP Service you own; a Route needs
+    weight: 100                         # neither MetalLB nor a LoadBalancer Service.
+                                        # The operator's mongot-search-<idx>-proxy-svc
+                                        # works too, but is deleted with the CR.
   port:
     targetPort: 27028                   # numeric port, not a port name
   tls:

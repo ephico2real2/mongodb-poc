@@ -1,0 +1,64 @@
+# The Service the passthrough Route targets. No MetalLB, no LoadBalancer, no VIP.
+#
+# Use this when traffic arrives through an OpenShift Route - on a laptop, or behind a
+# custom F5 passthrough VIP fronting the infra nodes. Use 30-envoy-lb-service.yaml
+# instead when the entry point is a MetalLB VIP. They can both exist; the one that
+# carries traffic is whichever mongotHost points at.
+#
+# WHY NOT JUST TARGET THE OPERATOR'S OWN PROXY SERVICE
+# The operator already creates mongot-search-0-proxy-svc, ClusterIP, selecting the same
+# Envoy pods, and a Route can target it directly. This Service exists so the ingress
+# contract does not depend on operator internals:
+#
+#   1. mongot-search-0-proxy-svc carries ownerReferences: MongoDBSearch/mongot, so it is
+#      garbage-collected with the CR. Delete or recreate the CR and a Route pointing at
+#      it is left dangling.
+#   2. Its name is derived - <cr-name>-search-<clusterIndex>-proxy-svc - so it moves if
+#      the CR is renamed or the cluster index changes.
+#
+# A Service you own is stable, and the F5 / Route / DNS contract is written against a
+# name you control. It costs one object.
+#
+# A PASSTHROUGH ROUTE DOES NOT USE THE ClusterIP. HAProxy reads the Service's
+# EndpointSlices and connects to the pod IPs directly - visible in the router config as
+#   server pod:<envoy-pod>:...:10.217.1.119:27028
+# So the ClusterIP here is unused on the ingress path. The Service is an endpoint
+# selector, which is why type ClusterIP is sufficient and externalTrafficPolicy
+# (a LoadBalancer/NodePort field) does not apply.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongot-search-lb
+  namespace: mongodb-poc
+  labels:
+    app.kubernetes.io/part-of: mongot-poc
+    app.kubernetes.io/component: ingress
+spec:
+  type: ClusterIP
+  selector:
+    # <MongoDBSearch name>-search-lb-<clusterIndex>. The trailing index is the CLUSTER
+    # index, NOT a replica index - confirmed in the operator's naming helpers, which
+    # format it as "%s-search-lb-%d" from clusterIndex.
+    #
+    # Raising loadBalancer.managed.replicas does NOT need a change here: there is one
+    # Deployment per cluster entry, and every replica carries this same label. Measured
+    # by scaling 2 -> 3 -> 2 on the running cluster:
+    #
+    #   replicas: 2   Deployment mongot-search-lb-0 2/2, pods ...nwgsw ...q94lv
+    #                 both app=mongot-search-lb-0; 2 ready endpoints on every Service;
+    #                 2 server lines in the Route backend
+    #   replicas: 3   the SAME Deployment 3/3, third pod ...jkssh also
+    #                 app=mongot-search-lb-0; 3 ready endpoints on every Service;
+    #                 3 server lines in the Route backend - no manifest change needed
+    #
+    # What DOES need a change is multi-cluster: spec.clusters accepts up to 50 entries,
+    # one per Kubernetes cluster, and each gets its own Envoy Deployment
+    # mongot-search-lb-0, -1, ... A Service selecting only -0 would miss the others.
+    # Each cluster also needs its own externalHostname, so it needs its own Route and
+    # its own Service anyway - copy this file per cluster index.
+    app: mongot-search-lb-0
+  ports:
+  - name: mongot-grpc
+    port: 27028                    # EnvoyDefaultProxyPort
+    targetPort: 27028
+    protocol: TCP
