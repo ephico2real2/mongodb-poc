@@ -307,6 +307,50 @@ Guard it in review: the entry Service selector must be `app=<name>-search-lb-<id
 
 ---
 
+## Proof that the load balancing is real
+
+The [failure that produces no error](#the-failure-that-produces-no-error) is invisible to
+health checks, so it can only be closed by measurement. Measured on the running system:
+40 `$search` queries issued from `mongod`, then each `mongot`'s own Prometheus counter
+read directly.
+
+```text
+mongot-search-0-0   mongot_command_searchCommandTotalLatency_seconds_count = 13
+mongot-search-0-1   mongot_command_searchCommandTotalLatency_seconds_count = 14
+mongot-search-0-2   mongot_command_searchCommandTotalLatency_seconds_count = 14
+                                                                    TOTAL  = 41
+
+Envoy, same window:
+  cluster.mongot_rs_cluster.upstream_rq_total:  41    <- matches the sum
+  cluster.mongot_rs_cluster.upstream_cx_active:  3    <- a live connection to EACH mongot
+```
+
+`mongod` holds **one** connection to the endpoint, yet those 41 requests landed on
+**three** pods. That is the whole argument for the L7, demonstrated rather than asserted:
+distribution happens **per request**, not per connection.
+
+### Reading the access log will mislead you
+
+Envoy emits **one access-log record per gRPC stream, at stream close** — not per request.
+Forty queries over long-lived streams produced three log lines. Counting log lines to
+judge distribution will therefore under-report it badly; use `mongot`'s counters or
+Envoy's `upstream_rq_total`.
+
+### How to re-run it
+
+```bash
+# per-pod query counts
+for p in mongot-search-0-0 mongot-search-0-1 mongot-search-0-2; do
+  oc exec -n <ns> $p -- curl -s localhost:9946/metrics \
+    | grep searchCommandTotalLatency_seconds_count
+done
+
+# Envoy's view (note: MCK restricts the admin interface to
+# /stats, /ready, /logging, /drain_listeners - /clusters returns 403)
+oc port-forward -n <ns> pod/<envoy-pod> 19901:9901
+curl -s localhost:19901/stats | grep -E "mongot.*(rq_total|cx_active)"
+```
+
 ## Certificates
 
 ### Enabling TLS changes no ports
@@ -473,4 +517,5 @@ what you put here. Running on names requires the set to *advertise* names.
 | MetalLB VIP | assigned, Envoy answering |
 | External replica set | 3 members, `PRIMARY` + 2 `SECONDARY` |
 | **TLS** | **not enabled** — plaintext h2c on every leg |
-| **`$search` query** | **not yet run** — the path is proven wired and reachable, not proven to return results |
+| **`$search` query** | ✅ **verified** — returns correct results with relevance scores |
+| **Stream distribution** | ✅ **measured** — 41 queries spread **13 / 14 / 14** across three `mongot` |

@@ -474,8 +474,8 @@ answering a non-gRPC path — a real response, not a timeout.*
     pod -> 192.168.64.4:27017/18/19 -> CONNECTED
     colima -> 192.168.64.1:27028 -> http=404
 
-  NOT YET PROVEN: no $search query has run. This proves the path is wired and
-  reachable - not that a search returns results, nor that streams spread across pods.
+  VERIFIED: $search returns correct results, and 41 requests over ONE mongod
+  connection landed on THREE mongot pods (13/14/14) - per-request distribution.
 ```
 
 ## Verified end state
@@ -496,7 +496,8 @@ rs0                                   PRIMARY + 2 SECONDARY, health=1
   per-leg in managed mode) and requires three cert-manager Secrets:
   `<prefix>-mongot-search-lb-0-cert` (SAN must cover `externalHostname`),
   `<prefix>-mongot-search-lb-0-client-cert`, `<prefix>-mongot-search-cert`.
-- **No `$search` query has been run.** Everything above proves wiring, not the data path.
+- **`$search` verified.** 40 queries distributed 13 / 14 / 14 across the three `mongot`,
+  confirmed from each pod's own Prometheus counter and Envoy's `upstream_rq_total: 41`.
 - `mongot-grpc-lb` has no `ownerReferences`.
 
 ---
