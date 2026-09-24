@@ -778,7 +778,7 @@ a { color: var(--remote); }
     <h2>Architecture: OpenShift Route behind an F5</h2>
     <figure>
       <div class="fig-scroll">
-        <svg viewBox="0 0 980 812" role="img" aria-label="North to south: an external MongoDB replica set reaches a custom F5 VIP on 443, the OpenShift infra nodes, the HAProxy router which selects a passthrough Route by SNI, the operator's proxy Service, two Envoy replicas that split gRPC streams, and three mongot pods.">
+        <svg viewBox="0 0 980 812" role="img" aria-label="North to south: an external MongoDB replica set reaches a custom F5 VIP on 443, the OpenShift infra nodes, the HAProxy router which selects a passthrough Route by SNI, the headless Service mongot-search-lb, two Envoy replicas that split gRPC streams, and three mongot pods.">
           <defs><marker id="ahA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
           <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
 
@@ -813,8 +813,8 @@ a { color: var(--remote); }
             <line x1="490" y1="476" x2="490" y2="498" stroke="currentColor" stroke-width="1.5" marker-end="url(#ahA)"/>
 
             <rect x="300" y="502" width="380" height="58" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
-            <text x="490" y="525" text-anchor="middle" font-weight="600" fill="var(--remote)">&lt;name&gt;-search-0-proxy-svc :27028</text>
-            <text x="490" y="544" text-anchor="middle" font-size="11.5" fill="var(--remote)">operator-owned ClusterIP &#8212; you write nothing</text>
+            <text x="490" y="525" text-anchor="middle" font-weight="600" fill="var(--remote)">Service mongot-search-lb :27028</text>
+            <text x="490" y="544" text-anchor="middle" font-size="11.5" fill="var(--remote)">headless &#8212; an endpoint selector, not an address</text>
             <line x1="490" y1="560" x2="490" y2="582" stroke="currentColor" stroke-width="1.5" marker-end="url(#ahA)"/>
 
             <rect x="300" y="586" width="380" height="84" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="2.4"/>
@@ -859,7 +859,7 @@ a { color: var(--remote); }
             <text x="36" y="443" font-size="11.5" fill="var(--remote)">· MetalLB</text>
             <text x="36" y="460" font-size="11.5" fill="var(--remote)">· a LoadBalancer Service</text>
             <text x="36" y="477" font-size="11.5" fill="var(--remote)">· any port but 443 externally</text>
-            <text x="36" y="496" font-size="11" fill="var(--muted)">The Route targets the operator’s Svc.</text>
+            <text x="36" y="496" font-size="11" fill="var(--muted)">A headless Svc you own is enough.</text>
 
             <rect x="20" y="586" width="262" height="84" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
             <text x="36" y="608" font-weight="600" fill="var(--host)">TLS is mandatory here</text>

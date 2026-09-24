@@ -270,9 +270,12 @@ the OpenShift infra nodes. Same Envoy, same `mongot` — only the way in differs
                    bypassing F5, the router and Envoy entirely
 ```
 
-**Why this shape needs no extra Kubernetes objects.** The Route targets the operator's
-own `ClusterIP` proxy Service, so you need neither MetalLB nor a hand-written
-`LoadBalancer` Service. What you own is the F5 VIP and the Route.
+**Why this shape needs no MetalLB.** A Route needs neither MetalLB nor a
+`LoadBalancer` Service — a headless Service is enough, because HAProxy reads its
+EndpointSlices and dials the Envoy pod IPs. The Route targets `mongot-search-lb`
+([`30-envoy-direct-service.yaml`](manifests/30-envoy-direct-service.yaml)); the operator's
+own `mongot-search-0-proxy-svc` would work too, but it is deleted with the CR. What you own
+is the F5 VIP, the Route and that one Service.
 
 **TLS is mandatory here, not optional.** Passthrough selects the backend by SNI, and SNI
 exists only inside a TLS `ClientHello`. Against a plaintext Envoy this returns `DPE`/400 —

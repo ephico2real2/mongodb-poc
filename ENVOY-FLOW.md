@@ -177,9 +177,9 @@ error](README.md#the-failure-that-produces-no-error). Point the same Envoy confi
 Service and it forwards every request to the same pod. Readiness probes stay green, because
 nothing is unhealthy.
 
-The cluster does have a ClusterIP Service in the path — `mongot-search-0-proxy-svc`
-(`10.217.5.138`) — but it sits **in front of** Envoy, selecting the Envoy pods for the Route.
-It is not what Envoy dials.
+Two other Services select the Envoy pods rather than the mongot pods, and neither is what
+Envoy dials: `mongot-search-lb`, the headless Service the Route targets, and the operator's
+own `mongot-search-0-proxy-svc` (`10.217.5.138`, ClusterIP). Both sit **in front of** Envoy.
 
 ---
 

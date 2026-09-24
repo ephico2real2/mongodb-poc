@@ -265,7 +265,7 @@ The operator creates:
 |---|---|
 | Envoy Deployment | `mongot-search-lb-0` (pod label `app=mongot-search-lb-0`) |
 | Envoy config | `mongot-search-lb-0-config` (lds.json / cds.json) |
-| Proxy Service | `mongot-search-0-proxy-svc` — **ClusterIP, hardcoded** |
+| Proxy Service | `mongot-search-0-proxy-svc` — **ClusterIP, hardcoded**. Usable as a Route target, but owner-referenced by the CR; we point the Route at our own `mongot-search-lb` instead |
 | mongot StatefulSet | `mongot-search-0` |
 | mongot headless Svc | `mongot-search-0-svc` (`clusterIP: None`) |
 
