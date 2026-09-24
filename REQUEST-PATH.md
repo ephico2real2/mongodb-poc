@@ -36,7 +36,7 @@ second mutual-TLS leg.*
   colima VM 192.168.64.4
     (1) mongod rs0, 3 members          mongotHost = grpc-search.apps-crc.testing:443
          |                             useGrpcForSearch = true, searchTLSMode = requireTLS
-         | (2) ONE long-lived HTTP/2 connection   <- this is the whole problem
+         | (2) ONE long-lived HTTP/2 connection   <- an L4 hop cannot split this
          v
   macOS host
     DNS -> 192.168.64.1 : 443          gvisor-tap-vsock forwards into CRC
@@ -72,9 +72,9 @@ second mutual-TLS leg.*
 
 ### The two things the figure is really saying
 
-1. **`mongod` opens one connection.** Every L4 hop between it and `mongot` can therefore only
-   *pin* it. Only the L7 hop — Envoy — can split the gRPC streams *inside* that connection
-   across the pods. That is the entire reason this tier exists.
+1. **`mongod` opens one connection.** An L4 hop can only pin it to one backend. An L7 proxy
+   reads the HTTP/2 framing, so it can send each gRPC stream inside that connection to a
+   different pod.
 2. **Both TLS legs are mutual.** Envoy requires a client certificate downstream
    (`require_client_certificate: true`, TLS 1.3 exactly) and presents one of its own upstream,
    with SNI set to the headless Service FQDN. Nothing on this path is cleartext.

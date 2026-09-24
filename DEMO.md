@@ -20,7 +20,7 @@ An application talks only to MongoDB — it has never heard of `mongot`.
 
 **The thing worth proving:** `mongod` opens **one** connection, so a normal load balancer
 would pin every query to a single `mongot` pod — and it would still *look* healthy. We
-prove all three pods actually serve traffic.
+prove all three pods serve traffic.
 
 ---
 

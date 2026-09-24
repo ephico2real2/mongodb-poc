@@ -207,7 +207,7 @@ belongs to this run rather than to whatever the pods did earlier:
 
 **What this proves.** `mongod` holds **one** connection to the endpoint, and those 40
 requests reached **three** pods. Distribution is therefore **per request**, not per
-connection — which is the entire reason an L7 proxy is required. `upstream_cx_active=3`
+connection, which is what an L7 proxy provides. `upstream_cx_active=3`
 on each Envoy confirms a live connection to every `mongot`.
 
 **What a broken deployment looks like:**
@@ -242,8 +242,8 @@ Only one Envoy replica carries the connection; the other reads zero forever. Agg
 with `-l app=...` mixes an idle pod into the sample.
 
 **2. A single stats scrape shows one Envoy pod.** `mongot-envoy-stats` is a normal
-`ClusterIP` Service, so every scrape is a coin flip and a scrape landing on the idle
-replica reads zero. Address each Envoy **pod IP** instead.
+`ClusterIP` Service, so a scrape may land on the idle replica and read zero. Address each
+Envoy **pod IP** instead.
 
 **3. `/clusters` returns 403.** MCK restricts Envoy's admin listener to `/stats`,
 `/ready`, `/logging` and `/drain_listeners`. Per-endpoint breakdowns are not available

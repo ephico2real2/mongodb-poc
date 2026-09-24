@@ -198,7 +198,7 @@ fault. Check the Secret to tell "not yet" from "never":
 ```bash
 oc get secret prometheus-user-workload -n openshift-user-workload-monitoring \
   -o jsonpath='{.data.prometheus\.yaml\.gz}' | base64 -d | gunzip | grep -c mongodb-poc
-#   non-zero => config generated, Prometheus simply has not reloaded yet
+#   non-zero => config generated, Prometheus has not reloaded yet
 ```
 
 > **Envoy does not block the scrape.** MCK restricts its admin listener to `/stats`,

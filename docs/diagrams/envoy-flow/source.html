@@ -59,7 +59,7 @@ a{color:var(--remote)}
   <header>
     <div class="eyebrow">mongodb-poc · envoy internals · 2026-09-24</div>
     <h1>Inside Envoy: what the config actually does to a request</h1>
-    <p class="lede">Read out of the running pod with <code>cat /etc/envoy/{bootstrap,cds,lds}.json</code>. Every step below is a line in that config, in the order Envoy applies it &mdash; and the answer to the question the shape of it raises: Envoy balances across the <strong>pods</strong>, never through a Service ClusterIP.</p>
+    <p class="lede">Read out of the running pod with <code>cat /etc/envoy/{bootstrap,cds,lds}.json</code>. Every step below is a line in that config, in the order Envoy applies it &mdash; It also answers the question the shape of it raises: Envoy balances across the <strong>pods</strong>, not through a Service ClusterIP.</p>
   </header>
 
   <section>
@@ -130,7 +130,7 @@ a{color:var(--remote)}
             <text x="20" y="438" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">http_connection_manager</text>
             <text x="20" y="452" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">  .http2_protocol_options</text>
             <text x="712" y="440" font-size="11.5" fill="var(--muted)">one connection carries many</text>
-            <text x="712" y="456" font-size="11.5" fill="var(--muted)">concurrent streams. THIS is the</text>
+            <text x="712" y="456" font-size="11.5" fill="var(--muted)">concurrent streams. This is the</text>
             <text x="712" y="472" font-size="11.5" fill="var(--remote)" font-weight="600">layer an L4 balancer cannot see.</text>
             <line x1="490" y1="508" x2="490" y2="530" stroke="currentColor" stroke-width="1.5" marker-end="url(#ef-ah)"/>
 
@@ -180,8 +180,8 @@ a{color:var(--remote)}
             <text x="316" y="920" font-size="11" fill="var(--muted)">chosen per REQUEST, not per connection</text>
             <text x="20" y="888" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">cds.json has no</text>
             <text x="20" y="902" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">  lb_policy key</text>
-            <text x="712" y="890" font-size="11.5" fill="var(--muted)">this single line is the whole</text>
-            <text x="712" y="906" font-size="11.5" fill="var(--muted)">reason the tier exists</text>
+            <text x="712" y="890" font-size="11.5" fill="var(--muted)">this line is what spreads</text>
+            <text x="712" y="906" font-size="11.5" fill="var(--muted)">requests across the pods</text>
             <line x1="490" y1="926" x2="490" y2="948" stroke="currentColor" stroke-width="1.5" marker-end="url(#ef-ah)"/>
 
             <rect x="300" y="950" width="380" height="80" rx="7" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
@@ -220,12 +220,12 @@ a{color:var(--remote)}
             <text x="30" y="1226" font-size="11" fill="var(--muted)">buffered on Envoy&#8217;s 10s default flush interval &#8212; measured 9s between the query returning and the line appearing</text>
 
             <text x="20" y="1262" fill="var(--muted)">Read from the running pod on 2026-09-24: cat /etc/envoy/bootstrap.json, cds.json, lds.json, plus the admin /stats endpoint.</text>
-            <text x="20" y="1284" fill="var(--remote)" font-weight="600">Steps &#9319; and &#9320; together are the whole mechanism: three hosts from a headless Service, and one absent lb_policy line.</text>
+            <text x="20" y="1284" fill="var(--remote)" font-weight="600">Steps &#9319; and &#9320; are the mechanism: three hosts from a headless Service, and an absent lb_policy leaving Envoy on ROUND_ROBIN.</text>
             <text x="20" y="1306" fill="var(--muted)">The admin listener allows only /ready, /stats, /drain_listeners and /logging &#8212; /clusters and /config_dump return 403.</text>
           </g>
         </svg>
       </div>
-      <figcaption>Eleven steps, each one a line in <code>lds.json</code> or <code>cds.json</code>. The two that matter most are &#9319; and &#9320;: <code>STRICT_DNS</code> over a <strong>headless</strong> Service gives Envoy one host per pod, and an absent <code>lb_policy</code> leaves Envoy on its <code>ROUND_ROBIN</code> default, which it applies <em>per request</em>.</figcaption>
+      <figcaption>Eleven steps, each one a line in <code>lds.json</code> or <code>cds.json</code>. Steps &#9319; and &#9320; carry the distribution: <code>STRICT_DNS</code> over a <strong>headless</strong> Service gives Envoy one host per pod, and an absent <code>lb_policy</code> leaves it on the <code>ROUND_ROBIN</code> default, applied <em>per request</em>.</figcaption>
     </figure>
   </section>
 
@@ -301,14 +301,14 @@ a{color:var(--remote)}
             <rect x="530" y="414" width="450" height="66" rx="7" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.8"/>
             <text x="546" y="436" font-weight="600" fill="var(--gap)">one pod serves everything</text>
             <text x="546" y="456" font-size="11.5">and every pod still reports Ready</text>
-            <text x="546" y="474" font-size="11.5" fill="var(--muted)">the L7 is reduced to an expensive pass-through</text>
+            <text x="546" y="474" font-size="11.5" fill="var(--muted)">the L7 no longer distributes anything</text>
 
             <text x="20" y="516" fill="var(--muted)">The right-hand column is NOT deployed. It is drawn to name the failure that the headless Service prevents.</text>
             <text x="20" y="534" fill="var(--remote)" font-weight="600">Solid = measured on this cluster. Dashed = the counterfactual, not built.</text>
           </g>
         </svg>
       </div>
-      <figcaption>The choice of Service is not a detail. <code>STRICT_DNS</code> against a ClusterIP Service resolves to exactly one address, so Envoy holds one host and the per-request balancing it was deployed to do silently becomes a no-op &mdash; while every readiness probe stays green.</figcaption>
+      <figcaption><code>STRICT_DNS</code> against a ClusterIP Service resolves to one address, so Envoy holds one host and forwards every request to the same pod. Readiness probes stay green, because nothing is unhealthy.</figcaption>
     </figure>
   </section>
 </div>

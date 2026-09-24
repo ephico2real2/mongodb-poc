@@ -142,8 +142,8 @@ That is the failure seen after a CA rotation, and why [TLS.md](TLS.md) calls for
      buffered on Envoy's 10s default flush interval (measured 9s)
 ```
 
-Steps **(8)** and **(9)** are the entire mechanism: three hosts from a headless Service, and one
-*absent* `lb_policy` line leaving Envoy on its round-robin default.
+Steps **(8)** and **(9)** are the mechanism: three hosts from a headless Service, and an
+absent `lb_policy` leaving Envoy on its round-robin default.
 
 ---
 
@@ -172,10 +172,10 @@ Steps **(8)** and **(9)** are the entire mechanism: three hosts from a headless 
      30 queries split 10 / 10 / 10            |     and every pod still reports Ready
 ```
 
-This is the sharpest form of [the failure that produces no
+This is one form of [the failure that produces no
 error](README.md#the-failure-that-produces-no-error). Point the same Envoy config at a ClusterIP
-Service and the per-request balancing it exists to perform silently becomes a no-op, with every
-readiness probe still green.
+Service and it forwards every request to the same pod. Readiness probes stay green, because
+nothing is unhealthy.
 
 The cluster does have a ClusterIP Service in the path — `mongot-search-0-proxy-svc`
 (`10.217.5.138`) — but it sits **in front of** Envoy, selecting the Envoy pods for the Route.
@@ -207,7 +207,7 @@ cluster.mongot_rs_cluster.upstream_rq_total: 26714
 
 | Stat | Reads as |
 |---|---|
-| `membership_healthy` | how many pods Envoy can currently choose between — **3 is the whole point** |
+| `membership_healthy` | how many pods Envoy can choose between — 3 means every pod is selectable |
 | `membership_total` − `healthy` | pods resolved but failing health checks |
 | `update_success` climbing | DNS is being re-resolved, so pod restarts are picked up |
 | `update_failure` non-zero | DNS is broken; membership is frozen at its last good answer |

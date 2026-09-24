@@ -247,6 +247,18 @@ operator creates it as a custom role.
 `loadBalancer.managed` present is what triggers the Envoy Deployment. Only
 `spec.clusters` is a required field; `version`, `source` and `security` are optional.
 
+Two variants exist. Apply one:
+
+| File | Lab |
+|---|---|
+| `20-search-managed-envoy.yaml` | plaintext h2c, no `security.tls` — prove the wiring first |
+| `20-tls-search-managed-envoy.yaml` | the same deployment with TLS, and what is actually running |
+
+The TLS variant sets `security.tls.certsSecretPrefix` **and**
+`source.external.tls.ca`. The second is not optional: the operator gates Envoy's
+certificate volume mounts on it, so setting `security.tls` alone brings the Envoy pods up
+Ready with no certificates mounted and every handshake failing. See [TLS.md](TLS.md).
+
 The operator creates:
 
 | Object | Name |

@@ -90,7 +90,7 @@ Deployment the MCK operator creates from `spec.clusters[].loadBalancer.managed`.
   colima VM 192.168.64.4
     (1) mongod rs0, 3 members          mongotHost = grpc-search.apps-crc.testing:443
          |                             useGrpcForSearch = true, searchTLSMode = requireTLS
-         | (2) ONE long-lived HTTP/2 connection   <- this is the whole problem
+         | (2) ONE long-lived HTTP/2 connection   <- an L4 hop cannot split this
          v
   macOS host
     DNS -> 192.168.64.1 : 443          gvisor-tap-vsock forwards into CRC
@@ -440,14 +440,14 @@ Before the failure modes, the normal path stated plainly:
   issuer  = O=Enterprise POC, CN=Enterprise Root CA
   ```
 
-- **The OpenShift router's default wildcard is never involved.** It lives in
-  `router-certs-default` in `openshift-ingress` and serves the cluster's `edge` routes. On a
-  passthrough Route it plays no part.
+- A passthrough Route is a pure TCP pipe, and the router takes no part in its TLS
+  negotiation. Its default certificate (`router-certs-default` in `openshift-ingress`) serves
+  the cluster's terminating routes and is not used here.
 
-The one situation in which you will see that wildcard is the misconfiguration below — and
-seeing it is the signal that traffic never reached the search tier at all.
+That certificate appears only in the misconfiguration below, where it signals that traffic
+never reached the search tier.
 
-### What a wrong SNI actually does — and it differs by path
+### What a wrong SNI does, by path
 
 `vip-grpc-search.apps-crc.testing` is kept as a **spare SAN** on the certificate, so the cert is
 ready if the VIP is ever split onto its own name and its own `MongoDBSearch`. Using it as
@@ -461,11 +461,9 @@ ready if the VIP is ever split onto its own name and its own `MongoDBSearch`. Us
                                    and NO ALPN. TLS "succeeds" and never reaches Envoy.
 ```
 
-**The `:443` case needs stating carefully, because it is easy to misread.** A passthrough
-Route is a pure TCP pipe and the router takes **no part** in its TLS negotiation — that is
-true, and it is the whole reason this design works. What happens with an unmatched SNI is
-that *the connection is never classified as passthrough traffic in the first place*. From the
-router's own frontend:
+A passthrough Route is a pure TCP pipe, and the router takes no part in its TLS negotiation.
+An unmatched SNI does not contradict that: the connection is never classified as passthrough
+traffic in the first place. From the router's frontend:
 
 ```haproxy
 frontend public_ssl
@@ -489,10 +487,9 @@ Port 443 is shared between the passthrough and terminating flows; **the map is w
 connection passthrough.** Red Hat documents the sibling case in the same terms: *"Any non-SNI
 traffic received on port 443 is handled with TLS termination and a default certificate."*
 
-This is the nastier of the two failures: a naive check sees a completed TLS handshake and
-concludes the path is healthy, when the request never got near the search tier.
-`./test/run.sh entry` asserts the refusal against the **VIP** path for exactly that reason —
-there, Envoy itself answers, so the refusal is unambiguous.
+This failure is easy to miss: a check that only asserts "TLS connects" passes, while the
+request never reaches the search tier. `./test/run.sh entry` asserts the refusal against the
+**VIP** path, where Envoy answers directly and the refusal is unambiguous.
 
 **IP SANs are for completeness, not function.** A client that dials an IP sends no SNI at all,
 so no filter chain matches and the connection closes before the certificate is examined. The
@@ -691,9 +688,9 @@ Two consequences worth stating explicitly:
   queries succeed and nothing errors. **With TLS on it fails loudly**, because
   `mongot`'s certificate does not carry the `externalHostname` as a SAN and `mongot`
   runs in `mode: mTLS`, so the handshake is rejected. Treat the silent case as the
-  dangerous one, and note that TLS is what turns it into a visible error.
+  one to check first, and note that TLS is what turns it into a visible error.
 
-This is the whole reason the vendor asks for an L7 proxy, and it is invisible in every
+This is why an L7 proxy is required, and it is invisible in every
 health check. The only way to see it is in Envoy's access logs: run a series of queries
 and confirm the selected upstream address **changes**. A `Service` with three ready
 endpoints proves nothing.
@@ -776,8 +773,7 @@ Envoy, same window:
 ```
 
 `mongod` holds **one** connection to the endpoint, yet those 41 requests landed on
-**three** pods. That is the whole argument for the L7, demonstrated rather than asserted:
-distribution happens **per request**, not per connection.
+**three** pods. Distribution happens **per request**, not per connection.
 
 ### The movement, in three independent measurements
 
@@ -809,7 +805,7 @@ oc logs -n mongodb-poc <envoy-pod> | grep '"logger":"access"' \
 
 **Scrape the pod, not the Service.** Only the Envoy replica carrying the connection has
 any traffic; the other reads zero forever (`downstream_cx_total: 0`). A `ClusterIP`
-Service round-robins, so a single scrape is a coin flip — address each pod.
+Service load-balances, so a single scrape may land on the idle replica — address each pod.
 
 > An earlier revision of this page claimed Envoy logged once per *stream* and that 40
 > queries produced 3 log lines. That was wrong: it generalised from a sample taken just
@@ -861,7 +857,7 @@ mongod   searchTLSMode:         disabled -> requireTLS   (you set this yourself)
          plus three cert Secrets, and a restart - certs are read only at startup
 ```
 
-### The trap: `mongotHost` must become a hostname
+### `mongotHost` must be a hostname, not an IP
 
 With TLS on, `externalHostname` stops being inert and becomes the **SNI** Envoy matches
 on. TLS clients do not send SNI for IP literals, so an IP in `mongotHost` produces no
@@ -992,19 +988,31 @@ what you put here. Running on names requires the set to *advertise* names.
 | Path | What |
 |---|---|
 | `README.md` | this page — the architecture |
-| [`DEMO.md`](DEMO.md) | **start here** — run the demo end to end, with expected output at every step |
-| [`TLS.md`](TLS.md) | **TLS setup: cert-manager, enterprise signer, or your own CSRs — plus the working Route** |
-| [`OBSERVE.md`](OBSERVE.md) | **seeing request distribution** — console graphs, the access log, the queries |
-| [`TESTING.md`](TESTING.md) | **sample data → load → query → prove the load balancing** |
-| [`DEPLOYMENT.md`](DEPLOYMENT.md) | full walkthrough, reproduced on a laptop, with every command and measurement |
+| [`REQUEST-PATH.md`](REQUEST-PATH.md) | the request path as diagrams, with every label sourced |
+| [`ENVOY-FLOW.md`](ENVOY-FLOW.md) | the Envoy config line by line, and why it balances across pods |
+| [`USECASE.md`](USECASE.md) | keyword vs semantic recall on a platform-incident corpus |
+| [`DEMO.md`](DEMO.md) | run the demo end to end, with expected output at every step |
+| [`DEPLOYMENT.md`](DEPLOYMENT.md) | full walkthrough on a laptop, with every command and measurement |
+| [`TESTING.md`](TESTING.md) | the test suite, and the failure each assertion guards |
+| [`OBSERVE.md`](OBSERVE.md) | seeing request distribution — console graphs, the access log, `trace-query.sh` |
+| [`TLS.md`](TLS.md) | cert-manager, enterprise signer or your own CSRs, plus rotation |
 | [`mongoT-setup.md`](mongoT-setup.md) | design decisions and findings from building it |
-| `manifests/` | OLM subscriptions, MetalLB, the `MongoDBSearch` CR, the `LoadBalancer` Service, certificates, the Route, ServiceMonitors |
+
+| Path | What |
+|---|---|
+| `manifests/` | 15 files: OLM subscriptions, MetalLB, the CA and certificates, the Route, ServiceMonitors, alerts |
+| `manifests/20-search-managed-envoy.yaml` | Lab 1 — the `MongoDBSearch` CR, plaintext |
+| `manifests/20-tls-search-managed-envoy.yaml` | Lab 2 — the same CR with TLS, including `source.external.tls.ca` |
+| `test/run.sh` | 55 assertions across 8 suites |
+| `app/trace-query.sh` | run a search and name the `mongot` pod that answered |
+| `app/entry-path.sh` | prove whether traffic enters via the Route or the MetalLB VIP |
+| `app/search-cli.sh`, `app/gui/` | a search CLI and a web GUI showing which `mongot` answered |
 | `mongodb/` | Compose stack for the external replica set, parameterised by `ADVERTISED_HOST` |
-| `mongodb/data/` | 24 curated documents + a 20,000-document generated corpus |
-| `app/` | a search CLI and a **web GUI** showing which `mongot` answered |
-| `mongodb/scripts/` | `load-data.sh`, `verify-search.sh` and the bootstrap scripts |
-| `docs/diagrams/` | figure sources and rendered PNGs |
-| `docs/screenshots/` | console evidence: pods, Services, the Route |
+| `mongodb/data/` | 24 curated films, a 20,000-film generated corpus, and 20 platform incidents |
+| `mongodb/scripts/` | loaders, `verify-search.sh`, `load-test.sh`, bootstrap scripts |
+| `docs/envoy/` | `bootstrap.json`, `cds.json`, `lds.json` as read from the running proxy |
+| `docs/diagrams/` | 3 figure sources and 28 rendered PNGs |
+| `docs/screenshots/` | 8 console captures: pods, Services, the Route, metrics, the GUI |
 
 ---
 

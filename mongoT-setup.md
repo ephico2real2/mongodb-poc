@@ -317,7 +317,7 @@ A passthrough `Route` routes on SNI, and SNI exists only in a TLS `ClientHello` 
 Route needs Envoy TLS, which needs source TLS, which needs a TLS-enabled `mongod`.
 **Route, Envoy TLS and database TLS are one decision, not three.** Once TLS is in place
 the Route works exactly as well as the VIP — both were measured distributing across all
-three `mongot`. The VIP simply does not *force* the decision.
+three `mongot`. The VIP does not *force* the decision.
 
 The certificate manifests are kept in `manifests/70-tls-certs.yaml` with the correct
 derived Secret names, ready for when the source is TLS-enabled too.

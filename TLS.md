@@ -83,7 +83,7 @@ cluster index `0`:
 Each must be type `kubernetes.io/tls` with **`tls.crt`** and **`tls.key`**. Plus a
 ConfigMap for the source CA, with key **`ca.crt`**.
 
-Get a name wrong and the operator does not error — it simply does not find the Secret.
+Get a name wrong and the operator does not error — it does not find the Secret.
 
 > The operator creates its own copy, `<name>-search-certificate-key`, an `Opaque` Secret
 > holding a single **hash-named** `.pem` (cert and key concatenated). That is deliberate:
