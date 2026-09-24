@@ -773,4 +773,105 @@ a { color: var(--remote); }
       <figcaption>North-to-south. The entry is L4 &mdash; a VIP pins one connection to one Envoy pod &mdash; and Envoy is where a connection becomes per-request distribution across all three <code>mongot</code>. The sync leg runs the other way and never crosses Envoy.</figcaption>
     </figure>
   </section>
+
+  <section>
+    <h2>Architecture: OpenShift Route behind an F5</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 812" role="img" aria-label="North to south: an external MongoDB replica set reaches a custom F5 VIP on 443, the OpenShift infra nodes, the HAProxy router which selects a passthrough Route by SNI, the operator's proxy Service, two Envoy replicas that split gRPC streams, and three mongot pods.">
+          <defs><marker id="ahA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
+
+            <rect x="300" y="14" width="380" height="82" rx="8" fill="var(--surface)" stroke="var(--none)" stroke-width="1.8"/>
+            <text x="490" y="37" text-anchor="middle" font-weight="600">mongod rs0 &#8212; outside OpenShift</text>
+            <text x="490" y="55" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">mongotHost = grpc-search.corp:443</text>
+            <text x="490" y="73" text-anchor="middle" font-size="11.5" fill="var(--muted)">searchTLSMode: requireTLS</text>
+            <text x="490" y="89" text-anchor="middle" font-size="11" fill="var(--gap)">sends the hostname as SNI — never an IP</text>
+            <line x1="490" y1="96" x2="490" y2="118" stroke="currentColor" stroke-width="1.5" marker-end="url(#ahA)"/>
+
+            <rect x="300" y="122" width="380" height="74" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="2"/>
+            <text x="490" y="145" text-anchor="middle" font-weight="600" fill="var(--host)">F5 VIP :443 &#8212; custom, non-terminating</text>
+            <text x="490" y="163" text-anchor="middle" fill="var(--host)">fastL4 / TCP, or a CIS SNI-parsing iRule</text>
+            <text x="490" y="181" text-anchor="middle" font-size="11.5" fill="var(--gap)">never an HTTP profile — it downgrades to HTTP/1.1</text>
+            <line x1="490" y1="196" x2="490" y2="218" stroke="currentColor" stroke-width="1.5" marker-end="url(#ahA)"/>
+
+            <rect x="300" y="222" width="380" height="58" rx="8" fill="var(--surface)" stroke="var(--rule)" stroke-width="1.5"/>
+            <text x="490" y="245" text-anchor="middle" font-weight="600">OpenShift infra nodes :443</text>
+            <text x="490" y="264" text-anchor="middle" font-size="11.5" fill="var(--muted)">the F5 pool members</text>
+            <line x1="490" y1="280" x2="490" y2="302" stroke="currentColor" stroke-width="1.5" marker-end="url(#ahA)"/>
+
+            <rect x="300" y="306" width="380" height="70" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="490" y="329" text-anchor="middle" font-weight="600" fill="var(--remote)">HAProxy router</text>
+            <text x="490" y="347" text-anchor="middle" fill="var(--remote)">reads SNI, selects the Route, then TCP-tunnels</text>
+            <text x="490" y="365" text-anchor="middle" font-size="11.5" fill="var(--remote)">timeout tunnel = 1h (not timeout server = 30s)</text>
+            <line x1="490" y1="376" x2="490" y2="398" stroke="currentColor" stroke-width="1.5" marker-end="url(#ahA)"/>
+
+            <rect x="300" y="402" width="380" height="74" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="490" y="425" text-anchor="middle" font-weight="600" fill="var(--host)">Route &#8212; termination: passthrough</text>
+            <text x="490" y="443" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--host)">host: grpc-search.corp</text>
+            <text x="490" y="461" text-anchor="middle" font-size="11.5" fill="var(--gap)">edge: no HTTP/2 · reencrypt: 30s cuts cursors</text>
+            <line x1="490" y1="476" x2="490" y2="498" stroke="currentColor" stroke-width="1.5" marker-end="url(#ahA)"/>
+
+            <rect x="300" y="502" width="380" height="58" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="490" y="525" text-anchor="middle" font-weight="600" fill="var(--remote)">&lt;name&gt;-search-0-proxy-svc :27028</text>
+            <text x="490" y="544" text-anchor="middle" font-size="11.5" fill="var(--remote)">operator-owned ClusterIP &#8212; you write nothing</text>
+            <line x1="490" y1="560" x2="490" y2="582" stroke="currentColor" stroke-width="1.5" marker-end="url(#ahA)"/>
+
+            <rect x="300" y="586" width="380" height="84" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="2.4"/>
+            <text x="490" y="609" text-anchor="middle" font-weight="600" fill="var(--remote)">Envoy ×2 &#8212; the only L7 · MCK-managed</text>
+            <text x="490" y="627" text-anchor="middle" fill="var(--remote)">TERMINATES TLS here · matches SNI filter chain</text>
+            <text x="490" y="645" text-anchor="middle" fill="var(--remote)">splits gRPC streams · retries resource-exhausted</text>
+            <text x="490" y="662" text-anchor="middle" font-size="11" fill="var(--muted)">listens 27028 with or without TLS — no port changes</text>
+
+            <g stroke="var(--remote)" stroke-width="1.5" fill="none">
+              <path d="M490,670 V690 H200 V706" marker-end="url(#ahA)"/>
+              <path d="M490,670 V706" marker-end="url(#ahA)"/>
+              <path d="M490,670 V690 H780 V706" marker-end="url(#ahA)"/>
+            </g>
+            <g font-family="IBM Plex Mono, monospace" font-size="11.5">
+              <rect x="110" y="710" width="180" height="42" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+              <text x="200" y="736" text-anchor="middle" fill="var(--remote)">mongot-0</text>
+              <rect x="400" y="710" width="180" height="42" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+              <text x="490" y="736" text-anchor="middle" fill="var(--remote)">mongot-1</text>
+              <rect x="690" y="710" width="180" height="42" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+              <text x="780" y="736" text-anchor="middle" fill="var(--remote)">mongot-2</text>
+            </g>
+
+            <path d="M870,731 H952 V55 H684" stroke="var(--none)" stroke-width="1.4" fill="none" stroke-dasharray="5 4" marker-end="url(#ahA)"/>
+            <g font-size="11.5" fill="var(--none)">
+              <text x="706" y="238" font-weight="600">sync leg</text>
+              <text x="706" y="255">mongot pulls from rs0</text>
+              <text x="706" y="272">TLS + SCRAM</text>
+              <text x="706" y="289">bypasses F5, router</text>
+              <text x="706" y="306">and Envoy entirely</text>
+            </g>
+
+            <rect x="20" y="122" width="262" height="120" rx="8" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.5"/>
+            <text x="36" y="144" font-weight="600" fill="var(--gap)">One string, four places</text>
+            <text x="36" y="163" font-size="11.5" fill="var(--gap)">1. mongod’s mongotHost</text>
+            <text x="36" y="180" font-size="11.5" fill="var(--gap)">2. the Route’s spec.host</text>
+            <text x="36" y="197" font-size="11.5" fill="var(--gap)">3. externalHostname</text>
+            <text x="36" y="214" font-size="11.5" fill="var(--gap)">4. a SAN on Envoy’s cert</text>
+            <text x="36" y="233" font-size="11" fill="var(--muted)">Any mismatch → connection dropped.</text>
+
+            <rect x="20" y="402" width="262" height="104" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="36" y="424" font-weight="600" fill="var(--remote)">What you do NOT need</text>
+            <text x="36" y="443" font-size="11.5" fill="var(--remote)">· MetalLB</text>
+            <text x="36" y="460" font-size="11.5" fill="var(--remote)">· a LoadBalancer Service</text>
+            <text x="36" y="477" font-size="11.5" fill="var(--remote)">· any port but 443 externally</text>
+            <text x="36" y="496" font-size="11" fill="var(--muted)">The Route targets the operator’s Svc.</text>
+
+            <rect x="20" y="586" width="262" height="84" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="36" y="608" font-weight="600" fill="var(--host)">TLS is mandatory here</text>
+            <text x="36" y="627" font-size="11.5" fill="var(--host)">Passthrough selects by SNI, and</text>
+            <text x="36" y="644" font-size="11.5" fill="var(--host)">SNI exists only in a TLS hello.</text>
+            <text x="36" y="661" font-size="11" fill="var(--muted)">Plaintext Envoy → DPE / 400.</text>
+
+            <text x="20" y="790" font-size="12.5" fill="var(--remote)" font-weight="600">Verified serving $search and $vectorSearch with TLS, distributing 13 / 13 / 14 of 40 across three mongot.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>The F5 never terminates and never parses HTTP; the router tunnels TCP; Envoy is still the only L7 and the only place TLS ends. The sync leg runs the other way and touches none of them.</figcaption>
+    </figure>
+  </section>
 </div>

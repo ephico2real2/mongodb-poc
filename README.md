@@ -110,6 +110,74 @@ other two Ready and idle.
 Every element above is running in the reference deployment. *Proposed* refers to adopting
 it at production scale, not to unbuilt work.
 
+## Architecture: OpenShift Route behind an F5
+
+The alternative entry, and the shape that fits an enterprise where an F5 already fronts
+the OpenShift infra nodes. Same Envoy, same `mongot` — only the way in differs.
+
+<!-- markdownlint-disable MD033 -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mongot-openshift/architecture-route-f5.dark.png">
+  <source srcset="docs/diagrams/mongot-openshift/architecture-route-f5.light.png">
+  <img alt="North to south: an external MongoDB replica set reaches a custom F5 VIP on 443, the OpenShift infra nodes, the HAProxy router which selects a passthrough Route by SNI, the operator's proxy Service, two Envoy replicas that split gRPC streams, and three mongot pods." src="docs/diagrams/mongot-openshift/architecture-route-f5.light.png">
+</picture>
+<!-- markdownlint-enable MD033 -->
+
+```text
+              mongod rs0  -  outside OpenShift
+              mongotHost = grpc-search.corp:443 . searchTLSMode: requireTLS
+              sends the HOSTNAME as SNI - never an IP
+                              |
+                              v
+              F5 VIP :443  -  custom, NON-terminating
+              fastL4 / TCP, or a CIS SNI-parsing iRule
+              never an HTTP profile - it downgrades to HTTP/1.1
+                              |
+                              v
+              OpenShift infra nodes :443       (the F5 pool members)
+                              |
+                              v
+              HAProxy router
+              reads SNI, selects the Route, then TCP-tunnels
+              timeout tunnel = 1h   (NOT timeout server = 30s)
+                              |
+                              v
+              Route  -  termination: passthrough
+              host: grpc-search.corp
+              edge: no HTTP/2 . reencrypt: 30s cuts cursors
+                              |
+                              v
+              <name>-search-0-proxy-svc :27028
+              operator-owned ClusterIP - you write nothing
+                              |
+                              v
+              Envoy x2  -  the only L7 . MCK-managed
+              TERMINATES TLS here . matches the SNI filter chain
+              splits gRPC streams . retries resource-exhausted
+                              |
+              +---------------+---------------+
+              v               v               v
+          mongot-0        mongot-1        mongot-2
+              |
+              +--> sync leg: mongot pulls from rs0 over TLS + SCRAM,
+                   bypassing F5, the router and Envoy entirely
+```
+
+**Why this shape needs no extra Kubernetes objects.** The Route targets the operator's
+own `ClusterIP` proxy Service, so you need neither MetalLB nor a hand-written
+`LoadBalancer` Service. What you own is the F5 VIP and the Route.
+
+**TLS is mandatory here, not optional.** Passthrough selects the backend by SNI, and SNI
+exists only inside a TLS `ClientHello`. Against a plaintext Envoy this returns `DPE`/400 —
+the request reaches Envoy and dies on the protocol. See [TLS.md](TLS.md).
+
+**One string in four places** — `mongod`'s `mongotHost`, the Route's `spec.host`,
+`externalHostname`, and a SAN on Envoy's certificate. Any mismatch drops the connection,
+and because `mongod` must send a hostname as SNI, **`mongotHost` cannot be an IP**.
+
+Manifest: `manifests/80-route-passthrough.yaml`. Verified serving `$search` and
+`$vectorSearch` with TLS, distributing **13 / 13 / 14** of 40 across three `mongot`.
+
 ## The two things you own
 
 Everything else is operator-managed. These two are not:
