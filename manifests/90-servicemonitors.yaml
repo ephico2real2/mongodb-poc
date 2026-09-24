@@ -1,0 +1,35 @@
+# Scrape mongot and Envoy into OpenShift's user-workload Prometheus, so request
+# distribution is visible as a graph rather than only via ad-hoc curl.
+#
+# ServiceMonitor scrapes ENDPOINTS, not the Service IP, so each pod becomes its own
+# series - which is exactly what makes the per-pod distribution visible. That also
+# sidesteps the round-robin sampling problem a single curl against the Service has.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: mongot
+  namespace: mongodb-poc
+  labels: { app.kubernetes.io/part-of: mongot-poc }
+spec:
+  selector:
+    matchLabels:
+      app: mongot-search-0-svc        # the operator's headless Service
+  endpoints:
+  - port: prometheus                  # 9946, already declared on the Service
+    path: /metrics
+    interval: 15s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: mongot-envoy
+  namespace: mongodb-poc
+  labels: { app.kubernetes.io/part-of: mongot-poc }
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: observability   # the mongot-envoy-stats Service
+  endpoints:
+  - port: admin                       # 9901
+    path: /stats/prometheus           # MCK's admin allowlist matches on prefix /stats
+    interval: 15s
