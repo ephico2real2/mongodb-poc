@@ -347,10 +347,11 @@ for p in mongot-search-0-0 mongot-search-0-1 mongot-search-0-2; do
     | grep searchCommandTotalLatency_seconds_count
 done
 
-# Envoy's view (note: MCK restricts the admin interface to
-# /stats, /ready, /logging, /drain_listeners - /clusters returns 403)
-oc port-forward -n <ns> pod/<envoy-pod> 19901:9901
-curl -s localhost:19901/stats | grep -E "mongot.*(rq_total|cx_active)"
+# Envoy's view, from the in-cluster toolbox - no port-forward needed
+# (MCK restricts the admin listener to /stats, /ready, /logging,
+#  /drain_listeners - /clusters returns 403)
+oc exec -n <ns> $TB -- curl -s http://mongot-envoy-stats:9901/stats \\
+  | grep -E "mongot_rs_cluster\\.(upstream_rq_total|upstream_cx_active)"
 ```
 
 ## Certificates

@@ -10,10 +10,23 @@ endpoints. Only measurement distinguishes it from a working one.
 **Prerequisites:** the stack from [README.md](README.md) deployed and
 `MongoDBSearch` at `phase=Running`, with the external replica set reachable.
 
-| Script | Does |
+| Script / manifest | Does |
 |---|---|
 | `mongodb/scripts/load-data.sh` | loads the documents and both search indexes |
 | `mongodb/scripts/verify-search.sh` | runs the queries and measures distribution |
+| `manifests/50-envoy-stats-service.yaml` | exposes Envoy's admin port, **ClusterIP only** |
+| `manifests/60-toolbox.yaml` | the in-cluster pod all observation runs from |
+
+**Observation happens inside the cluster.** Everything is addressed by Service and
+StatefulSet DNS from a toolbox pod — no `port-forward`, no local tooling. That matters
+because `port-forward` is restricted in many clusters, and because it exercises the same
+DNS a real client would use.
+
+```bash
+oc apply -f manifests/50-envoy-stats-service.yaml
+oc apply -f manifests/60-toolbox.yaml
+oc rollout status deploy/mongot-toolbox -n mongodb-poc
+```
 
 ---
 
@@ -173,16 +186,26 @@ Service, so it round-robins. Scrape **every** Envoy pod and sum, which
 from Envoy — that is why the per-pod truth comes from `mongot`'s own Prometheus
 counters on `:9946`.
 
-### Reaching the stats by hand
-
-`manifests/50-envoy-stats-service.yaml` exposes the admin port as **ClusterIP only**.
-Deliberately not a VIP and not a Route: it is still an admin surface.
+### Reading the stats from inside the cluster
 
 ```bash
-oc port-forward -n mongodb-poc svc/mongot-envoy-stats 19901:9901
-curl -s localhost:19901/stats | grep -E "mongot_rs_cluster\.(upstream_rq_total|upstream_cx_active)"
-curl -s localhost:19901/ready
+TB=$(oc get pods -n mongodb-poc -l app=mongot-toolbox -o jsonpath='{.items[0].metadata.name}')
+
+# Envoy, by Service name
+oc exec -n mongodb-poc $TB -- curl -s http://mongot-envoy-stats:9901/stats \
+  | grep -E "mongot_rs_cluster\.(upstream_rq_total|upstream_cx_active)"
 ```
+
+Scrape it three times and the round-robin caveat becomes visible:
+
+```text
+scrape 1: upstream_cx_active: 3   upstream_rq_total: 168     <- the Envoy carrying traffic
+scrape 2: upstream_cx_active: 0   upstream_rq_total: 16      <- the idle replica
+scrape 3: upstream_cx_active: 3   upstream_rq_total: 168
+```
+
+A single scrape that lands on the idle replica reads near-zero and looks like a failure.
+Sum across replicas, or scrape repeatedly.
 
 Counters worth knowing:
 
@@ -193,17 +216,33 @@ Counters worth knowing:
 | `upstream_rq_retry` | retries fired, e.g. after `RESOURCE_EXHAUSTED` |
 | `upstream_rq_timeout` | requests that hit the 300s route timeout |
 
-### The per-pod counter
+### The per-pod counter, by StatefulSet DNS
+
+Each `mongot` is individually addressable, so the breakdown needs no `exec` into each pod:
 
 ```bash
-for p in mongot-search-0-0 mongot-search-0-1 mongot-search-0-2; do
-  printf "%s " "$p"
-  oc exec -n mongodb-poc $p -- curl -s localhost:9946/metrics \
+oc exec -n mongodb-poc $TB -- sh -c '
+for i in 0 1 2; do
+  printf "mongot-search-0-$i  "
+  curl -s http://mongot-search-0-$i.mongot-search-0-svc:9946/metrics \
     | grep "^mongot_command_searchCommandTotalLatency_seconds_count"
-done
+done'
 ```
 
----
+```text
+mongot-search-0-0.mongot-search-0-svc:9946   41
+mongot-search-0-1.mongot-search-0-svc:9946   42
+mongot-search-0-2.mongot-search-0-svc:9946   40
+```
+
+The headless Service resolves to every pod, which is what lets Envoy fan out:
+
+```bash
+oc exec -n mongodb-poc $TB -- getent hosts mongot-search-0-svc
+#   10.217.0.253
+#   10.217.1.6
+#   10.217.1.7
+```
 
 ## Step 6 — failure behaviour worth exercising
 

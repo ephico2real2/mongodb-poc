@@ -1,0 +1,33 @@
+# In-cluster toolbox for observing the search path by SERVICE NAME.
+#
+# Preferred over `oc port-forward`: it works where port-forward is restricted, needs no
+# local tooling, and exercises the same cluster DNS a real client would use.
+# securityContext satisfies the `restricted-v2` SCC / restricted PodSecurity.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongot-toolbox
+  namespace: mongodb-poc
+  labels: { app: mongot-toolbox }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: mongot-toolbox }
+  template:
+    metadata:
+      labels: { app: mongot-toolbox }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+      - name: toolbox
+        image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+        command: ["/bin/sh", "-c", "sleep infinity"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: { drop: ["ALL"] }
+          readOnlyRootFilesystem: true
+        resources:
+          requests: { cpu: 10m, memory: 32Mi }
+          limits:   { cpu: 200m, memory: 128Mi }
