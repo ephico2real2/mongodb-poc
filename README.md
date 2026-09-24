@@ -53,6 +53,63 @@ expected to retry **against a different replica**.
 
 ---
 
+## Architecture: proposed
+
+The shape to adopt: **MetalLB in, Envoy as the only L7, three `mongot` out.** No Route,
+no HAProxy, no 80/443 constraint.
+
+<!-- markdownlint-disable MD033 -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mongot-openshift/architecture-proposed.dark.png">
+  <source srcset="docs/diagrams/mongot-openshift/architecture-proposed.light.png">
+  <img alt="North to south: an external three-member MongoDB replica set reaches a MetalLB VIP, a LoadBalancer Service, two Envoy replicas that split gRPC streams, a headless Service, and three serving mongot pods, which sync back to the replica set directly." src="docs/diagrams/mongot-openshift/architecture-proposed.light.png">
+</picture>
+<!-- markdownlint-enable MD033 -->
+
+```text
+              mongod rs0  -  outside OpenShift
+              3 members . mongotHost = <vip>:27028
+              ONE long-lived HTTP/2 connection per member
+                              |
+                              v
+              MetalLB VIP :27028                          operator-independent
+              L2Advertisement . any port, not just 80/443
+              no HAProxy, no Route, no SNI coupling
+                              |
+                              v
+              Service mongot-grpc-lb                      <-- YOU own this
+              type: LoadBalancer
+              selector app=<name>-search-lb-0
+                              |
+                              v
+              Envoy x2  -  the only L7 . MCK-managed      <-- cannot be removed
+              splits gRPC streams across pods
+              STRICT_DNS . ROUND_ROBIN . 300s timeouts
+              retry on resource-exhausted -> a different pod
+                              |
+                              v
+              <name>-search-0-svc  -  headless
+              clusterIP: None -> DNS returns every pod IP
+              Envoy re-resolves, so new replicas join automatically
+                              |
+              +---------------+---------------+
+              |               |               |
+              v               v               v
+          mongot-0        mongot-1        mongot-2
+          serving         serving         serving
+          own PVC         own PVC         own PVC
+              |
+              +--> sync leg: mongot pulls from rs0 directly
+                   SCRAM . searchCoordinator . does NOT cross Envoy
+```
+
+**Why Envoy cannot be removed from that column.** One TCP connection reaches one pod.
+Take the L7 out and every query lands on a single `mongot` — with no error, and with the
+other two Ready and idle.
+
+Every element above is running in the reference deployment. *Proposed* refers to adopting
+it at production scale, not to unbuilt work.
+
 ## The two things you own
 
 Everything else is operator-managed. These two are not:

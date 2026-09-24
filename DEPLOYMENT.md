@@ -503,7 +503,7 @@ rs0                                   PRIMARY + 2 SECONDARY, health=1
 
 ## Diagram sources
 
-The six figures are hand-authored inline SVG in `docs/diagrams/mongot-openshift/source.html`,
+The nine figures are hand-authored inline SVG in `docs/diagrams/mongot-openshift/source.html`,
 rendered to light and dark PNGs at 2x. **The name list must match the figure
 order in the page** — render.py assigns names in DOM order, so a mismatched list
 silently writes each PNG under the wrong name:
@@ -511,7 +511,7 @@ silently writes each PNG under the wrong name:
 ```sh
 python3 ~/.claude/skills/visual/render.py \
   docs/diagrams/mongot-openshift/source.html \
-  docs/diagrams/mongot-openshift network-layout,grpc-path,failure-domains,end-to-end,architecture,l4-bypass
+  docs/diagrams/mongot-openshift network-layout,grpc-path,failure-domains,end-to-end,architecture,l4-bypass,before-route-single,after-metallb-three,architecture-proposed
 ```
 
 The page, the PNGs and the ASCII twin above change together. Solid shapes are shipped

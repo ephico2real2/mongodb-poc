@@ -688,4 +688,89 @@ a { color: var(--remote); }
       <figcaption>The Route is not reconfigured &mdash; it is removed from the data path entirely. MetalLB supplies the address, and <code>loadBalancer.managed</code> supplies the Envoy that makes more than one <code>mongot</code> legal in the first place.</figcaption>
     </figure>
   </section>
+
+  <section>
+    <h2>Architecture: proposed</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 700" role="img" aria-label="North to south: an external three-member MongoDB replica set reaches a MetalLB VIP, a LoadBalancer Service, two Envoy replicas that split gRPC streams, a headless Service, and three serving mongot pods, which sync back to the replica set directly.">
+          <defs><marker id="ah9" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
+
+            <rect x="310" y="14" width="360" height="86" rx="8" fill="var(--surface)" stroke="var(--none)" stroke-width="1.8"/>
+            <text x="490" y="38" text-anchor="middle" font-weight="600">mongod rs0 &#8212; outside OpenShift</text>
+            <text x="490" y="56" text-anchor="middle" font-size="12" fill="var(--muted)">3 members</text>
+            <text x="490" y="76" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--muted)">mongotHost = &lt;vip&gt;:27028</text>
+            <text x="490" y="92" text-anchor="middle" font-size="11" fill="var(--gap)">ONE long-lived HTTP/2 connection per member</text>
+            <line x1="490" y1="100" x2="490" y2="124" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah9)"/>
+
+            <rect x="310" y="128" width="360" height="70" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="490" y="152" text-anchor="middle" font-weight="600" fill="var(--remote)">MetalLB VIP :27028</text>
+            <text x="490" y="170" text-anchor="middle" fill="var(--remote)">L2Advertisement · any port, not just 80/443</text>
+            <text x="490" y="188" text-anchor="middle" font-size="11" fill="var(--muted)">no HAProxy, no Route, no SNI coupling</text>
+            <line x1="490" y1="198" x2="490" y2="222" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah9)"/>
+
+            <rect x="310" y="226" width="360" height="70" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="490" y="250" text-anchor="middle" font-weight="600" fill="var(--host)">Service mongot-grpc-lb &#8212; you own this</text>
+            <text x="490" y="268" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--host)">type: LoadBalancer</text>
+            <text x="490" y="286" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--host)">selector app=&lt;name&gt;-search-lb-0</text>
+            <line x1="490" y1="296" x2="490" y2="320" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah9)"/>
+
+            <rect x="310" y="324" width="360" height="86" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="2.4"/>
+            <text x="490" y="348" text-anchor="middle" font-weight="600" fill="var(--remote)">Envoy ×2 &#8212; the only L7 · MCK-managed</text>
+            <text x="490" y="366" text-anchor="middle" fill="var(--remote)">splits gRPC streams across pods</text>
+            <text x="490" y="384" text-anchor="middle" fill="var(--remote)">STRICT_DNS · ROUND_ROBIN · 300s timeouts</text>
+            <text x="490" y="402" text-anchor="middle" font-size="11" fill="var(--remote)">retry on resource-exhausted → a different pod</text>
+            <line x1="490" y1="410" x2="490" y2="434" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah9)"/>
+
+            <rect x="310" y="438" width="360" height="64" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="490" y="462" text-anchor="middle" font-weight="600" fill="var(--remote)">&lt;name&gt;-search-0-svc &#8212; headless</text>
+            <text x="490" y="480" text-anchor="middle" fill="var(--remote)">clusterIP: None → DNS returns every pod IP</text>
+            <text x="490" y="496" text-anchor="middle" font-size="11" fill="var(--muted)">Envoy re-resolves, so new replicas join automatically</text>
+
+            <g stroke="var(--remote)" stroke-width="1.5" fill="none">
+              <path d="M490,502 V520 H210 V536" marker-end="url(#ah9)"/>
+              <path d="M490,502 V536" marker-end="url(#ah9)"/>
+              <path d="M490,502 V520 H770 V536" marker-end="url(#ah9)"/>
+            </g>
+
+            <g>
+              <rect x="90" y="540" width="240" height="76" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.8"/>
+              <text x="210" y="566" text-anchor="middle" font-weight="600" fill="var(--remote)">mongot-0</text>
+              <text x="210" y="584" text-anchor="middle" fill="var(--remote)">serving</text>
+              <text x="210" y="602" text-anchor="middle" font-size="11" fill="var(--muted)">own PVC</text>
+              <rect x="370" y="540" width="240" height="76" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.8"/>
+              <text x="490" y="566" text-anchor="middle" font-weight="600" fill="var(--remote)">mongot-1</text>
+              <text x="490" y="584" text-anchor="middle" fill="var(--remote)">serving</text>
+              <text x="490" y="602" text-anchor="middle" font-size="11" fill="var(--muted)">own PVC</text>
+              <rect x="650" y="540" width="240" height="76" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.8"/>
+              <text x="770" y="566" text-anchor="middle" font-weight="600" fill="var(--remote)">mongot-2</text>
+              <text x="770" y="584" text-anchor="middle" fill="var(--remote)">serving</text>
+              <text x="770" y="602" text-anchor="middle" font-size="11" fill="var(--muted)">own PVC</text>
+            </g>
+
+            <path d="M890,578 H948 V57 H674" stroke="var(--none)" stroke-width="1.4" fill="none" stroke-dasharray="5 4" marker-end="url(#ah9)"/>
+            <g font-family="IBM Plex Sans, sans-serif" font-size="11.5" fill="var(--none)">
+              <text x="700" y="150" font-weight="600">sync leg</text>
+              <text x="700" y="168">mongot pulls from rs0</text>
+              <text x="700" y="186">SCRAM · searchCoordinator</text>
+              <text x="700" y="204">does NOT cross Envoy</text>
+            </g>
+
+            <g font-family="IBM Plex Sans, sans-serif" font-size="11.5">
+              <rect x="20" y="324" width="270" height="86" rx="8" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.5"/>
+              <text x="36" y="346" font-weight="600" fill="var(--gap)">Why this box cannot be removed</text>
+              <text x="36" y="364" fill="var(--gap)">One TCP connection reaches one pod.</text>
+              <text x="36" y="382" fill="var(--gap)">Without an L7 every query lands on</text>
+              <text x="36" y="400" fill="var(--gap)">a single mongot &#8212; silently.</text>
+            </g>
+
+            <text x="20" y="654" font-size="12.5" fill="var(--muted)">Solid teal = operator-owned · solid amber = you own it · grey = outside the cluster.</text>
+            <text x="20" y="676" font-size="12.5" font-weight="600" fill="var(--remote)">Every element above is running in the reference deployment. &#8220;Proposed&#8221; refers to adopting it at production scale, not to unbuilt work.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>North-to-south. The entry is L4 &mdash; a VIP pins one connection to one Envoy pod &mdash; and Envoy is where a connection becomes per-request distribution across all three <code>mongot</code>. The sync leg runs the other way and never crosses Envoy.</figcaption>
+    </figure>
+  </section>
 </div>
