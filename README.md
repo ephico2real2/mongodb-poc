@@ -39,52 +39,6 @@ expected to retry **against a different replica**.
 </picture>
 <!-- markdownlint-enable MD033 -->
 
-```text
-  Applications
-      |  MongoDB wire protocol - apps never talk to mongot
-      v
-  MongoDB replica set - OUTSIDE OpenShift
-    mongod-1.corp:27017 / mongod-2.corp:27017 / mongod-3.corp:27017
-    mongotHost = grpc-search.corp.example:27028
-      |
-      |  ONE long-lived HTTP/2 connection  <-- why L7 is mandatory
-      v
-  ============ OpenShift cluster ==========================================
-      |
-      |  ENTRY - choose one
-      |
-      |   A) MetalLB VIP           Service type LoadBalancer, ANY port
-      |      (recommended)         VIP:27028 -> Envoy, no HAProxy in path
-      |                            F5 optional, plain L4 in front
-      |
-      |   B) OpenShift Route       80/443 ONLY
-      |      termination: passthrough (TCP + SNI), :443 -> Svc :27028
-      |      timeout tunnel = 1h (edge/reencrypt: no HTTP/2, 30s cut)
-      |      Route host MUST equal externalHostname
-      |
-      |   EITHER WAY the entry is L4: one TCP connection lands on ONE
-      |   Envoy pod. That is fine - Envoy is where streams are split.
-      |   It is NOT fine if Envoy is bypassed (see below).
-      v
-  Service mongot-grpc-lb ................................ you own this
-    type: LoadBalancer, selector app=<name>-search-lb-0, port 27028
-      v
-  Envoy xN .............................................. operator-owned
-    the ONLY L7. splits gRPC streams. STRICT_DNS + ROUND_ROBIN.
-    retry on connect-failure,refused-stream,unavailable,reset,
-    resource-exhausted -> previous_hosts predicate -> a DIFFERENT pod
-      v
-  <name>-search-0-svc (headless) ........................ operator-owned
-    clusterIP: None -> DNS returns every mongot pod IP
-      v
-  mongot x3 (StatefulSet) ............................... operator-owned
-    one PVC per replica, indexes rebuilt from the source
-      |
-      +--> sync leg: mongot pulls from the replica set DIRECTLY
-           SCRAM as searchCoordinator. Does NOT cross Envoy.
-  =========================================================================
-```
-
 ### Order of deployment
 
 1. **MongoDB replica set** running and reachable from the cluster network.
