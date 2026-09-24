@@ -89,6 +89,23 @@ In OpenShift user-workload monitoring a user-namespace `PrometheusRule` is evalu
 `ruleSelector` match expressions say so explicitly. Querying the wrong one reports a
 perfectly healthy rule group as missing — the `alerts` suite queries Thanos Ruler.
 
+In the console they appear under **Observe → Alerting → Alerting rules** with
+**Source: User**, which is what separates them from the 228 platform rules:
+
+<!-- markdownlint-disable MD033 -->
+<img alt="The OpenShift console Alerting rules list filtered to name Mongot and source User, showing four rules: MongotEnvoyRetriesElevated and MongotTrafficNotDistributed as Warning, MongotNoSearchTraffic and MongotPodReceivingNoTraffic as Info." src="docs/screenshots/console-alert-rules.jpg">
+<!-- markdownlint-enable MD033 -->
+
+```text
+MongotEnvoyRetriesElevated    Warning   User
+MongotNoSearchTraffic         Info      User
+MongotPodReceivingNoTraffic   Info      User
+MongotTrafficNotDistributed   Warning   User
+```
+
+Filter with `?name=Mongot&alert-source=user`. The default `alert-source=platform` hides them
+entirely, which looks exactly like the rules having failed to load.
+
 
 ## Step 1 — the sample data
 

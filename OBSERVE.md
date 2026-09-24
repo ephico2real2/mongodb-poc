@@ -96,6 +96,21 @@ https://mongot-gui-mongodb-poc.apps-crc.testing/?q=the&mode=text
 https://mongot-gui-mongodb-poc.apps-crc.testing/?q=detective&mode=vector
 ```
 
+The same URL, loaded twice in a row. Nothing changed but the pod that answered:
+
+<!-- markdownlint-disable MD033 -->
+<img alt="The GUI at ?q=the&mode=text. The WHICH MONGOT SERVED THIS QUERY panel shows mongot-search-0-1 with +1 and lifetime 8985, the other two pods showing a dash. Eight film results, all titles beginning with The, each scoring 0.7269." src="docs/screenshots/gui-text-the.jpg">
+<img alt="The identical URL loaded again. Now mongot-search-0-0 shows +1 with lifetime 8997 while mongot-search-0-1 and -0-2 show a dash. The eight results are unchanged." src="docs/screenshots/gui-text-the-again.jpg">
+<!-- markdownlint-enable MD033 -->
+
+```text
+first load    mongot-search-0-1   +1   lifetime 8985   1190 ms
+second load   mongot-search-0-0   +1   lifetime 8997    901 ms
+```
+
+Same query, same URL, same eight results — a different pod each time. That is the round
+robin at step (9) of [ENVOY-FLOW.md](ENVOY-FLOW.md), one request at a time.
+
 | Parameter | Values | Default |
 |---|---|---|
 | `q` | any string | empty — the page renders with no query run |
@@ -145,6 +160,22 @@ Anything else — `?q=the&mode=vector`, for example — returns `[0.2, 0.2, 0.2,
 is equidistant from every theme. **It does not fail. It returns eight results in a
 meaningless order**, and the pod-attribution panel still works, because the request really did
 travel `mongod` → Envoy → `mongot` and come back.
+
+The difference is visible side by side — a word the table knows, against one it does not:
+
+<!-- markdownlint-disable MD033 -->
+<img alt="Vector search for detective. All eight results are the noir genre, every one scoring exactly 1.0000, served by mongot-search-0-2." src="docs/screenshots/gui-vector-detective.jpg">
+<img alt="Vector search for the, a word the theme table does not know. The eight results are a mix of thriller and sci-fi scoring between 0.8608 and 0.8705, with no coherent theme, served by mongot-search-0-1." src="docs/screenshots/gui-vector-fallback.jpg">
+<!-- markdownlint-enable MD033 -->
+
+```text
+?q=detective&mode=vector   8 results, ALL noir,          every score 1.0000
+?q=the&mode=vector         8 results, thriller + sci-fi, scores 0.8608 - 0.8705
+```
+
+`detective` lands exactly on the noir axis, so eight noir films score a perfect 1.0. `the`
+lands nowhere, so the ranking is arbitrary — but the lifetime counters moved in both cases.
+The *transport* works perfectly; only the *ranking* is meaningless.
 
 That is fine for what this GUI is for — showing one request landing on one pod — but the
 *ranking* in vector mode is only meaningful for those ten words. Real semantic search needs an
