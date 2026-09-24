@@ -1,0 +1,23 @@
+# Envoy's admin interface, exposed read-only for observability.
+#
+# MCK restricts the admin listener to /stats, /ready, /logging and /drain_listeners
+# (/clusters and /config_dump return 403), so exposing it is far less dangerous than
+# exposing a stock Envoy admin port - but it is still an admin surface. ClusterIP only:
+# reach it with `oc port-forward`, do NOT give it a VIP or a Route.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongot-envoy-stats
+  namespace: mongodb-poc
+  labels:
+    app.kubernetes.io/part-of: mongot-poc
+    app.kubernetes.io/component: observability
+spec:
+  type: ClusterIP
+  selector:
+    app: mongot-search-lb-0        # the operator's Envoy pods
+  ports:
+  - name: admin
+    port: 9901
+    targetPort: 9901
+    protocol: TCP

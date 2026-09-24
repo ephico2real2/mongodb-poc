@@ -338,6 +338,8 @@ Envoy's `upstream_rq_total`.
 
 ### How to re-run it
 
+Full procedure in **[TESTING.md](TESTING.md)**; the short form:
+
 ```bash
 # per-pod query counts
 for p in mongot-search-0-0 mongot-search-0-1 mongot-search-0-2; do
@@ -499,10 +501,13 @@ what you put here. Running on names requires the set to *advertise* names.
 | Path | What |
 |---|---|
 | `README.md` | this page — the architecture |
+| [`TESTING.md`](TESTING.md) | **sample data → load → query → prove the load balancing** |
 | [`DEPLOYMENT.md`](DEPLOYMENT.md) | full walkthrough, reproduced on a laptop, with every command and measurement |
 | [`mongoT-setup.md`](mongoT-setup.md) | design decisions and findings from building it |
 | `manifests/` | OLM subscriptions, MetalLB config, the `MongoDBSearch` CR, the `LoadBalancer` Service |
 | `mongodb/` | Compose stack for the external replica set, parameterised by `ADVERTISED_HOST` |
+| `mongodb/data/` | sample documents and index definitions |
+| `mongodb/scripts/` | `load-data.sh`, `verify-search.sh` and the bootstrap scripts |
 | `docs/diagrams/` | figure sources and rendered PNGs |
 
 ---
