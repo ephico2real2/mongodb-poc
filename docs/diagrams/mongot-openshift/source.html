@@ -559,4 +559,133 @@ a { color: var(--remote); }
       <figcaption>The entry point is L4 in both designs &mdash; a VIP and a passthrough Route both pin one TCP connection to one pod. That is harmless <em>because</em> Envoy sits behind it. Wire the entry straight to <code>mongot</code> and the deployment looks perfectly healthy while two of three replicas serve nothing.</figcaption>
     </figure>
   </section>
+
+  <section>
+    <h2>Before &mdash; a passthrough Route, and exactly one mongot</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 372" role="img" aria-label="With a single mongot the operator points mongod straight at pod zero and no load balancer is needed, so a passthrough Route is sufficient; that design cannot grow past one pod.">
+          <defs><marker id="ah7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
+            <rect x="24" y="52" width="196" height="84" rx="8" fill="var(--surface)" stroke="var(--none)" stroke-width="1.8"/>
+            <text x="122" y="76" text-anchor="middle" font-weight="600">mongod rs0</text>
+            <text x="122" y="94" text-anchor="middle" font-size="12" fill="var(--muted)">outside OpenShift</text>
+            <text x="122" y="114" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">mongotHost =</text>
+            <text x="122" y="128" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">grpc-search.corp:443</text>
+            <line x1="220" y1="94" x2="256" y2="94" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah7)"/>
+
+            <rect x="260" y="52" width="216" height="84" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="368" y="76" text-anchor="middle" font-weight="600" fill="var(--host)">OpenShift Route</text>
+            <text x="368" y="94" text-anchor="middle" font-size="12" fill="var(--host)">passthrough · TCP + SNI</text>
+            <text x="368" y="114" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--host)">:443 → Svc :27028</text>
+            <text x="368" y="128" text-anchor="middle" font-size="11" fill="var(--muted)">HAProxy, timeout tunnel 1h</text>
+            <line x1="476" y1="94" x2="512" y2="94" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah7)"/>
+
+            <rect x="516" y="52" width="176" height="84" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="604" y="82" text-anchor="middle" font-weight="600" fill="var(--remote)">Service</text>
+            <text x="604" y="102" text-anchor="middle" font-size="11.5" fill="var(--remote)">one endpoint</text>
+            <text x="604" y="120" text-anchor="middle" font-size="11" fill="var(--muted)">nothing to balance</text>
+            <line x1="692" y1="94" x2="728" y2="94" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah7)"/>
+
+            <rect x="732" y="52" width="220" height="84" rx="8" fill="var(--surface)" stroke="var(--remote)" stroke-width="1.8"/>
+            <text x="842" y="80" text-anchor="middle" font-weight="600" fill="var(--remote)">mongot ×1</text>
+            <text x="842" y="100" text-anchor="middle" font-size="11.5" fill="var(--muted)">pod-0 only</text>
+            <text x="842" y="120" text-anchor="middle" font-size="11" fill="var(--muted)">no Envoy anywhere</text>
+
+            <rect x="24" y="164" width="460" height="130" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="42" y="188" font-weight="600" fill="var(--remote)">Why it worked</text>
+            <text x="42" y="210" fill="var(--remote)">With one mongot there is nothing to load balance.</text>
+            <text x="42" y="230" fill="var(--remote)">The operator needs no proxy and wires mongod straight</text>
+            <text x="42" y="250" fill="var(--remote)">to pod-0:</text>
+            <text x="42" y="272" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">&lt;sts&gt;-0.&lt;svc&gt;.&lt;ns&gt;.svc.cluster.local:27028</text>
+            <text x="42" y="288" font-size="11" fill="var(--muted)">mongotHostAndPort() — the no-load-balancer branch</text>
+
+            <rect x="492" y="164" width="460" height="130" rx="8" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.5"/>
+            <text x="510" y="188" font-weight="600" fill="var(--gap)">Why it stops here</text>
+            <text x="510" y="210" fill="var(--gap)">· A passthrough Route is TCP. It cannot split streams.</text>
+            <text x="510" y="230" fill="var(--gap)">· Add a 2nd pod and the operator REJECTS the resource:</text>
+            <text x="510" y="250" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--gap)">  replicas &gt; 1 requires a load balancer</text>
+            <text x="510" y="270" fill="var(--gap)">· 80/443 only, and edge/reencrypt break HTTP/2 or cut at 30s.</text>
+            <text x="510" y="288" fill="var(--muted)" font-size="11">No redundancy: pod-0 restarting is a full search outage.</text>
+
+            <text x="24" y="322" font-weight="600" fill="var(--muted)">Capacity: 1 mongot. Availability: none. This is a starting point, not a design.</text>
+            <text x="24" y="348" fill="var(--muted)">Solid = shipped behaviour. Everything drawn here ran.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>This is not a Route that happened to be paired with one pod &mdash; one pod is the only shape it can take. The moment a second <code>mongot</code> is asked for, the resource is rejected until a load balancer is supplied, and a passthrough Route cannot be that load balancer.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>After &mdash; Route removed, MetalLB and Envoy, three mongot</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 414" role="img" aria-label="The demo removes the Route entirely: a MetalLB VIP reaches a hand-written LoadBalancer Service, Envoy splits gRPC streams, and all three mongot pods serve queries.">
+          <defs><marker id="ah8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
+            <rect x="20" y="58" width="168" height="84" rx="8" fill="var(--surface)" stroke="var(--none)" stroke-width="1.8"/>
+            <text x="104" y="82" text-anchor="middle" font-weight="600">mongod rs0</text>
+            <text x="104" y="100" text-anchor="middle" font-size="11.5" fill="var(--muted)">3 members</text>
+            <text x="104" y="120" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">mongotHost =</text>
+            <text x="104" y="133" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">VIP:27028</text>
+            <line x1="188" y1="100" x2="216" y2="100" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah8)"/>
+
+            <rect x="220" y="58" width="150" height="84" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="295" y="82" text-anchor="middle" font-weight="600" fill="var(--remote)">MetalLB VIP</text>
+            <text x="295" y="102" text-anchor="middle" font-size="11.5" fill="var(--remote)">any port</text>
+            <text x="295" y="122" text-anchor="middle" font-size="11" fill="var(--muted)">L2Advertisement</text>
+            <line x1="370" y1="100" x2="398" y2="100" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah8)"/>
+
+            <rect x="402" y="58" width="152" height="84" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="478" y="82" text-anchor="middle" font-weight="600" fill="var(--host)">mongot-grpc-lb</text>
+            <text x="478" y="102" text-anchor="middle" font-size="11.5" fill="var(--host)">LoadBalancer Svc</text>
+            <text x="478" y="122" text-anchor="middle" font-size="11" fill="var(--muted)">you own this</text>
+            <line x1="554" y1="100" x2="582" y2="100" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah8)"/>
+
+            <rect x="586" y="58" width="152" height="84" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="2.2"/>
+            <text x="662" y="82" text-anchor="middle" font-weight="600" fill="var(--remote)">Envoy ×2</text>
+            <text x="662" y="102" text-anchor="middle" font-size="11.5" fill="var(--remote)">the L7</text>
+            <text x="662" y="122" text-anchor="middle" font-size="11" fill="var(--remote)">splits streams</text>
+
+            <g stroke="var(--remote)" stroke-width="1.5" fill="none">
+              <path d="M738,86 H768 V60 H794" marker-end="url(#ah8)"/>
+              <path d="M738,100 H794" marker-end="url(#ah8)"/>
+              <path d="M738,114 H768 V140 H794" marker-end="url(#ah8)"/>
+            </g>
+            <g font-family="IBM Plex Mono, monospace" font-size="11">
+              <rect x="798" y="42" width="158" height="36" rx="6" fill="var(--remote-wash)" stroke="var(--remote)"/>
+              <text x="877" y="65" text-anchor="middle" fill="var(--remote)">mongot-0  serving</text>
+              <rect x="798" y="82" width="158" height="36" rx="6" fill="var(--remote-wash)" stroke="var(--remote)"/>
+              <text x="877" y="105" text-anchor="middle" fill="var(--remote)">mongot-1  serving</text>
+              <rect x="798" y="122" width="158" height="36" rx="6" fill="var(--remote-wash)" stroke="var(--remote)"/>
+              <text x="877" y="145" text-anchor="middle" fill="var(--remote)">mongot-2  serving</text>
+            </g>
+
+            <rect x="20" y="182" width="460" height="152" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="38" y="206" font-weight="600" fill="var(--host)">What changed, and why</text>
+            <text x="38" y="228" fill="var(--host)">· Route removed &#8212; no HAProxy, no 80/443 limit,</text>
+            <text x="38" y="246" fill="var(--host)">  no SNI coupling, no edge/reencrypt trap.</text>
+            <text x="38" y="266" fill="var(--host)">· MetalLB gives the Service a real IP on any port.</text>
+            <text x="38" y="286" fill="var(--host)">· loadBalancer.managed makes the operator deploy Envoy,</text>
+            <text x="38" y="304" fill="var(--host)">  which is what unlocks replicas &gt; 1.</text>
+            <text x="38" y="326" fill="var(--muted)" font-size="11">F5 optional: a plain L4 VIP can front the MetalLB address.</text>
+
+            <rect x="492" y="182" width="464" height="152" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="510" y="206" font-weight="600" fill="var(--remote)">What it buys</text>
+            <text x="510" y="228" fill="var(--remote)">· All three mongot serve queries &#8212; streams are split</text>
+            <text x="510" y="246" fill="var(--remote)">  per request, not per connection.</text>
+            <text x="510" y="266" fill="var(--remote)">· A mongot restart no longer takes search down.</text>
+            <text x="510" y="286" fill="var(--remote)">· RESOURCE_EXHAUSTED retries onto a DIFFERENT pod.</text>
+            <text x="510" y="304" fill="var(--remote)">· Scale by changing spec.clusters[].replicas alone.</text>
+            <text x="510" y="326" fill="var(--muted)" font-size="11">Envoy ×2 is for restart tolerance, not per-connection sharing.</text>
+
+            <text x="20" y="366" font-weight="600" fill="var(--remote)">Capacity: 3 mongot. This is what the demo runs today &#8212; every box above was observed.</text>
+            <text x="20" y="392" fill="var(--gap)">Still open: no TLS on any leg, and no $search query has been executed.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>The Route is not reconfigured &mdash; it is removed from the data path entirely. MetalLB supplies the address, and <code>loadBalancer.managed</code> supplies the Envoy that makes more than one <code>mongot</code> legal in the first place.</figcaption>
+    </figure>
+  </section>
 </div>

@@ -170,6 +170,75 @@ streams — it must sit *in front of* Envoy, never instead of it.
 
 ---
 
+## How this evolved: one mongot behind a Route, to three behind Envoy
+
+### Before — a passthrough Route, and exactly one `mongot`
+
+<!-- markdownlint-disable MD033 -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mongot-openshift/before-route-single.dark.png">
+  <source srcset="docs/diagrams/mongot-openshift/before-route-single.light.png">
+  <img alt="With a single mongot the operator points mongod straight at pod zero and no load balancer is needed, so a passthrough Route is sufficient; that design cannot grow past one pod." src="docs/diagrams/mongot-openshift/before-route-single.light.png">
+</picture>
+<!-- markdownlint-enable MD033 -->
+
+```text
+  mongod rs0 ──▶ OpenShift Route ──▶ Service ──▶ mongot x1
+  (external)     passthrough          one          pod-0 only
+                 :443 -> :27028       endpoint     no Envoy anywhere
+```
+
+This worked, and it is worth being precise about *why*: **with one `mongot` there is
+nothing to load balance.** The Operator needs no proxy and wires `mongod` straight at
+pod-0 — the no-load-balancer branch of `mongotHostAndPort()`:
+
+```text
+<sts>-0.<svc>.<ns>.svc.cluster.local:27028
+```
+
+It is not a Route that happened to be paired with one pod. **One pod is the only shape
+it can take:**
+
+- a passthrough Route is TCP and cannot split gRPC streams
+- ask for a second pod and the Operator rejects the resource — `replicas > 1` requires a
+  load balancer, and the Route cannot be that load balancer
+- 80/443 only, with `edge`/`reencrypt` breaking HTTP/2 or cutting at 30s
+- no redundancy: pod-0 restarting is a full search outage
+
+### After — Route removed, MetalLB and Envoy, three `mongot`
+
+<!-- markdownlint-disable MD033 -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mongot-openshift/after-metallb-three.dark.png">
+  <source srcset="docs/diagrams/mongot-openshift/after-metallb-three.light.png">
+  <img alt="The demo removes the Route entirely: a MetalLB VIP reaches a hand-written LoadBalancer Service, Envoy splits gRPC streams, and all three mongot pods serve queries." src="docs/diagrams/mongot-openshift/after-metallb-three.light.png">
+</picture>
+<!-- markdownlint-enable MD033 -->
+
+```text
+                                                     ┌──▶ mongot-0  serving
+  mongod rs0 ──▶ MetalLB VIP ──▶ mongot-grpc-lb ──▶ Envoy x2 ──▶ mongot-1  serving
+  (3 members)    any port        LoadBalancer Svc    the L7   └──▶ mongot-2  serving
+  mongotHost=    L2Advertise     you own this        splits streams
+  VIP:27028
+```
+
+The Route is not reconfigured — it is **removed from the data path entirely**. MetalLB
+supplies the address on any port, and `loadBalancer.managed` supplies the Envoy that
+makes more than one `mongot` legal in the first place.
+
+| | Before | After |
+|---|---|---|
+| Entry | Route `:443` passthrough | MetalLB VIP, any port |
+| L7 | none | **Envoy ×2, operator-managed** |
+| `mongot` | **1** | **3, all serving** |
+| Restart of one `mongot` | full search outage | absorbed |
+| `RESOURCE_EXHAUSTED` | nowhere to retry | retried on a *different* pod |
+| Scaling | blocked by validation | `spec.clusters[].replicas` |
+
+This is what the demo runs today; every box in the "after" figure was observed. Still
+open on both: no TLS on any leg, and no `$search` query has been executed.
+
 ## The failure that produces no error
 
 <!-- markdownlint-disable MD033 -->
