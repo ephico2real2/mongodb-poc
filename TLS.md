@@ -13,7 +13,7 @@ and a passthrough Route, distributing across all three `mongot`.
 Three legs, and they are **not** independently switchable:
 
 ```text
-  mongod  --(A) TLS-->  Envoy  --(B) mTLS-->  mongot
+  mongod  --(A) mTLS-->  Envoy  --(B) mTLS-->  mongot
      ^                                           |
      +---------------(C) TLS --------------------+
                      sync leg, never crosses Envoy
@@ -21,9 +21,19 @@ Three legs, and they are **not** independently switchable:
 
 | Leg | Turned on by | Certificate |
 |---|---|---|
-| **A** client → Envoy | `spec.security.tls.certsSecretPrefix` | `<prefix>-<name>-search-lb-<idx>-cert` |
+| **A** client → Envoy — **mTLS** | `spec.security.tls.certsSecretPrefix` | `<prefix>-<name>-search-lb-<idx>-cert` **+ a client cert on `mongod`** |
 | **B** Envoy → `mongot` | same field — not separable | `<prefix>-<name>-search-lb-<idx>-client-cert` + `<prefix>-<name>-search-cert` |
 | **C** `mongot` → `mongod` | `spec.source.external.tls.ca` | the external `mongod`'s own server cert |
+
+**Leg A is mutual TLS, not one-way.** The operator-generated listener sets
+`"require_client_certificate": true`, so the external `mongod` **must** present a client
+certificate chaining to the CA in `ca.crt`. Provision its certificate with
+`extendedKeyUsage = serverAuth, clientAuth` (§6.1's table does) — a server-only
+certificate produces a handshake failure with nothing pointing at the cause.
+
+**The client-facing leg is pinned to TLS 1.3 exactly**, not "1.2 or better":
+`tls_params: { tls_minimum_protocol_version: TLSv1_3, tls_maximum_protocol_version: TLSv1_3 }`.
+A `mongod` or F5 that cannot negotiate 1.3 cannot connect.
 
 **Enabling TLS changes no ports.** `EnvoyDefaultProxyPort` and `MongotDefaultGrpcPort`
 are both the constant `27028` with no TLS variant; TLS is negotiated in-band over ALPN on
@@ -430,8 +440,10 @@ oc get secret lab-mongot-search-lb-0-cert -n mongodb-poc -o jsonpath='{.data.tls
 ```
 
 **Limits worth designing around.** `mongot` validates that a client certificate is signed
-by a trusted CA but **does not validate hostname or SAN** on that leg. Minimum TLS 1.2.
-No FIPS. Cipher suites are not configurable.
+by a trusted CA but **does not validate hostname or SAN** on that leg. The client-facing
+Envoy listener is pinned to **TLS 1.3 exactly** (measured in `lds.json`); the 1.2 floor
+MongoDB documents applies to `mongot`'s own listener, which this repo has not measured
+separately. No FIPS. Cipher suites are not configurable.
 
 ---
 

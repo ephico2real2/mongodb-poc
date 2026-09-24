@@ -168,18 +168,22 @@ entry Service selector points at the `mongot` pods rather than `app=<name>-searc
 
 Three things will mislead you.
 
-**1. Do not count access-log lines.** Envoy emits **one record per gRPC stream, at stream
-close** — not per request. Forty queries over long-lived streams produced **three** log
-lines. Counting them under-reports distribution catastrophically.
+**1. Use the access log — but scrape the POD, not the Service.** Envoy emits one record
+**per request**, each carrying `upstream_host`, so it is the best instrument available:
+it shows per-request ordering, which the Prometheus counters cannot.
 
 ```bash
-# this is NOT a distribution measurement
-oc logs -n mongodb-poc -l app=mongot-search-lb-0 | grep -o '"upstream_host":"[^"]*"' | sort | uniq -c
+# per-request distribution, from the pod that carries the connection
+oc logs -n mongodb-poc <envoy-pod> | grep '"logger":"access"' \
+  | grep -o 'upstream=[0-9.]*' | sort | uniq -c
 ```
 
+Only one Envoy replica carries the connection; the other reads zero forever. Aggregating
+with `-l app=...` mixes an idle pod into the sample.
+
 **2. A single stats scrape shows one Envoy pod.** `mongot-envoy-stats` is a normal
-Service, so it round-robins. Scrape **every** Envoy pod and sum, which
-`verify-search.sh` does. A scrape that lands on the idle replica reads zero.
+`ClusterIP` Service, so every scrape is a coin flip and a scrape landing on the idle
+replica reads zero. Address each Envoy **pod IP** instead.
 
 **3. `/clusters` returns 403.** MCK restricts Envoy's admin listener to `/stats`,
 `/ready`, `/logging` and `/drain_listeners`. Per-endpoint breakdowns are not available
@@ -212,7 +216,7 @@ Counters worth knowing:
 | Stat | Means |
 |---|---|
 | `upstream_rq_total` | requests this Envoy sent to `mongot` |
-| `upstream_cx_active` | live connections — should equal the `mongot` replica count |
+| `upstream_cx_active` | live upstream connections **right now** — *not* a health signal. The cluster's `idle_timeout` is 300s, so between bursts this is legitimately **0**. Observed 0, 2, 3 and 6 on a healthy system |
 | `upstream_rq_retry` | retries fired, e.g. after `RESOURCE_EXHAUSTED` |
 | `upstream_rq_timeout` | requests that hit the 300s route timeout |
 

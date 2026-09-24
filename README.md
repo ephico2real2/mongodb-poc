@@ -362,10 +362,16 @@ Two consequences worth stating explicitly:
   replica set each member opens its own connection, so replicas *do* spread load across
   members. Scale Envoy for restart tolerance, not for throughput on one connection.
 
-- **If Envoy is ever bypassed, you silently revert to L4 pinning.** Point the Route or
-  the `LoadBalancer` Service at the `mongot` headless Service instead of the Envoy pods
-  and everything still works — queries succeed, nothing errors, and **one `mongot` serves
-  all of them** while the other two sit idle holding warm indexes.
+- **If Envoy is ever bypassed, you revert to L4 pinning** — one connection, one pod,
+  with the other two idle holding warm indexes. The mechanism is measured: 40 queries
+  rode a pre-existing connection with `downstream_cx_total` delta **0**, so an L4 hop in
+  Envoy's place delivers that single connection to a single `mongot`.
+
+  **How loudly it fails depends on TLS.** In a *plaintext* deployment it is silent —
+  queries succeed and nothing errors. **With TLS on it fails loudly**, because
+  `mongot`'s certificate does not carry the `externalHostname` as a SAN and `mongot`
+  runs in `mode: mTLS`, so the handshake is rejected. Treat the silent case as the
+  dangerous one, and note that TLS is what turns it into a visible error.
 
 This is the whole reason the vendor asks for an L7 proxy, and it is invisible in every
 health check. The only way to see it is in Envoy's access logs: run a series of queries
@@ -453,12 +459,31 @@ Envoy, same window:
 **three** pods. That is the whole argument for the L7, demonstrated rather than asserted:
 distribution happens **per request**, not per connection.
 
-### Reading the access log will mislead you
+### Envoy's access log is the best instrument
 
-Envoy emits **one access-log record per gRPC stream, at stream close** — not per request.
-Forty queries over long-lived streams produced three log lines. Counting log lines to
-judge distribution will therefore under-report it badly; use `mongot`'s counters or
-Envoy's `upstream_rq_total`.
+Envoy emits **one access-log record per request**, each carrying `upstream_host`. That
+makes it the only instrument that shows per-request *ordering* — the Prometheus counters
+give totals, not sequence.
+
+```bash
+oc logs -n mongodb-poc <envoy-pod> | grep '"logger":"access"' \
+  | grep -o 'upstream=[0-9.]*' | sort | uniq -c
+```
+
+```text
+  14 upstream=10.217.1.38
+  13 upstream=10.217.1.36
+  13 upstream=10.217.1.37
+```
+
+**Scrape the pod, not the Service.** Only the Envoy replica carrying the connection has
+any traffic; the other reads zero forever (`downstream_cx_total: 0`). A `ClusterIP`
+Service round-robins, so a single scrape is a coin flip — address each pod.
+
+> An earlier revision of this page claimed Envoy logged once per *stream* and that 40
+> queries produced 3 log lines. That was wrong: it generalised from a sample taken just
+> after a pod restart. Measured properly, 3545 access lines correspond exactly to
+> `downstream_rq_total: 3545`.
 
 ### How to re-run it
 

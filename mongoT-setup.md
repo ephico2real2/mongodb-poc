@@ -324,7 +324,7 @@ derived Secret names, ready for when the source is TLS-enabled too.
 
 ---
 
-## 8. Edition support
+## 9. Edition support
 
 MongoDB's compatibility matrix is explicit, and it is about **editions**, not topology:
 

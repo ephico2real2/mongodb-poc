@@ -60,11 +60,12 @@ mongot-toolbox-...                    1/1     Running   0          1h
 docker compose -f mongodb/compose.yaml --env-file mongodb/.env ps
 ```
 ```text
-NAME     STATE     STATUS
-mongo1   running   Up
-mongo2   running   Up
-mongo3   running   Up
+NAME     IMAGE                                             SERVICE  STATUS
+mongo1   docker.io/mongodb/mongodb-community-server:8.3.4-ubi9   mongo1   Up 2 hours
+mongo2   docker.io/mongodb/mongodb-community-server:8.3.4-ubi9   mongo2   Up 2 hours
+mongo3   docker.io/mongodb/mongodb-community-server:8.3.4-ubi9   mongo3   Up 2 hours
 ```
+(There is no `STATE` column; check `STATUS` reads `Up`.)
 
 > **If `PHASE` is not `Running`**, stop here. Nothing below will work. See §8.
 
@@ -156,6 +157,7 @@ cd .. && ./app/search-cli.sh detective
 ```
 ```text
   query   : "space"   mode: vector   filter: year >= 1990
+  corpus  : 20,024 documents
   latency : 131ms   results: 4
 
   TITLE                         YEAR  GENRE     SCORE
@@ -180,8 +182,8 @@ cd mongodb && ./scripts/verify-search.sh
 ```
 ```text
 === 1. correctness: $search ===
-  PASS  $search "karate" -> The Karate Kid  score=2.262
-=== 2. correctness: $vectorSearch ===
+  PASS  $search "karate" -> The Karate Kid  score=8.308
+=== 2. correctness: $vectorSearch (curated corpus) ===
   PASS  The Karate Kid  score=0.9992
   PASS  The Wrestler    score=0.9905
   PASS  Rocky           score=0.9892
@@ -195,6 +197,10 @@ cd mongodb && ./scripts/verify-search.sh
   TOTAL                   40
   PASS  every query accounted for, spread across 3 pods
 ```
+
+> **Scores move with the corpus.** BM25 relevance depends on collection statistics, so
+> `score=8.308` is what you get after `load-bulk.sh`. Before the bulk load it is ~2.3.
+> Assert on the *title*, never the score.
 
 ### How to read this
 
@@ -309,9 +315,21 @@ Both scripts drop and recreate the collection, so they are safe to re-run.
 To tear the cluster side down completely:
 
 ```bash
-oc delete mongodbsearch mongot -n mongodb-poc      # mongot + Envoy
-oc delete svc mongot-grpc-lb mongot-envoy-stats -n mongodb-poc   # NOT operator-owned
-oc delete route mongot-grpc -n mongodb-poc
+NS=mongodb-poc
+oc delete mongodbsearch mongot -n $NS                      # mongot + Envoy + their PVCs? NO - see below
+oc delete svc mongot-grpc-lb mongot-envoy-stats mongod-external -n $NS
+oc delete route mongot-grpc -n $NS
+oc delete deploy mongot-toolbox -n $NS
+oc delete endpointslice mongod-external-v4 -n $NS
+# certificates and the CA - none of these are owned by the CR
+oc delete certificate --all -n $NS
+oc delete secret lab-mongot-search-cert lab-mongot-search-lb-0-cert \
+                 lab-mongot-search-lb-0-client-cert external-mongod-cert -n $NS
+oc delete configmap external-mongod-ca -n $NS
+oc delete clusterissuer enterprise-ca enterprise-selfsigned-bootstrap
+oc delete certificate enterprise-root-ca -n cert-manager
+# PVCs survive the StatefulSet by design - delete them explicitly to reclaim disk
+oc delete pvc -l app=mongot-search-0-svc -n $NS
 ```
 
 > `mongot-grpc-lb` and `mongot-envoy-stats` have **no ownerReference**, so deleting the
