@@ -93,40 +93,46 @@ Deployment the MCK operator creates from `spec.clusters[].loadBalancer.managed`.
 
 ```text
   colima VM 192.168.64.4
-    (1) mongod rs0, 3 members          mongotHost = grpc-search.apps-crc.testing:443
-         |                             useGrpcForSearch = true, searchTLSMode = requireTLS
-         | (2) ONE long-lived HTTP/2 connection   <- an L4 hop cannot split this
+    (1) mongod rs0, 3 members             mongotHost = grpc-search.apps-crc.testing:443
+         |                                useGrpcForSearch = true
+         |                                searchTLSMode   = requireTLS
+         | (2) ONE long-lived HTTP/2 connection  <-- an L4 hop cannot split this
          v
   macOS host
-    DNS -> 192.168.64.1 : 443          gvisor-tap-vsock forwards into CRC
-         |                             (CRC has no host interface; this hop is the only stitch)
+    DNS -> 192.168.64.1 : 443             gvisor-tap-vsock forwards into CRC
+         |                                CRC has no host interface, so this hop
+         |                                is the only stitch between the two VMs
          v
   CRC, openshift-ingress
-    (3) Route mongot-grpc, passthrough        be_tcp:mongodb-poc:mongot-grpc
-         |                                    balance roundrobin  (set by annotation)
-         |                                    the passthrough DEFAULT is `source`, which
-         |                                    pinned every connection to ONE Envoy:
-         | (4) mutual TLS 1.3 ends here       that gave 26,605 requests vs 0
+    (3) Route mongot-grpc, passthrough    be_tcp:mongodb-poc:mongot-grpc
+         |                                balance roundrobin, set by annotation
+         |                                the passthrough DEFAULT is `source`, which
+         |                                pinned every connection to ONE Envoy
+         | (4) mutual TLS 1.3 ends here   measured under `source`: 26,605 vs 0
          v
   CRC, namespace mongodb-poc
     (5) Envoy, Deployment mongot-search-lb-0, operator-owned, from a ConfigMap
-         pod ...-5r4qg   carries the connection, 26,605 requests, 1 client_id
-         pod ...-v5ffh   ready, healthy, idle, 0 requests - failover only
-         lds.json: bind :27028, require_client_cert, TLS min=max=v1.3, alpn h2, 300s
-         cds.json: STRICT_DNS, lb_policy absent -> Envoy default ROUND_ROBIN,
-                   retry_on 5 kinds incl. resource-exhausted, previous_hosts, 2 retries
+         pod ...-5r4qg                    carries the connection, 26,605 requests
+         pod ...-v5ffh                    ready, healthy, idle, 0 requests
+         lds.json                         bind :27028, require_client_cert,
+                                          TLS min = max = v1.3, alpn h2, 300s
+         cds.json                         STRICT_DNS, lb_policy absent so Envoy
+                                          defaults to ROUND_ROBIN, retry_on 5 kinds
+                                          incl. resource-exhausted, previous_hosts
          |
          | (6) STRICT_DNS on headless mongot-search-0-svc -> 3 pod IPs
-         | (7) each gRPC STREAM to the next pod, second mutual-TLS leg, SNI = Service FQDN
+         | (7) each gRPC STREAM to the next pod, second mutual-TLS leg
          v
-    mongot-search-0-0        mongot-search-0-1        mongot-search-0-2
-    10.217.1.38:27028        10.217.1.37:27028        10.217.1.36:27028
+    +----------------------+----------------------+
+    v                      v                      v
+  mongot-search-0-0    mongot-search-0-1    mongot-search-0-2
+  10.217.1.38:27028    10.217.1.37:27028    10.217.1.36:27028
 
-    (8) reverse leg: each mongot opens its OWN change stream straight back to
-        192.168.64.4:27017-19 - not through Envoy, not through the Route, not balanced.
+  (8) reverse leg: each mongot opens its OWN change stream straight back to
+      192.168.64.4:27017-19 - not through Envoy, not the Route, not balanced
 
-    also deployed, carrying no traffic today:
-        Service mongot-grpc-lb, MetalLB L2, 192.168.127.100:27028
+  also deployed, carrying no traffic today:
+      Service mongot-grpc-lb, MetalLB L2, 192.168.127.100:27028
 ```
 
 mongod opens **one** connection, so every L4 hop can only pin it. Only the L7 hop — Envoy —
@@ -177,40 +183,49 @@ no HAProxy, no 80/443 constraint.
 <!-- markdownlint-enable MD033 -->
 
 ```text
-              mongod rs0  -  outside OpenShift
-              3 members . mongotHost = <vip>:27028
-              ONE long-lived HTTP/2 connection per member
-                              |
-                              v
-              MetalLB VIP :443 (or any port you choose)
-              L2Advertisement . the Service maps 443 -> 27028
-              no HAProxy, no Route, no SNI coupling
-                              |
-                              v
-              Service mongot-grpc-lb                      <-- YOU own this
-              type: LoadBalancer
-              selector app=<name>-search-lb-0
-                              |
-                              v
-              Envoy x2  -  the only L7 . MCK-managed      <-- cannot be removed
-              splits gRPC streams across pods
-              STRICT_DNS . ROUND_ROBIN . 300s timeouts
-              retry on resource-exhausted -> a different pod
-                              |
-                              v
-              <name>-search-0-svc  -  headless
-              clusterIP: None -> DNS returns every pod IP
-              Envoy re-resolves, so new replicas join automatically
-                              |
-              +---------------+---------------+
-              |               |               |
-              v               v               v
-          mongot-0        mongot-1        mongot-2
-          serving         serving         serving
-          own PVC         own PVC         own PVC
-              |
-              +--> sync leg: mongot pulls from rs0 directly
-                   SCRAM . searchCoordinator . does NOT cross Envoy
+  +--------------------------------------------------------------+
+  | mongod rs0  -  outside OpenShift                             |
+  | 3 members . mongotHost = <vip>:27028                         |
+  | ONE long-lived HTTP/2 connection per member                  |
+  +--------------------------------------------------------------+
+                                  |
+                                  v
+  +--------------------------------------------------------------+
+  | MetalLB VIP :443  (or any port you choose)                   |
+  | L2Advertisement . the Service maps 443 -> 27028              |
+  | no HAProxy, no Route, no SNI coupling                        |
+  +--------------------------------------------------------------+
+                                  |
+                                  v
+  +--------------------------------------------------------------+
+  | Service mongot-grpc-lb                                       |   <-- you own this
+  | type: LoadBalancer                                           |
+  | selector app=<name>-search-lb-0                              |
+  +--------------------------------------------------------------+
+                                  |
+                                  v
+  +--------------------------------------------------------------+
+  | Envoy x2  -  the only L7 . MCK-managed                       |   <-- cannot be removed
+  | splits gRPC streams across pods                              |
+  | STRICT_DNS . ROUND_ROBIN . 300s timeouts                     |
+  | retry on resource-exhausted -> a different pod               |
+  +--------------------------------------------------------------+
+                                  |
+                                  v
+  +--------------------------------------------------------------+
+  | <name>-search-0-svc  -  headless                             |
+  | clusterIP: None -> DNS returns every pod IP                  |
+  | Envoy re-resolves, so new replicas join automatically        |
+  +--------------------------------------------------------------+
+                                  |
+       +--------------------------+--------------------------+
+       v                          v                          v
+   mongot-0                   mongot-1                   mongot-2
+    serving                    serving                    serving
+    own PVC                    own PVC                    own PVC
+
+  sync leg, all three pods: mongot pulls from rs0 directly
+  SCRAM . searchCoordinator . does NOT cross Envoy
 ```
 
 **Why Envoy cannot be removed from that column.** One TCP connection reaches one pod.
@@ -234,45 +249,61 @@ the OpenShift infra nodes. Same Envoy, same `mongot` — only the way in differs
 <!-- markdownlint-enable MD033 -->
 
 ```text
-              mongod rs0  -  outside OpenShift
-              mongotHost = grpc-search.corp:443 . searchTLSMode: requireTLS
-              sends the HOSTNAME as SNI - never an IP
-                              |
-                              v
-              F5 VIP :443  -  custom, NON-terminating
-              fastL4 / TCP, or a CIS SNI-parsing iRule
-              never an HTTP profile - it downgrades to HTTP/1.1
-                              |
-                              v
-              OpenShift infra nodes :443       (the F5 pool members)
-                              |
-                              v
-              HAProxy router
-              reads SNI, selects the Route, then TCP-tunnels
-              timeout tunnel = 1h   (NOT timeout server = 30s)
-                              |
-                              v
-              Route  -  termination: passthrough
-              host: grpc-search.corp
-              edge: no HTTP/2 . reencrypt: 30s cuts cursors
-                              |
-                              v
-              mongot-search-lb :27028
-              a ClusterIP you own - endpoint selector only
-              (the operator's <name>-search-<idx>-proxy-svc works
-               too, but is deleted with the CR and named after it)
-                              |
-                              v
-              Envoy x2  -  the only L7 . MCK-managed
-              TERMINATES TLS here . matches the SNI filter chain
-              splits gRPC streams . retries resource-exhausted
-                              |
-              +---------------+---------------+
-              v               v               v
-          mongot-0        mongot-1        mongot-2
-              |
-              +--> sync leg: mongot pulls from rs0 over TLS + SCRAM,
-                   bypassing F5, the router and Envoy entirely
+  +--------------------------------------------------------------+
+  | mongod rs0  -  outside OpenShift                             |
+  | mongotHost = grpc-search.corp:443                            |
+  | searchTLSMode: requireTLS                                    |
+  | sends the HOSTNAME as SNI - never an IP                      |
+  +--------------------------------------------------------------+
+                                  |
+                                  v
+  +--------------------------------------------------------------+
+  | F5 VIP :443  -  custom, NON-terminating                      |
+  | fastL4 / TCP, or a CIS SNI-parsing iRule                     |
+  | never an HTTP profile - it downgrades to HTTP/1.1            |
+  +--------------------------------------------------------------+
+                                  |
+                                  v
+  +--------------------------------------------------------------+
+  | OpenShift infra nodes :443                                   |
+  | the F5 pool members                                          |
+  +--------------------------------------------------------------+
+                                  |
+                                  v
+  +--------------------------------------------------------------+
+  | HAProxy router                                               |
+  | reads SNI, selects the Route, then TCP-tunnels               |
+  | timeout tunnel = 1h   (NOT timeout server = 30s)             |
+  +--------------------------------------------------------------+
+                                  |
+                                  v
+  +--------------------------------------------------------------+
+  | Route  -  termination: passthrough                           |
+  | host: grpc-search.corp                                       |
+  | edge: no HTTP/2 . reencrypt: 30s cuts cursors                |
+  +--------------------------------------------------------------+
+                                  |
+                                  v
+  +--------------------------------------------------------------+
+  | Service mongot-search-lb :27028                              |   <-- you own this
+  | a headless Service you own - endpoint selector only          |
+  | the operator's proxy Service works too, but is               |
+  | deleted with the CR and named after it                       |
+  +--------------------------------------------------------------+
+                                  |
+                                  v
+  +--------------------------------------------------------------+
+  | Envoy x2  -  the only L7 . MCK-managed                       |
+  | TERMINATES TLS here . matches the SNI filter chain           |
+  | splits gRPC streams . retries resource-exhausted             |
+  +--------------------------------------------------------------+
+                                  |
+       +--------------------------+--------------------------+
+       v                          v                          v
+   mongot-0                   mongot-1                   mongot-2
+
+  sync leg, all three pods: mongot pulls from rs0 over TLS + SCRAM,
+  bypassing the F5, the router and Envoy entirely
 ```
 
 **Why this shape needs no MetalLB.** A Route needs neither MetalLB nor a
@@ -301,25 +332,26 @@ behind an F5 VIP fronting the infra nodes. Nothing about the cluster side change
 
 ```text
   mongod
-    |  TLS, SNI = grpc-search.<domain>
+    |   TLS, SNI = grpc-search.<domain>
     v
-  F5 VIP                    passthrough / L4 - does NOT terminate TLS
-    |                       fastL4 or standard TCP virtual server
-    |                       no client-SSL profile, no server-SSL profile
+  F5 VIP                     passthrough / L4 - does NOT terminate TLS
+    |                        fastL4 or standard TCP virtual server
+    |                        no client-SSL profile, no server-SSL profile
     v
-  OpenShift infra nodes :443
-    |
-  passthrough Route         selected by SNI - does NOT terminate TLS
-    |                       holds no spec.tls.certificate or spec.tls.key
-    v
-  Service mongot-search-lb  endpoint selector only; HAProxy dials the pod IPs
+  OpenShift infra nodes      port 443
     |
     v
-  Envoy  :27028             <-- TLS TERMINATES HERE, and only here
-    |                           certificate from the MongoDBSearch CR
-    |                           (security.tls.certsSecretPrefix)
+  passthrough Route          selected by SNI - does NOT terminate TLS
+    |                        holds no spec.tls.certificate or spec.tls.key
     v
-  mongot x3                 second mutual-TLS leg, Envoy -> pods
+  Service mongot-search-lb   endpoint selector only
+    |                        HAProxy dials the Envoy pod IPs
+    v
+  Envoy :27028               <-- TLS TERMINATES HERE, and only here
+    |                        certificate from the MongoDBSearch CR
+    |                        (security.tls.certsSecretPrefix)
+    v
+  mongot x3                  second mutual-TLS leg, Envoy -> pods
 ```
 
 **TLS is terminated exactly once, at Envoy.** Neither the F5 nor the router decrypts. Both
@@ -761,11 +793,19 @@ The entry point — VIP or Route — is **L4**. One TCP connection lands on exac
 backend pod. That is harmless here **only because Envoy sits behind it**:
 
 ```text
-  mongod member --- 1 long-lived TCP conn ---> [ entry ] ---> ONE Envoy pod
-                                                                  |
-                                                    splits HTTP/2 streams
-                                                                  v
-                                                          mongot-1 / -2 / -3
+  mongod member
+       |
+       |  one long-lived TCP connection
+       v
+  [ entry: MetalLB VIP or passthrough Route ]
+       |
+       |  an L4 hop can only pin it
+       v
+  ONE Envoy pod
+       |
+       |  splits the HTTP/2 streams inside that connection
+       v
+  mongot-0  /  mongot-1  /  mongot-2
 ```
 
 Two consequences worth stating explicitly:

@@ -34,40 +34,46 @@ second mutual-TLS leg.*
 
 ```text
   colima VM 192.168.64.4
-    (1) mongod rs0, 3 members          mongotHost = grpc-search.apps-crc.testing:443
-         |                             useGrpcForSearch = true, searchTLSMode = requireTLS
-         | (2) ONE long-lived HTTP/2 connection   <- an L4 hop cannot split this
+    (1) mongod rs0, 3 members             mongotHost = grpc-search.apps-crc.testing:443
+         |                                useGrpcForSearch = true
+         |                                searchTLSMode   = requireTLS
+         | (2) ONE long-lived HTTP/2 connection  <-- an L4 hop cannot split this
          v
   macOS host
-    DNS -> 192.168.64.1 : 443          gvisor-tap-vsock forwards into CRC
-         |                             (CRC has no host interface; this hop is the only stitch)
+    DNS -> 192.168.64.1 : 443             gvisor-tap-vsock forwards into CRC
+         |                                CRC has no host interface, so this hop
+         |                                is the only stitch between the two VMs
          v
   CRC, openshift-ingress
-    (3) Route mongot-grpc, passthrough        be_tcp:mongodb-poc:mongot-grpc
-         |                                    balance roundrobin  (set by annotation)
-         |                                    the passthrough DEFAULT is `source`, which
-         |                                    pinned every connection to ONE Envoy:
-         | (4) mutual TLS 1.3 ends here       that gave 26,605 requests vs 0
+    (3) Route mongot-grpc, passthrough    be_tcp:mongodb-poc:mongot-grpc
+         |                                balance roundrobin, set by annotation
+         |                                the passthrough DEFAULT is `source`, which
+         |                                pinned every connection to ONE Envoy
+         | (4) mutual TLS 1.3 ends here   measured under `source`: 26,605 vs 0
          v
   CRC, namespace mongodb-poc
     (5) Envoy, Deployment mongot-search-lb-0, operator-owned, from a ConfigMap
-         pod ...-5r4qg   holds the live connection, 26,605 requests, 1 client_id
-         pod ...-v5ffh   0 requests, 5 connections - idle under the old default
-         lds.json: bind :27028, require_client_cert, TLS min=max=v1.3, alpn h2, 300s
-         cds.json: STRICT_DNS, lb_policy absent -> Envoy default ROUND_ROBIN,
-                   retry_on 5 kinds incl. resource-exhausted, previous_hosts, 2 retries
+         pod ...-5r4qg                    carries the connection, 26,605 requests
+         pod ...-v5ffh                    ready, healthy, idle, 0 requests
+         lds.json                         bind :27028, require_client_cert,
+                                          TLS min = max = v1.3, alpn h2, 300s
+         cds.json                         STRICT_DNS, lb_policy absent so Envoy
+                                          defaults to ROUND_ROBIN, retry_on 5 kinds
+                                          incl. resource-exhausted, previous_hosts
          |
          | (6) STRICT_DNS on headless mongot-search-0-svc -> 3 pod IPs
-         | (7) each gRPC STREAM to the next pod, second mutual-TLS leg, SNI = Service FQDN
+         | (7) each gRPC STREAM to the next pod, second mutual-TLS leg
          v
-    mongot-search-0-0        mongot-search-0-1        mongot-search-0-2
-    10.217.1.38:27028        10.217.1.37:27028        10.217.1.36:27028
+    +----------------------+----------------------+
+    v                      v                      v
+  mongot-search-0-0    mongot-search-0-1    mongot-search-0-2
+  10.217.1.38:27028    10.217.1.37:27028    10.217.1.36:27028
 
-    (8) reverse leg: each mongot opens its OWN change stream straight back to
-        192.168.64.4:27017-19 - not through Envoy, not through the Route, not balanced.
+  (8) reverse leg: each mongot opens its OWN change stream straight back to
+      192.168.64.4:27017-19 - not through Envoy, not the Route, not balanced
 
-    also deployed, carrying no traffic today:
-        Service mongot-grpc-lb, MetalLB L2, 192.168.127.100:27028
+  also deployed, carrying no traffic today:
+      Service mongot-grpc-lb, MetalLB L2, 192.168.127.100:27028
 ```
 
 ### The two things the figure is really saying
