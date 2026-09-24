@@ -72,8 +72,8 @@ no HAProxy, no 80/443 constraint.
               ONE long-lived HTTP/2 connection per member
                               |
                               v
-              MetalLB VIP :27028                          operator-independent
-              L2Advertisement . any port, not just 80/443
+              MetalLB VIP :443 (or any port you choose)
+              L2Advertisement . the Service maps 443 -> 27028
               no HAProxy, no Route, no SNI coupling
                               |
                               v
@@ -136,8 +136,21 @@ spec:
   selector:
     app: mongot-search-lb-0          # <MongoDBSearch name>-search-lb-<clusterIndex>
   ports:
-  - { name: grpc, port: 27028, targetPort: 27028, protocol: TCP }
+  - name: grpc
+    port: 443           # what clients dial - YOUR choice, 443 is fine
+    targetPort: 27028   # what Envoy listens on - fixed by the operator
+    protocol: TCP
 ```
+
+**The port clients dial is yours to pick.** MetalLB supplies the address; the *Service*
+maps `port` to `targetPort`, so the VIP can present **443** while Envoy keeps listening
+on 27028. Verified by patching the live Service: `VIP:443` returned a 404 from Envoy
+while `VIP:27028` stopped answering.
+
+Presenting 443 is usually the better choice — it matches what a Route would have given
+you, so `mongotHost` does not change if you ever switch entry method, and it is the port
+your firewall rules already describe. Whatever you choose, set `mongotHost` on the
+external `mongod` to match; the port is always explicit there.
 
 Two cautions: it has **no `ownerReference`**, so it outlives the CR and is never
 reconciled; and the selector is an Operator-internal name, so renaming the CR silently
@@ -163,7 +176,7 @@ Plus a user holding the built-in **`searchCoordinator`** role (MongoDB 8.2+).
 
 |  | **A · MetalLB VIP** | **B · OpenShift Route** |
 |---|---|---|
-| Ports | **any** — 27028, 443, anything | **80/443 only** |
+| Ports | **any** — the Service maps `port`→`targetPort` | **80/443 only** |
 | Data path | client → VIP → Envoy | client → router (HAProxy) → Svc → Envoy |
 | Stream splitting | **at Envoy** — entry is L4 either way | **at Envoy** — the Route cannot split streams |
 | Termination | TLS ends at Envoy | must be **passthrough** |
