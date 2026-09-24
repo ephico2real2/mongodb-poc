@@ -309,6 +309,50 @@ Guard it in review: the entry Service selector must be `app=<name>-search-lb-<id
 
 ## Certificates
 
+### Enabling TLS changes no ports
+
+Worth stating plainly, because it is counterintuitive if you think in 80/443 terms:
+
+| | Plaintext | TLS |
+|---|---|---|
+| Envoy listener | `EnvoyDefaultProxyPort` = **27028** | **same 27028, same single listener** |
+| `mongot` gRPC | `MongotDefaultGrpcPort` = **27028** | **same** — no TLS branch in `GetMongotGrpcPort()` |
+| Your Service `port` | your choice | **unchanged** |
+
+There is one `mongod_listener` bound to 27028 either way. TLS adds a `transport_socket`
+and a `FilterChainMatch` to that same listener; gRPC negotiates TLS in-band over ALPN.
+**No new firewall rules are needed to turn TLS on.**
+
+What changes is configuration, not topology:
+
+```text
+Envoy    + tls_inspector listener filter   (added only when TLS is on, to read SNI)
+         + FilterChainMatch.ServerNames: [externalHostname]
+         + downstream TLS transport socket
+mongot   server.grpc.tls.mode:  Disabled -> TLS   (-> MTLS when a client CA is set)
+mongod   searchTLSMode:         disabled -> requireTLS   (you set this yourself)
+         plus three cert Secrets, and a restart - certs are read only at startup
+```
+
+### The trap: `mongotHost` must become a hostname
+
+With TLS on, `externalHostname` stops being inert and becomes the **SNI** Envoy matches
+on. TLS clients do not send SNI for IP literals, so an IP in `mongotHost` produces no
+SNI, no filter-chain match, and a dropped connection — which presents as a certificate
+problem rather than a naming one.
+
+```text
+mongotHost = 10.20.30.40:27028          plaintext: fine.  TLS: FAILS - no SNI sent
+mongotHost = grpc-search.corp:443       required once TLS is on
+```
+
+So enabling TLS has a prerequisite that is easy to miss: the external `mongod` must
+address `mongot` by **name**, that name must equal `externalHostname`, and it must be a
+SAN on Envoy's server certificate. All three, or nothing connects.
+
+### The certificate map
+
+
 TLS in managed mode is **all-or-nothing**: setting `spec.security.tls` turns it on for
 *both* legs (client→Envoy and Envoy→`mongot`). It is not per-leg.
 
