@@ -144,7 +144,7 @@ Service ClusterIP — see **[ENVOY-FLOW.md](ENVOY-FLOW.md)**.
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mongot-openshift/architecture.dark.png">
   <source srcset="docs/diagrams/mongot-openshift/architecture.light.png">
-  <img alt="An external MongoDB replica set reaches mongot pods inside OpenShift through one L7 hop, Envoy, entered either by a MetalLB VIP or a passthrough Route on 443." src="docs/diagrams/mongot-openshift/architecture.light.png">
+  <img alt="An external MongoDB replica set reaches mongot pods inside OpenShift through one L7 hop, Envoy. Entry is a deployment choice between two supported options, marked OR because you build one of them: Path 1 a MetalLB VIP on any port, or Path 2 a passthrough Route on 443. Both terminate on a Service you own that selects the Envoy pods." src="docs/diagrams/mongot-openshift/architecture.light.png">
 </picture>
 <!-- markdownlint-enable MD033 -->
 
