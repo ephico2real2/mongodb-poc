@@ -244,6 +244,47 @@ oc exec -n mongodb-poc $TB -- getent hosts mongot-search-0-svc
 #   10.217.1.7
 ```
 
+## What a healthy deployment looks like
+
+<!-- markdownlint-disable MD033 -->
+<img alt="OpenShift console pod list for the mongodb-poc namespace: the MCK operator, three mongot pods, two Envoy replicas and the toolbox, all Running 1/1 with zero restarts." src="docs/screenshots/console-pods.jpg">
+<!-- markdownlint-enable MD033 -->
+
+Seven pods, all `Running 1/1`, **zero restarts**:
+
+| Pod | Role |
+|---|---|
+| `mongodb-kubernetes-operator-*` | MCK |
+| `mongot-search-0-0/1/2` | the three `mongot`, StatefulSet-ordinal named |
+| `mongot-search-lb-0-*` ×2 | the operator-managed Envoy |
+| `mongot-toolbox-*` | in-cluster observation |
+
+### Measured resource usage vs the defaults
+
+`oc adm top pods` on an idle-to-light load:
+
+```text
+mongot-search-0-0                      14m   449Mi
+mongot-search-0-1                      15m   451Mi
+mongot-search-0-2                      15m   440Mi
+mongot-search-lb-0-...-kt2cx            4m    25Mi
+mongot-search-lb-0-...-zcjxr            4m    23Mi
+mongodb-kubernetes-operator-...         1m    34Mi
+mongot-toolbox-...                      0m     6Mi
+```
+
+Worth knowing before you size a cluster: **`mongot` defaults to 2 CPU / 4 GiB of
+*requests* per replica** — three replicas reserve 6 CPU / 12 GiB before anything runs.
+Actual usage here is ~**450 MiB and ~15 millicores** each. The gap is enormous at this
+data volume, and the default is sized for real corpora, not five documents. Measure
+against your own data before either accepting the default or cutting it.
+
+**Envoy is almost free** — ~25 MiB and 4 millicores per replica. There is no resource
+argument for running one replica instead of two, and one replica means a rolling restart
+severs every in-flight cursor.
+
+---
+
 ## Step 6 — failure behaviour worth exercising
 
 | Test | Command | Expected |
