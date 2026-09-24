@@ -211,29 +211,101 @@ is mounted from a ConfigMap. Point it at another corpus with `DB` and `COLL`.
 ## 2. The console graph (best for watching)
 
 <!-- markdownlint-disable MD033 -->
-<img alt="OpenShift console Metrics view showing three overlapping lines at roughly 7 requests per second, one per mongot pod, with a table reading mongot-search-0-0 7.62, -0-1 7.16, -0-2 7.06." src="docs/screenshots/console-metrics-distribution.jpg">
+<img alt="OpenShift console Metrics view, query sum by pod of the rate of mongot search command count over five minutes. The graph climbs from zero as load starts, and the table below reads mongot-search-0-2 at 15.82, mongot-search-0-1 at 15.7 and mongot-search-0-0 at 14.56 — three pods within about one request per second of each other." src="docs/screenshots/console-metrics-distribution.jpg">
 <!-- markdownlint-enable MD033 -->
 
 ```text
-mongot-search-0-0   7.62 req/s
-mongot-search-0-1   7.16 req/s      three lines, one per pod, essentially superimposed
-mongot-search-0-2   7.06 req/s
+sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count[5m]))
+
+mongot-search-0-2   15.82 req/s
+mongot-search-0-1   15.70 req/s     three lines, one per pod, essentially superimposed
+mongot-search-0-0   14.56 req/s
+                    ------------
+                    46.08 req/s     the three summed
 ```
 
-**Three lines sitting on top of each other is the proof.** One line carrying everything
-while two sit at zero is the [L4 bypass](README.md#the-failure-that-produces-no-error).
+**Read the window, not the burst.** That run issued 13,663 queries in 60 seconds — about
+228 q/s while it lasted. The graph shows ~46 because `rate(...[5m])` averages over 300
+seconds: `13663 / 300 = 45.5`, which is what the three lines sum to. A `[5m]` window will
+always understate a short burst by roughly the ratio of burst length to window length.
+
+**Three lines sitting on top of each other is the proof.** One line carrying everything while
+two sit at zero is the [L4 bypass](README.md#the-failure-that-produces-no-error) — and note
+that in that failure every pod still reports `Ready`, so this graph is the only place it shows.
 
 **Open it directly** — CRC, already URL-encoded:
 
 ```text
-https://console-openshift-console.apps-crc.testing/monitoring/query-browser?query0=sum%20by%20%28pod%29%20%28rate%28mongot_command_searchCommandTotalLatency_seconds_count%5B2m%5D%29%29
+https://console-openshift-console.apps-crc.testing/monitoring/query-browser?query0=sum%20by%20%28pod%29%20%28rate%28mongot_command_searchCommandTotalLatency_seconds_count%5B5m%5D%29%29
 ```
 
 Or: **Observe → Metrics**, then paste:
 
 ```promql
-sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count[2m]))
+sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count[5m]))
 ```
+
+`[5m]` is what the capture above used — it smooths well for a screenshot. Drop to `[2m]` when
+you are watching live and want the lines to react quickly, or to `[1m]` to see a single burst.
+Vector queries need the other counter, `...vectorSearchCommandTotalLatency_seconds_count`; a
+`$vectorSearch` load read through the text counter looks like no traffic at all.
+
+### The share, as a recording rule
+
+Rates are hard to compare at a glance. `mongot:search_share:pod`, from
+[`manifests/96-alerts.yaml`](manifests/96-alerts.yaml), normalises them to a fraction of total:
+
+<!-- markdownlint-disable MD033 -->
+<img alt="OpenShift console Metrics view of the recording rule mongot:search_share:pod. The table shows mongot-search-0-0 at 0.352, mongot-search-0-1 at 0.323 and mongot-search-0-2 at 0.325. The graph swings wildly between 0 and 1 while the cluster is idle, then settles into three flat lines near 0.33 once load starts." src="docs/screenshots/console-metrics-share.jpg">
+<!-- markdownlint-enable MD033 -->
+
+```promql
+mongot:search_share:pod
+```
+
+```text
+mongot-search-0-0   0.352
+mongot-search-0-1   0.323          three shares, summing to 1.0
+mongot-search-0-2   0.325
+```
+
+**The wild swings on the left of that graph are not a fault.** When almost nothing is being
+queried, one stray request makes a pod's share 1.0 and the others 0. That is why
+`MongotTrafficNotDistributed` is guarded by `and on() (mongot:search_rate:total > 0.2)` — a
+share alone would page you every quiet night.
+
+### Envoy's own view — and why it looks lopsided
+
+The same window, counted at Envoy instead of at `mongot`:
+
+<!-- markdownlint-disable MD033 -->
+<img alt="OpenShift console Metrics view of the rate of envoy_cluster_upstream_rq_total for the mongot_rs_cluster, broken down by Envoy pod. One Envoy pod reads 73.43 requests per second; the other reads exactly 0." src="docs/screenshots/console-metrics-envoy.jpg">
+<!-- markdownlint-enable MD033 -->
+
+```promql
+sum by (pod) (rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="mongot_rs_cluster"}[5m]))
+```
+
+```text
+mongot-search-lb-0-...-nwgsw   73.43 req/s     lifetime upstream_rq_total  35,203
+mongot-search-lb-0-...-q94lv       0 req/s     lifetime upstream_rq_total      13
+```
+
+**This is the architecture in one picture.** One Envoy carries everything and the other sits at
+zero, because `mongod` holds a single long-lived connection and the L4 hop in front can only
+pin it to one replica. That same Envoy then spreads the individual gRPC streams across all
+three `mongot` pods — the flat, even lines in the first graph above.
+
+So the two graphs should look different, and both are healthy:
+
+```text
+Envoy tier    1 of 2 busy     expected - connections are pinned, the second is failover
+mongot tier   3 of 3 busy     the point of the L7 - requests are distributed
+```
+
+A second Envoy replica earns its keep on restart and reconnection, not on throughput. If you
+ever see the *mongot* graph look like the Envoy one — one line carrying everything — that is
+the [L4 bypass](README.md#the-failure-that-produces-no-error), and nothing else will alert.
 
 ### Queries worth keeping
 

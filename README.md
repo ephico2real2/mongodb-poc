@@ -1106,7 +1106,7 @@ what you put here. Running on names requires the set to *advertise* names.
 | `mongodb/scripts/` | loaders, `verify-search.sh`, `load-test.sh`, bootstrap scripts |
 | `docs/envoy/` | `bootstrap.json`, `cds.json`, `lds.json` as read from the running proxy |
 | `docs/diagrams/` | 3 figure sources and 28 rendered PNGs |
-| `docs/screenshots/` | 13 captures: pods, Services, the Route, the CR, alert rules, metrics, and five GUI searches |
+| `docs/screenshots/` | 15 captures: pods, Services, the Route, the CR, alert rules, three metrics views, and five GUI searches |
 
 ---
 
