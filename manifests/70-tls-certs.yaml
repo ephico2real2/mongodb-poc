@@ -1,0 +1,66 @@
+# TLS for the search path, issued by cert-manager.
+#
+# Secret names are NOT free choice - the operator derives them from
+# spec.security.tls.certsSecretPrefix and the CR name:
+#   <prefix>-<name>-search-lb-<idx>-cert          Envoy server cert  (faces mongod)
+#   <prefix>-<name>-search-lb-<idx>-client-cert   Envoy -> mongot client cert
+#   <prefix>-<name>-search-cert                   mongot server cert
+# Here prefix=lab, name=mongot, idx=0.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata: { name: mongot-selfsigned, namespace: mongodb-poc }
+spec: { selfSigned: {} }
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: { name: mongot-ca, namespace: mongodb-poc }
+spec:
+  isCA: true
+  commonName: mongot-poc-ca
+  secretName: mongot-ca
+  privateKey: { algorithm: RSA, size: 2048 }
+  issuerRef: { name: mongot-selfsigned, kind: Issuer, group: cert-manager.io }
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata: { name: mongot-ca-issuer, namespace: mongodb-poc }
+spec:
+  ca: { secretName: mongot-ca }
+---
+# Envoy's server certificate. The SAN MUST cover externalHostname, which must also
+# equal the Route host - mongod sends it as SNI and Envoy matches the filter chain on it.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: { name: lab-mongot-search-lb-0-cert, namespace: mongodb-poc }
+spec:
+  secretName: lab-mongot-search-lb-0-cert
+  commonName: grpc-search.apps-crc.testing
+  dnsNames:
+  - grpc-search.apps-crc.testing
+  - mongot-search-0-proxy-svc.mongodb-poc.svc.cluster.local
+  usages: [server auth, digital signature, key encipherment]
+  issuerRef: { name: mongot-ca-issuer, kind: Issuer, group: cert-manager.io }
+---
+# Envoy's client certificate for the upstream leg to mongot.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: { name: lab-mongot-search-lb-0-client-cert, namespace: mongodb-poc }
+spec:
+  secretName: lab-mongot-search-lb-0-client-cert
+  commonName: envoy-client
+  usages: [client auth, digital signature, key encipherment]
+  issuerRef: { name: mongot-ca-issuer, kind: Issuer, group: cert-manager.io }
+---
+# mongot's server certificate, covering the headless Service and every pod FQDN.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: { name: lab-mongot-search-cert, namespace: mongodb-poc }
+spec:
+  secretName: lab-mongot-search-cert
+  commonName: mongot-search-0-svc.mongodb-poc.svc.cluster.local
+  dnsNames:
+  - mongot-search-0-svc.mongodb-poc.svc.cluster.local
+  - "*.mongot-search-0-svc.mongodb-poc.svc.cluster.local"
+  - mongot-search-0-proxy-svc.mongodb-poc.svc.cluster.local
+  usages: [server auth, client auth, digital signature, key encipherment]
+  issuerRef: { name: mongot-ca-issuer, kind: Issuer, group: cert-manager.io }

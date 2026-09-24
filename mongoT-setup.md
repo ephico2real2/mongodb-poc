@@ -194,6 +194,72 @@ creates it as a custom role.
 
 ---
 
+## 8. TLS on an external source is not per-leg — and failing it is silent
+
+Attempting to enable TLS so a passthrough `Route` could be tested produced a
+**status-green, config-valid, completely broken** data path. Worth knowing before
+planning a TLS rollout.
+
+### What happens
+
+Set `spec.security.tls.certsSecretPrefix` with `spec.source.external` and no
+`spec.source.external.tls`, and the operator will:
+
+- generate an Envoy listener with `tls_inspector`, an SNI `filter_chain_match` and a
+  `transport_socket` referencing `/etc/envoy/tls/server/tls.crt`, `.../tls.key`
+  and `/etc/envoy/tls/ca/ca-pem`
+- switch `mongot` to `server.grpc.tls.mode: TLS` and roll the StatefulSet
+- **never mount those cert files into the Envoy pods** — the Deployment stays at
+  `generation=1` with only `envoy-config -> /etc/envoy`
+- report `phase=Running` with no warning, and log
+  `Envoy Deployment created/updated` as though it had
+
+The result: `mongod` gets `upstream connect error or disconnect/reset before headers`,
+and a TLS client gets `wrong version number`, while every status field says healthy.
+
+### Why
+
+Three lines, in three files:
+
+```go
+// mongodbsearchenvoy_controller.go:625 - the cert volumes are gated on tlsCfg
+if tlsEnabled && tlsCfg != nil { /* mount envoy-server-cert, -client-cert, ca-cert */ }
+
+// external_search_source.go:36 - tlsCfg is nil unless the SOURCE has TLS
+func (r *externalSearchResource) TLSConfig() *TLSSourceConfig {
+    if r.spec.TLS == nil { return nil }     // spec.source.external.tls
+
+// mongodbsearch_reconcile_helper.go:2022 - and setting it turns on the sync leg
+scramTLS := &mongot.ScramAuthTLS{ Enabled: true, CertificateAuthorityFile: ... }
+```
+
+So Envoy's **downstream** TLS (client → Envoy) is gated on the **source's** TLS config
+(`mongot` → `mongod`) — two unrelated legs coupled through one nil check.
+
+### What it means in practice
+
+**For an external source you cannot TLS one leg without the other.** Enabling
+`security.tls` obliges you to also:
+
+1. set `spec.source.external.tls.ca` to a ConfigMap holding `ca.crt`, and
+2. actually run the external `mongod` with TLS, because that CA now makes `mongot`
+   connect to it over TLS
+
+A plan that says "terminate TLS at Envoy first, secure the database later" is not
+available here. Budget both together, or stay plaintext deliberately.
+
+### Consequence for Routes
+
+A passthrough `Route` routes on SNI, and SNI exists only in a TLS `ClientHello` — so a
+Route needs Envoy TLS, which needs source TLS, which needs a TLS-enabled `mongod`.
+**Route, Envoy TLS and database TLS are one decision, not three.** With a MetalLB VIP
+none of that is forced, which is a stronger argument for the VIP than convenience.
+
+The certificate manifests are kept in `manifests/70-tls-certs.yaml` with the correct
+derived Secret names, ready for when the source is TLS-enabled too.
+
+---
+
 ## 8. Edition support
 
 MongoDB's compatibility matrix is explicit, and it is about **editions**, not topology:

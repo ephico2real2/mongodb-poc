@@ -479,6 +479,16 @@ For the **sync leg** (`mongot` → `mongod`), which never crosses Envoy:
 And outside the cluster, the `mongod` members need their own server certificate and the
 CA that signed Envoy's.
 
+**External sources: TLS is not per-leg.** Enabling `security.tls` with
+`spec.source.external` also requires `spec.source.external.tls.ca`, because Envoy's
+downstream cert volumes are gated on the *source's* TLS config
+(`mongodbsearchenvoy_controller.go:625` + `external_search_source.go:36`). Setting that
+CA in turn switches the `mongot` → `mongod` sync leg to TLS
+(`mongodbsearch_reconcile_helper.go:2022`). Omit it and the operator still reports
+`phase=Running` while generating an Envoy config referencing cert files it never mounts —
+the path dies with `upstream connect error`. **Budget Envoy TLS and database TLS
+together.** See [design notes §8](mongoT-setup.md).
+
 Known limits worth designing around: `mongot` validates that a client certificate is
 signed by a trusted CA but **does not validate hostname or SAN**; certificates are read
 only at startup, so rotation requires a restart; minimum TLS 1.2; no FIPS.
