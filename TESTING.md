@@ -57,7 +57,7 @@ so the suite degrades cleanly when an optional piece (the toolbox pod, Thanos) i
   PASS  no non-OK gRPC status in the last 10m                0
 
 ────────────────────────────────────────────────────────
-  60 passed   0 failed   0 skipped
+  61 passed   0 failed   0 skipped
 ```
 
 ### What each suite is actually guarding

@@ -152,6 +152,21 @@ if want entry; then suite "entry path"
     # contract would break when the CR is renamed or recreated.
     assert_eq "the Route targets our own Service" "mongot-search-lb" \
       "$(oc get route mongot-grpc -n "$NS" -o jsonpath='{.spec.to.name}' 2>/dev/null)"
+    # Guard the bypass: the Route's target must resolve to the ENVOY pod IPs. Pointing it
+    # at the headless mongot-search-0-svc would look plausible - same namespace, same port,
+    # also headless - but it selects the mongot pods and skips the L7 entirely.
+    RT=$(oc get route mongot-grpc -n "$NS" -o jsonpath='{.spec.to.name}' 2>/dev/null)
+    RT_EPS=$(oc get endpointslice -n "$NS" -l kubernetes.io/service-name="$RT" \
+              -o jsonpath='{range .items[*].endpoints[*]}{.addresses[0]}{"\n"}{end}' 2>/dev/null | sort | tr '\n' ' ')
+    ENVOY_EPS=$(oc get pods -n "$NS" -l app=mongot-search-lb-0 \
+                 -o jsonpath='{range .items[*]}{.status.podIP}{"\n"}{end}' 2>/dev/null | sort | tr '\n' ' ')
+    MONGOT_EPS=$(oc get pods -n "$NS" -l app=mongot-search-0-svc \
+                  -o jsonpath='{range .items[*]}{.status.podIP}{"\n"}{end}' 2>/dev/null | sort | tr '\n' ' ')
+    if [ "$RT_EPS" = "$MONGOT_EPS" ] && [ -n "$MONGOT_EPS" ]; then
+      no "the Route resolves to Envoy, not mongot" "it points straight at the mongot pods - the L7 is bypassed"
+    else
+      assert_eq "the Route resolves to Envoy, not mongot" "$ENVOY_EPS" "$RT_EPS"
+    fi
     assert_eq "that Service selects the Envoy pods" \
       "$(oc get pods -n "$NS" -l app=mongot-search-lb-0 --no-headers 2>/dev/null | wc -l | tr -d ' ')" \
       "$(oc get endpointslice -n "$NS" -l kubernetes.io/service-name=mongot-search-lb \

@@ -19,12 +19,32 @@
 # A Service you own is stable, and the F5 / Route / DNS contract is written against a
 # name you control. It costs one object.
 #
-# A PASSTHROUGH ROUTE DOES NOT USE THE ClusterIP. HAProxy reads the Service's
+# WHY HEADLESS. A passthrough Route never uses a ClusterIP: HAProxy reads the Service's
 # EndpointSlices and connects to the pod IPs directly - visible in the router config as
-#   server pod:<envoy-pod>:...:10.217.1.119:27028
-# So the ClusterIP here is unused on the ingress path. The Service is an endpoint
-# selector, which is why type ClusterIP is sufficient and externalTrafficPolicy
-# (a LoadBalancer/NodePort field) does not apply.
+#   server pod:<envoy-pod>:mongot-search-lb:mongot-grpc:10.217.1.119:27028
+# so a virtual IP would be allocated and never used. clusterIP: None says what this object
+# is: an endpoint selector, not an address. Verified by recreating it headless - 2 ready
+# endpoints, 2 server lines in the Route backend, and the path still serving Envoy's
+# certificate. This also matches mongot-search-0-svc, which is headless for the same
+# reason: Envoy needs the pod IPs, not a VIP.
+#
+# externalTrafficPolicy is a LoadBalancer/NodePort field and does not apply here.
+#
+# NOT the same as mongot-search-0-svc. That one is headless too, but it selects the MONGOT
+# pods (app=mongot-search-0-svc -> 10.217.1.36/.37/.38). Pointing a Route at it would send
+# traffic straight to mongot and bypass Envoy - the L4 bypass this whole design exists to
+# prevent, losing per-request distribution. It would also fail at TLS: mongot's certificate
+# is CN=mongot-search-0-svc.mongodb-poc.svc.cluster.local with in-cluster SANs only, so the
+# externalHostname the client sends as SNI would not validate.
+# ON THE NAME. The operator has a helper LoadBalancerDeploymentName() returning
+# <cr-name>-search-lb, which for CR "mongot" is exactly this name. It is safe to use:
+# that helper is never used to name an object directly - its only call sites append the
+# cluster index, giving Deployment mongot-search-lb-0 and ConfigMap
+# mongot-search-lb-0-config. Operator SERVICE names use a different pattern entirely,
+# "%s-search-%d-%s" -> mongot-search-0-proxy-svc, which cannot collide with this.
+#
+# This object is ours: no ownerReferences, so nothing garbage-collects it and the
+# MongoDBSearch CR can be deleted and recreated without breaking the Route.
 apiVersion: v1
 kind: Service
 metadata:
@@ -35,6 +55,7 @@ metadata:
     app.kubernetes.io/component: ingress
 spec:
   type: ClusterIP
+  clusterIP: None                  # headless: this Service is an endpoint selector
   selector:
     # <MongoDBSearch name>-search-lb-<clusterIndex>. The trailing index is the CLUSTER
     # index, NOT a replica index - confirmed in the operator's naming helpers, which

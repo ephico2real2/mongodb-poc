@@ -45,7 +45,7 @@ across the `mongot` pods.
 Three commands worth knowing before anything else:
 
 ```bash
-./test/run.sh                      # 60 assertions across 8 suites, exit code
+./test/run.sh                      # 61 assertions across 8 suites, exit code
 ./app/entry-path.sh                # is mongod using the Route, or the MetalLB VIP?
 ./app/trace-query.sh -n 6 "pods"   # which mongot pod answered each query
 ```
@@ -1094,7 +1094,7 @@ what you put here. Running on names requires the set to *advertise* names.
 | `manifests/20-tls-search-managed-envoy.yaml` | Lab 2 — the same CR with TLS, including `source.external.tls.ca` |
 | `manifests/30-envoy-direct-service.yaml` | ClusterIP Service the Route targets — for a laptop or an F5 passthrough VIP |
 | `manifests/30-envoy-lb-service.yaml` | `LoadBalancer` Service for the MetalLB VIP entry path |
-| `test/run.sh` | 60 assertions across 8 suites |
+| `test/run.sh` | 61 assertions across 8 suites |
 | `app/trace-query.sh` | run a search and name the `mongot` pod that answered |
 | `app/entry-path.sh` | prove whether traffic enters via the Route or the MetalLB VIP |
 | `app/search-cli.sh`, `app/gui/` | a search CLI and a web GUI showing which `mongot` answered |

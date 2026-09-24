@@ -327,7 +327,7 @@ An iteration count is the wrong knob — 60 polls completed in 5s here and still
 | Is traffic spread right now? | the console graph (§2) |
 | Which pod served *this* query? | **`trace-query.sh` (§6)** — names the pod at the CLI |
 | Which entry path is mongod using? | `entry-path.sh` — Route or MetalLB VIP, proven |
-| Did my change break anything? | `./test/run.sh` — 60 assertions, exit code |
+| Did my change break anything? | `./test/run.sh` — 61 assertions, exit code |
 | Is Envoy retrying / shedding load? | `envoy_cluster_upstream_rq_retry` (§2) |
 | How many pods can Envoy even choose between? | `membership_healthy` — see [ENVOY-FLOW.md](ENVOY-FLOW.md#reading-it-live) |
 
