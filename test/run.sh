@@ -219,7 +219,7 @@ if want entry; then suite "entry path"
   fi
   if [ "${RC:-0}" -gt 0 ]; then
     ok "entry path identified" "OpenShift Route ($RC established router->Envoy)"
-    assert_contains "the Route is passthrough (edge/reencrypt break HTTP/2)" "passthrough" \
+    assert_contains "the Route is passthrough, not edge or reencrypt" "passthrough" \
       "$(oc get route -n "$NS" -o jsonpath='{range .items[*]}{.spec.tls.termination}{" "}{end}' 2>/dev/null)"
     BLK=$(oc rsh -n openshift-ingress "$RP" sh -c \
       "awk '/^backend be_tcp:$NS:/{f=1} f&&/^backend /&&!/be_tcp:$NS:/{f=0} f' /var/lib/haproxy/conf/haproxy.config" 2>/dev/null | tr -d '\r')

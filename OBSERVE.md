@@ -488,6 +488,23 @@ An iteration count is the wrong knob — 60 polls completed in 5s here and still
 
 ---
 
+## The commands, briefly
+
+| Command | Answers |
+|---|---|
+| `./app/trace-query.sh "term"` | which `mongot` pod served **this** query — one line per gRPC request, from Envoy's access log |
+| `./app/trace-query.sh -n 12 -q "pods"` | the spread across pods over twelve queries, census only |
+| `./app/entry-path.sh` | is traffic entering by the Route or the MetalLB VIP, proven at the hop that carries it |
+| `./app/sync-probe.sh -n 3` | how long a write takes to become searchable |
+| `./app/index-storage.sh` | what each replica holds on its volume |
+| `cd mongodb && ./scripts/verify-search.sh` | a one-off before/after distribution check |
+
+Two results that look wrong and are not: `only 1 of 3 pods answered` is correct for a single
+query, and `trace-query.sh` taking a few seconds per query is Envoy's 10s access-log flush,
+not a slow search. Full detail in [SYNC.md](SYNC.md#commands-used-in-this-document).
+
+---
+
 ## Which to use
 
 | Question | Use |

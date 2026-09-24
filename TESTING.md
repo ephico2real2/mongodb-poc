@@ -45,20 +45,35 @@ so the suite degrades cleanly when an optional piece (the toolbox pod, Thanos) i
 
 ```text
 ── entry path ──────────────────────────────────────
-  PASS  every mongod agrees on mongotHost                    1
-  PASS  mongod requires TLS to the search head               requireTLS
-  PASS  entry path identified                                OpenShift Route (2 established router->Envoy)
-  PASS  the Route is passthrough (edge/reencrypt break HTTP/2) passthrough
-  PASS  HAProxy load-balances the passthrough backend by source balance source
+  PASS  the Route targets our own Service                    mongot-search-lb
+  PASS  the Route resolves to Envoy, not mongot              10.217.1.119 10.217.1.120
+  PASS  the Route carries no key material (cannot terminate)
+  PASS  the terminating Deployment is owned by MongoDBSearch MongoDBSearch
+  PASS  the served cert is issued by the enterprise CA       Enterprise Root CA
+  PASS  the served cert is not a wildcard                    CN=grpc-search.apps-crc.testing
+  PASS  the Route is passthrough, not edge or reencrypt      passthrough
+  PASS  the Route declares a balance algorithm               roundrobin
+  PASS  HAProxy applied the annotated algorithm              balance roundrobin
 
 ── per-request attribution ──────────────────────────────────────
-  PASS  at least one Envoy is logging requests               1 busy / 1 idle
+  PASS  at least one Envoy is logging requests               2 busy / 0 idle
   PASS  all 3 pods appear in a 6-query census                3
   PASS  no non-OK gRPC status in the last 10m                0
 
 ────────────────────────────────────────────────────────
   61 passed   0 failed   0 skipped
 ```
+
+### Running it, briefly
+
+| Command | What it does |
+|---|---|
+| `./test/run.sh` | every suite; exit 0 if all pass, exit 1 lists the failures by name |
+| `./test/run.sh entry` | one suite — `platform`, `data`, `search`, `entry`, `attribution`, `alerts`, `distribution`, `tls` |
+| `SKIP_DISTRIBUTION=1 ./test/run.sh` | skip the suites that generate query load |
+
+Skips never fail a run, so the suite degrades cleanly when an optional piece is missing rather
+than reporting a false failure.
 
 ### What each suite is actually guarding
 
