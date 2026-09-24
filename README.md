@@ -437,10 +437,15 @@ Plus a user holding the built-in **`searchCoordinator`** role (MongoDB 8.2+).
 
 ## Entry point: VIP or Route
 
+**Path 1 and Path 2 are deployment choices, not two live traffic paths.** You build one of
+them. Both are fully supported, and the decision is usually made for you by what the
+environment already has: MetalLB available and free port choice, or an existing ingress and
+an F5 in front of the infra nodes.
+
 |  | **Path 1 · MetalLB VIP** | **Path 2 · OpenShift Route** |
 |---|---|---|
 | Ports | **any** — the Service maps `port`→`targetPort` | **80/443 only** |
-| Data path | client → VIP → Envoy | client → router (HAProxy) → Svc → Envoy |
+| Traffic flow | client → VIP → Envoy | client → router (HAProxy) → Svc → Envoy |
 | Stream splitting | **at Envoy** — entry is L4 either way | **at Envoy** — the Route cannot split streams |
 | Termination | TLS ends at Envoy | must be **passthrough** |
 | Timeout | none imposed | `timeout tunnel`, default **1h** |
