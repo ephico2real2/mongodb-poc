@@ -4,6 +4,22 @@ Written for a team that has the deployment running and does not yet have a menta
 of what is happening inside it. Every number and every claim below was measured on the
 running cluster; the commands are included so you can reproduce them.
 
+### The figures
+
+Both diagrams in this document are in the repository and render inline below. To open them
+full size, or to read the SVG source:
+
+| | |
+|---|---|
+| Figure 1, how a search executes | [`search-execution.light.png`](docs/diagrams/search-and-sync/search-execution.light.png) · [dark](docs/diagrams/search-and-sync/search-execution.dark.png) |
+| Figure 2, how the index syncs | [`index-sync.light.png`](docs/diagrams/search-and-sync/index-sync.light.png) · [dark](docs/diagrams/search-and-sync/index-sync.dark.png) |
+| Source | [`docs/diagrams/search-and-sync/source.html`](docs/diagrams/search-and-sync/source.html) |
+| Interactive page | <https://claude.ai/artifact/BH7FeVGsr7T6PBhDCJ3o99> |
+
+> The interactive page is **private to the account that published it**. If you cannot open it,
+> that is expected — use the PNGs above, which are the copy of record and are versioned with
+> this document.
+
 **The two questions this answers**
 
 1. When an application runs `$search`, what actually executes?

@@ -19,7 +19,7 @@ across the `mongot` pods.
 | this page | the architecture, and the one constraint everything follows from |
 | [REQUEST-PATH.md](REQUEST-PATH.md) | the path a request takes, as diagrams, with every label sourced |
 | [ENVOY-FLOW.md](ENVOY-FLOW.md) | the Envoy config itself — what each line does, and why it balances across **pods**, not a Service |
-| [SYNC.md](SYNC.md) | how a `$search` executes, and how the `mongot` index stays in sync |
+| [SYNC.md](SYNC.md) | how a `$search` executes, and how the `mongot` index stays in sync — **start here for the two-process model and the change stream** |
 | [USECASE.md](USECASE.md) | what a search tier buys you that a keyword index does not |
 
 **Build it**
