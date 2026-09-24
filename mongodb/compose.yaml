@@ -12,6 +12,9 @@ x-mongod: &mongod
   entrypoint: [mongod]          # bypass the image's python entrypoint: predictable args
   network_mode: host
   restart: unless-stopped
+  extra_hosts:
+  - "${SEARCH_HOST}:${GATEWAY_IP}"
+  - "${VIP_HOST}:${GATEWAY_IP}"
   stop_grace_period: 30s
   depends_on:
     keyfile-init:
@@ -53,7 +56,13 @@ services:
       - --setParameter=searchIndexManagementHostAndPort=${MONGOT_ENDPOINT}
       - --setParameter=useGrpcForSearch=true
       - --setParameter=skipAuthenticationToSearchIndexManagementServer=false
-      - --setParameter=searchTLSMode=disabled
+      - --setParameter=searchTLSMode=${SEARCH_TLS_MODE}
+      # mongod's own TLS. preferTLS keeps plaintext admin clients working while
+      # letting mongot connect over TLS, which the source CA now requires.
+      - --tlsMode=preferTLS
+      - --tlsCertificateKeyFile=/run/lab/mongod.pem
+      - --tlsCAFile=/run/lab/ca.crt
+      - --tlsAllowConnectionsWithoutCertificates
     volumes:
       - db1:/data/db
       - runtime:/run/lab:ro
@@ -72,7 +81,13 @@ services:
       - --setParameter=searchIndexManagementHostAndPort=${MONGOT_ENDPOINT}
       - --setParameter=useGrpcForSearch=true
       - --setParameter=skipAuthenticationToSearchIndexManagementServer=false
-      - --setParameter=searchTLSMode=disabled
+      - --setParameter=searchTLSMode=${SEARCH_TLS_MODE}
+      # mongod's own TLS. preferTLS keeps plaintext admin clients working while
+      # letting mongot connect over TLS, which the source CA now requires.
+      - --tlsMode=preferTLS
+      - --tlsCertificateKeyFile=/run/lab/mongod.pem
+      - --tlsCAFile=/run/lab/ca.crt
+      - --tlsAllowConnectionsWithoutCertificates
     volumes:
       - db2:/data/db
       - runtime:/run/lab:ro
@@ -91,7 +106,13 @@ services:
       - --setParameter=searchIndexManagementHostAndPort=${MONGOT_ENDPOINT}
       - --setParameter=useGrpcForSearch=true
       - --setParameter=skipAuthenticationToSearchIndexManagementServer=false
-      - --setParameter=searchTLSMode=disabled
+      - --setParameter=searchTLSMode=${SEARCH_TLS_MODE}
+      # mongod's own TLS. preferTLS keeps plaintext admin clients working while
+      # letting mongot connect over TLS, which the source CA now requires.
+      - --tlsMode=preferTLS
+      - --tlsCertificateKeyFile=/run/lab/mongod.pem
+      - --tlsCAFile=/run/lab/ca.crt
+      - --tlsAllowConnectionsWithoutCertificates
     volumes:
       - db3:/data/db
       - runtime:/run/lab:ro

@@ -36,8 +36,11 @@ spec:
   secretName: lab-mongot-search-lb-0-cert
   commonName: grpc-search.apps-crc.testing
   dnsNames:
-  - grpc-search.apps-crc.testing
+  - grpc-search.apps-crc.testing            # the Route record        (:443 -> router)
+  - vip-grpc-search.apps-crc.testing        # the MetalLB VIP record  (:27028 -> VIP)
   - mongot-search-0-proxy-svc.mongodb-poc.svc.cluster.local
+  ipAddresses:
+  - 192.168.127.100                          # the VIP itself
   usages: [server auth, digital signature, key encipherment]
   issuerRef: { name: mongot-ca-issuer, kind: Issuer, group: cert-manager.io }
 ---
@@ -62,5 +65,21 @@ spec:
   - mongot-search-0-svc.mongodb-poc.svc.cluster.local
   - "*.mongot-search-0-svc.mongodb-poc.svc.cluster.local"
   - mongot-search-0-proxy-svc.mongodb-poc.svc.cluster.local
+  usages: [server auth, client auth, digital signature, key encipherment]
+  issuerRef: { name: mongot-ca-issuer, kind: Issuer, group: cert-manager.io }
+---
+# The external mongod's server certificate. Required because enabling Envoy TLS on an
+# external source also switches the mongot -> mongod sync leg to TLS (see design notes
+# section 8). mongot validates this against the CA in spec.source.external.tls.ca.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: { name: external-mongod-cert, namespace: mongodb-poc }
+spec:
+  secretName: external-mongod-cert
+  commonName: mongod.lab.internal
+  dnsNames:
+  - mongod.lab.internal
+  ipAddresses:
+  - 192.168.64.4                             # what the replica set advertises
   usages: [server auth, client auth, digital signature, key encipherment]
   issuerRef: { name: mongot-ca-issuer, kind: Issuer, group: cert-manager.io }

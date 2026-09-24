@@ -194,7 +194,7 @@ creates it as a custom role.
 
 ---
 
-## 8. TLS on an external source is not per-leg — and failing it is silent
+## 8. TLS on an external source is not per-leg (solved — here is the recipe)
 
 Attempting to enable TLS so a passthrough `Route` could be tested produced a
 **status-green, config-valid, completely broken** data path. Worth knowing before
@@ -248,12 +248,76 @@ So Envoy's **downstream** TLS (client → Envoy) is gated on the **source's** TL
 A plan that says "terminate TLS at Envoy first, secure the database later" is not
 available here. Budget both together, or stay plaintext deliberately.
 
+### The working configuration
+
+Both fields together, plus TLS on the external `mongod` itself. Verified end to end:
+
+```yaml
+spec:
+  security:
+    tls:
+      certsSecretPrefix: lab              # -> lab-mongot-search-cert
+                                          #    lab-mongot-search-lb-0-cert
+                                          #    lab-mongot-search-lb-0-client-cert
+  source:
+    external:
+      hostAndPorts: ["192.168.64.4:27017", "...:27018", "...:27019"]
+      tls:
+        ca: { name: external-mongod-ca }  # ConfigMap with ca.crt - REQUIRED, or the
+                                          # Envoy cert volumes are never mounted
+  clusters:
+  - loadBalancer:
+      managed:
+        externalHostname: grpc-search.apps-crc.testing
+```
+
+and on the external `mongod`:
+
+```text
+--tlsMode=preferTLS                       # mongot now connects over TLS
+--tlsCertificateKeyFile=/run/lab/mongod.pem
+--tlsCAFile=/run/lab/ca.crt
+--setParameter=searchTLSMode=requireTLS
+--setParameter=mongotHost=grpc-search.apps-crc.testing:443
+```
+
+Applying `spec.source.external.tls.ca` is what flips the Deployment:
+
+```text
+before:  envoy-config -> /etc/envoy
+after:   envoy-config       -> /etc/envoy
+         envoy-server-cert  -> /etc/envoy/tls/server
+         envoy-client-cert  -> /etc/envoy/tls/client
+         ca-cert            -> /etc/envoy/tls/ca
+```
+
+### One hostname serves both entry paths
+
+**SNI carries the hostname only — never the port.** So a single `externalHostname`, a
+single certificate and a single filter chain serve the VIP and the Route; only the port
+differs:
+
+| `mongotHost` | Path |
+|---|---|
+| `grpc-search.apps-crc.testing:27028` | → MetalLB VIP → Envoy |
+| `grpc-search.apps-crc.testing:443` | → router → passthrough Route → Envoy |
+
+Both verified, each distributing across all three `mongot` (13/13/14 and 14/13/13 of 40).
+
+That matters because Envoy builds **one** filter chain matching **one**
+`server_names` value. Two different hostnames would need two `externalHostname` values,
+which the single-cluster spec has no room for — so if you want both entry paths, give
+them the same name and different ports. The certificate may still carry extra SANs
+(`vip-grpc-search.apps-crc.testing`, the VIP IP) for clients that address it differently,
+but only the `externalHostname` value will match the filter chain.
+
 ### Consequence for Routes
 
 A passthrough `Route` routes on SNI, and SNI exists only in a TLS `ClientHello` — so a
 Route needs Envoy TLS, which needs source TLS, which needs a TLS-enabled `mongod`.
-**Route, Envoy TLS and database TLS are one decision, not three.** With a MetalLB VIP
-none of that is forced, which is a stronger argument for the VIP than convenience.
+**Route, Envoy TLS and database TLS are one decision, not three.** Once TLS is in place
+the Route works exactly as well as the VIP — both were measured distributing across all
+three `mongot`. The VIP simply does not *force* the decision.
 
 The certificate manifests are kept in `manifests/70-tls-certs.yaml` with the correct
 derived Secret names, ready for when the source is TLS-enabled too.
