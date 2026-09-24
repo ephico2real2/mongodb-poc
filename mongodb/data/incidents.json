@@ -1,0 +1,382 @@
+[
+  {
+    "_id": 1,
+    "incident_id": "INC-1001",
+    "title": "Pods stuck in Pending after node drain",
+    "component": "scheduling",
+    "severity": "high",
+    "symptom": "Workloads would not schedule following a maintenance drain. Events showed insufficient cpu on remaining nodes.",
+    "root_cause": "The drained node was never uncordoned, so the scheduler had two nodes for three replicas' requests.",
+    "resolution": "Uncordoned the node and added a PodDisruptionBudget so future drains block rather than silently under-provision.",
+    "year": 2024,
+    "embedding": [
+      0.986,
+      0.0519,
+      0.0208,
+      0.0,
+      0.0208,
+      0.1557
+    ]
+  },
+  {
+    "_id": 2,
+    "incident_id": "INC-1002",
+    "title": "CrashLoopBackOff after a config change",
+    "component": "scheduling",
+    "severity": "high",
+    "symptom": "A deployment entered CrashLoopBackOff immediately after a routine ConfigMap edit.",
+    "root_cause": "The ConfigMap was mounted with subPath, which does not hot-reload, and the new key was malformed. The pod read a truncated file on restart.",
+    "resolution": "Fixed the key and moved off subPath so the projection updates in place.",
+    "year": 2025,
+    "embedding": [
+      0.9596,
+      0.06,
+      0.2399,
+      0.0,
+      0.06,
+      0.12
+    ]
+  },
+  {
+    "_id": 3,
+    "incident_id": "INC-1003",
+    "title": "OOMKilled under modest load",
+    "component": "scheduling",
+    "severity": "medium",
+    "symptom": "Containers were OOMKilled well below the traffic we expected to handle.",
+    "root_cause": "The JVM sized its heap from the node's memory, not the cgroup limit, so it believed it had far more than the 1Gi limit allowed.",
+    "resolution": "Set an explicit max heap and aligned requests with limits.",
+    "year": 2024,
+    "embedding": [
+      0.8888,
+      0.0202,
+      0.0505,
+      0.0,
+      0.0202,
+      0.4545
+    ]
+  },
+  {
+    "_id": 4,
+    "incident_id": "INC-1010",
+    "title": "Intermittent 503s through the router",
+    "component": "network",
+    "severity": "high",
+    "symptom": "Clients saw sporadic 503s with no corresponding application errors.",
+    "root_cause": "Readiness probes were slower than the termination grace period, so the router kept endpoints that were already shutting down.",
+    "resolution": "Lengthened the grace period and added a preStop sleep so endpoints drain before the process exits.",
+    "year": 2025,
+    "embedding": [
+      0.1026,
+      0.944,
+      0.0205,
+      0.0513,
+      0.0205,
+      0.3078
+    ]
+  },
+  {
+    "_id": 5,
+    "incident_id": "INC-1011",
+    "title": "DNS resolution failures inside pods",
+    "component": "network",
+    "severity": "high",
+    "symptom": "Applications intermittently failed to resolve in-cluster service names.",
+    "root_cause": "CoreDNS was CPU-throttled at peak and queries timed out before the second nameserver was tried.",
+    "resolution": "Raised the CoreDNS CPU limit and lowered ndots to cut lookup volume.",
+    "year": 2024,
+    "embedding": [
+      0.1535,
+      0.9208,
+      0.0,
+      0.0,
+      0.0205,
+      0.3581
+    ]
+  },
+  {
+    "_id": 6,
+    "incident_id": "INC-1012",
+    "title": "gRPC calls fail through the ingress",
+    "component": "network",
+    "severity": "high",
+    "symptom": "A gRPC service worked in-cluster but every call failed through the Route.",
+    "root_cause": "The Route used edge termination, which does not support HTTP/2, so the connection was downgraded to HTTP/1.1 and gRPC could not negotiate.",
+    "resolution": "Switched the Route to passthrough and terminated TLS at the workload.",
+    "year": 2025,
+    "embedding": [
+      0.051,
+      0.8984,
+      0.0,
+      0.4084,
+      0.0,
+      0.1531
+    ]
+  },
+  {
+    "_id": 7,
+    "incident_id": "INC-1013",
+    "title": "Long-running requests cut at 30 seconds",
+    "component": "network",
+    "severity": "medium",
+    "symptom": "Streaming responses were severed at almost exactly 30s with no application error.",
+    "root_cause": "The default HAProxy timeout server is 30s; the Route was edge-terminated so it applied, rather than the 1h tunnel timeout a passthrough Route gets.",
+    "resolution": "Raised the route timeout annotation and moved the streaming path to passthrough.",
+    "year": 2024,
+    "embedding": [
+      0.0784,
+      0.8329,
+      0.0,
+      0.098,
+      0.0,
+      0.539
+    ]
+  },
+  {
+    "_id": 8,
+    "incident_id": "INC-1020",
+    "title": "PersistentVolumeClaim stuck Pending",
+    "component": "storage",
+    "severity": "medium",
+    "symptom": "A StatefulSet would not start; its PVC never bound.",
+    "root_cause": "The StorageClass used WaitForFirstConsumer and the pod was unschedulable, so binding could never be triggered. The PVC was a symptom, not the cause.",
+    "resolution": "Fixed the scheduling constraint; the PVC bound immediately.",
+    "year": 2025,
+    "embedding": [
+      0.5207,
+      0.0189,
+      0.852,
+      0.0,
+      0.0189,
+      0.0473
+    ]
+  },
+  {
+    "_id": 9,
+    "incident_id": "INC-1021",
+    "title": "Disk filled by unrotated container logs",
+    "component": "storage",
+    "severity": "high",
+    "symptom": "Nodes went NotReady with disk pressure and pods were evicted.",
+    "root_cause": "A chatty debug logger was left enabled after an investigation and filled the node filesystem.",
+    "resolution": "Reverted the log level and set container log rotation limits.",
+    "year": 2024,
+    "embedding": [
+      0.4047,
+      0.0506,
+      0.8903,
+      0.0,
+      0.0,
+      0.2024
+    ]
+  },
+  {
+    "_id": 10,
+    "incident_id": "INC-1022",
+    "title": "Data lost after scaling a StatefulSet down",
+    "component": "storage",
+    "severity": "critical",
+    "symptom": "Scaling a StatefulSet to zero and back lost the indexes it held.",
+    "root_cause": "persistentVolumeClaimRetentionPolicy defaulted to Delete on scale-down, so the PVCs were reclaimed with the pods.",
+    "resolution": "Set the retention policy to Retain and restored from backup.",
+    "year": 2025,
+    "embedding": [
+      0.3008,
+      0.0,
+      0.9524,
+      0.0,
+      0.0,
+      0.0501
+    ]
+  },
+  {
+    "_id": 11,
+    "incident_id": "INC-1030",
+    "title": "TLS handshake fails with wrong version number",
+    "component": "tls",
+    "severity": "high",
+    "symptom": "Clients got 'wrong version number' connecting to a service that had just had TLS enabled.",
+    "root_cause": "The proxy was configured for TLS but its certificate volumes were never mounted, so it was still listening plaintext while the client spoke TLS.",
+    "resolution": "Corrected the configuration so the certificates are mounted, and restarted the proxy.",
+    "year": 2024,
+    "embedding": [
+      0.0197,
+      0.3448,
+      0.0,
+      0.9359,
+      0.0493,
+      0.0493
+    ]
+  },
+  {
+    "_id": 12,
+    "incident_id": "INC-1031",
+    "title": "Certificate expired in production",
+    "component": "tls",
+    "severity": "critical",
+    "symptom": "All mutual-TLS connections began failing at the same moment across services.",
+    "root_cause": "A certificate issued outside cert-manager had no renewal automation, and nothing alerted on expiry.",
+    "resolution": "Reissued via cert-manager and added an expiry alert.",
+    "year": 2025,
+    "embedding": [
+      0.0,
+      0.1997,
+      0.0,
+      0.9784,
+      0.0499,
+      0.02
+    ]
+  },
+  {
+    "_id": 13,
+    "incident_id": "INC-1032",
+    "title": "Proxy serving a certificate from the retired CA",
+    "component": "tls",
+    "severity": "high",
+    "symptom": "After a CA rotation, clients rejected the server certificate although the Secret held the new one.",
+    "root_cause": "The proxy reads certificates only at startup and mounts the Secret directly, so it kept serving the old material until restarted.",
+    "resolution": "Restarted the proxy as the final step of the rotation and documented that ordering.",
+    "year": 2024,
+    "embedding": [
+      0.0522,
+      0.2612,
+      0.0,
+      0.961,
+      0.0522,
+      0.0522
+    ]
+  },
+  {
+    "_id": 14,
+    "incident_id": "INC-1033",
+    "title": "Handshake fails only when dialling by IP",
+    "component": "tls",
+    "severity": "medium",
+    "symptom": "The same service connected fine by hostname and failed by IP address.",
+    "root_cause": "TLS clients send no SNI for an IP literal, so the proxy's SNI-matched filter chain matched nothing and dropped the connection.",
+    "resolution": "Addressed the service by DNS name and added the name to the certificate SANs.",
+    "year": 2025,
+    "embedding": [
+      0.0,
+      0.447,
+      0.0,
+      0.8941,
+      0.0199,
+      0.0199
+    ]
+  },
+  {
+    "_id": 15,
+    "incident_id": "INC-1040",
+    "title": "Operator cannot create resources after upgrade",
+    "component": "auth",
+    "severity": "high",
+    "symptom": "An operator's reconcile loop began failing with forbidden errors after a cluster upgrade.",
+    "root_cause": "A new API version required an RBAC rule the bundled ClusterRole did not carry.",
+    "resolution": "Added the missing rule and pinned the operator channel.",
+    "year": 2024,
+    "embedding": [
+      0.0525,
+      0.021,
+      0.021,
+      0.021,
+      0.9977,
+      0.021
+    ]
+  },
+  {
+    "_id": 16,
+    "incident_id": "INC-1041",
+    "title": "Pods rejected by PodSecurity admission",
+    "component": "auth",
+    "severity": "medium",
+    "symptom": "Workloads that ran fine previously were rejected on a namespace after relabelling.",
+    "root_cause": "The namespace moved to the restricted policy and the pods requested capabilities it disallows.",
+    "resolution": "Added a compliant securityContext rather than relaxing the namespace.",
+    "year": 2025,
+    "embedding": [
+      0.3695,
+      0.0,
+      0.0,
+      0.0,
+      0.929,
+      0.0211
+    ]
+  },
+  {
+    "_id": 17,
+    "incident_id": "INC-1042",
+    "title": "Authentication fails for a service account",
+    "component": "auth",
+    "severity": "high",
+    "symptom": "A workload could not authenticate to its datastore despite correct credentials.",
+    "root_cause": "The password Secret was updated but the consuming pod caches credentials at startup and had not been restarted.",
+    "resolution": "Restarted the workload and moved to a rollout-triggering annotation on the Secret hash.",
+    "year": 2024,
+    "embedding": [
+      0.055,
+      0.055,
+      0.0,
+      0.1099,
+      0.9894,
+      0.055
+    ]
+  },
+  {
+    "_id": 18,
+    "incident_id": "INC-1050",
+    "title": "p99 latency collapses under concurrency",
+    "component": "performance",
+    "severity": "high",
+    "symptom": "Throughput fell and p99 rose from 180ms to 16s as concurrency increased, with zero errors.",
+    "root_cause": "The backend was CPU-capped, so additional concurrency queued rather than failed. The system degraded in latency, not correctness.",
+    "resolution": "Raised CPU limits and added a concurrency ceiling at the client.",
+    "year": 2025,
+    "embedding": [
+      0.5335,
+      0.0445,
+      0.0,
+      0.0,
+      0.0,
+      0.8447
+    ]
+  },
+  {
+    "_id": 19,
+    "incident_id": "INC-1051",
+    "title": "One replica serving all traffic",
+    "component": "performance",
+    "severity": "high",
+    "symptom": "Three replicas were Ready but one carried every request; the others idled.",
+    "root_cause": "The client held a single long-lived HTTP/2 connection and the load balancer was L4, so it pinned that connection to one pod. Nothing was unhealthy, so nothing alerted.",
+    "resolution": "Put an L7 proxy in front so individual streams are distributed, and alerted on per-pod traffic share.",
+    "year": 2024,
+    "embedding": [
+      0.2545,
+      0.5937,
+      0.0,
+      0.0,
+      0.0,
+      0.7634
+    ]
+  },
+  {
+    "_id": 20,
+    "incident_id": "INC-1052",
+    "title": "Slow queries after a large data load",
+    "component": "performance",
+    "severity": "medium",
+    "symptom": "Query latency tripled after a bulk import.",
+    "root_cause": "The search index had not finished building, so queries fell back to a slower path.",
+    "resolution": "Waited for the index to report queryable and added a readiness gate on it.",
+    "year": 2025,
+    "embedding": [
+      0.2103,
+      0.0,
+      0.3155,
+      0.0,
+      0.0,
+      0.9253
+    ]
+  }
+]

@@ -256,14 +256,78 @@ delta, so the result is attributable to that run rather than to history.
 
 ---
 
+## 6. `trace-query.sh` — who answered *this* query
+
+The one instrument that names the pod for a single query, at the CLI:
+
+```bash
+./app/trace-query.sh "CrashLoopBackOff"          # one text search, traced
+./app/trace-query.sh -n 12 "pods"                # twelve searches + a pod census
+./app/trace-query.sh -m vector -d performance    # a vector search, by failure domain
+./app/trace-query.sh -n 12 -q "pods"             # census only, no per-query detail
+```
+
+```text
+text search "CrashLoopBackOff"  index=incidents_text
+entry grpc-search.apps-crc.testing:443  ->  Envoy  ->  3 mongot pods
+
+query 1
+    INC-1002  CrashLoopBackOff after a config change  [scheduling]  2.545
+    served by: mongot-search-0-1 (10.217.1.37)  OK  19ms
+
+query 2
+    INC-1002  CrashLoopBackOff after a config change  [scheduling]  2.545
+    served by: mongot-search-0-0 (10.217.1.38)  OK  5ms
+
+query 3
+    INC-1002  CrashLoopBackOff after a config change  [scheduling]  2.545
+    served by: mongot-search-0-2 (10.217.1.36)  OK  14ms
+
+──────────────────────────────────────────────
+who answered (3 gRPC requests over 3 queries)
+  mongot-search-0-0       1   33%  ###########
+  mongot-search-0-1       1   33%  ###########
+  mongot-search-0-2       1   33%  ###########
+  all 3 pods answered
+```
+
+Identical input, three different pods, in order. The query never changed — only the pod
+that answered it.
+
+### Why it reads the access log and not `/metrics`
+
+`mongot`'s Prometheus counters are **scraped**, so they lag the response. Measured: issuing
+one query and immediately diffing the per-pod counters, **2 of 5 queries were still
+invisible** when the query had already returned its results. The counters are correct in
+aggregate and wrong for attributing a single request.
+
+Envoy writes one access-log line per gRPC request carrying `upstream_host`, which names the
+pod exactly. That is what the script parses.
+
+### The one gotcha: the flush interval
+
+Envoy buffers access logs and flushes on `--file-flush-interval-msec`. The operator does not
+set it, so Envoy's **10s default** applies — measured here at **9s** between a query
+returning and its line appearing. The script therefore polls against a wall-clock deadline
+(`FLUSH_WAIT`, default 15s), not an iteration count:
+
+```bash
+FLUSH_WAIT=25 ./app/trace-query.sh -n 5 "etcd"     # slower cluster, longer patience
+```
+
+An iteration count is the wrong knob — 60 polls completed in 5s here and still saw nothing.
+
+---
+
 ## Which to use
 
 | Question | Use |
 |---|---|
 | Show me one request end to end | **the GUI (§1)** |
 | Is traffic spread right now? | the console graph (§2) |
-| Which pod served *this* query? | the GUI (§1), or the access log (§4) |
-| Did my change break distribution? | `verify-search.sh` (§5) |
+| Which pod served *this* query? | **`trace-query.sh` (§6)** — names the pod at the CLI |
+| Which entry path is mongod using? | `entry-path.sh` — Route or MetalLB VIP, proven |
+| Did my change break anything? | `./test/run.sh` — 46 assertions, exit code |
 | Is Envoy retrying / shedding load? | `envoy_cluster_upstream_rq_retry` (§2) |
 
 **One counter to distrust:** `upstream_cx_active` is not a health signal. The cluster's

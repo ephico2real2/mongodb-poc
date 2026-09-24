@@ -12,6 +12,23 @@ kind: Route
 metadata:
   name: mongot-grpc
   namespace: mongodb-poc
+  annotations:
+    # A passthrough Route DOES honour this annotation - the router template reads it for
+    # TCP backends before falling back to ROUTER_TCP_BALANCE_SCHEME. Valid values are
+    # roundrobin | leastconn | source | random.
+    #
+    # The passthrough DEFAULT is `source`, and that is degenerate here: every client
+    # reaches the router through one ingress path, so HAProxy sees a single peer address
+    # (192.168.127.1 on CRC) and hashes every connection onto the SAME Envoy replica.
+    # Measured under `source`: 26,605 requests on one Envoy, 0 on the other.
+    #
+    # Measured after switching to roundrobin: 10 fresh TLS connections split 5/5 across
+    # the two Envoy replicas.
+    #
+    # This balances CONNECTIONS, not requests - HAProxy is in TCP mode here. An already
+    # established mongod connection does not move; this decides where the NEXT one lands.
+    # Per-request spreading across mongot still happens only at Envoy.
+    haproxy.router.openshift.io/balance: roundrobin
 spec:
   # MUST equal spec.clusters[].loadBalancer.managed.externalHostname, because mongod
   # sends it as SNI, the router selects this Route by it, and Envoy matches its

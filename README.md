@@ -10,6 +10,30 @@ across the `mongot` pods.
 
 ---
 
+## Start here
+
+| If you want to | Read |
+|---|---|
+| Understand the architecture and the one constraint | this page |
+| See the request path as diagrams, with every label sourced | **[REQUEST-PATH.md](REQUEST-PATH.md)** |
+| Stand it up on a laptop, end to end | [DEPLOYMENT.md](DEPLOYMENT.md) |
+| Follow a guided demo with expected output at each step | [DEMO.md](DEMO.md) |
+| Know *why* a search tier is worth it | [USECASE.md](USECASE.md) |
+| Run the test suite, or understand what it guards | [TESTING.md](TESTING.md) |
+| Watch traffic land on the pods | [OBSERVE.md](OBSERVE.md) |
+| Issue, rotate or hand-sign the certificates | [TLS.md](TLS.md) |
+| Read the original design notes and findings | [mongoT-setup.md](mongoT-setup.md) |
+
+Three commands worth knowing before anything else:
+
+```bash
+./test/run.sh                      # 47 assertions across 8 suites, exit code
+./app/entry-path.sh                # is mongod using the Route, or the MetalLB VIP?
+./app/trace-query.sh -n 6 "pods"   # which mongot pod answered each query
+```
+
+---
+
 ## The one constraint everything follows from
 
 `mongod` opens **a single, long-lived TCP connection** to `mongot` and multiplexes every
@@ -26,6 +50,67 @@ requires a proxy in front of more than one `mongot`, and why the Operator refuse
 
 `mongot` also sheds load by returning gRPC `RESOURCE_EXHAUSTED`, which the proxy is
 expected to retry **against a different replica**.
+
+---
+
+## The request path, end to end
+
+<!-- markdownlint-disable MD033 -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/grpc-through-envoy/request-path.dark.png">
+  <source srcset="docs/diagrams/grpc-through-envoy/request-path.light.png">
+  <img alt="One long-lived HTTP/2 connection from mongod is pinned by the Route's source hashing to a single Envoy replica, which then round-robins each individual gRPC stream across all three mongot pods over a second mutual-TLS leg." src="docs/diagrams/grpc-through-envoy/request-path.light.png">
+</picture>
+<!-- markdownlint-enable MD033 -->
+
+*Every value in the figure was read from the running objects on 2026-09-24 — `getCmdLineOpts`
+on the replica set, the router's `haproxy.config`, ConfigMap `mongot-search-lb-0-config`, and
+the Envoy access logs. There is **no Gateway API object** in this cluster: the Envoy is a plain
+Deployment the MCK operator creates from `spec.clusters[].loadBalancer.managed`.*
+
+```text
+  colima VM 192.168.64.4
+    (1) mongod rs0, 3 members          mongotHost = grpc-search.apps-crc.testing:443
+         |                             useGrpcForSearch = true, searchTLSMode = requireTLS
+         | (2) ONE long-lived HTTP/2 connection   <- this is the whole problem
+         v
+  macOS host
+    DNS -> 192.168.64.1 : 443          gvisor-tap-vsock forwards into CRC
+         |                             (CRC has no host interface; this hop is the only stitch)
+         v
+  CRC, openshift-ingress
+    (3) Route mongot-grpc, passthrough        be_tcp:mongodb-poc:mongot-grpc
+         |                                    balance roundrobin  (set by annotation)
+         |                                    the passthrough DEFAULT is `source`, which
+         |                                    pinned every connection to ONE Envoy:
+         | (4) mutual TLS 1.3 ends here       that gave 26,605 requests vs 0
+         v
+  CRC, namespace mongodb-poc
+    (5) Envoy, Deployment mongot-search-lb-0, operator-owned, from a ConfigMap
+         pod ...-5r4qg   carries the connection, 26,605 requests, 1 client_id
+         pod ...-v5ffh   ready, healthy, idle, 0 requests - failover only
+         lds.json: bind :27028, require_client_cert, TLS min=max=v1.3, alpn h2, 300s
+         cds.json: STRICT_DNS, lb_policy absent -> Envoy default ROUND_ROBIN,
+                   retry_on 5 kinds incl. resource-exhausted, previous_hosts, 2 retries
+         |
+         | (6) STRICT_DNS on headless mongot-search-0-svc -> 3 pod IPs
+         | (7) each gRPC STREAM to the next pod, second mutual-TLS leg, SNI = Service FQDN
+         v
+    mongot-search-0-0        mongot-search-0-1        mongot-search-0-2
+    10.217.1.38:27028        10.217.1.37:27028        10.217.1.36:27028
+
+    (8) reverse leg: each mongot opens its OWN change stream straight back to
+        192.168.64.4:27017-19 - not through Envoy, not through the Route, not balanced.
+
+    also deployed, carrying no traffic today:
+        Service mongot-grpc-lb, MetalLB L2, 192.168.127.100:27028
+```
+
+mongod opens **one** connection, so every L4 hop can only pin it. Only the L7 hop — Envoy —
+can split the streams *inside* that connection across the pods.
+
+Both figures, the provenance of every label, and what they deliberately do **not** claim are
+in **[REQUEST-PATH.md](REQUEST-PATH.md)**.
 
 ---
 
@@ -262,6 +347,87 @@ Passthrough uses `timeout tunnel` instead, and its 1h default comfortably covers
 **A passthrough Route is a pipe, not a balancer.** Being pure TCP it cannot split gRPC
 streams — it must sit *in front of* Envoy, never instead of it.
 
+### Which one is actually in use?
+
+Both paths can exist at once and both terminate on the same Envoy pods, so the port number
+alone is a guess. `app/entry-path.sh` walks the chain and proves it at the hop that can only
+be carrying traffic on one of them:
+
+```bash
+./app/entry-path.sh
+```
+
+```text
+1. mongotHost, read from the running mongod
+   mongo1 (27017): grpc-search.apps-crc.testing:443    (all three agree)
+2. resolves, inside the container, to 192.168.64.1 port 443
+3. candidates:  MetalLB VIP 192.168.127.100:27028  |  Route grpc-search... (passthrough)
+4. router -> Envoy established TCP : 2
+5. verdict: mongod reaches mongot through the OpenShift Route
+6. HAProxy backend: balance roundrobin across 2 Envoy server(s)
+7. envoy ...-5r4qg  26,605 access lines   envoy ...-v5ffh  0 access lines
+```
+
+Step 4 is the decisive one: the router pod holds established TCP sessions to the Envoy pods,
+which it only would if traffic traverses the Route.
+
+### Passthrough routes *do* honour the balance annotation
+
+A passthrough Route is TCP, but it is still an HAProxy backend, and the router template reads
+the route annotation **before** falling back to its default:
+
+```text
+# haproxy-config.template, the TCP (passthrough) backend block
+{{- with $balanceAlgo := firstMatch $balanceAlgoPattern (index $cfg.Annotations "haproxy.router.openshift.io/balance") }}
+  balance {{ $balanceAlgo }}
+{{- else }}
+  balance {{ if gt $cfg.ActiveServiceUnits 1 }}roundrobin{{ else }}{{ firstMatch ... (env "ROUTER_TCP_BALANCE_SCHEME") ... "source" }}{{ end }}
+```
+
+| | |
+|---|---|
+| Annotation | `haproxy.router.openshift.io/balance` |
+| Valid values | `roundrobin` · `leastconn` · `source` · `random` |
+| Default, **passthrough / TCP** | `source` (`ROUTER_TCP_BALANCE_SCHEME`) |
+| Default, edge / reencrypt / http | `random` (`ROUTER_LOAD_BALANCE_ALGORITHM`) |
+| Forced to `roundrobin` | when the route has more than one active service (weighted backends) |
+
+**The passthrough default is degenerate in this topology.** Every client reaches the router
+through a single ingress path, so HAProxy sees one peer address for all of them — on CRC,
+`192.168.127.1` — and `balance source` hashes every connection onto the *same* Envoy replica.
+That is why one Envoy had logged 26,605 requests and the other exactly zero.
+
+Verified by changing it and measuring, rather than by reading the template:
+
+```bash
+oc annotate route mongot-grpc -n mongodb-poc \
+  haproxy.router.openshift.io/balance=roundrobin --overwrite
+```
+
+```text
+BEFORE   balance source        5r4qg downstream_cx_total = 4   v5ffh = 0
+         ... 10 fresh TLS connections through the Route ...
+AFTER    balance roundrobin    5r4qg downstream_cx_total = 9   v5ffh = 5
+```
+
+An exact 5/5 split. The annotation is now declared in
+[`manifests/80-route-passthrough.yaml`](manifests/80-route-passthrough.yaml).
+
+**But be precise about what this buys.** HAProxy is in TCP mode, so `balance` chooses a
+backend **per connection, not per request**. `mongod` holds one long-lived HTTP/2 connection,
+and that connection does not migrate when the annotation changes — roundrobin decides where
+the *next* connection lands. So:
+
+- it makes the second Envoy replica genuinely useful (reconnects, additional replica-set
+  members, other clients) instead of permanently idle;
+- it does **not** spread requests. Per-request distribution across the `mongot` pods still
+  happens only at Envoy, one hop later.
+
+`leastconn` is the other sensible choice here and is arguably better for long-lived
+connections, since it counts what actually matters — open sessions per backend — rather than
+assigning them in turn.
+
+
 ---
 
 ## How this evolved: one mongot behind a Route, to three behind Envoy
@@ -458,6 +624,17 @@ Envoy, same window:
 `mongod` holds **one** connection to the endpoint, yet those 41 requests landed on
 **three** pods. That is the whole argument for the L7, demonstrated rather than asserted:
 distribution happens **per request**, not per connection.
+
+### The movement, in three independent measurements
+
+The same query run three times lands on three different pods; thirty queries split 10/10/10;
+a 90-second load measures 37.1 / 31.3 / 31.6 %. The figure and the numbers behind it are in
+**[REQUEST-PATH.md](REQUEST-PATH.md#figure-2--the-movement-measured)**.
+
+**Counter deltas are unreliable for a single query** — 2 of 5 were still invisible in
+`/metrics` when the query returned. Per-request truth comes from the access log, which is
+what `app/trace-query.sh` reads.
+
 
 ### Envoy's access log is the best instrument
 
@@ -689,3 +866,35 @@ what you put here. Running on names requires the set to *advertise* names.
 | **TLS** | ✅ **verified** on both entry paths — see [TLS.md](TLS.md) |
 | **`$search` query** | ✅ **verified** — returns correct results with relevance scores |
 | **Stream distribution** | ✅ **measured** — 41 queries spread **13 / 14 / 14** across three `mongot` |
+
+---
+
+## Diagram sources
+
+The figures in this repository are generated, not hand-placed images. Two pages hold them:
+
+```bash
+# the request path (2 figures) - see REQUEST-PATH.md
+python3 ~/.claude/skills/visual/render.py \
+  docs/diagrams/grpc-through-envoy/source.html \
+  docs/diagrams/grpc-through-envoy \
+  request-path,movement
+
+# the architecture set (10 figures) - embedded throughout this page
+python3 ~/.claude/skills/visual/render.py \
+  docs/diagrams/mongot-openshift/source.html \
+  docs/diagrams/mongot-openshift \
+  network-layout,grpc-path,failure-domains,end-to-end,architecture,l4-bypass,before-route-single,after-metallb-three,architecture-proposed,architecture-route-f5
+```
+
+**`render.py` assigns names in DOM order, not alphabetically.** The name list must match the
+order the figures appear in `source.html`; pass them in the wrong order and it silently writes
+each PNG under another's name, with no error — the only symptom is that the file sizes look
+shuffled. In the architecture set `architecture` is the **fifth** figure, not the first, which
+is exactly how this went wrong twice. The orders above were verified by re-rendering to
+placeholder names and byte-matching against the committed PNGs.
+
+The page, the PNGs, the `<picture>` embed and the ```text``` twin beneath each figure all
+change together. When a value in a figure stops being true, the figure is *wrong*, not stale:
+re-read the running object, update `source.html`, re-render, and update the twin and the
+`aria-label` in the same commit.

@@ -30,6 +30,66 @@ oc rollout status deploy/mongot-toolbox -n mongodb-poc
 
 ---
 
+
+## The test suite
+
+```bash
+./test/run.sh                  # every suite
+./test/run.sh search           # one suite
+SKIP_DISTRIBUTION=1 ./test/run.sh
+```
+
+Suites: `platform`, `data`, `search`, `entry`, `attribution`, `alerts`, `distribution`, `tls`.
+Exit 0 means every assertion passed; exit 1 lists the failures by name. Skips never fail a run,
+so the suite degrades cleanly when an optional piece (the toolbox pod, Thanos) is absent.
+
+```text
+── entry path ──────────────────────────────────────
+  PASS  every mongod agrees on mongotHost                    1
+  PASS  mongod requires TLS to the search head               requireTLS
+  PASS  entry path identified                                OpenShift Route (2 established router->Envoy)
+  PASS  the Route is passthrough (edge/reencrypt break HTTP/2) passthrough
+  PASS  HAProxy load-balances the passthrough backend by source balance source
+
+── per-request attribution ──────────────────────────────────────
+  PASS  at least one Envoy is logging requests               1 busy / 1 idle
+  PASS  all 3 pods appear in a 6-query census                3
+  PASS  no non-OK gRPC status in the last 10m                0
+
+────────────────────────────────────────────────────────
+  46 passed   0 failed   0 skipped
+```
+
+### What each suite is actually guarding
+
+| Suite | The failure it catches |
+|---|---|
+| `platform` | the entry Service pointed at the **mongot** pods instead of Envoy — the silent L7 bypass |
+| `data` | a corpus that loaded but whose indexes never became `queryable` |
+| `search` | recall regressions, and filters that are silently ignored rather than applied |
+| `entry` | the replica set disagreeing on `mongotHost`; a Route flipped off `passthrough` |
+| `attribution` | one pod serving everything while all three report Ready |
+| `alerts` | a `PrometheusRule` that was applied but never loaded |
+| `distribution` | round robin degrading to a single pod under load |
+| `tls` | the coupling defect — Envoy cert volumes silently not mounted |
+
+Two assertions encode findings that cost real debugging time:
+
+- **`source CA set (Envoy cert mounts depend on it)`** — the operator gates Envoy's
+  certificate volumes on `spec.source.external.tls.ca`. Set `security.tls` without it and
+  the pods come up healthy with no certificates mounted.
+- **`mongotHost is a hostname, not an IP`** — TLS clients send no SNI for an IP literal, so
+  a passthrough Route cannot pick a backend and the path fails at the handshake.
+
+### A note on where alerting rules live
+
+In OpenShift user-workload monitoring a user-namespace `PrometheusRule` is evaluated by
+**Thanos Ruler**, *not* by `prometheus-user-workload`, unless it carries the label
+`openshift.io/prometheus-rule-evaluation-scope: leaf-prometheus`. Both components'
+`ruleSelector` match expressions say so explicitly. Querying the wrong one reports a
+perfectly healthy rule group as missing — the `alerts` suite queries Thanos Ruler.
+
+
 ## Step 1 — the sample data
 
 `mongodb/data/` holds five `sample_mflix`-shaped documents, after MongoDB's dev.to

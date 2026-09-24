@@ -1,0 +1,7 @@
+{ "name": "incidents_vector", "type": "vectorSearch",
+  "definition": { "fields": [
+    { "type": "vector", "path": "embedding", "numDimensions": 6, "similarity": "cosine" },
+    { "type": "filter", "path": "component" },
+    { "type": "filter", "path": "severity" },
+    { "type": "filter", "path": "_id" }
+  ] } }

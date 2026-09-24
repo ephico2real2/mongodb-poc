@@ -1,0 +1,84 @@
+# Turn "the failure that produces no error" into a failure that pages.
+#
+# The central risk in this architecture is that losing L7 load balancing is INVISIBLE:
+# queries succeed, pods stay Ready, the Service reports healthy endpoints, and one mongot
+# quietly serves everything. No liveness or readiness probe can detect it, because
+# nothing is unhealthy - the traffic is simply concentrated.
+#
+# These rules detect it the only way it can be detected: by comparing per-pod shares.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mongot-distribution
+  namespace: mongodb-poc
+  labels: { app.kubernetes.io/part-of: mongot-poc }
+spec:
+  groups:
+  - name: mongot.distribution
+    rules:
+    # ---- recording rules: per-pod share of search traffic -------------------
+    - record: mongot:search_rate:pod
+      expr: |
+        sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count[5m]))
+          + sum by (pod) (rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count[5m]))
+    - record: mongot:search_rate:total
+      expr: sum(mongot:search_rate:pod)
+    - record: mongot:search_share:pod
+      expr: mongot:search_rate:pod / ignoring(pod) group_left mongot:search_rate:total
+
+    # ---- THE alert this whole repository exists to justify ------------------
+    - alert: MongotTrafficNotDistributed
+      expr: |
+        max(mongot:search_share:pod) > 0.90
+          and on() (mongot:search_rate:total > 0.2)
+          and on() (count(count by (pod) (mongot:search_rate:pod)) > 1)
+      for: 10m
+      labels: { severity: warning }
+      annotations:
+        summary: "One mongot pod is serving {{ $value | humanizePercentage }} of search traffic"
+        description: >-
+          Search traffic is concentrated on a single mongot pod while others are idle.
+          Queries will still succeed and every pod will still report Ready, so nothing
+          else will alert. The usual cause is that the L7 proxy has been bypassed - check
+          that the entry Service selector is app=<name>-search-lb-<idx> (the Envoy pods)
+          and NOT the mongot pods, and that Envoy is running.
+        runbook: "https://github.com/ephico2real2/mongodb-poc/blob/main/README.md#the-failure-that-produces-no-error"
+
+    # ---- a replica that is Ready but receiving nothing ----------------------
+    - alert: MongotPodReceivingNoTraffic
+      expr: |
+        (mongot:search_rate:pod == 0)
+          and on() (mongot:search_rate:total > 0.5)
+      for: 15m
+      labels: { severity: info }
+      annotations:
+        summary: "mongot pod {{ $labels.pod }} has served nothing for 15m while others are busy"
+        description: >-
+          The pod is Ready and scraped, but Envoy is sending it no requests. Expected
+          briefly after a restart while it re-syncs; sustained, it suggests the pod is
+          missing from Envoy's upstream set.
+
+    # ---- Envoy is retrying: mongot is shedding load ------------------------
+    - alert: MongotEnvoyRetriesElevated
+      expr: sum(rate(envoy_cluster_upstream_rq_retry[5m])) > 1
+      for: 10m
+      labels: { severity: warning }
+      annotations:
+        summary: "Envoy is retrying {{ $value | printf \"%.1f\" }} req/s to mongot"
+        description: >-
+          mongot is returning RESOURCE_EXHAUSTED (load shedding) or resetting streams, and
+          Envoy is retrying onto a different pod. Sustained retries mean the mongot tier is
+          undersized for the query rate.
+
+    # ---- the search path is down --------------------------------------------
+    - alert: MongotNoSearchTraffic
+      expr: |
+        sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="mongot_rs_cluster"}[5m])) == 0
+          and on() (count(up{job=~".*mongot.*"} == 1) > 0)
+      for: 30m
+      labels: { severity: info }
+      annotations:
+        summary: "Envoy has forwarded no requests to mongot for 30m"
+        description: >-
+          Either genuinely idle, or mongod has stopped reaching the load balancer. Check
+          mongotHost on the external mongod and that the VIP/Route still resolves.
