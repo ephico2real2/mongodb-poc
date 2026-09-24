@@ -1,0 +1,58 @@
+{
+    "node": {
+        "id": "envoy-search-proxy",
+        "cluster": "search-proxy"
+    },
+    "dynamic_resources": {
+        "lds_config": {
+            "path_config_source": {
+                "path": "/etc/envoy/lds.json",
+                "watched_directory": {
+                    "path": "/etc/envoy"
+                }
+            }
+        },
+        "cds_config": {
+            "path_config_source": {
+                "path": "/etc/envoy/cds.json",
+                "watched_directory": {
+                    "path": "/etc/envoy"
+                }
+            }
+        }
+    },
+    "layered_runtime": {
+        "layers": [
+            {
+                "name": "static_layer",
+                "static_layer": {
+                    "overload": {
+                        "global_downstream_max_connections": 50000
+                    }
+                }
+            }
+        ]
+    },
+    "admin": {
+        "address": {
+            "socket_address": {
+                "address": "0.0.0.0",
+                "port_value": 9901
+            }
+        },
+        "allow_paths": [
+            {
+                "exact": "/ready"
+            },
+            {
+                "prefix": "/stats"
+            },
+            {
+                "prefix": "/drain_listeners"
+            },
+            {
+                "prefix": "/logging"
+            }
+        ]
+    }
+}

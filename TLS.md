@@ -478,3 +478,26 @@ cd mongodb && ./scripts/verify-search.sh
 | Certificate has no SANs | `openssl x509 -req` run without `-extfile`/`-extensions` |
 | `mongot` cannot sync after enabling TLS | the `mongod` certificate does not cover what `rs.conf()` advertises |
 | Operator ignores your Secret | the name does not match the derived `<prefix>-<name>-search-…` form |
+
+---
+
+## Why Envoy does not pick up a rotated certificate
+
+Envoy's `bootstrap.json` points `cds_config` and `lds_config` at files with a
+`watched_directory`, so it reloads `cds.json` / `lds.json` when the ConfigMap changes. The
+certificates are **not** covered by that: they are referenced by filename inside the TLS
+contexts and read when the config loads.
+
+The whole difference is the filename, verified on the running pods:
+
+```text
+Envoy    secret lab-mongot-search-lb-0-cert    -> /etc/envoy/tls/server/tls.crt, tls.key
+mongot   secret mongot-search-certificate-key  -> /var/lib/tls/server/c515fd27...af5.pem
+```
+
+`mongot`'s PEM is named after its content hash, so a rotation yields a **different filename**,
+the pod spec changes, and the pod restarts on its own. Envoy's filenames are **fixed**, so
+after a rotation the bytes differ but nothing it watches has changed — no reload, and it keeps
+presenting the old certificate until something restarts it.
+
+The mechanism is walked through in [ENVOY-FLOW.md](ENVOY-FLOW.md#how-the-three-files-relate).

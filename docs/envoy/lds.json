@@ -1,0 +1,154 @@
+{
+    "resources": [
+        {
+            "@type": "type.googleapis.com/envoy.config.listener.v3.Listener",
+            "name": "mongod_listener",
+            "address": {
+                "socket_address": {
+                    "address": "0.0.0.0",
+                    "port_value": 27028
+                }
+            },
+            "filter_chains": [
+                {
+                    "filter_chain_match": {
+                        "server_names": [
+                            "grpc-search.apps-crc.testing"
+                        ]
+                    },
+                    "filters": [
+                        {
+                            "name": "envoy.filters.network.http_connection_manager",
+                            "typed_config": {
+                                "@type": "type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager",
+                                "stat_prefix": "ingress_rs",
+                                "route_config": {
+                                    "name": "rs_route",
+                                    "virtual_hosts": [
+                                        {
+                                            "name": "mongot_rs_backend",
+                                            "domains": [
+                                                "*"
+                                            ],
+                                            "routes": [
+                                                {
+                                                    "match": {
+                                                        "prefix": "/",
+                                                        "grpc": {}
+                                                    },
+                                                    "route": {
+                                                        "cluster": "mongot_rs_cluster",
+                                                        "timeout": "300s",
+                                                        "retry_policy": {
+                                                            "retry_on": "connect-failure,refused-stream,unavailable,reset,resource-exhausted",
+                                                            "num_retries": 2,
+                                                            "per_try_timeout": "60s",
+                                                            "retry_host_predicate": [
+                                                                {
+                                                                    "name": "envoy.retry_host_predicates.previous_hosts",
+                                                                    "typed_config": {
+                                                                        "@type": "type.googleapis.com/envoy.extensions.retry.host.previous_hosts.v3.PreviousHostsPredicate"
+                                                                    }
+                                                                }
+                                                            ],
+                                                            "host_selection_retry_max_attempts": "3"
+                                                        }
+                                                    }
+                                                }
+                                            ],
+                                            "include_request_attempt_count": true
+                                        }
+                                    ],
+                                    "validate_clusters": false
+                                },
+                                "http_filters": [
+                                    {
+                                        "name": "envoy.filters.http.router",
+                                        "typed_config": {
+                                            "@type": "type.googleapis.com/envoy.extensions.filters.http.router.v3.Router"
+                                        }
+                                    }
+                                ],
+                                "http2_protocol_options": {
+                                    "initial_stream_window_size": 1048576,
+                                    "initial_connection_window_size": 1048576,
+                                    "connection_keepalive": {
+                                        "interval": "60s",
+                                        "timeout": "10s"
+                                    }
+                                },
+                                "stream_idle_timeout": "300s",
+                                "request_timeout": "300s",
+                                "access_log": [
+                                    {
+                                        "name": "envoy.access_loggers.stdout",
+                                        "typed_config": {
+                                            "@type": "type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog",
+                                            "log_format": {
+                                                "json_format": {
+                                                    "bytes_in": "%BYTES_RECEIVED%",
+                                                    "bytes_out": "%BYTES_SENT%",
+                                                    "client_id": "%REQ(MONGODB-CLIENTID)%",
+                                                    "duration_ms": "%DURATION%",
+                                                    "grpc_status": "%GRPC_STATUS%",
+                                                    "level": "info",
+                                                    "logger": "access",
+                                                    "message": "stream upstream=%UPSTREAM_HOST% path=%REQ(:PATH)% resp=%RESPONSE_CODE% grpc=%GRPC_STATUS% flags=%RESPONSE_FLAGS% dur=%DURATION%ms",
+                                                    "path": "%REQ(:PATH)%",
+                                                    "response_code": "%RESPONSE_CODE%",
+                                                    "response_flags": "%RESPONSE_FLAGS%",
+                                                    "time": "%START_TIME(%Y-%m-%dT%H:%M:%E3S%Ez)%",
+                                                    "upstream_host": "%UPSTREAM_HOST%"
+                                                }
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "transport_socket": {
+                        "name": "envoy.transport_sockets.tls",
+                        "typed_config": {
+                            "@type": "type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext",
+                            "common_tls_context": {
+                                "tls_params": {
+                                    "tls_minimum_protocol_version": "TLSv1_3",
+                                    "tls_maximum_protocol_version": "TLSv1_3"
+                                },
+                                "tls_certificates": [
+                                    {
+                                        "certificate_chain": {
+                                            "filename": "/etc/envoy/tls/server/tls.crt"
+                                        },
+                                        "private_key": {
+                                            "filename": "/etc/envoy/tls/server/tls.key"
+                                        }
+                                    }
+                                ],
+                                "validation_context": {
+                                    "trusted_ca": {
+                                        "filename": "/etc/envoy/tls/ca/ca.crt"
+                                    }
+                                },
+                                "alpn_protocols": [
+                                    "h2"
+                                ]
+                            },
+                            "require_client_certificate": true
+                        }
+                    }
+                }
+            ],
+            "listener_filters": [
+                {
+                    "name": "envoy.filters.listener.tls_inspector",
+                    "typed_config": {
+                        "@type": "type.googleapis.com/envoy.extensions.filters.listener.tls_inspector.v3.TlsInspector"
+                    }
+                }
+            ]
+        }
+    ],
+    "type_url": "type.googleapis.com/envoy.config.listener.v3.Listener"
+}

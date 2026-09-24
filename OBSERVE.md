@@ -329,6 +329,7 @@ An iteration count is the wrong knob — 60 polls completed in 5s here and still
 | Which entry path is mongod using? | `entry-path.sh` — Route or MetalLB VIP, proven |
 | Did my change break anything? | `./test/run.sh` — 46 assertions, exit code |
 | Is Envoy retrying / shedding load? | `envoy_cluster_upstream_rq_retry` (§2) |
+| How many pods can Envoy even choose between? | `membership_healthy` — see [ENVOY-FLOW.md](ENVOY-FLOW.md#reading-it-live) |
 
 **One counter to distrust:** `upstream_cx_active` is not a health signal. The cluster's
 `idle_timeout` is 300s, so between bursts it is legitimately **0**. Values of 0, 2, 3 and

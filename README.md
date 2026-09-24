@@ -12,17 +12,35 @@ across the `mongot` pods.
 
 ## Start here
 
-| If you want to | Read |
+**Understand it**
+
+| Doc | What it covers |
 |---|---|
-| Understand the architecture and the one constraint | this page |
-| See the request path as diagrams, with every label sourced | **[REQUEST-PATH.md](REQUEST-PATH.md)** |
-| Stand it up on a laptop, end to end | [DEPLOYMENT.md](DEPLOYMENT.md) |
-| Follow a guided demo with expected output at each step | [DEMO.md](DEMO.md) |
-| Know *why* a search tier is worth it | [USECASE.md](USECASE.md) |
-| Run the test suite, or understand what it guards | [TESTING.md](TESTING.md) |
-| Watch traffic land on the pods | [OBSERVE.md](OBSERVE.md) |
-| Issue, rotate or hand-sign the certificates | [TLS.md](TLS.md) |
-| Read the original design notes and findings | [mongoT-setup.md](mongoT-setup.md) |
+| this page | the architecture, and the one constraint everything follows from |
+| [REQUEST-PATH.md](REQUEST-PATH.md) | the path a request takes, as diagrams, with every label sourced |
+| [ENVOY-FLOW.md](ENVOY-FLOW.md) | the Envoy config itself — what each line does, and why it balances across **pods**, not a Service |
+| [USECASE.md](USECASE.md) | what a search tier buys you that a keyword index does not |
+
+**Build it**
+
+| Doc | What it covers |
+|---|---|
+| [DEPLOYMENT.md](DEPLOYMENT.md) | standing it up end to end, including the laptop network stitching |
+| [TLS.md](TLS.md) | issuing, rotating and hand-signing the certificates |
+
+**Run and verify it**
+
+| Doc | What it covers |
+|---|---|
+| [DEMO.md](DEMO.md) | a guided walkthrough with the expected output at every step |
+| [TESTING.md](TESTING.md) | the test suite, and the failure each assertion guards against |
+| [OBSERVE.md](OBSERVE.md) | watching traffic land on the pods, five different ways |
+
+**Background**
+
+| Doc | What it covers |
+|---|---|
+| [mongoT-setup.md](mongoT-setup.md) | the original design notes and findings |
 
 Three commands worth knowing before anything else:
 
@@ -110,7 +128,9 @@ mongod opens **one** connection, so every L4 hop can only pin it. Only the L7 ho
 can split the streams *inside* that connection across the pods.
 
 Both figures, the provenance of every label, and what they deliberately do **not** claim are
-in **[REQUEST-PATH.md](REQUEST-PATH.md)**.
+in **[REQUEST-PATH.md](REQUEST-PATH.md)**. For the proxy's own configuration — what each line
+of `lds.json` and `cds.json` does to a request, and why Envoy dials the **pods** rather than a
+Service ClusterIP — see **[ENVOY-FLOW.md](ENVOY-FLOW.md)**.
 
 ---
 

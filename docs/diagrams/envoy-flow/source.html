@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Inside Envoy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --ground:#f5f6f8; --surface:#ffffff; --ink:#18212c; --muted:#58636f; --rule:#d7dce3;
+  --host:#a55a0b; --host-wash:#fbf1e4; --remote:#0e6f68; --remote-wash:#e3f3f1;
+  --gap:#b3261e; --gap-wash:#fbe9e7; --none:#6b7684; --none-wash:#eef0f3;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ground:#0e131a; --surface:#151c25; --ink:#e5e9ef; --muted:#9aa5b3; --rule:#2a3440;
+    --host:#f0a53c; --host-wash:#2a2014; --remote:#3fcfc0; --remote-wash:#122a28;
+    --gap:#f2857c; --gap-wash:#2d1614; --none:#9aa5b3; --none-wash:#1b232d;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#0e131a; --surface:#151c25; --ink:#e5e9ef; --muted:#9aa5b3; --rule:#2a3440;
+  --host:#f0a53c; --host-wash:#2a2014; --remote:#3fcfc0; --remote-wash:#122a28;
+  --gap:#f2857c; --gap-wash:#2d1614; --none:#9aa5b3; --none-wash:#1b232d;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.55;margin:0}
+.page{max-width:1060px;margin:0 auto;padding-inline:16px;padding-block:40px 72px;display:grid;gap:44px}
+header{display:grid;gap:10px}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{font-size:clamp(26px,4vw,36px);line-height:1.15;margin:0;font-weight:700;text-wrap:balance}
+h2{font-size:20px;margin:0 0 6px;font-weight:600;text-wrap:balance}
+p{margin:0;max-width:72ch}
+.lede{font-size:17px;max-width:70ch}
+code{font-family:var(--font-mono);font-size:.9em;overflow-wrap:anywhere}
+section{display:grid;gap:14px}
+figure{margin:0;display:grid;gap:10px}
+.fig-scroll{overflow-x:auto;background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:12px}
+.fig-scroll svg{display:block;width:100%;min-width:760px;height:auto;color:var(--ink)}
+figcaption{font-size:13.5px;color:var(--muted);max-width:80ch}
+.tbl{overflow-x:auto;background:var(--surface);border:1px solid var(--rule);border-radius:10px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;vertical-align:top;padding:10px 14px;border-bottom:1px solid var(--rule)}
+th{font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:var(--ground)}
+tr:last-child td{border-bottom:0}
+ul{margin:0;padding-left:20px;display:grid;gap:8px;max-width:80ch}
+a{color:var(--remote)}
+:focus-visible{outline:2px solid var(--remote);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div class="eyebrow">mongodb-poc · envoy internals · 2026-09-24</div>
+    <h1>Inside Envoy: what the config actually does to a request</h1>
+    <p class="lede">Read out of the running pod with <code>cat /etc/envoy/{bootstrap,cds,lds}.json</code>. Every step below is a line in that config, in the order Envoy applies it &mdash; and the answer to the question the shape of it raises: Envoy balances across the <strong>pods</strong>, never through a Service ClusterIP.</p>
+  </header>
+
+  <section>
+    <h2>One request, config line by line</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1000 1316" role="img" aria-label="A request enters Envoy on port 27028. The tls_inspector listener filter reads the SNI from the ClientHello, and filter_chain_match requires it to equal grpc-search.apps-crc.testing, so a connection with no SNI or a different one matches no chain and is closed. The chain then completes mutual TLS 1.3 with ALPN h2, requiring a client certificate. HttpConnectionManager parses HTTP/2 with one mebibyte windows and 300 second timeouts, route rs_route matches any authority and every gRPC path to cluster mongot_rs_cluster, and a retry policy allows two retries onto a different host. The cluster is STRICT_DNS over the headless Service, which resolves to three pod IPs and is re-resolved about every five seconds, so Envoy holds three hosts and round-robins between them, opening a second mutual-TLS leg to the chosen pod IP.">
+          <defs>
+            <marker id="ef-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+            <marker id="ef-no" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--gap)"/></marker>
+            <marker id="ef-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--remote)"/></marker>
+          </defs>
+          <g font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">
+            <text x="20" y="26">FROM THE CONFIG FILE</text>
+            <text x="404" y="26" text-anchor="middle">WHAT ENVOY DOES</text>
+            <text x="712" y="26">EFFECT, AND HOW IT FAILS</text>
+          </g>
+          <line x1="16" y1="36" x2="984" y2="36" stroke="var(--rule)" stroke-width="1.5"/>
+
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+
+            <rect x="300" y="52" width="380" height="50" rx="7" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="316" y="72" font-weight="600" fill="var(--host)">&#9312; TCP connect on 0.0.0.0:27028</text>
+            <text x="316" y="91" font-size="11.5" fill="var(--muted)">from the Route&#8217;s HAProxy, or from the MetalLB VIP</text>
+            <text x="20" y="76" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">lds.json &#183; address</text>
+            <line x1="490" y1="102" x2="490" y2="124" stroke="currentColor" stroke-width="1.5" marker-end="url(#ef-ah)"/>
+
+            <rect x="300" y="126" width="380" height="58" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="316" y="146" font-weight="600">&#9313; listener_filters: tls_inspector</text>
+            <text x="316" y="165" font-size="11.5">peek at the ClientHello, before any decryption</text>
+            <text x="316" y="180" font-size="11.5" fill="var(--muted)">extract the SNI and the offered ALPN</text>
+            <text x="20" y="150" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">envoy.filters.listener.</text>
+            <text x="20" y="164" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">tls_inspector</text>
+            <line x1="490" y1="184" x2="490" y2="206" stroke="currentColor" stroke-width="1.5" marker-end="url(#ef-ah)"/>
+
+            <rect x="300" y="208" width="380" height="70" rx="7" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.5"/>
+            <text x="316" y="228" font-weight="600" fill="var(--gap)">&#9314; filter_chain_match on server_names</text>
+            <text x="316" y="247" font-family="IBM Plex Mono, monospace" font-size="11">["grpc-search.apps-crc.testing"]</text>
+            <text x="316" y="267" font-size="11.5" fill="var(--muted)">there is exactly ONE filter chain</text>
+            <text x="20" y="232" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">lds.json &#183; filter_chains[0]</text>
+            <text x="20" y="246" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">  .filter_chain_match</text>
+            <text x="712" y="226" font-size="11.5" fill="var(--gap)" font-weight="600">no SNI, or a different one:</text>
+            <text x="712" y="242" font-size="11.5" fill="var(--gap)">no chain matches, connection closed</text>
+            <text x="712" y="262" font-size="11.5" fill="var(--muted)">this is why mongotHost must be a</text>
+            <text x="712" y="277" font-size="11.5" fill="var(--muted)">hostname: no SNI is sent for an IP</text>
+            <line x1="490" y1="278" x2="490" y2="300" stroke="currentColor" stroke-width="1.5" marker-end="url(#ef-ah)"/>
+
+            <rect x="300" y="302" width="380" height="88" rx="7" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="316" y="322" font-weight="600" fill="var(--remote)">&#9315; DownstreamTlsContext &#183; mutual TLS</text>
+            <text x="316" y="341" font-size="11.5">TLS 1.3 exactly &#183; min = max &#183; ALPN h2 only</text>
+            <text x="316" y="359" font-size="11.5" font-weight="600">require_client_certificate: true</text>
+            <text x="316" y="377" font-size="11.5" fill="var(--muted)">validate the client against ca/ca.crt</text>
+            <text x="20" y="326" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">tls/server/tls.crt</text>
+            <text x="20" y="340" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">tls/server/tls.key</text>
+            <text x="20" y="354" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">tls/ca/ca.crt</text>
+            <text x="712" y="326" font-size="11.5" fill="var(--muted)">read from disk at config load.</text>
+            <text x="712" y="342" font-size="11.5" fill="var(--muted)">Rotating the Secret does NOT</text>
+            <text x="712" y="358" font-size="11.5" fill="var(--muted)">reload them &#8212; Envoy keeps serving</text>
+            <text x="712" y="374" font-size="11.5" fill="var(--muted)">the old cert until it restarts.</text>
+            <line x1="490" y1="390" x2="490" y2="412" stroke="currentColor" stroke-width="1.5" marker-end="url(#ef-ah)"/>
+
+            <rect x="300" y="414" width="380" height="94" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="316" y="434" font-weight="600">&#9316; HttpConnectionManager &#183; ingress_rs</text>
+            <text x="316" y="453" font-size="11.5">codec absent &#8594; AUTO, resolves to HTTP/2</text>
+            <text x="316" y="471" font-size="11.5">stream + connection windows: 1 MiB each</text>
+            <text x="316" y="489" font-size="11.5">keepalive 60s / 10s &#183; stream_idle 300s</text>
+            <text x="316" y="503" font-size="11" fill="var(--muted)">request_timeout 300s</text>
+            <text x="20" y="438" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">http_connection_manager</text>
+            <text x="20" y="452" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">  .http2_protocol_options</text>
+            <text x="712" y="440" font-size="11.5" fill="var(--muted)">one connection carries many</text>
+            <text x="712" y="456" font-size="11.5" fill="var(--muted)">concurrent streams. THIS is the</text>
+            <text x="712" y="472" font-size="11.5" fill="var(--remote)" font-weight="600">layer an L4 balancer cannot see.</text>
+            <line x1="490" y1="508" x2="490" y2="530" stroke="currentColor" stroke-width="1.5" marker-end="url(#ef-ah)"/>
+
+            <rect x="300" y="532" width="380" height="76" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="316" y="552" font-weight="600">&#9317; route_config rs_route</text>
+            <text x="316" y="571" font-family="IBM Plex Mono, monospace" font-size="11">vhost mongot_rs_backend  domains: ["*"]</text>
+            <text x="316" y="589" font-family="IBM Plex Mono, monospace" font-size="11">match: prefix "/" + grpc:{}</text>
+            <text x="316" y="603" font-size="11" fill="var(--muted)">timeout 300s &#8594; cluster mongot_rs_cluster</text>
+            <text x="20" y="556" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">route_config.virtual_hosts</text>
+            <text x="712" y="556" font-size="11.5" fill="var(--muted)">domains ["*"] means :authority is</text>
+            <text x="712" y="572" font-size="11.5" fill="var(--muted)">NOT matched. The SNI check at &#9314;</text>
+            <text x="712" y="588" font-size="11.5" fill="var(--muted)">is the only host gate on this path.</text>
+            <line x1="490" y1="608" x2="490" y2="630" stroke="currentColor" stroke-width="1.5" marker-end="url(#ef-ah)"/>
+
+            <rect x="300" y="632" width="380" height="86" rx="7" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="316" y="652" font-weight="600" fill="var(--host)">&#9318; retry_policy, on the route</text>
+            <text x="316" y="670" font-size="11">connect-failure, refused-stream, unavailable,</text>
+            <text x="316" y="685" font-size="11">reset, resource-exhausted</text>
+            <text x="316" y="703" font-size="11.5">2 retries &#183; 60s per try &#183; previous_hosts</text>
+            <text x="20" y="656" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">routes[0].route</text>
+            <text x="20" y="670" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">  .retry_policy</text>
+            <text x="712" y="656" font-size="11.5" fill="var(--muted)">previous_hosts forces a retry onto</text>
+            <text x="712" y="672" font-size="11.5" fill="var(--muted)">a DIFFERENT pod, up to 3 host</text>
+            <text x="712" y="688" font-size="11.5" fill="var(--muted)">selection attempts. A shedding pod</text>
+            <text x="712" y="704" font-size="11.5" fill="var(--muted)">does not fail the query.</text>
+            <line x1="490" y1="718" x2="490" y2="740" stroke="currentColor" stroke-width="1.5" marker-end="url(#ef-ah)"/>
+
+            <rect x="300" y="742" width="380" height="98" rx="7" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.8"/>
+            <text x="316" y="762" font-weight="600" fill="var(--remote)">&#9319; cluster mongot_rs_cluster &#183; STRICT_DNS</text>
+            <text x="316" y="781" font-family="IBM Plex Mono, monospace" font-size="10.5">mongot-search-0-svc.mongodb-poc</text>
+            <text x="316" y="795" font-family="IBM Plex Mono, monospace" font-size="10.5">  .svc.cluster.local:27028</text>
+            <text x="316" y="814" font-size="11.5">re-resolved every ~5s (measured 3&#8211;5s)</text>
+            <text x="316" y="832" font-size="11.5" font-weight="600">membership_healthy: 3</text>
+            <text x="20" y="766" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">cds.json &#183; type: STRICT_DNS</text>
+            <text x="20" y="780" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">load_assignment</text>
+            <text x="20" y="794" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">  .endpoints[0]</text>
+            <text x="712" y="766" font-size="11.5" fill="var(--remote)" font-weight="600">the Service is HEADLESS.</text>
+            <text x="712" y="782" font-size="11.5" fill="var(--muted)">DNS returns 3 A records, so Envoy</text>
+            <text x="712" y="798" font-size="11.5" fill="var(--muted)">builds 3 HOSTS &#8212; one per pod.</text>
+            <text x="712" y="818" font-size="11.5" fill="var(--muted)">No ClusterIP, no kube-proxy, no</text>
+            <text x="712" y="834" font-size="11.5" fill="var(--muted)">iptables on this hop.</text>
+            <line x1="490" y1="840" x2="490" y2="862" stroke="currentColor" stroke-width="1.5" marker-end="url(#ef-ah)"/>
+
+            <rect x="300" y="864" width="380" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="316" y="884" font-weight="600">&#9320; pick a host: lb_policy is ABSENT</text>
+            <text x="316" y="903" font-size="11.5">so Envoy&#8217;s default applies: ROUND_ROBIN</text>
+            <text x="316" y="920" font-size="11" fill="var(--muted)">chosen per REQUEST, not per connection</text>
+            <text x="20" y="888" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">cds.json has no</text>
+            <text x="20" y="902" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">  lb_policy key</text>
+            <text x="712" y="890" font-size="11.5" fill="var(--muted)">this single line is the whole</text>
+            <text x="712" y="906" font-size="11.5" fill="var(--muted)">reason the tier exists</text>
+            <line x1="490" y1="926" x2="490" y2="948" stroke="currentColor" stroke-width="1.5" marker-end="url(#ef-ah)"/>
+
+            <rect x="300" y="950" width="380" height="80" rx="7" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="316" y="970" font-weight="600" fill="var(--remote)">&#9321; UpstreamTlsContext &#183; the second mTLS leg</text>
+            <text x="316" y="989" font-size="11.5">present tls/client/tls.crt &#183; verify with ca.crt</text>
+            <text x="316" y="1007" font-family="IBM Plex Mono, monospace" font-size="10.5">sni: mongot-search-0-svc...cluster.local</text>
+            <text x="316" y="1023" font-size="11" fill="var(--muted)">alpn h2 &#183; HTTP/2 to the chosen pod IP</text>
+            <text x="20" y="974" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">cds.json</text>
+            <text x="20" y="988" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">  .transport_socket</text>
+            <text x="712" y="974" font-size="11.5" fill="var(--muted)">SNI is the SERVICE name, not the</text>
+            <text x="712" y="990" font-size="11.5" fill="var(--muted)">pod name, so one certificate</text>
+            <text x="712" y="1006" font-size="11.5" fill="var(--muted)">serves every mongot pod.</text>
+            <line x1="490" y1="1030" x2="490" y2="1056" stroke="var(--remote)" stroke-width="1.6"/>
+            <path d="M490,1056 H150 V1084" fill="none" stroke="var(--remote)" stroke-width="1.6" marker-end="url(#ef-ok)"/>
+            <path d="M490,1056 V1084" fill="none" stroke="var(--remote)" stroke-width="1.6" marker-end="url(#ef-ok)"/>
+            <path d="M490,1056 H830 V1084" fill="none" stroke="var(--remote)" stroke-width="1.6" marker-end="url(#ef-ok)"/>
+
+            <rect x="60" y="1086" width="180" height="60" rx="7" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="74" y="1106" font-family="IBM Plex Mono, monospace" font-size="11.5" font-weight="600">mongot-search-0-0</text>
+            <text x="74" y="1124" font-family="IBM Plex Mono, monospace" font-size="10.5">10.217.1.38:27028</text>
+            <text x="74" y="1140" font-size="10.5" fill="var(--muted)">a host, not a Service</text>
+
+            <rect x="400" y="1086" width="180" height="60" rx="7" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="414" y="1106" font-family="IBM Plex Mono, monospace" font-size="11.5" font-weight="600">mongot-search-0-1</text>
+            <text x="414" y="1124" font-family="IBM Plex Mono, monospace" font-size="10.5">10.217.1.37:27028</text>
+            <text x="414" y="1140" font-size="10.5" fill="var(--muted)">a host, not a Service</text>
+
+            <rect x="740" y="1086" width="180" height="60" rx="7" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="754" y="1106" font-family="IBM Plex Mono, monospace" font-size="11.5" font-weight="600">mongot-search-0-2</text>
+            <text x="754" y="1124" font-family="IBM Plex Mono, monospace" font-size="10.5">10.217.1.36:27028</text>
+            <text x="754" y="1140" font-size="10.5" fill="var(--muted)">a host, not a Service</text>
+
+            <rect x="16" y="1172" width="968" height="60" rx="8" fill="var(--none-wash)" stroke="var(--none)" stroke-width="1.2"/>
+            <text x="30" y="1192" font-weight="600">&#9322; the access log line, written per request</text>
+            <text x="30" y="1210" font-family="IBM Plex Mono, monospace" font-size="10.5">{"upstream_host":"10.217.1.37:27028","grpc_status":"OK","duration_ms":4,"client_id":"b7eefd73-...","path":"/mongodb.CommandService/..."}</text>
+            <text x="30" y="1226" font-size="11" fill="var(--muted)">buffered on Envoy&#8217;s 10s default flush interval &#8212; measured 9s between the query returning and the line appearing</text>
+
+            <text x="20" y="1262" fill="var(--muted)">Read from the running pod on 2026-09-24: cat /etc/envoy/bootstrap.json, cds.json, lds.json, plus the admin /stats endpoint.</text>
+            <text x="20" y="1284" fill="var(--remote)" font-weight="600">Steps &#9319; and &#9320; together are the whole mechanism: three hosts from a headless Service, and one absent lb_policy line.</text>
+            <text x="20" y="1306" fill="var(--muted)">The admin listener allows only /ready, /stats, /drain_listeners and /logging &#8212; /clusters and /config_dump return 403.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>Eleven steps, each one a line in <code>lds.json</code> or <code>cds.json</code>. The two that matter most are &#9319; and &#9320;: <code>STRICT_DNS</code> over a <strong>headless</strong> Service gives Envoy one host per pod, and an absent <code>lb_policy</code> leaves Envoy on its <code>ROUND_ROBIN</code> default, which it applies <em>per request</em>.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Why it must be the headless Service, and not the ClusterIP one</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1000 540" role="img" aria-label="Two columns compare the same Envoy cluster pointed at two different Services. Against the headless Service, DNS returns three pod IPs, Envoy holds three hosts and round-robins per request, so all three mongot pods serve traffic. Against a ClusterIP Service, DNS returns one virtual IP, Envoy holds a single host, and kube-proxy picks one pod per connection, so a single long-lived HTTP/2 connection sends every request to the same pod and the L7 proxy is reduced to a pass-through.">
+          <defs>
+            <marker id="hv-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--remote)"/></marker>
+            <marker id="hv-no" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--gap)"/></marker>
+          </defs>
+          <line x1="500" y1="20" x2="500" y2="500" stroke="var(--rule)" stroke-width="1.5" stroke-dasharray="6 5"/>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+
+            <rect x="20" y="20" width="450" height="52" rx="7" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.8"/>
+            <text x="36" y="42" font-weight="600" fill="var(--remote)">what this deployment does</text>
+            <text x="36" y="62" font-family="IBM Plex Mono, monospace" font-size="11.5">mongot-search-0-svc &#183; clusterIP: None</text>
+
+            <rect x="530" y="20" width="450" height="52" rx="7" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.5" stroke-dasharray="5 4"/>
+            <text x="546" y="42" font-weight="600" fill="var(--gap)">the same config against a ClusterIP Service</text>
+            <text x="546" y="62" font-family="IBM Plex Mono, monospace" font-size="11.5">not built &#8212; drawn to show what changes</text>
+
+            <text x="36" y="102" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">STRICT_DNS resolves the name</text>
+            <text x="546" y="102" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">STRICT_DNS resolves the name</text>
+
+            <rect x="20" y="112" width="450" height="72" rx="7" fill="none" stroke="var(--remote)" stroke-width="1.2"/>
+            <text x="36" y="132" font-weight="600">DNS returns 3 A records</text>
+            <text x="36" y="151" font-family="IBM Plex Mono, monospace" font-size="11">10.217.1.36  10.217.1.37  10.217.1.38</text>
+            <text x="36" y="172" font-size="11.5" fill="var(--muted)">verified with getent inside the cluster</text>
+
+            <rect x="530" y="112" width="450" height="72" rx="7" fill="none" stroke="var(--gap)" stroke-width="1.2" stroke-dasharray="5 4"/>
+            <text x="546" y="132" font-weight="600">DNS returns 1 A record</text>
+            <text x="546" y="151" font-family="IBM Plex Mono, monospace" font-size="11">the Service&#8217;s virtual IP</text>
+            <text x="546" y="172" font-size="11.5" fill="var(--muted)">e.g. mongot-search-0-proxy-svc is 10.217.5.138</text>
+
+            <line x1="245" y1="184" x2="245" y2="210" stroke="var(--remote)" stroke-width="1.5" marker-end="url(#hv-ok)"/>
+            <line x1="755" y1="184" x2="755" y2="210" stroke="var(--gap)" stroke-width="1.5" marker-end="url(#hv-no)"/>
+
+            <rect x="20" y="212" width="450" height="66" rx="7" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="36" y="232" font-weight="600" fill="var(--remote)">Envoy builds 3 hosts</text>
+            <text x="36" y="251" font-family="IBM Plex Mono, monospace" font-size="11">membership_healthy: 3</text>
+            <text x="36" y="270" font-size="11.5" fill="var(--muted)">ROUND_ROBIN has something to choose between</text>
+
+            <rect x="530" y="212" width="450" height="66" rx="7" fill="none" stroke="var(--gap)" stroke-width="1.5" stroke-dasharray="5 4"/>
+            <text x="546" y="232" font-weight="600" fill="var(--gap)">Envoy builds 1 host</text>
+            <text x="546" y="251" font-family="IBM Plex Mono, monospace" font-size="11">membership_healthy: 1</text>
+            <text x="546" y="270" font-size="11.5" fill="var(--muted)">ROUND_ROBIN has one choice, forever</text>
+
+            <line x1="245" y1="278" x2="245" y2="304" stroke="var(--remote)" stroke-width="1.5" marker-end="url(#hv-ok)"/>
+            <line x1="755" y1="278" x2="755" y2="304" stroke="var(--gap)" stroke-width="1.5" marker-end="url(#hv-no)"/>
+
+            <rect x="20" y="306" width="450" height="80" rx="7" fill="none" stroke="var(--remote)" stroke-width="1.2"/>
+            <text x="36" y="326" font-weight="600">Envoy dials the pod IP directly</text>
+            <text x="36" y="345" font-size="11.5">no kube-proxy, no iptables, no conntrack</text>
+            <text x="36" y="364" font-size="11.5">a NEW upstream request can pick a NEW pod</text>
+            <text x="36" y="380" font-size="11" fill="var(--muted)">upstream_rq_total 26,714 over 51 connections</text>
+
+            <rect x="530" y="306" width="450" height="80" rx="7" fill="none" stroke="var(--gap)" stroke-width="1.2" stroke-dasharray="5 4"/>
+            <text x="546" y="326" font-weight="600" fill="var(--gap)">kube-proxy picks a pod per CONNECTION</text>
+            <text x="546" y="345" font-size="11.5">the choice happens below Envoy, in the kernel</text>
+            <text x="546" y="364" font-size="11.5">and it is made once, when the socket opens</text>
+            <text x="546" y="380" font-size="11" fill="var(--muted)">every later request rides that same socket</text>
+
+            <line x1="245" y1="386" x2="245" y2="412" stroke="var(--remote)" stroke-width="1.5" marker-end="url(#hv-ok)"/>
+            <line x1="755" y1="386" x2="755" y2="412" stroke="var(--gap)" stroke-width="1.5" marker-end="url(#hv-no)"/>
+
+            <rect x="20" y="414" width="450" height="66" rx="7" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.8"/>
+            <text x="36" y="436" font-weight="600" fill="var(--remote)">all three pods serve traffic</text>
+            <text x="36" y="456" font-size="11.5">30 queries split 10 / 10 / 10</text>
+            <text x="36" y="474" font-size="11.5" fill="var(--muted)">the L7 tier does what it was deployed for</text>
+
+            <rect x="530" y="414" width="450" height="66" rx="7" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.8"/>
+            <text x="546" y="436" font-weight="600" fill="var(--gap)">one pod serves everything</text>
+            <text x="546" y="456" font-size="11.5">and every pod still reports Ready</text>
+            <text x="546" y="474" font-size="11.5" fill="var(--muted)">the L7 is reduced to an expensive pass-through</text>
+
+            <text x="20" y="516" fill="var(--muted)">The right-hand column is NOT deployed. It is drawn to name the failure that the headless Service prevents.</text>
+            <text x="20" y="534" fill="var(--remote)" font-weight="600">Solid = measured on this cluster. Dashed = the counterfactual, not built.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>The choice of Service is not a detail. <code>STRICT_DNS</code> against a ClusterIP Service resolves to exactly one address, so Envoy holds one host and the per-request balancing it was deployed to do silently becomes a no-op &mdash; while every readiness probe stays green.</figcaption>
+    </figure>
+  </section>
+</div>
+</body>
+</html>
