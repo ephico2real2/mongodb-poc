@@ -183,6 +183,8 @@ Plus a user holding the built-in **`searchCoordinator`** role (MongoDB 8.2+).
 | Timeout | none imposed | `timeout tunnel`, default **1h** |
 | SNI | not required | Route host **must** equal `externalHostname` |
 | F5 | optional, plain L4 | L4/fastL4 — **never an HTTP profile** |
+| Extra objects | a `LoadBalancer` Service you write | **none** — target the operator's proxy Service |
+| Needs TLS | no | **yes** — passthrough routes on SNI |
 
 **Avoid `edge` and `reencrypt`.** Edge does not support HTTP/2 at all, so gRPC breaks;
 both use `timeout server`, default **30s**, which severs long-running search cursors.
@@ -304,6 +306,60 @@ endpoints proves nothing.
 
 Guard it in review: the entry Service selector must be `app=<name>-search-lb-<idx>`
 (the Envoy pods), never `<name>-search-<idx>-svc` (the `mongot` pods).
+
+---
+
+## Running, in the console
+
+Seven pods, all `Running 1/1`, zero restarts — the MCK operator, three `mongot`, two
+Envoy replicas and the in-cluster toolbox.
+
+<!-- markdownlint-disable MD033 -->
+<img alt="OpenShift console pod list: the MCK operator, three mongot pods, two Envoy replicas and the toolbox, all Running 1/1 with zero restarts." src="docs/screenshots/console-pods.jpg">
+<!-- markdownlint-enable MD033 -->
+
+The Services view shows the whole wiring in one frame:
+
+<!-- markdownlint-disable MD033 -->
+<img alt="OpenShift console Services list showing mongot-grpc-lb with the MetalLB VIP 192.168.127.100, the operator's ClusterIP proxy Service, and the headless mongot Service with Location None." src="docs/screenshots/console-services.jpg">
+<!-- markdownlint-enable MD033 -->
+
+| Service | Location | Selector | Whose |
+|---|---|---|---|
+| `mongot-grpc-lb` | **192.168.127.100** — the MetalLB VIP | `app=mongot-search-lb-0` | yours |
+| `mongot-search-0-proxy-svc` | `10.217.5.138:27028` — ClusterIP | `app=mongot-search-lb-0` | operator |
+| `mongot-search-0-svc` | **None** — headless | `app=mongot-search-0-svc` | operator |
+| `mongot-envoy-stats` | `10.217.4.46:9901` | `app=mongot-search-lb-0` | yours |
+| `mongod-external` | **None** — selector-less | — | yours |
+
+Two things are visible rather than asserted: the VIP really is attached to a Service that
+selects the **Envoy** pods, and `mongot-search-0-svc` really is **headless** (`Location:
+None`) — which is what lets DNS return every pod IP for Envoy to fan out across.
+
+### The Route, and why "Accepted" proves nothing
+
+<!-- markdownlint-disable MD033 -->
+<img alt="OpenShift console Routes list showing mongot-grpc with status Accepted, pointing at the operator's proxy Service." src="docs/screenshots/console-route.jpg">
+<!-- markdownlint-enable MD033 -->
+
+A passthrough `Route` pointed at the operator's own proxy Service. Note it can target
+`mongot-search-0-proxy-svc` directly — **with a Route you need neither MetalLB nor the
+hand-written `LoadBalancer` Service.**
+
+It reports **`Accepted`**, green and healthy. Traffic through it nevertheless fails:
+
+```text
+client  ->  error:0A00010B:SSL routines::wrong version number
+Envoy   ->  {"resp":400, "response_flags":"DPE", "upstream_host":null}
+```
+
+`DPE` is *downstream protocol error*: the request reached Envoy — so the F5-shaped path
+of router, SNI match and passthrough all worked — and failed at the last inch because
+Envoy is listening **plaintext h2c** and received a TLS `ClientHello`.
+
+**A passthrough Route routes on SNI, and SNI only exists inside a TLS ClientHello.** So a
+Route and TLS are the same decision, not two. `Accepted` means the router parsed the
+object, nothing about whether the backend can serve it.
 
 ---
 
@@ -510,6 +566,7 @@ what you put here. Running on names requires the set to *advertise* names.
 | `mongodb/data/` | sample documents and index definitions |
 | `mongodb/scripts/` | `load-data.sh`, `verify-search.sh` and the bootstrap scripts |
 | `docs/diagrams/` | figure sources and rendered PNGs |
+| `docs/screenshots/` | console evidence: pods, Services, the Route |
 
 ---
 
