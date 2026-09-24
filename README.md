@@ -442,7 +442,7 @@ Plus a user holding the built-in **`searchCoordinator`** role (MongoDB 8.2+).
 | Timeout | none imposed | `timeout tunnel`, default **1h** |
 | SNI | not required | Route host **must** equal `externalHostname` |
 | F5 | optional, plain L4 | L4/fastL4 — **never an HTTP profile** |
-| Extra objects | a `LoadBalancer` Service you write | **none** — target the operator's proxy Service |
+| Extra objects | a `LoadBalancer` Service you write | a headless Service you write, or the operator's proxy Service |
 | Needs TLS | no | **yes** — passthrough routes on SNI |
 
 **Avoid `edge` and `reencrypt`.** Edge does not support HTTP/2 at all, so gRPC breaks;

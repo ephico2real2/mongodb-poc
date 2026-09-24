@@ -490,7 +490,7 @@ a { color: var(--remote); }
           </g>
         </svg>
       </div>
-      <figcaption>The operator owns Envoy, the headless Service and the <code>mongot</code> StatefulSet. You own the entry point and the <code>LoadBalancer</code> Service, because <code>ManagedLBConfig</code> has no Service-type field and the operator's own proxy Service is <code>ClusterIP</code>-only.</figcaption>
+      <figcaption>The operator owns Envoy, the headless <code>mongot</code> Service and the <code>mongot</code> StatefulSet. You own the entry point and the Service in front of Envoy &mdash; a <code>LoadBalancer</code> for the MetalLB path, or a headless one for the Route &mdash; because <code>ManagedLBConfig</code> has no Service-type field and the operator's own proxy Service is <code>ClusterIP</code>-only.</figcaption>
     </figure>
   </section>
 
