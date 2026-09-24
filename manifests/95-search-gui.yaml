@@ -1,0 +1,63 @@
+# A GUI that shows which mongot pod answered your search.
+#
+# It connects ONLY to MongoDB (MONGO_URI -> the external replica set). It never
+# addresses mongot, Envoy or the VIP - mongod forwards the $search stage over gRPC.
+# It reads each mongot's Prometheus counter before and after the query purely to
+# ATTRIBUTE the answer to a pod; that is observability, not the data path.
+#
+# Runs on the mongodb-community-server image because it already ships python3 and
+# mongosh - no build, no registry, no dependencies.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongot-gui
+  namespace: mongodb-poc
+  labels: { app: mongot-gui }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: mongot-gui } }
+  template:
+    metadata:
+      labels: { app: mongot-gui }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+      - name: gui
+        image: docker.io/mongodb/mongodb-community-server:8.3.4-ubi9
+        command: ["python3", "/app/server.py"]
+        env:
+        - name: MONGO_URI
+          valueFrom: { secretKeyRef: { name: mongot-gui-mongo-uri, key: uri } }
+        - name: MONGOT_REPLICAS
+          value: "3"
+        ports: [{ name: http, containerPort: 8080 }]
+        volumeMounts: [{ name: src, mountPath: /app }]
+        readinessProbe:
+          httpGet: { path: /healthz, port: 8080 }
+          initialDelaySeconds: 5
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: { drop: ["ALL"] }
+        resources:
+          requests: { cpu: 50m, memory: 128Mi }
+          limits:   { cpu: 500m, memory: 512Mi }
+      volumes:
+      - name: src
+        configMap: { name: mongot-gui-src }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: mongot-gui, namespace: mongodb-poc, labels: { app: mongot-gui } }
+spec:
+  selector: { app: mongot-gui }
+  ports: [{ name: http, port: 8080, targetPort: 8080 }]
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata: { name: mongot-gui, namespace: mongodb-poc }
+spec:
+  to: { kind: Service, name: mongot-gui }
+  port: { targetPort: http }
+  tls: { termination: edge, insecureEdgeTerminationPolicy: Redirect }

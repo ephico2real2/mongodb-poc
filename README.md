@@ -670,7 +670,7 @@ what you put here. Running on names requires the set to *advertise* names.
 | `manifests/` | OLM subscriptions, MetalLB, the `MongoDBSearch` CR, the `LoadBalancer` Service, certificates, the Route, ServiceMonitors |
 | `mongodb/` | Compose stack for the external replica set, parameterised by `ADVERTISED_HOST` |
 | `mongodb/data/` | 24 curated documents + a 20,000-document generated corpus |
-| `app/` | a search CLI that talks only to MongoDB |
+| `app/` | a search CLI and a **web GUI** showing which `mongot` answered |
 | `mongodb/scripts/` | `load-data.sh`, `verify-search.sh` and the bootstrap scripts |
 | `docs/diagrams/` | figure sources and rendered PNGs |
 | `docs/screenshots/` | console evidence: pods, Services, the Route |

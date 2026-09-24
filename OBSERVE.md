@@ -5,7 +5,113 @@ requests. Use the graph to monitor, the access log to debug.
 
 ---
 
-## 1. The console graph (best for watching)
+## 0. First, the data
+
+Nothing below shows anything until the corpus exists and `mongot` has indexed it. Two
+datasets with different jobs — see [`mongodb/data/README.md`](mongodb/data/README.md).
+
+```bash
+cd mongodb
+./scripts/load-data.sh          # 24 curated documents + both search indexes
+./scripts/load-bulk.sh          # + 20,000 generated, for volume
+```
+
+```text
+documents loaded: 24
+index requested: default (search)
+index requested: vector_index (vectorSearch)
+waiting for indexes to become queryable...
+QUERYABLE: default, vector_index
+
+loading 20000 documents from data/bulk-movies.json in batches of 2000
+  inserted 20000/20000
+  collection count: 20024
+  load took 8s
+waiting for mongot to index...
+  both indexes queryable
+```
+
+Confirm what you have:
+
+```text
+documents : 20,024
+curated   : 24       (_id 1-24, the correctness assertions depend on these)
+bulk      : 20,000   (_id >= 1001, volume for load testing)
+
+default        queryable=true   status=READY
+vector_index   queryable=true   status=READY
+```
+
+> **Creating an index is itself a test of the whole path.** It is not a local operation —
+> `mongod` forwards it to `searchIndexManagementHostAndPort`, so the call traverses the
+> VIP (or Route) and Envoy exactly as a query does. Reaching `QUERYABLE` means the chain
+> works before you have run a single search.
+
+> **Why two datasets.** The curated 24 are positioned so nearest-neighbour ordering is
+> assertable. The bulk 20,000 are generated from the *same five theme vectors*, so an
+> unscoped vector assertion would start failing once they are loaded — which is why the
+> assertions filter on `_id < 25`, and why `vector_index.json` declares `_id` as a filter
+> field.
+
+---
+
+## 1. The GUI — trigger a request and watch it land
+
+The most direct answer to "show me a request going from MongoDB to `mongot`": type a
+query, get results, and see **which pod answered**.
+
+```bash
+oc apply -f manifests/95-search-gui.yaml
+echo "https://$(oc get route mongot-gui -n mongodb-poc -o jsonpath='{.spec.host}')"
+#   https://mongot-gui-mongodb-poc.apps-crc.testing
+```
+
+<!-- markdownlint-disable MD033 -->
+<img alt="The search GUI: a query for detective, a panel titled WHICH MONGOT SERVED THIS QUERY showing mongot-search-0-2 with +1 highlighted while the other two show a dash, and eight noir results from the corpus." src="docs/screenshots/gui-text-search.jpg">
+<!-- markdownlint-enable MD033 -->
+
+```text
+WHICH MONGOT SERVED THIS QUERY
+  mongot-search-0-0      —     lifetime 2293
+  mongot-search-0-1      —     lifetime 2292
+  mongot-search-0-2     +1     lifetime 2291      <- served by
+  Served by mongot-search-0-2 · 493 ms round trip
+```
+
+**Search again and a different pod lights up.** Same query, `$vectorSearch` this time:
+
+<!-- markdownlint-disable MD033 -->
+<img alt="The same GUI in vector mode: mongot-search-0-1 now shows +1 while the others show a dash, with eight sci-fi results and lifetime counters from the vector metric." src="docs/screenshots/gui-vector-search.jpg">
+<!-- markdownlint-enable MD033 -->
+
+That alternation **is** the load balancing — one request at a time, visible.
+
+### How it works, and why that matters
+
+**The app connects only to MongoDB.** Its single data dependency is `MONGO_URI`,
+pointing at the external replica set. It contains no reference to `mongot`, Envoy, the
+VIP or the Route — `mongod` forwards the `$search` stage over gRPC, exactly as a real
+application would.
+
+```text
+GUI ──▶ mongod (outside the cluster) ──one long-lived HTTP/2 conn──▶ Envoy ──▶ mongot ×3
+```
+
+The per-pod attribution is done by reading each `mongot`'s Prometheus counter
+immediately **before and after** the query — the pod whose counter moved is the one that
+answered. That is observability, deliberately separate from the data path.
+
+It switches metric with the mode (`searchCommand…` for text,
+`vectorSearchCommand…` for vector), which is why the lifetime numbers differ between the
+two screenshots.
+
+**No build, no registry, no dependencies.** It runs on the
+`mongodb-community-server` image, which already ships `python3` and `mongosh`; the code
+is mounted from a ConfigMap. Point it at another corpus with `DB` and `COLL`.
+
+---
+
+## 2. The console graph (best for watching)
 
 <!-- markdownlint-disable MD033 -->
 <img alt="OpenShift console Metrics view showing three overlapping lines at roughly 7 requests per second, one per mongot pod, with a table reading mongot-search-0-0 7.62, -0-1 7.16, -0-2 7.06." src="docs/screenshots/console-metrics-distribution.jpg">
@@ -49,7 +155,7 @@ sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count[2m]))
 
 ---
 
-## 2. Setting it up
+## 3. Setting it up
 
 User-workload monitoring must be on. On CRC it already is; elsewhere:
 
@@ -103,7 +209,7 @@ oc get secret prometheus-user-workload -n openshift-user-workload-monitoring \
 
 ---
 
-## 3. The Envoy access log (best for debugging)
+## 4. The Envoy access log (best for debugging)
 
 One record **per request**, each carrying the `mongot` that served it. This is the only
 instrument that shows per-request *ordering* — the counters give totals, not sequence.
@@ -139,7 +245,7 @@ joined across both sides without time-guessing.
 
 ---
 
-## 4. The script (best for a one-off check)
+## 5. The script (best for a one-off check)
 
 ```bash
 cd mongodb && ./scripts/verify-search.sh
@@ -154,10 +260,11 @@ delta, so the result is attributable to that run rather than to history.
 
 | Question | Use |
 |---|---|
-| Is traffic spread right now? | the console graph (§1) |
-| Which pod served *this* query? | the access log (§3) |
-| Did my change break distribution? | `verify-search.sh` (§4) |
-| Is Envoy retrying / shedding load? | `envoy_cluster_upstream_rq_retry` (§1) |
+| Show me one request end to end | **the GUI (§1)** |
+| Is traffic spread right now? | the console graph (§2) |
+| Which pod served *this* query? | the GUI (§1), or the access log (§4) |
+| Did my change break distribution? | `verify-search.sh` (§5) |
+| Is Envoy retrying / shedding load? | `envoy_cluster_upstream_rq_retry` (§2) |
 
 **One counter to distrust:** `upstream_cx_active` is not a health signal. The cluster's
 `idle_timeout` is 300s, so between bursts it is legitimately **0**. Values of 0, 2, 3 and
