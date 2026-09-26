@@ -84,11 +84,7 @@ That is the failure seen after a CA rotation, and why [TLS.md](TLS.md) calls for
 ## Figure 1 — one request, config line by line
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/envoy-flow/request-lifecycle.dark.png">
-  <source srcset="docs/diagrams/envoy-flow/request-lifecycle.light.png">
-  <img alt="Eleven steps from TCP connect to access log: tls_inspector reads SNI, filter_chain_match requires the exact hostname, mutual TLS 1.3 with a required client certificate, HttpConnectionManager parses HTTP/2, the route matches any authority and every gRPC path, a retry policy retries onto a different host, and STRICT_DNS over the headless Service gives three hosts that ROUND_ROBIN selects between per request." src="docs/diagrams/envoy-flow/request-lifecycle.light.png">
-</picture>
+<img alt="Eleven steps from TCP connect to access log: tls_inspector reads SNI, filter_chain_match requires the exact hostname, mutual TLS 1.3 with a required client certificate, HttpConnectionManager parses HTTP/2, the route matches any authority and every gRPC path, a retry policy retries onto a different host, and STRICT_DNS over the headless Service gives three hosts that ROUND_ROBIN selects between per request." src="docs/diagrams/envoy-flow/request-lifecycle.light.png">
 <!-- markdownlint-enable MD033 -->
 
 ```text
@@ -150,11 +146,7 @@ absent `lb_policy` leaving Envoy on its round-robin default.
 ## Figure 2 — why it must be the headless Service
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/envoy-flow/headless-vs-clusterip.dark.png">
-  <source srcset="docs/diagrams/envoy-flow/headless-vs-clusterip.light.png">
-  <img alt="Against the headless Service, DNS returns three pod IPs, Envoy holds three hosts and round-robins per request, so all three pods serve traffic. Against a ClusterIP Service, DNS returns one virtual IP, Envoy holds a single host, and kube-proxy picks one pod per connection, so a single long-lived HTTP/2 connection sends every request to the same pod." src="docs/diagrams/envoy-flow/headless-vs-clusterip.light.png">
-</picture>
+<img alt="Against the headless Service, DNS returns three pod IPs, Envoy holds three hosts and round-robins per request, so all three pods serve traffic. Against a ClusterIP Service, DNS returns one virtual IP, Envoy holds a single host, and kube-proxy picks one pod per connection, so a single long-lived HTTP/2 connection sends every request to the same pod." src="docs/diagrams/envoy-flow/headless-vs-clusterip.light.png">
 <!-- markdownlint-enable MD033 -->
 
 ```text

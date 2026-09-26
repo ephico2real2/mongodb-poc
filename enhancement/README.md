@@ -160,11 +160,7 @@ crc-csi-hostpath-provisioner   Retain    <none>
 ## Part B — shared storage that can grow
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="../docs/diagrams/storage-nfs/nfs.dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="../docs/diagrams/storage-nfs/nfs.light.png">
-  <img alt="Two pods in namespace nfs-test mount the same ReadWriteMany claim, shared-nfs-pvc, of StorageClass nfs-csi. The NFS CSI driver in kube-system - its controller with a csi-resizer, and a node plugin that does the mount - turns that claim into a sub-directory of the export of the NFSv4 server in namespace nfs-server, reached at nfs-server.nfs-server.svc.cluster.local. The server's data lives on its own claim, nfs-data, on the default class crc-csi-hostpath-provisioner, which is a directory on the CRC VM's disk." src="../docs/diagrams/storage-nfs/nfs.light.png">
-</picture>
+<img alt="Two pods in namespace nfs-test mount the same ReadWriteMany claim, shared-nfs-pvc, of StorageClass nfs-csi. The NFS CSI driver in kube-system - its controller with a csi-resizer, and a node plugin that does the mount - turns that claim into a sub-directory of the export of the NFSv4 server in namespace nfs-server, reached at nfs-server.nfs-server.svc.cluster.local. The server's data lives on its own claim, nfs-data, on the default class crc-csi-hostpath-provisioner, which is a directory on the CRC VM's disk." src="../docs/diagrams/storage-nfs/nfs.light.png">
 <!-- markdownlint-enable MD033 -->
 
 ### Where the NFS server runs — Option A, and why

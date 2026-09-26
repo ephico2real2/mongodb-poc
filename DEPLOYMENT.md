@@ -55,11 +55,7 @@ predicate so a retry lands on a *different* `mongot`, 300s stream/request/route 
 ## Network layout
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mongot-openshift/network-layout.dark.png">
-  <source srcset="docs/diagrams/mongot-openshift/network-layout.light.png">
-  <img alt="CRC runs behind a userspace network stack with no host interface, while colima sits on a real vmnet bridge, so the two VMs share no L2 domain and are stitched at L3 in two different directions." src="docs/diagrams/mongot-openshift/network-layout.light.png">
-</picture>
+<img alt="CRC runs behind a userspace network stack with no host interface, while colima sits on a real vmnet bridge, so the two VMs share no L2 domain and are stitched at L3 in two different directions." src="docs/diagrams/mongot-openshift/network-layout.light.png">
 <!-- markdownlint-enable MD033 -->
 
 *CRC has **no host interface at all** — it is reached only by port-forwards over a unix
@@ -138,11 +134,7 @@ curl -X POST http://192.168.127.254/services/forwarder/expose \
 
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mongot-openshift/grpc-path.dark.png">
-  <source srcset="docs/diagrams/mongot-openshift/grpc-path.light.png">
-  <img alt="mongod opens one long-lived HTTP/2 connection, so Envoy is required to split individual gRPC streams across three mongot pods; the sync leg runs in the opposite direction back to the external replica set." src="docs/diagrams/mongot-openshift/grpc-path.light.png">
-</picture>
+<img alt="mongod opens one long-lived HTTP/2 connection, so Envoy is required to split individual gRPC streams across three mongot pods; the sync leg runs in the opposite direction back to the external replica set." src="docs/diagrams/mongot-openshift/grpc-path.light.png">
 <!-- markdownlint-enable MD033 -->
 
 *Every hop verified on the running cluster. `mongot-grpc-lb` is hand-written because
@@ -328,11 +320,7 @@ That is a deliberate, documented compromise — not an accident — and it must 
 whenever this lab is used as evidence.
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mongot-openshift/failure-domains.dark.png">
-  <source srcset="docs/diagrams/mongot-openshift/failure-domains.light.png">
-  <img alt="In production a three-member replica set is three machines in three failure domains; this lab collapses all three onto one colima VM separated only by port, which exercises process resilience but not availability." src="docs/diagrams/mongot-openshift/failure-domains.light.png">
-</picture>
+<img alt="In production a three-member replica set is three machines in three failure domains; this lab collapses all three onto one colima VM separated only by port, which exercises process resilience but not availability." src="docs/diagrams/mongot-openshift/failure-domains.light.png">
 <!-- markdownlint-enable MD033 -->
 
 *Production puts each member in its own failure domain. This lab puts all three in one.
@@ -447,11 +435,7 @@ already cpu 71% / memory 64%.
 ## Verified end to end
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mongot-openshift/end-to-end.dark.png">
-  <source srcset="docs/diagrams/mongot-openshift/end-to-end.light.png">
-  <img alt="Every hop from the external MongoDB replica set through the forwarder, MetalLB VIP, Service and Envoy to three mongot pods, each with the measurement that proves it." src="docs/diagrams/mongot-openshift/end-to-end.light.png">
-</picture>
+<img alt="Every hop from the external MongoDB replica set through the forwarder, MetalLB VIP, Service and Envoy to three mongot pods, each with the measurement that proves it." src="docs/diagrams/mongot-openshift/end-to-end.light.png">
 <!-- markdownlint-enable MD033 -->
 
 *Each hop paired with the command output that proves it. The 404 at the VIP is Envoy
