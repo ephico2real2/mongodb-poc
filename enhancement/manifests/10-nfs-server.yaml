@@ -1,0 +1,85 @@
+# An NFSv4 server inside the cluster, whose data lives on a PVC of the cluster's own
+# storage (crc-csi-hostpath-provisioner, Retain). csi-driver-nfs then carves one
+# sub-directory per volume out of its export (storageclass-nfs-csi.yaml).
+#
+# Its own namespace, not kube-system: kube-system is exempt from SCC admission on
+# OpenShift (measured: the driver's pods there ran with no SCC), so a privileged server
+# there would bypass the check entirely. Here it runs only because of one explicit grant
+# to one ServiceAccount (11-privileged-scc.yaml), and the whole thing deletes as a unit.
+#
+# The image is Kubernetes' own e2e NFS server (Fedora nfs-utils, the kernel's nfsd),
+# pinned to the multi-arch index by digest - it has an arm64 build, which this node
+# needs. It is a TEST image: fine for a lab, not a supported product.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nfs-server
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nfs-server
+  namespace: nfs-server
+---
+# Where the shared data lives. On crc-csi-hostpath-provisioner a volume is a directory on
+# the CRC VM's disk, and its size is not enforced (README, Part A): the 20Gi is a record,
+# not a limit, and this claim never needs resizing. The real capacity of everything NFS
+# serves is the VM's disk - grow that (README, "Growing the storage behind NFS").
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nfs-data
+  namespace: nfs-server
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: crc-csi-hostpath-provisioner
+  resources:
+    requests: { storage: 20Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nfs-server
+  namespace: nfs-server
+  labels: { app: nfs-server }
+spec:
+  selector: { app: nfs-server }
+  ports:
+  - { name: nfs, port: 2049, targetPort: 2049, protocol: TCP }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nfs-server
+  namespace: nfs-server
+  labels: { app: nfs-server }
+spec:
+  replicas: 1
+  # One server per volume: never two at once on the same data, even during a rollout.
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: nfs-server } }
+  template:
+    metadata:
+      labels: { app: nfs-server }
+    spec:
+      serviceAccountName: nfs-server
+      containers:
+      - name: nfs-server
+        image: registry.k8s.io/e2e-test-images/volume/nfs@sha256:c3e380bb5a92095288b4dd586a250c560612afbabf53fb2a057e99fff75f038f  # tag 1.4
+        args: ["/exports"]
+        ports:
+        - { name: nfs, containerPort: 2049 }
+        securityContext:
+          privileged: true
+        readinessProbe:
+          tcpSocket: { port: 2049 }
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests: { cpu: "50m",  memory: "64Mi" }
+          limits:   { cpu: "500m", memory: "256Mi" }
+        volumeMounts:
+        - { name: data, mountPath: /exports }
+      volumes:
+      - name: data
+        persistentVolumeClaim: { claimName: nfs-data }
