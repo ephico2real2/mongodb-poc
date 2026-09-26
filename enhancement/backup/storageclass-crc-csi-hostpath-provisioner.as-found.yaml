@@ -1,0 +1,16 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"storage.k8s.io/v1","kind":"StorageClass","metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"},"name":"crc-csi-hostpath-provisioner"},"parameters":{"storagePool":"local"},"provisioner":"kubevirt.io.hostpath-provisioner","reclaimPolicy":"Retain","volumeBindingMode":"WaitForFirstConsumer"}
+    storageclass.kubernetes.io/is-default-class: "true"
+  creationTimestamp: "2026-07-30T12:45:51Z"
+  name: crc-csi-hostpath-provisioner
+  resourceVersion: "22301"
+  uid: aa620839-34b3-4dbf-865f-5c2029dcf10a
+parameters:
+  storagePool: local
+provisioner: kubevirt.io.hostpath-provisioner
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
