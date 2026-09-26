@@ -1,0 +1,44 @@
+# Part B: a ReadWriteMany claim and two pods writing to it at once - the thing NFS gives
+# that the hostpath class cannot. Each pod appends one line to the same file.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nfs-test
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-nfs-pvc
+  namespace: nfs-test
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: nfs-csi
+  resources:
+    requests: { storage: 5Gi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: writer
+  namespace: nfs-test
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: writer } }
+  template:
+    metadata:
+      labels: { app: writer }
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+      - name: sh
+        image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+        command: ["sh", "-c", "echo \"$HOSTNAME $(date -u +%T)\" >> /data/writers.log && sleep infinity"]
+        volumeMounts: [{ name: data, mountPath: /data }]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: { drop: ["ALL"] }
+          runAsNonRoot: true
+          seccompProfile: { type: RuntimeDefault }
+      volumes:
+      - name: data
+        persistentVolumeClaim: { claimName: shared-nfs-pvc }

@@ -1,0 +1,22 @@
+# nfs-csi, served by the in-cluster NFSv4 server (10-nfs-server.yaml). csi-driver-nfs
+# (chart 4.13.4, in kube-system) creates one sub-directory of the export per volume, and
+# its csi-resizer processes resizes - which crc-csi-hostpath-provisioner cannot.
+#
+# The driver's pods use the host network with dnsPolicy ClusterFirstWithHostNet (chart),
+# so the Service's cluster DNS name resolves where the mount happens.
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nfs-csi
+provisioner: nfs.csi.k8s.io
+parameters:
+  server: nfs-server.nfs-server.svc.cluster.local
+  # The server exports /exports with fsid=0: to an NFSv4 client that is the root, "/".
+  share: /
+# Retain, like the cluster's default class: deleting a claim never deletes its data.
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+mountOptions:
+  - nfsvers=4.1

@@ -1,0 +1,112 @@
+<title>Lab NFS Storage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --ground: #f5f6f8; --surface: #ffffff; --ink: #18212c; --muted: #58636f; --rule: #d7dce3;
+  --host: #a55a0b; --host-wash: #fbf1e4; --remote: #0e6f68; --remote-wash: #e3f3f1;
+  --gap: #b3261e; --gap-wash: #fbe9e7; --none: #6b7684; --none-wash: #eef0f3;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+    --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+    --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+  --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+  --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55; margin: 0; }
+.page { max-width: 1060px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 72px; display: grid; gap: 44px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0 0 6px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+.lede { font-size: 17px; max-width: 70ch; }
+.muted { color: var(--muted); }
+code { font-family: var(--font-mono); font-size: .9em; }
+section { display: grid; gap: 14px; }
+figure { margin: 0; display: grid; gap: 10px; }
+.fig-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px; }
+.fig-scroll svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--ink); }
+figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
+.tbl { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+th { font-size: 12px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); background: var(--ground); }
+tr:last-child td { border-bottom: 0; }
+.yes { color: var(--remote); font-weight: 600; } .no { color: var(--gap); font-weight: 600; }
+.cell-gap { background: var(--gap-wash); }
+.decisions { display: grid; gap: 12px; }
+.decision { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 20px; display: grid; gap: 8px; }
+.decision .id { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.decision .q { font-weight: 600; }
+.decision .rec { font-size: 14px; border-left: 3px solid var(--remote); padding-left: 10px; }
+.decision .rec.warn { border-left-color: var(--host); }
+a { color: var(--remote); }
+:focus-visible { outline: 2px solid var(--remote); outline-offset: 2px; }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow">mongodb-poc · enhancement · Part B</div>
+    <h1>Shared storage that can grow</h1>
+    <p class="lede">Drawn from <code>enhancement/manifests/</code>; every label was measured on CRC.</p>
+  </header>
+
+  <section>
+    <h2>One volume, many pods, and what is under it</h2>
+    <figure>
+      <div class="fig-scroll">
+<svg viewBox="0 0 980 516" role="img" aria-label="Two pods in namespace nfs-test mount the same ReadWriteMany claim, shared-nfs-pvc, of StorageClass nfs-csi. The NFS CSI driver in kube-system - its controller with a csi-resizer, and a node plugin that does the mount - turns that claim into a sub-directory of the export of the NFSv4 server in namespace nfs-server, reached at nfs-server.nfs-server.svc.cluster.local. The server&#x27;s data lives on its own claim, nfs-data, on the default class crc-csi-hostpath-provisioner, which is a directory on the CRC VM&#x27;s disk.">
+  <defs><marker id="n1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker><marker id="n1g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--gap)"/></marker></defs>
+  <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+<text x="20" y="22" font-family="IBM Plex Mono, monospace" font-size="12.5" font-weight="600" fill="var(--remote)">NAMESPACE nfs-test</text>
+<rect x="20" y="32" width="300" height="54" rx="7" fill="none" stroke="currentColor" stroke-width="1.3"/>
+<text x="34" y="53" font-weight="600">pod writer-…-4hz79</text>
+<text x="34" y="70" fill="var(--muted)">mounts /data</text>
+<rect x="340" y="32" width="300" height="54" rx="7" fill="none" stroke="currentColor" stroke-width="1.3"/>
+<text x="354" y="53" font-weight="600">pod writer-…-hmzd5</text>
+<text x="354" y="70" fill="var(--muted)">mounts /data</text>
+<rect x="660" y="32" width="300" height="54" rx="7" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+<text x="674" y="53" font-weight="600">claim shared-nfs-pvc</text>
+<text x="674" y="70" font-family="IBM Plex Mono, monospace" font-size="12">ReadWriteMany · class nfs-csi</text>
+<line x1="170" y1="86" x2="170" y2="112" stroke="currentColor" stroke-width="1.3" marker-end="url(#n1)"/>
+<line x1="490" y1="86" x2="490" y2="112" stroke="currentColor" stroke-width="1.3" marker-end="url(#n1)"/>
+<line x1="640" y1="59" x2="658" y2="59" stroke="currentColor" stroke-width="1.3"/>
+<rect x="20" y="114" width="940" height="70" rx="7" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+<text x="34" y="135" font-family="IBM Plex Mono, monospace" font-size="12.5" font-weight="600" fill="var(--remote)">NFS CSI DRIVER — kube-system, chart 4.13.4</text>
+<text x="34" y="152">controller: csi-provisioner (one sub-directory per volume) · csi-resizer (resizes: 5Gi → 10Gi)</text>
+<text x="34" y="169">node plugin: mounts nfs-server.nfs-server.svc.cluster.local:/ with NFS 4.1</text>
+<line x1="490" y1="184" x2="490" y2="210" stroke="currentColor" stroke-width="1.3" marker-end="url(#n1)"/>
+<rect x="250" y="212" width="480" height="70" rx="7" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.3"/>
+<text x="264" y="233" font-family="IBM Plex Mono, monospace" font-size="12.5" font-weight="600" fill="var(--remote)">NFSv4 SERVER — namespace nfs-server</text>
+<text x="264" y="250">the kernel&#x27;s nfsd, versions +3 +4 +4.1 +4.2</text>
+<text x="264" y="267" fill="var(--muted)">privileged: one grant to one ServiceAccount</text>
+<line x1="490" y1="282" x2="490" y2="308" stroke="currentColor" stroke-width="1.3" marker-end="url(#n1)"/>
+<rect x="250" y="310" width="480" height="54" rx="7" fill="none" stroke="currentColor" stroke-width="1.3"/>
+<text x="264" y="331" font-weight="600">its claim nfs-data — class crc-csi-hostpath-provisioner</text>
+<text x="264" y="348" fill="var(--muted)">/exports/pvc-03e7…/writers.log: both writers&#x27; lines</text>
+<line x1="490" y1="364" x2="490" y2="390" stroke="currentColor" stroke-width="1.3" marker-end="url(#n1)"/>
+<rect x="250" y="392" width="480" height="54" rx="7" fill="var(--none-wash)" stroke="var(--none)" stroke-width="1.3"/>
+<text x="264" y="413" font-weight="600">the CRC VM&#x27;s disk, /dev/vda4 — 150G</text>
+<text x="264" y="430" fill="var(--muted)">the one real limit: grow it with crc config set disk-size</text>
+<text x="20" y="484" font-weight="600">A second class, nfs-csi: many pods, one volume, resizes that complete — all of it, in the end, a directory on the VM&#x27;s disk.</text>
+<text x="20" y="504" fill="var(--muted)">Measured on CRC in namespaces nfs-test and nfs-server. The default class stays crc-csi-hostpath-provisioner.</text>
+  </g>
+</svg>
+      </div>
+      <figcaption>nfs-csi serves ReadWriteMany volumes from an in-cluster NFSv4 server; underneath, everything is the CRC VM&#x27;s disk.</figcaption>
+    </figure>
+  </section>
+</div>

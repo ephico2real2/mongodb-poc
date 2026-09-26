@@ -1,0 +1,20 @@
+# OPTION B (NOT USED, NOT RUN) - nfs-csi served by the Mac (mac-nfs-server.sh).
+# The lab uses Option A, manifests/20-storageclass-nfs-csi.yaml. Both are named nfs-csi:
+# apply one or the other. A StorageClass's parameters cannot be changed in place, so
+# switching means: oc delete sc nfs-csi, then apply the other.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nfs-csi
+provisioner: nfs.csi.k8s.io
+parameters:
+  # The Mac, as the CRC VM sees it through gvproxy (host.crc.testing). The driver's pods
+  # use the host network, so the IP is used rather than relying on in-pod DNS.
+  server: 192.168.127.254
+  share: /System/Volumes/Data/Users/Shared/crc-nfs
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+mountOptions:
+  - nfsvers=3      # macOS's nfsd serves NFS version 3 (man nfsd) - not 4.1
+  - nolock         # no NLM locking: it would not cross gvproxy's NAT

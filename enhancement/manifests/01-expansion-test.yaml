@@ -1,6 +1,11 @@
-# A throwaway claim and a pod that mounts it, to measure what a resize does on
+# Part A: a throwaway claim and a pod that mounts it, to see what a resize does on
 # crc-csi-hostpath-provisioner. The class binds on first consumer, so the pod is what
-# provisions the volume. Apply in its own namespace:  oc create ns sc-expansion-test
+# provisions the volume. The pod writes a marker file, to show the data survives.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sc-expansion-test
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

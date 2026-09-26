@@ -1,49 +1,22 @@
-# Volume expansion on `crc-csi-hostpath-provisioner`
+# Storage and the MongoDB operator — measurements and findings
 
-**What changed (2026-09-26):** `allowVolumeExpansion: true` on the StorageClass
-`crc-csi-hostpath-provisioner`, the cluster's default. Nothing else about the class
-changed — it still uses `reclaimPolicy: Retain` on purpose, so a deleted claim never
-takes its data with it.
+The companion to [`README.md`](README.md): what was measured on CRC's default storage
+class, and what the MongoDB operator (`mongodb-kubernetes`) does with volume sizes and
+retained volumes. The hands-on steps are in the README.
 
-**What it does, in one line:** the API server now accepts a bigger size on a claim;
-nothing on this cluster actually grows a volume. Every result below was measured on this
-CRC cluster (OpenShift 4.22.7).
-
-## Before the change — the backup
-
-Two copies, in [`backup/`](backup/):
-
-| File | What it is |
-|---|---|
-| [`storageclass-crc-csi-hostpath-provisioner.as-found.yaml`](backup/storageclass-crc-csi-hostpath-provisioner.as-found.yaml) | `oc get sc … -o yaml`, exactly as the cluster returned it — sha256 `98896a7a20d7b0d0a89cc09649f8cd61136b3dd873692a0e97ac369d926911b6` |
-| [`storageclass-crc-csi-hostpath-provisioner.restore.yaml`](backup/storageclass-crc-csi-hostpath-provisioner.restore.yaml) | the same class without server-set fields, ready for `oc replace` — `oc diff` against the live class returned 0 before the change |
-
-The class was created by CRC with `kubectl apply` (it carries the last-applied
-annotation) and has no owner references: no operator reconciles it, so a patch is not
-reverted. Whether `crc start` re-applies it after the VM is recreated is **not known** —
-check after the next `crc stop`/`crc start`:
-
-```sh
-oc get sc crc-csi-hostpath-provisioner -o jsonpath='{.allowVolumeExpansion}{"\n"}'
-```
-
-## The change
-
-```sh
-oc patch sc crc-csi-hostpath-provisioner --type=merge -p '{"allowVolumeExpansion":true}'
-```
-
-or `oc apply -f storageclass-crc-csi-hostpath-provisioner.yaml` — the desired state,
-which `oc diff` confirms matches the live class. To undo:
-
-```sh
-oc replace -f backup/storageclass-crc-csi-hostpath-provisioner.restore.yaml
-```
+**The default class is unchanged.** `crc-csi-hostpath-provisioner` was given
+`allowVolumeExpansion: true` only to measure what that does (README, Part A), then put
+back exactly as CRC made it — from
+[`backup/storageclass-crc-csi-hostpath-provisioner.restore.yaml`](backup/storageclass-crc-csi-hostpath-provisioner.restore.yaml)
+(the class as found is in [`backup/`](backup/) too, sha256
+`98896a7a20d7b0d0a89cc09649f8cd61136b3dd873692a0e97ac369d926911b6`). Storage that really
+resizes is the second class, `nfs-csi` (README, Part B).
 
 ## What enabling it does — measured
 
-The test is [`test/expansion-test.yaml`](test/expansion-test.yaml): a 1Gi claim and a pod
-that writes a marker file into it, in a scratch namespace.
+The test is [`manifests/01-expansion-test.yaml`](manifests/01-expansion-test.yaml) (README,
+Part A): a 1Gi claim and a pod that writes a marker file into it. Measured when the CRC
+VM's disk was 120 GiB — volumes then reported 119Gi; on the 150 GiB disk, 149Gi.
 
 | | Result |
 |---|---|
