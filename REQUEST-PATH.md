@@ -19,11 +19,7 @@ objects on CRC 4.22 on 2026-09-24 — not from the specification, and not from m
 ## Figure 1 — how a gRPC call reaches a `mongot` pod
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/grpc-through-envoy/request-path.dark.png">
-  <source srcset="docs/diagrams/grpc-through-envoy/request-path.light.png">
-  <img alt="One long-lived HTTP/2 connection from mongod reaches a passthrough Route, whose default source hashing pinned every connection to a single Envoy replica; the Route now sets balance roundrobin. The Envoy holding the connection round-robins each individual gRPC stream across all three mongot pods over a second mutual-TLS leg." src="docs/diagrams/grpc-through-envoy/request-path.light.png">
-</picture>
+<img alt="One long-lived HTTP/2 connection from mongod reaches a passthrough Route, whose default source hashing pinned every connection to a single Envoy replica; the Route now sets balance roundrobin. The Envoy holding the connection round-robins each individual gRPC stream across all three mongot pods over a second mutual-TLS leg." src="docs/diagrams/grpc-through-envoy/request-path.light.png">
 <!-- markdownlint-enable MD033 -->
 
 *One connection in, three pods out. The passthrough default, `balance source`, pinned every
@@ -90,11 +86,7 @@ second mutual-TLS leg.*
 ## Figure 2 — the movement, measured
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/grpc-through-envoy/movement.dark.png">
-  <source srcset="docs/diagrams/grpc-through-envoy/movement.light.png">
-  <img alt="Three runs of an identical query went to three different mongot pods in turn; thirty queries split exactly ten, ten and ten; and over a ninety second load the recording rule measured 37.1, 31.3 and 31.6 percent." src="docs/diagrams/grpc-through-envoy/movement.light.png">
-</picture>
+<img alt="Three runs of an identical query went to three different mongot pods in turn; thirty queries split exactly ten, ten and ten; and over a ninety second load the recording rule measured 37.1, 31.3 and 31.6 percent." src="docs/diagrams/grpc-through-envoy/movement.light.png">
 <!-- markdownlint-enable MD033 -->
 
 *Three independent measurements of the same claim.*

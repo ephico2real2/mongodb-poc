@@ -80,11 +80,7 @@ expected to retry **against a different replica**.
 ## The request path, end to end
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/grpc-through-envoy/request-path.dark.png">
-  <source srcset="docs/diagrams/grpc-through-envoy/request-path.light.png">
-  <img alt="One long-lived HTTP/2 connection from mongod is pinned by the Route's source hashing to a single Envoy replica, which then round-robins each individual gRPC stream across all three mongot pods over a second mutual-TLS leg." src="docs/diagrams/grpc-through-envoy/request-path.light.png">
-</picture>
+<img alt="One long-lived HTTP/2 connection from mongod is pinned by the Route's source hashing to a single Envoy replica, which then round-robins each individual gRPC stream across all three mongot pods over a second mutual-TLS leg." src="docs/diagrams/grpc-through-envoy/request-path.light.png">
 <!-- markdownlint-enable MD033 -->
 
 *Every value in the figure was read from the running objects on 2026-09-24 — `getCmdLineOpts`
@@ -149,11 +145,7 @@ Service ClusterIP — see **[ENVOY-FLOW.md](ENVOY-FLOW.md)**.
 ## Architecture
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mongot-openshift/architecture.dark.png">
-  <source srcset="docs/diagrams/mongot-openshift/architecture.light.png">
-  <img alt="An external MongoDB replica set reaches mongot pods inside OpenShift through one L7 hop, Envoy. Entry is a deployment choice between two supported options, marked OR because you build one of them: Path 1 a MetalLB VIP on any port, or Path 2 a passthrough Route on 443. Both terminate on a Service you own that selects the Envoy pods." src="docs/diagrams/mongot-openshift/architecture.light.png">
-</picture>
+<img alt="An external MongoDB replica set reaches mongot pods inside OpenShift through one L7 hop, Envoy. Entry is a deployment choice between two supported options, marked OR because you build one of them: Path 1 a MetalLB VIP on any port, or Path 2 a passthrough Route on 443. Both terminate on a Service you own that selects the Envoy pods." src="docs/diagrams/mongot-openshift/architecture.light.png">
 <!-- markdownlint-enable MD033 -->
 
 ### Order of deployment
@@ -176,11 +168,7 @@ The shape to adopt: **MetalLB in, Envoy as the only L7, three `mongot` out.** No
 no HAProxy, no 80/443 constraint.
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mongot-openshift/architecture-proposed.dark.png">
-  <source srcset="docs/diagrams/mongot-openshift/architecture-proposed.light.png">
-  <img alt="North to south: an external three-member MongoDB replica set reaches a MetalLB VIP, a LoadBalancer Service, two Envoy replicas that split gRPC streams, a headless Service, and three serving mongot pods, which sync back to the replica set directly." src="docs/diagrams/mongot-openshift/architecture-proposed.light.png">
-</picture>
+<img alt="North to south: an external three-member MongoDB replica set reaches a MetalLB VIP, a LoadBalancer Service, two Envoy replicas that split gRPC streams, a headless Service, and three serving mongot pods, which sync back to the replica set directly." src="docs/diagrams/mongot-openshift/architecture-proposed.light.png">
 <!-- markdownlint-enable MD033 -->
 
 ```text
@@ -242,11 +230,7 @@ The alternative entry, and the shape that fits an enterprise where an F5 already
 the OpenShift infra nodes. Same Envoy, same `mongot` — only the way in differs.
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mongot-openshift/architecture-route-f5.dark.png">
-  <source srcset="docs/diagrams/mongot-openshift/architecture-route-f5.light.png">
-  <img alt="North to south: an external MongoDB replica set reaches a custom F5 VIP on 443, the OpenShift infra nodes, the HAProxy router which selects a passthrough Route by SNI, the operator's proxy Service, two Envoy replicas that split gRPC streams, and three mongot pods." src="docs/diagrams/mongot-openshift/architecture-route-f5.light.png">
-</picture>
+<img alt="North to south: an external MongoDB replica set reaches a custom F5 VIP on 443, the OpenShift infra nodes, the HAProxy router which selects a passthrough Route by SNI, the operator's proxy Service, two Envoy replicas that split gRPC streams, and three mongot pods." src="docs/diagrams/mongot-openshift/architecture-route-f5.light.png">
 <!-- markdownlint-enable MD033 -->
 
 ```text
@@ -715,11 +699,7 @@ assigning them in turn.
 ### Before — a passthrough Route, and exactly one `mongot`
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mongot-openshift/before-route-single.dark.png">
-  <source srcset="docs/diagrams/mongot-openshift/before-route-single.light.png">
-  <img alt="With a single mongot the operator points mongod straight at pod zero and no load balancer is needed, so a passthrough Route is sufficient; that design cannot grow past one pod." src="docs/diagrams/mongot-openshift/before-route-single.light.png">
-</picture>
+<img alt="With a single mongot the operator points mongod straight at pod zero and no load balancer is needed, so a passthrough Route is sufficient; that design cannot grow past one pod." src="docs/diagrams/mongot-openshift/before-route-single.light.png">
 <!-- markdownlint-enable MD033 -->
 
 ```text
@@ -748,11 +728,7 @@ it can take:**
 ### After — Route removed, MetalLB and Envoy, three `mongot`
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mongot-openshift/after-metallb-three.dark.png">
-  <source srcset="docs/diagrams/mongot-openshift/after-metallb-three.light.png">
-  <img alt="The demo removes the Route entirely: a MetalLB VIP reaches a hand-written LoadBalancer Service, Envoy splits gRPC streams, and all three mongot pods serve queries." src="docs/diagrams/mongot-openshift/after-metallb-three.light.png">
-</picture>
+<img alt="The demo removes the Route entirely: a MetalLB VIP reaches a hand-written LoadBalancer Service, Envoy splits gRPC streams, and all three mongot pods serve queries." src="docs/diagrams/mongot-openshift/after-metallb-three.light.png">
 <!-- markdownlint-enable MD033 -->
 
 ```text
@@ -782,11 +758,7 @@ open on both: no TLS on any leg, and no `$search` query has been executed.
 ## The failure that produces no error
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/mongot-openshift/l4-bypass.dark.png">
-  <source srcset="docs/diagrams/mongot-openshift/l4-bypass.light.png">
-  <img alt="Pointing the entry Service at the mongot headless Service instead of the Envoy pods still serves queries successfully, but sends every one of them to a single mongot while the others idle." src="docs/diagrams/mongot-openshift/l4-bypass.light.png">
-</picture>
+<img alt="Pointing the entry Service at the mongot headless Service instead of the Envoy pods still serves queries successfully, but sends every one of them to a single mongot while the others idle." src="docs/diagrams/mongot-openshift/l4-bypass.light.png">
 <!-- markdownlint-enable MD033 -->
 
 

@@ -70,11 +70,7 @@ and the lookup stage spells out exactly what it does:
 So a search is:
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/search-and-sync/search-execution.dark.png">
-  <source srcset="docs/diagrams/search-and-sync/search-execution.light.png">
-  <img alt="An application runs a dollar-search against mongod. mongod rewrites it into internalSearchMongotRemote, which goes through Envoy to one mongot pod and returns matching ids and scores, then internalSearchIdLookup, which fetches the real documents by id from the collection inside mongod." src="docs/diagrams/search-and-sync/search-execution.light.png">
-</picture>
+<img alt="An application runs a dollar-search against mongod. mongod rewrites it into internalSearchMongotRemote, which goes through Envoy to one mongot pod and returns matching ids and scores, then internalSearchIdLookup, which fetches the real documents by id from the collection inside mongod." src="docs/diagrams/search-and-sync/search-execution.light.png">
 <!-- markdownlint-enable MD033 -->
 
 
@@ -131,11 +127,7 @@ two phases, and replication is tracked **per index**, not per collection or per 
 ## Part 3 — how it stays current: a change stream
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/search-and-sync/index-sync.dark.png">
-  <source srcset="docs/diagrams/search-and-sync/index-sync.light.png">
-  <img alt="Each mongot replica opens its own connection straight to the replica set and runs two phases: an initial sync that scans the collection in id order and builds Lucene segments, then a steady state that applies an open change stream and records the oplog position so a restart resumes rather than rescans. All three replicas do this independently, so immediately after a write they briefly disagree." src="docs/diagrams/search-and-sync/index-sync.light.png">
-</picture>
+<img alt="Each mongot replica opens its own connection straight to the replica set and runs two phases: an initial sync that scans the collection in id order and builds Lucene segments, then a steady state that applies an open change stream and records the oplog position so a restart resumes rather than rescans. All three replicas do this independently, so immediately after a write they briefly disagree." src="docs/diagrams/search-and-sync/index-sync.light.png">
 <!-- markdownlint-enable MD033 -->
 
 After initial sync, each `mongot` holds an open **change stream** against the replica set
