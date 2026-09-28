@@ -172,6 +172,94 @@ source.external.tls.ca.name: external-mongod-ca -> ent-trust-bundle
 `internal-ca` is a namespace-scoped `Issuer` (`88-internal-ca.yaml`); its root never
 leaves the cluster. mongod needs no change: it sees only the company-issued hostname cert.
 
+### The hostname certificate: from the company CA to `ent-mongot-search-lb-0-cert`
+
+This is the one certificate the company CA issues for the cluster. It is the certificate
+for the **external hostname** — the name mongod dials — and Envoy presents it to every
+mongod connection.
+
+**One name, five places.** They must all be the same string:
+
+| # | Place | Measured on this lab |
+|---|---|---|
+| 1 | mongod `mongotHost` (`MONGOT_ENDPOINT` in `mongodb/.env`) | `grpc-search.apps-crc.testing:443` |
+| 2 | DNS for that name (here `extra_hosts` in `mongodb/compose.yaml`) | → `192.168.64.1`, the router |
+| 3 | Route `spec.host` | `grpc-search.apps-crc.testing` |
+| 4 | CR `spec.clusters[].loadBalancer.managed.externalHostname` | Envoy filter chain `server_names: ["grpc-search.apps-crc.testing"]` |
+| 5 | **the first SAN on this certificate** | `DNS:grpc-search.apps-crc.testing` |
+
+In an enterprise all five are the company FQDN, e.g. `grpc-search.corp.example`, and #2 is
+real DNS pointing at the router or F5 VIP.
+
+**1. Request it from the company CA.** Generate the key and a CSR that carries the SAN —
+the SAN must be in the CSR, so use a config file ([TLS.md §6.1](TLS.md) has one). What
+to ask for:
+
+| Field | Value |
+|---|---|
+| CN and first DNS SAN | the external hostname, exactly as in #1–#4 |
+| `extendedKeyUsage` | `serverAuth`. Envoy's *client* identity is a separate certificate, so this one needs no `clientAuth` — which a public CA would no longer issue anyway |
+| Key | PEM, **unencrypted** (Envoy reads `tls.key` directly) |
+
+The company returns the signed leaf and its intermediates. The company **root** goes into
+two places: the mongod hosts' `--tlsCAFile` (to verify this certificate) and, because in
+this lab the same root also signed mongod, the trust bundle.
+
+**2. Load it under the name the operator reads.** A `kubernetes.io/tls` Secret with
+`tls.crt` and `tls.key`. `tls.crt` is served as the chain, so put the leaf **first**, then
+the intermediates; leave the root out.
+
+```bash
+cat grpc-search.crt company-intermediate.crt > grpc-search-fullchain.crt
+oc create secret tls ent-mongot-search-lb-0-cert -n mongodb-poc \
+  --cert=grpc-search-fullchain.crt --key=grpc-search.key
+```
+
+The name is not free choice in 88: the operator derives `<prefix>-<CR name>-search-lb-<cluster
+index>-cert`, here `ent` + `mongot` + `0`. A wrong name is not an error — the operator just
+does not find it. `89-tls-search-managed-envoy.yaml` shows how to set the name explicitly,
+through the `loadBalancer.managed.deployment` override of the `envoy-server-cert` volume.
+
+**3. How Envoy uses it — measured.** The operator mounts the whole Secret, certificate
+**and** key, read-only into Envoy:
+
+```text
+Secret ent-mongot-search-lb-0-cert   type kubernetes.io/tls, keys tls.crt,tls.key
+  -> volume envoy-server-cert          all keys, readOnly, defaultMode 420 (0644)
+  -> /etc/envoy/tls/server/tls.crt     listener certificate_chain
+     /etc/envoy/tls/server/tls.key     listener private_key
+```
+
+The certificate mongod receives through the passthrough Route has the same SHA-256
+fingerprint as the Secret (`6F:14:58:DA:…:D6:F4:BA:98`). Envoy presents it only on the
+filter chain whose `server_names` matches `externalHostname`; a different SNI gets no
+certificate at all.
+
+**Two things to manage:**
+
+- **The key file is `-rw-r--r--`** inside the Envoy container: the operator sets no
+  `defaultMode`, so the Kubernetes default 0644 applies. `merge.Volume` accepts
+  `defaultMode` from the `deployment` override. Measured ownership: Envoy runs under the
+  `restricted-v2` SCC as UID `1001060000` (from the namespace's range) with supplementary
+  group `1001060000`; the Secret files are `uid=0 gid=1001060000` (the pod's `fsGroup`).
+  So `0440` keeps Envoy's read access through the group, while `0400` would leave only
+  root able to read. Not applied or tested.
+- **Renewal is manual and needs an Envoy restart.** There is no cert-manager machinery
+  for an imported certificate, and Envoy does not reload a changed Secret. Replace the
+  Secret, then `oc rollout restart deploy/mongot-search-lb-0 -n mongodb-poc`. Put the
+  expiry on a calendar:
+
+  ```bash
+  oc get secret ent-mongot-search-lb-0-cert -n mongodb-poc -o jsonpath='{.data.tls\.crt}' \
+    | base64 -d | openssl x509 -noout -subject -enddate -ext subjectAltName
+  ```
+
+**In option 77** the same company certificate goes on the **Route** instead
+(`grpc-search-route-tls`, referenced by `spec.tls.externalCertificate`). The router reads
+it through the API — it is not mounted — which is why 77 needs the Role and RoleBinding,
+and the Route CRD asks for a single serving certificate there, not a chain. Envoy has no
+certificate in 77, so `ent-mongot-search-lb-0-cert` is not used.
+
 ### The trust bundle needs both roots — tested
 
 | Root in `ent-trust-bundle` | Needed for |
