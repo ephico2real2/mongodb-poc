@@ -1,0 +1,73 @@
+# Enterprise split, step 2: the ONLY certificates cert-manager issues - the in-cluster mTLS
+# leg between Envoy and mongot - signed by internal-ca from 88-internal-ca.yaml.
+#
+# Secret names are derived by the operator from certsSecretPrefix=ent and CR name mongot:
+#   ent-mongot-search-lb-0-client-cert   Envoy -> mongot client cert     here
+#   ent-mongot-search-cert               mongot server cert              here
+#   ent-mongot-search-lb-0-cert          Envoy server cert (hostname)    COMPANY CA, imported below
+#
+# ---------------------------------------------------------------------------------
+# WHAT cert-manager DOES NOT CREATE
+# ---------------------------------------------------------------------------------
+# 1. The hostname certificate, from the company CA. Its first SAN must equal
+#    spec.clusters[].loadBalancer.managed.externalHostname - the SNI name Envoy's one filter
+#    chain matches (the operator rejects an external source with managed LB and no
+#    externalHostname). tls.crt must carry the leaf THEN any intermediates: Envoy serves the
+#    file as the chain.
+#
+#      oc create secret tls ent-mongot-search-lb-0-cert -n mongodb-poc \
+#        --cert=grpc-search-fullchain.crt --key=grpc-search.key
+#
+# 2. The trust bundle for spec.source.external.tls.ca. Every hop verifies against this one
+#    file (see 88-internal-ca.yaml), so it holds the company root AND the internal root.
+#    The key MUST be ca.crt. trust-manager could build this, but it is not running here.
+#
+#      oc wait certificate/internal-root-ca -n mongodb-poc --for=condition=Ready --timeout=60s
+#      oc get secret internal-root-ca -n mongodb-poc -o jsonpath='{.data.ca\.crt}' | base64 -d > internal-root.crt
+#      cat company-root.crt internal-root.crt > ca.crt
+#      oc create configmap ent-trust-bundle -n mongodb-poc \
+#        --from-file=ca.crt=ca.crt --dry-run=client -o yaml | oc apply -f -
+#
+# ---------------------------------------------------------------------------------
+# RENEWAL
+# ---------------------------------------------------------------------------------
+# cert-manager renews these on its own; the two tiers do not pick renewals up the same way.
+# mongot restarts by itself: the operator's copy is a hash-named PEM, so new content changes
+# the pod spec. Envoy mounts the Secret directly and does NOT reload (TLS.md section 8), so
+# it keeps presenting the old client certificate until it is restarted - and the leg breaks
+# when that certificate expires. Restart Envoy after every renewal of the client cert:
+#
+#   oc rollout restart deploy/mongot-search-lb-0 -n mongodb-poc
+#
+# The one-year lifetime below keeps that to a yearly, scheduled operation.
+---
+# Envoy's client certificate for the upstream leg to mongot. mongot runs mTLS and checks
+# only that it chains to a trusted root - no SAN or CN check on this leg.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: { name: ent-mongot-search-lb-0-client-cert, namespace: mongodb-poc }
+spec:
+  secretName: ent-mongot-search-lb-0-client-cert
+  commonName: envoy-client
+  duration: 8760h       # 1 year
+  renewBefore: 720h     # 30 days
+  usages: [client auth, digital signature, key encipherment]
+  issuerRef: { name: internal-ca, kind: Issuer, group: cert-manager.io }
+---
+# mongot's server certificate, covering the headless Service and every pod FQDN. Envoy's
+# upstream validation is CA-chain only, but the names are kept correct for anything that
+# does check them. mongot uses this certificate only as its gRPC server identity.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: { name: ent-mongot-search-cert, namespace: mongodb-poc }
+spec:
+  secretName: ent-mongot-search-cert
+  commonName: mongot-search-0-svc.mongodb-poc.svc.cluster.local
+  dnsNames:
+  - mongot-search-0-svc.mongodb-poc.svc.cluster.local
+  - "*.mongot-search-0-svc.mongodb-poc.svc.cluster.local"
+  - mongot-search-0-proxy-svc.mongodb-poc.svc.cluster.local
+  duration: 8760h       # 1 year
+  renewBefore: 720h     # 30 days
+  usages: [server auth, digital signature, key encipherment]
+  issuerRef: { name: internal-ca, kind: Issuer, group: cert-manager.io }

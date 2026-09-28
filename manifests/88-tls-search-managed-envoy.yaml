@@ -1,0 +1,102 @@
+# Enterprise split, step 3: the same MongoDBSearch as 20-tls-search-managed-envoy.yaml,
+# wired to the company-CA hostname certificate and the internal cert-manager CA.
+#
+#   88-internal-ca.yaml      namespace-scoped internal CA (Issuer)
+#   88-internal-certs.yaml   Envoy client + mongot server certs, and the out-of-band steps
+#                            for the company hostname cert and the trust bundle
+#   this file                the CR that consumes them
+#
+# This REPLACES the live CR - same name (mongot), same namespace. The name is kept on
+# purpose: it drives the pod labels and Service names that 30-envoy-*-service.yaml and
+# 80-route-passthrough.yaml select on. Apply 20, 88 or 99 - never more than one.
+#
+# Only two fields differ from 20-tls-search-managed-envoy.yaml:
+#
+#   spec.security.tls.certsSecretPrefix     lab                  -> ent
+#   spec.source.external.tls.ca.name        external-mongod-ca   -> ent-trust-bundle
+#
+# externalHostname stays at the lab value so the existing Route keeps matching. In an
+# enterprise it is the company FQDN, and it is one string in four places: mongod's
+# mongotHost, the Route host, this field, and the first SAN on the company certificate.
+# The one-hostname / two-entry-path design and the SNI failure modes are documented in 20.
+#
+# Order:
+#   1. oc apply -f manifests/88-internal-ca.yaml
+#   2. oc apply -f manifests/88-internal-certs.yaml, and wait for both Certificates Ready
+#   3. import ent-mongot-search-lb-0-cert from the company CA   (commands in 88-internal-certs.yaml)
+#   4. create the ent-trust-bundle ConfigMap, company root + internal root (same file)
+#   5. oc apply -f manifests/88-tls-search-managed-envoy.yaml
+#   6. oc rollout restart deploy/mongot-search-lb-0 -n mongodb-poc
+#      Envoy mounts the Secrets directly and does not reload them (TLS.md section 8);
+#      mongot restarts on its own because the operator's copy is a hash-named PEM.
+#
+# The mongod hosts need no change as long as their certificate and --tlsCAFile are
+# already from the company CA: mongod sees only the company-issued hostname certificate.
+#
+# The sync-source password Secret is unchanged and still NOT in git - see 20.
+apiVersion: mongodb.com/v1
+kind: MongoDBSearch
+metadata:
+  name: mongot
+  namespace: mongodb-poc
+spec:
+  version: "1.70.1"
+
+  security:
+    tls:
+      # The operator DERIVES the Secret names from this prefix and the CR name:
+      #   ent-mongot-search-lb-0-cert          Envoy server cert    company CA (imported)
+      #   ent-mongot-search-lb-0-client-cert   Envoy -> mongot      internal-ca
+      #   ent-mongot-search-cert               mongot server cert   internal-ca
+      # A name that does not exist is not an error - the operator just does not find it.
+      certsSecretPrefix: ent
+
+  source:
+    external:
+      hostAndPorts:
+      - "192.168.64.4:27017"
+      - "192.168.64.4:27018"
+      - "192.168.64.4:27019"
+      # REQUIRED, and not only for the sync leg: Envoy's certificate volumes are gated on
+      # it (see 20). Every hop verifies against this one ca.crt - Envoy's listener, Envoy's
+      # upstream, and mongot in mTLS mode - so it bundles the company root (mongod's
+      # certificates) and the internal root (Envoy <-> mongot).
+      tls:
+        ca:
+          name: ent-trust-bundle
+    username: search-sync-source
+    passwordSecretRef:
+      name: mongot-search-sync-source-password
+
+  clusters:
+  - replicas: 3
+    # CRC has ~7GiB allocatable headroom; defaults are 2 CPU / 4Gi PER mongot.
+    resourceRequirements:
+      requests: { cpu: "200m", memory: "1Gi" }
+      limits:   { cpu: "1",    memory: "2Gi" }
+    persistence:
+      single:
+        storage: 2Gi
+        storageClass: crc-csi-hostpath-provisioner
+    loadBalancer:
+      managed:
+        # The SNI name Envoy matches - required for an external source with a managed LB.
+        # Must equal the Route host AND the first SAN on the company-issued
+        # ent-mongot-search-lb-0-cert.
+        externalHostname: grpc-search.apps-crc.testing
+        # A second replica is restart tolerance, not throughput: mongod holds ONE
+        # long-lived connection, and whichever L4 hop is in front pins it to one Envoy.
+        replicas: 2
+        retryPolicy:
+          numRetries: 2
+          perTryTimeout: 60s
+
+  observability:
+    prometheus:
+      mode: enabled
+      port: 9946
+    metricsForwarder:
+      mode: auto
+      resourceRequirements:
+        requests: { cpu: "100m", memory: "128Mi" }
+        limits:   { cpu: "250m", memory: "256Mi" }

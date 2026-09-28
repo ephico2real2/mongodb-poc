@@ -1,0 +1,67 @@
+# Enterprise split, step 1: a namespace-scoped INTERNAL CA for the in-cluster mTLS leg only.
+#
+#   internal-selfsigned-bootstrap  Issuer, selfSigned - bootstraps the root only
+#   internal-root-ca               Certificate (isCA) in mongodb-poc
+#   internal-ca                    Issuer signing from that root
+#
+# ---------------------------------------------------------------------------------
+# WHO ISSUES WHAT
+# ---------------------------------------------------------------------------------
+# The company CA issues only certificates for hostnames that clients outside the cluster
+# dial. Everything that never leaves the cluster comes from this Issuer:
+#
+#   ent-mongot-search-lb-0-cert          Envoy server cert, faces mongod    COMPANY CA (imported)
+#   external mongod certificate          on the mongod hosts                COMPANY CA
+#   ent-mongot-search-lb-0-client-cert   Envoy -> mongot client cert        internal-ca  (88-internal-certs.yaml)
+#   ent-mongot-search-cert               mongot server cert                 internal-ca  (88-internal-certs.yaml)
+#
+# The internal root never leaves the cluster: mongod talks only to Envoy (company cert),
+# and mongot presents no client certificate to mongod unless spec.source.tls is set.
+#
+# ---------------------------------------------------------------------------------
+# ONE TRUST FILE FOR EVERY HOP - so it must hold BOTH roots
+# ---------------------------------------------------------------------------------
+# From operator 1.12.0 (envoy_config_builder.go, mongodbsearch_reconcile_helper.go), every
+# verifier reads the ca.crt of the spec.source.external.tls.ca ConfigMap:
+#
+#   mongod -> Envoy   Envoy verifies mongod's CLIENT cert    needs the company root
+#   Envoy  -> mongot  Envoy verifies mongot's server cert    needs the internal root
+#   Envoy  -> mongot  mongot (mTLS) verifies Envoy's client  needs the internal root
+#   mongot -> mongod  mongot verifies mongod's server cert   needs the company root
+#
+# There is no per-hop CA field in the CRD, so the ConfigMap is a bundle of both. That
+# widens trust: Envoy's listener has no SAN match, so a client certificate from EITHER
+# root is accepted at the front door. Keep create rights on Certificates and Issuers in
+# this namespace tight - anyone who can use internal-ca can mint a client cert Envoy accepts.
+#
+# The CA key sits in a Secret beside the workload - acceptable here because this CA vouches
+# only for in-cluster identities.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata: { name: internal-selfsigned-bootstrap, namespace: mongodb-poc }
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: { name: internal-root-ca, namespace: mongodb-poc }
+spec:
+  isCA: true
+  commonName: mongodb-poc Internal mTLS Root CA
+  subject:
+    organizations: ["Enterprise POC"]
+  secretName: internal-root-ca
+  duration: 43800h      # 5 years - a root, not a leaf
+  renewBefore: 8760h    # 1 year
+  privateKey:
+    algorithm: RSA
+    size: 4096
+    encoding: PKCS8
+  issuerRef: { name: internal-selfsigned-bootstrap, kind: Issuer, group: cert-manager.io }
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata: { name: internal-ca, namespace: mongodb-poc }
+spec:
+  ca:
+    secretName: internal-root-ca
