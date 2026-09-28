@@ -23,6 +23,21 @@
 # side does not change: mongotHost stays grpc-search.apps-crc.testing:443 and
 # searchTLSMode stays requireTLS.
 #
+# VERIFIED 2026-09-28 on CRC (OCP 4.22.7, operator 1.12.0), with HTTP/2 enabled on the
+# default router: ALPN h2 at the router, certificate verified against the enterprise root;
+# $search, $vectorSearch and filtered $vectorSearch PASS through the edge Route; 40 queries
+# split 12/14/14 across mongot and 21/22 across the two Envoy replicas (passthrough put
+# 43/0 on one). mongot gRPC `mode: Disabled`, sync leg `tls.enabled: true`, Envoy with
+# only its config volume and no TLS transport sockets. A query after 75s idle (router
+# `timeout client 30s`) succeeded in 20ms. Not measured: one query running longer than 30s.
+#
+# APPLYING OVER A PATCHED CR: `oc apply` does NOT remove spec.security if it was added by
+# `kubectl patch` - client-side apply only deletes fields recorded in its
+# last-applied-configuration. Measured here: the apply reported `configured` and changed
+# nothing. Remove it explicitly, then apply this file:
+#
+#   oc patch mongodbsearch mongot -n mongodb-poc --type=json -p '[{"op":"remove","path":"/spec/security"}]'
+#
 # This REPLACES the live CR - same name, same namespace, so the Envoy pod labels that
 # 30-envoy-*-service.yaml and 77-envoy-h2c-service.yaml select on do not move.
 # Apply 20, 77, 88 or 99 - never more than one.
