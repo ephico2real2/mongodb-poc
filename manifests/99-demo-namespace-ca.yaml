@@ -1,0 +1,50 @@
+# A NAMESPACE-scoped CA for the demo, the Issuer counterpart of 65-enterprise-ca.yaml:
+#   demo-selfsigned-bootstrap  Issuer, selfSigned - bootstraps the root only
+#   demo-root-ca               Certificate (isCA) in mongodb-poc
+#   demo-ca                    Issuer signing from that root
+#
+# Same objects, same specs as the CA section of 99-tls-certs.yaml, so applying both files
+# is idempotent. Workload certificates reference it as:
+#   issuerRef: { name: demo-ca, kind: Issuer, group: cert-manager.io }
+#
+# Issuer vs ClusterIssuer: a namespaced Issuer resolves ca.secretName in ITS OWN namespace,
+# so the root Secret lives here, next to the workload. 65-enterprise-ca.yaml needs the
+# root in cert-manager because a ClusterIssuer resolves it in the operator's
+# --cluster-resource-namespace. An Issuer also signs only for Certificates in its own
+# namespace - nothing outside mongodb-poc can use it.
+#
+# The trade-off: the CA private key sits in a Secret beside the workload it signs for, so
+# anyone who can read Secrets in mongodb-poc can mint certificates this CA vouches for.
+# Fine for a demo; in production use 65-enterprise-ca.yaml or a corporate issuer.
+#
+# Whatever verifies a demo-signed certificate needs the root. Export it with:
+#   oc get secret demo-root-ca -n mongodb-poc -o jsonpath='{.data.ca\.crt}' | base64 -d > demo-ca.crt
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata: { name: demo-selfsigned-bootstrap, namespace: mongodb-poc }
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: { name: demo-root-ca, namespace: mongodb-poc }
+spec:
+  isCA: true
+  commonName: Demo Namespace Root CA
+  subject:
+    organizations: ["Enterprise POC"]
+  secretName: demo-root-ca
+  duration: 43800h      # 5 years - a root, not a leaf
+  renewBefore: 8760h    # 1 year
+  privateKey:
+    algorithm: RSA
+    size: 4096
+    encoding: PKCS8
+  issuerRef: { name: demo-selfsigned-bootstrap, kind: Issuer, group: cert-manager.io }
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata: { name: demo-ca, namespace: mongodb-poc }
+spec:
+  ca:
+    secretName: demo-root-ca

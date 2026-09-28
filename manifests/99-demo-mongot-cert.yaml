@@ -1,0 +1,37 @@
+# The ONE certificate mongot itself needs, signed by the namespace CA in
+# 99-demo-namespace-ca.yaml. No Envoy certificates, no hostname certificate for an entry path.
+#
+# The Secret name is derived, not chosen: with certsSecretPrefix=demo and CR name mongot
+# the operator reads demo-mongot-search-cert (TLSSecretNamespacedName). Alternatively set
+# spec.security.tls.certificateKeySecretRef.name to this Secret - that takes precedence.
+#
+# ---------------------------------------------------------------------------------
+# WHEN THIS IS THE ONLY CERTIFICATE (read from operator 1.12.0, the version running here)
+# ---------------------------------------------------------------------------------
+# 1. No managed Envoy. IsTLSConfigured() is just `spec.security.tls != nil`, and with
+#    loadBalancer.managed that one switch also makes Envoy mount
+#    <prefix>-mongot-search-lb-0-cert and -client-cert. Without loadBalancer the operator
+#    rejects replicas > 1 (validateMultipleReplicasRequireLB), so this is ONE mongot.
+#    Moving the live CR off `managed` makes the operator delete its Envoy resources.
+#
+# 2. No spec.source.external.tls. Setting it flips mongot's gRPC listener from TLS to mTLS
+#    and adds the source CA ConfigMap plus a client certificate on mongod - the full set
+#    in 70-tls-certs.yaml. Without it, mongot serves one-way TLS and the mongot -> mongod
+#    sync leg stays plaintext.
+#
+# What stays outside the cluster: mongod verifies this certificate with its --tlsCAFile,
+# so the demo root (see 99-demo-namespace-ca.yaml) must be in /run/lab/ca.crt. mongod also
+# checks the name it dials (mongotHost) against these SANs unless
+# --tlsAllowInvalidHostnames is set, so whatever name mongod uses to reach mongot must be
+# added below.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: { name: demo-mongot-search-cert, namespace: mongodb-poc }
+spec:
+  secretName: demo-mongot-search-cert
+  commonName: mongot-search-0-svc.mongodb-poc.svc.cluster.local
+  dnsNames:
+  - mongot-search-0-svc.mongodb-poc.svc.cluster.local
+  - "*.mongot-search-0-svc.mongodb-poc.svc.cluster.local"    # covers mongot-search-0-0.<svc>
+  usages: [server auth, client auth, digital signature, key encipherment]
+  issuerRef: { name: demo-ca, kind: Issuer, group: cert-manager.io }

@@ -1,0 +1,147 @@
+# The same workload certificates as 70-tls-certs.yaml, issued by a NAMESPACE-scoped CA
+# with certsSecretPrefix=demo. Pairs with 99-tls-search-managed-envoy.yaml.
+#
+#   demo-selfsigned-bootstrap  Issuer, selfSigned - bootstraps the root only
+#   demo-root-ca               Certificate (isCA) in mongodb-poc
+#   demo-ca                    Issuer signing from that root
+#
+# Issuer vs ClusterIssuer: a namespaced Issuer resolves ca.secretName in ITS OWN namespace,
+# so the root lives here, next to the workload. 65-enterprise-ca.yaml needs the root in
+# cert-manager because a ClusterIssuer resolves it in the cluster-resource namespace.
+# The trade-off: the CA private key sits in a Secret beside the workload it signs for, so
+# anyone who can read Secrets in mongodb-poc can mint trusted certificates. Fine for a
+# demo; in production use a ClusterIssuer or a corporate issuer.
+#
+# Secret names are NOT free choice - the operator derives them from
+# spec.security.tls.certsSecretPrefix and the CR name:
+#   <prefix>-<name>-search-lb-<idx>-cert          Envoy server cert  (faces mongod)
+#   <prefix>-<name>-search-lb-<idx>-client-cert   Envoy -> mongot client cert
+#   <prefix>-<name>-search-cert                   mongot server cert
+# Here prefix=demo, name=mongot, idx=0.
+#
+# ---------------------------------------------------------------------------------
+# ONE TRUST ANCHOR FOR ALL THREE LEGS
+# ---------------------------------------------------------------------------------
+# The operator mounts spec.source.external.tls.ca into BOTH tiers - verified on the
+# running deployment:
+#
+#   mongot-search-lb-0 (Envoy)   ca-cert -> ConfigMap <source CA>   verifies mongod's client
+#                                                                   cert and mongot's server cert
+#   mongot-search-0    (mongot)  ca      -> ConfigMap <source CA>   verifies mongod's server cert
+#
+# So every certificate below, INCLUDING the external mongod's, must chain to the anchor in
+# that ConfigMap. Switching to this CA is therefore also a change on the mongod host.
+#
+# cert-manager writes Secrets, not ConfigMaps, and trust-manager is not running on this
+# cluster (the Bundle CRD exists, no controller). Create the ConfigMap from the root once
+# it is Ready - the key MUST be ca.crt:
+#
+#   oc wait certificate/demo-root-ca -n mongodb-poc --for=condition=Ready --timeout=60s
+#   oc get secret demo-root-ca -n mongodb-poc -o jsonpath='{.data.ca\.crt}' | base64 -d > demo-ca.crt
+#   oc create configmap demo-external-mongod-ca -n mongodb-poc \
+#     --from-file=ca.crt=demo-ca.crt --dry-run=client -o yaml | oc apply -f -
+#
+# Then give the external mongod its new material (mongodb/compose.yaml reads /run/lab):
+#
+#   oc get secret demo-external-mongod-cert -n mongodb-poc -o jsonpath='{.data.tls\.crt}' | base64 -d >  mongod.pem
+#   oc get secret demo-external-mongod-cert -n mongodb-poc -o jsonpath='{.data.tls\.key}' | base64 -d >> mongod.pem
+#   #   -> /run/lab/mongod.pem (leaf, then key)  and  demo-ca.crt -> /run/lab/ca.crt
+#
+# To switch without a flag day, put BOTH anchors in each ca.crt (the enterprise root and
+# the demo root) during the overlap, then withdraw the old one. See TLS.md section 8.
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata: { name: demo-selfsigned-bootstrap, namespace: mongodb-poc }
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: { name: demo-root-ca, namespace: mongodb-poc }
+spec:
+  isCA: true
+  commonName: Demo Namespace Root CA
+  subject:
+    organizations: ["Enterprise POC"]
+  secretName: demo-root-ca
+  duration: 43800h      # 5 years - a root, not a leaf
+  renewBefore: 8760h    # 1 year
+  privateKey:
+    algorithm: RSA
+    size: 4096
+    encoding: PKCS8
+  issuerRef: { name: demo-selfsigned-bootstrap, kind: Issuer, group: cert-manager.io }
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata: { name: demo-ca, namespace: mongodb-poc }
+spec:
+  ca:
+    secretName: demo-root-ca
+---
+# Envoy's server certificate - the one the OpenShift passthrough Route depends on.
+#
+# The Route itself carries no key material: passthrough means the router never terminates
+# TLS, it only reads the SNI to pick the backend. So the CN/first SAN MUST equal
+# spec.clusters[].loadBalancer.managed.externalHostname AND the Route host
+# (80-route-passthrough.yaml): mongod sends it as SNI, the router selects the Route by it,
+# and Envoy matches its one filter chain on it. See 70-tls-certs.yaml for why the spare
+# and IP SANs are there and why only the first name is ever matched.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: { name: demo-mongot-search-lb-0-cert, namespace: mongodb-poc }
+spec:
+  secretName: demo-mongot-search-lb-0-cert
+  commonName: grpc-search.apps-crc.testing
+  dnsNames:
+  - grpc-search.apps-crc.testing                              # == externalHostname == Route host
+  - vip-grpc-search.apps-crc.testing                          # spare SAN, never matched today
+  - mongot-search-0-proxy-svc.mongodb-poc.svc.cluster.local   # the operator's in-cluster name
+  ipAddresses:
+  - 192.168.127.100    # the MetalLB VIP itself
+  - 192.168.64.1       # what both records resolve to from the mongod containers (bridge100)
+  - 192.168.127.2      # what *.apps-crc.testing resolves to INSIDE the cluster (br-ex)
+  usages: [server auth, digital signature, key encipherment]
+  issuerRef: { name: demo-ca, kind: Issuer, group: cert-manager.io }
+---
+# Envoy's client certificate for the upstream leg to mongot.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: { name: demo-mongot-search-lb-0-client-cert, namespace: mongodb-poc }
+spec:
+  secretName: demo-mongot-search-lb-0-client-cert
+  commonName: envoy-client
+  usages: [client auth, digital signature, key encipherment]
+  issuerRef: { name: demo-ca, kind: Issuer, group: cert-manager.io }
+---
+# mongot's server certificate, covering the headless Service and every pod FQDN.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: { name: demo-mongot-search-cert, namespace: mongodb-poc }
+spec:
+  secretName: demo-mongot-search-cert
+  commonName: mongot-search-0-svc.mongodb-poc.svc.cluster.local
+  dnsNames:
+  - mongot-search-0-svc.mongodb-poc.svc.cluster.local
+  - "*.mongot-search-0-svc.mongodb-poc.svc.cluster.local"
+  - mongot-search-0-proxy-svc.mongodb-poc.svc.cluster.local
+  usages: [server auth, client auth, digital signature, key encipherment]
+  issuerRef: { name: demo-ca, kind: Issuer, group: cert-manager.io }
+---
+# The external mongod's certificate. Not consumed in the cluster - it is exported to the
+# mongod host. serverAuth for the mongot -> mongod sync leg; clientAuth because Envoy's
+# listener sets require_client_certificate, so mongod must present it on the search leg.
+# The SANs must cover exactly what rs.conf() advertises.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: { name: demo-external-mongod-cert, namespace: mongodb-poc }
+spec:
+  secretName: demo-external-mongod-cert
+  commonName: mongod.lab.internal
+  dnsNames:
+  - mongod.lab.internal
+  ipAddresses:
+  - 192.168.64.4                             # what the replica set advertises
+  usages: [server auth, client auth, digital signature, key encipherment]
+  issuerRef: { name: demo-ca, kind: Issuer, group: cert-manager.io }
