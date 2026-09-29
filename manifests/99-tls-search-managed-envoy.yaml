@@ -4,7 +4,7 @@
 # This REPLACES the live CR - same name (mongot), same namespace. The name is kept on
 # purpose: it drives the pod labels and Service names that 30-envoy-*-service.yaml and
 # 80-route-passthrough.yaml select on (mongot-search-lb-0, mongot-search-0-proxy-svc).
-# Apply 20 OR 99, never both; whichever is applied last wins.
+# Apply 20, 77, 88, 89 or 99 - never more than one; whichever is applied last wins.
 #
 # Only two fields differ from 20-tls-search-managed-envoy.yaml:
 #

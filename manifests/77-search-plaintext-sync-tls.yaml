@@ -40,7 +40,7 @@
 #
 # This REPLACES the live CR - same name, same namespace, so the Envoy pod labels that
 # 30-envoy-*-service.yaml and 77-envoy-h2c-service.yaml select on do not move.
-# Apply 20, 77, 88 or 99 - never more than one.
+# Apply 20, 77, 88, 89 or 99 - never more than one.
 #
 # The sync-source password Secret is unchanged and still NOT in git - see 20.
 apiVersion: mongodb.com/v1

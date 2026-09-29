@@ -17,13 +17,17 @@ oc create configmap mongot-gui-src -n "$NS" --from-file=server.py=server.py \
   --dry-run=client -o yaml | oc apply -f -
 
 # 2. Settings - only the variables actually set, so unset ones keep server.py's defaults.
+#    A run that sets NONE keeps the saved settings (like the Secret below); a run that sets
+#    any replaces the whole set, so pass every setting you want to keep.
 args=()
 for v in DB COLL SEARCH_NAME CLUSTER_INDEX MONGOT_SVC MONGOT_REPLICAS METRICS_PORT \
          TEXT_INDEX VECTOR_INDEX VECTOR_PATH; do
   [ -n "${!v:-}" ] && args+=("--from-literal=$v=${!v}")
 done
-oc create configmap mongot-gui-config -n "$NS" ${args[@]+"${args[@]}"} \
-  --dry-run=client -o yaml | oc apply -f -
+if [ ${#args[@]} -gt 0 ] || ! oc get configmap mongot-gui-config -n "$NS" >/dev/null 2>&1; then
+  oc create configmap mongot-gui-config -n "$NS" ${args[@]+"${args[@]}"} \
+    --dry-run=client -o yaml | oc apply -f -
+fi
 
 # 3. The connection string. Piped through stdin so it never appears in a process list.
 if [ -n "${MONGO_URI:-}" ]; then
@@ -36,10 +40,12 @@ fi
 
 # 4. Deployment, Service, Route. The server reads its code, settings and connection string
 #    only at startup, so a hash of all three goes on the pod template IN THE SAME APPLY: a
-#    change rolls the pod once, an unchanged hash is a no-op. Only the hash is stored.
+#    change rolls the pod once, an unchanged hash is a no-op. The Secret contributes its
+#    resourceVersion, not its content: it changes on every update, and a hash of it reveals
+#    nothing about the password to someone who can read pods but not Secrets.
 hash=$( { cat server.py
           oc get configmap mongot-gui-config -n "$NS" -o jsonpath='{.data}'
-          oc get secret mongot-gui-mongo-uri -n "$NS" -o jsonpath='{.data.uri}'; } \
+          oc get secret mongot-gui-mongo-uri -n "$NS" -o jsonpath='{.metadata.resourceVersion}'; } \
         | shasum -a 256 | cut -c1-16 )
 sed "s|mongot-gui/config-hash: \"unset\"|mongot-gui/config-hash: \"$hash\"|" mongot-gui.yaml \
   | oc apply -n "$NS" -f -

@@ -37,12 +37,16 @@ registries (checked 2026-09-28):
 NS=search MONGO_URI='mongodb://user:pass@mongod-1.corp:27017/admin?replicaSet=rs0' \
   SEARCH_NAME=acme MONGOT_REPLICAS=2 ./app/gui/deploy.sh
 
-# later runs: the Secret is reused
+# later runs: the Secret and the saved settings are reused
 NS=search ./app/gui/deploy.sh
 ```
 
-The script prints the Route URL. The connection string is piped through stdin, so it
-never appears in a process list.
+The script prints the Route URL. The connection string never appears on a command line:
+`deploy.sh` pipes it into the Secret through stdin, and `server.py` has `mongosh` read it
+from the environment (`connect(process.env.MONGO_URI)`).
+
+Settings are replaced only by a run that passes at least one of them, and then the whole
+set is replaced - pass every setting you want to keep. A run that passes none keeps them.
 
 ### The same thing by hand
 
@@ -68,8 +72,9 @@ oc apply -n $NS -f app/gui/mongot-gui.yaml
 oc rollout restart deploy/mongot-gui -n $NS
 ```
 
-`deploy.sh` replaces step 5 with a hash of `server.py`, the settings and the connection
-string on the pod template, applied in the same `oc apply` (only the hash is stored).
+`deploy.sh` replaces step 5 with a hash of `server.py`, the settings and the URI Secret's
+`resourceVersion` on the pod template, applied in the same `oc apply`. The Secret's
+content is never hashed, so the annotation reveals nothing about the password.
 Measured on this lab: an unchanged rerun keeps the same pod; a settings change rolls it
 once; a changed connection string rolls it once; reverting goes back to the existing
 ReplicaSet.
@@ -155,15 +160,16 @@ the connection string, so nothing sensitive is shown:
 
 ```bash
 # replica set name, for step 2
-oc exec -n $NS deploy/mongot-gui -- sh -c 'mongosh "$MONGO_URI" --quiet --eval "db.hello().setName"'
+oc exec -n $NS deploy/mongot-gui -- mongosh --nodb --quiet --eval 'connect(process.env.MONGO_URI).hello().setName'
 
 # every search index per collection: "search" ones are TEXT_INDEX candidates,
 # "vectorSearch" ones are for later
-oc exec -n $NS deploy/mongot-gui -- sh -c 'mongosh "$MONGO_URI" --quiet --eval "
-db.getMongo().getDBNames().filter(d => ![\"admin\",\"local\",\"config\"].includes(d)).forEach(d =>
+oc exec -n $NS deploy/mongot-gui -- mongosh --nodb --quiet --eval '
+const db = connect(process.env.MONGO_URI);
+db.getMongo().getDBNames().filter(d => !["admin", "local", "config"].includes(d)).forEach(d =>
   db.getSiblingDB(d).getCollectionNames().forEach(c => { try {
-    db.getSiblingDB(d)[c].getSearchIndexes().forEach(i =>
-      print(d+\".\"+c, i.name, i.type || \"search\", i.status)) } catch(e) {} }))"'
+    db.getSiblingDB(d).getCollection(c).getSearchIndexes().forEach(i =>
+      print(d + "." + c, i.name, i.type || "search", i.status)) } catch (e) {} }))'
 ```
 
 Then rerun step 3 with the right `replicaSet`, `DB`, `COLL` and `TEXT_INDEX`.

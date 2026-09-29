@@ -102,6 +102,8 @@ spec:
   - 192.168.127.100    # the MetalLB VIP itself
   - 192.168.64.1       # what both records resolve to from the mongod containers (bridge100)
   - 192.168.127.2      # what *.apps-crc.testing resolves to INSIDE the cluster (br-ex)
+  duration: 8760h       # 1 year - Envoy does not reload a renewed Secret, so after each
+  renewBefore: 720h     # renewal: oc rollout restart deploy/mongot-search-lb-0 (TLS.md s8)
   usages: [server auth, digital signature, key encipherment]
   issuerRef: { name: demo-ca, kind: Issuer, group: cert-manager.io }
 ---
@@ -112,6 +114,8 @@ metadata: { name: demo-mongot-search-lb-0-client-cert, namespace: mongodb-poc }
 spec:
   secretName: demo-mongot-search-lb-0-client-cert
   commonName: envoy-client
+  duration: 8760h       # 1 year - Envoy does not reload a renewed Secret, so after each
+  renewBefore: 720h     # renewal: oc rollout restart deploy/mongot-search-lb-0 (TLS.md s8)
   usages: [client auth, digital signature, key encipherment]
   issuerRef: { name: demo-ca, kind: Issuer, group: cert-manager.io }
 ---
@@ -126,6 +130,8 @@ spec:
   - mongot-search-0-svc.mongodb-poc.svc.cluster.local
   - "*.mongot-search-0-svc.mongodb-poc.svc.cluster.local"
   - mongot-search-0-proxy-svc.mongodb-poc.svc.cluster.local
+  duration: 8760h       # 1 year - Envoy does not reload a renewed Secret, so after each
+  renewBefore: 720h     # renewal: oc rollout restart deploy/mongot-search-lb-0 (TLS.md s8)
   usages: [server auth, client auth, digital signature, key encipherment]
   issuerRef: { name: demo-ca, kind: Issuer, group: cert-manager.io }
 ---
@@ -143,5 +149,7 @@ spec:
   - mongod.lab.internal
   ipAddresses:
   - 192.168.64.4                             # what the replica set advertises
+  duration: 8760h       # 1 year - Envoy does not reload a renewed Secret, so after each
+  renewBefore: 720h     # renewal: oc rollout restart deploy/mongot-search-lb-0 (TLS.md s8)
   usages: [server auth, client auth, digital signature, key encipherment]
   issuerRef: { name: demo-ca, kind: Issuer, group: cert-manager.io }

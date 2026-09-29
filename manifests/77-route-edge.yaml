@@ -67,8 +67,11 @@
 # RoleBinding below allow for this one Secret only. The Route API checks this at
 # admission - verified with a server dry run, which rejects the Route with "router
 # serviceaccount does not have permission to get/list/watch this secret" and "not found".
-# So the Secret must exist before this file is applied; `oc apply` creates the Role and
-# RoleBinding ahead of the Route because they come first in the file.
+# So the Secret must exist before this file is applied. `oc apply` creates the Role and
+# RoleBinding ahead of the Route because they come first in the file, but that does not
+# guarantee the API server's authorizer already sees the binding when the Route is
+# admitted. If the first apply rejects the Route with "does not have permission to
+# get/list/watch this secret", apply the file again - the RBAC is in place by then.
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

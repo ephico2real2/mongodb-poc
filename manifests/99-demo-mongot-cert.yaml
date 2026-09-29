@@ -33,5 +33,8 @@ spec:
   dnsNames:
   - mongot-search-0-svc.mongodb-poc.svc.cluster.local
   - "*.mongot-search-0-svc.mongodb-poc.svc.cluster.local"    # covers mongot-search-0-0.<svc>
+  - mongot-search-0-proxy-svc.mongodb-poc.svc.cluster.local
+  duration: 8760h       # 1 year - Envoy does not reload a renewed Secret, so after each
+  renewBefore: 720h     # renewal: oc rollout restart deploy/mongot-search-lb-0 (TLS.md s8)
   usages: [server auth, client auth, digital signature, key encipherment]
   issuerRef: { name: demo-ca, kind: Issuer, group: cert-manager.io }

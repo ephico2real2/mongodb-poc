@@ -22,8 +22,9 @@ spec:
     metadata:
       labels: { app: mongot-gui }
       annotations:
-        # deploy.sh replaces this with a hash of server.py + mongot-gui-config, so a code
-        # or settings change rolls the pod in the same apply; unchanged, it is a no-op.
+        # deploy.sh replaces this with a hash of server.py, mongot-gui-config and the URI
+        # Secret's resourceVersion, so a code, settings or connection-string change rolls the
+        # pod in the same apply; unchanged, it is a no-op.
         mongot-gui/config-hash: "unset"
     spec:
       securityContext:

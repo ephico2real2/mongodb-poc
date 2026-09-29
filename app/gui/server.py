@@ -59,18 +59,23 @@ def counters(metric):
 def run_query(q, mode):
     if mode == "vector":
         vec = THEMES.get(q.lower().strip(), [0.2, 0.2, 0.2, 0.2, 0.2])
-        stage = (f'{{$vectorSearch:{{index:"{VEC_INDEX}",path:"{VEC_PATH}",'
-                 f'queryVector:{json.dumps(vec)},numCandidates:200,limit:8}}}}')
+        stage = {"$vectorSearch": {"index": VEC_INDEX, "path": VEC_PATH, "queryVector": vec,
+                                   "numCandidates": 200, "limit": 8}}
         meta = "vectorSearchScore"
     else:
-        safe = q.replace('"', '\\"')
-        stage = (f'{{$search:{{index:"{TEXT_INDEX}",text:{{query:"{safe}",'
-                 f'path:{{wildcard:"*"}}}}}}}}')
+        stage = {"$search": {"index": TEXT_INDEX, "text": {"query": q, "path": {"wildcard": "*"}}}}
         meta = "searchScore"
-    js = (f'const r=db.getSiblingDB("{DB}").{COLL}.aggregate([{stage},'
-          f'{{$project:{{title:1,year:1,genre:1,score:{{$meta:"{meta}"}}}}}},'
-          f'{{$limit:8}}]).toArray(); print(JSON.stringify(r));')
-    p = subprocess.run(["mongosh", MONGO_URI, "--quiet", "--eval", js],
+    pipeline = [stage,
+                {"$project": {"title": 1, "year": 1, "genre": 1, "score": {"$meta": meta}}},
+                {"$limit": 8}]
+    # Every value reaches the script through json.dumps - JSON is valid JavaScript, so the
+    # query text (and DB, COLL, index names) can only ever be a string literal, never code.
+    # The connection string is read from the environment inside mongosh, never passed on
+    # the command line, so it does not appear in the pod's process list.
+    js = (f'const r=connect(process.env.MONGO_URI)'
+          f'.getSiblingDB({json.dumps(DB)}).getCollection({json.dumps(COLL)})'
+          f'.aggregate({json.dumps(pipeline)}).toArray(); print(JSON.stringify(r));')
+    p = subprocess.run(["mongosh", "--nodb", "--quiet", "--eval", js],
                        capture_output=True, text=True, timeout=45)
     line = [l for l in p.stdout.strip().split("\n") if l.startswith("[")]
     if not line:

@@ -1,5 +1,11 @@
 # A GUI that shows which mongot pod answered your search.
 #
+# SUPERSEDED by the reusable component in app/gui/ (mongot-gui.yaml + deploy.sh), which
+# creates the same Deployment, Service and Route, plus settings and a CA mount. Use ONE of
+# them per namespace: applying this file over a deploy.sh deployment reverts it silently -
+# the three-way merge drops envFrom (every setting) and the config-hash annotation, and
+# switches the image registry. Kept for the walkthroughs that reference it.
+#
 # It connects ONLY to MongoDB (MONGO_URI -> the external replica set). It never
 # addresses mongot, Envoy or the VIP - mongod forwards the $search stage over gRPC.
 # It reads each mongot's Prometheus counter before and after the query purely to

@@ -49,6 +49,10 @@ spec:
   port:
     targetPort: 27028                   # the numeric port, not a port name
   tls:
-    termination: passthrough            # NOT edge (no HTTP/2) and not reencrypt
-                                        # (timeout server = 30s cuts search cursors)
+    termination: passthrough            # Envoy terminates TLS, so the router must not.
+                                        # edge works only in the 77 design: HTTP/2 on the
+                                        # IngressController, an h2c Service, and Envoy with
+                                        # no TLS (77-route-edge.yaml). reencrypt cannot work
+                                        # with the operator's Envoy: its listener requires a
+                                        # client cert and the router presents none.
   wildcardPolicy: None
