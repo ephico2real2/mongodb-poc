@@ -64,10 +64,21 @@ Two operator facts drive both designs (operator 1.12.0 source):
 
 ## 3. Option 77 — edge Route, TLS ends at the router
 
+<!-- markdownlint-disable MD033 -->
+<img alt="Option 77: mongod reaches the OpenShift router over one-way TLS with ALPN h2 using the Route's company hostname certificate; the router forwards plaintext HTTP/2 to Envoy and Envoy forwards plaintext HTTP/2 to mongot, which hold no certificates; mongot syncs from mongod over TLS verified with the external-mongod-ca ConfigMap. One certificate to maintain, no mTLS, and HTTP/2 enabled on the default IngressController." src="docs/diagrams/route-tls-options/option-77-edge.light.png">
+<!-- markdownlint-enable MD033 -->
+
+*Option 77: one company certificate, on the Route. Everything past the router is plaintext
+HTTP/2, and no client certificate is checked on any hop.*
+
 ```text
-mongod --TLS 1.3, ALPN h2--> router (edge, company cert) --h2c--> Envoy --h2c--> mongot :27028
-   ^                                                                                  |
-   +---------------------- TLS, verified with the CA ConfigMap only ------------------+
+① mongod --TLS one-way, ALPN h2--> router (edge, Secret grpc-search-route-tls)
+② router --h2c, balanced per request--> Envoy x2   (Service appProtocol kubernetes.io/h2c)
+③ Envoy  --h2c--> mongot x3 :27028                 (no certificates; gRPC mode Disabled)
+④ mongot --MongoDB wire protocol, TLS one-way--> mongod   (ConfigMap external-mongod-ca)
+
+company CA -> 1 certificate · cluster-wide change: default-enable-http2=true on IngressController
+measured: $search and $vectorSearch PASS · mongot 12 / 14 / 14 · Envoy 21 / 22
 ```
 
 No certificate on Envoy or mongot. The only certificate in the cluster is the Route's.
@@ -146,10 +157,26 @@ reencrypt Route on it.
 
 ## 4. Option 88 — passthrough, company cert at the edge, internal CA inside
 
+<!-- markdownlint-disable MD033 -->
+<img alt="Option 88: the OpenShift router passes TLS through without decrypting it; mongod and Envoy authenticate each other with company-CA certificates, Envoy and mongot authenticate each other with certificates from the internal cert-manager CA, and mongot syncs from mongod over TLS. Every verifier inside the cluster reads one ConfigMap, ent-trust-bundle, which must hold both roots; with only the company root, Envoy to mongot fails while every pod stays Ready. A trust-manager Bundle to build that ConfigMap is proposed, not built." src="docs/diagrams/route-tls-options/option-88-passthrough.light.png">
+<!-- markdownlint-enable MD033 -->
+
+*Option 88: mutual TLS on both search hops. The company CA signs the hostname and mongod
+certificates, cert-manager's internal CA signs Envoy's client and mongot's certificates, and
+every check inside the cluster reads the two-root `ent-trust-bundle`. The dashed box is a
+proposal, not deployed.*
+
 ```text
-mongod --mTLS--> router (passthrough, never decrypts) --mTLS--> Envoy --mTLS--> mongot :27028
-  ^                                                                                  |
-  +--------------------------------- TLS (sync) -------------------------------------+
+① mongod <--mTLS, ALPN h2, SNI match--> Envoy x2   through the router, never decrypted
+     Envoy presents the company hostname cert; mongod presents its company client cert
+② Envoy  <--mTLS--> mongot x3 :27028   both certificates from the internal CA
+③ mongot --MongoDB wire protocol, TLS one-way--> mongod
+
+issuers: company CA (hostname cert, mongod cert) · cert-manager Issuer internal-ca (Envoy client, mongot)
+trust:   ConfigMap ent-trust-bundle = company root + internal root, built by hand
+         (proposed, not built: a trust-manager Bundle)
+measured: search PASS · mongot 13 / 13 / 14 · Envoy 43 / 0
+          only the company root in the bundle: ssl.fail_verify_error 12, every pod still Ready
 ```
 
 The same topology as `20-tls-search-managed-envoy.yaml`. The CR differs in two fields:
@@ -283,6 +310,51 @@ Measured with **only the company root** in the bundle, after restarting Envoy an
 
 Restoring both roots and restarting brought search back.
 
+### Automating the bundle with trust-manager — not tested here
+
+The deploy steps below build `ent-trust-bundle` by hand (`cat company-root.crt
+internal-root.crt`). trust-manager, a cert-manager project since 2021 (v0.1.0 on
+2021-11-08; v0.25.0 on 2026-09-11), does that with a `Bundle`.
+
+What it would do for 88. A `Bundle` replaces the manual `cat company-root internal-root > ca.crt`:
+
+```yaml
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: ent-trust-bundle              # the target ConfigMap gets this name
+spec:
+  sources:
+  - configMap: { name: company-root-ca, key: ca.crt }   # the company root
+  - secret:    { name: internal-root-ca, key: ca.crt }  # cert-manager's internal root
+  target:
+    configMap: { key: ca.crt }                          # key the MongoDBSearch CR expects
+    namespaceSelector:
+      matchLabels: { kubernetes.io/metadata.name: mongodb-poc }
+```
+
+It re-syncs the target whenever a source changes, so a CA rotation no longer means
+rebuilding the file. Two constraints for this design:
+
+1. **Sources must live in the trust-manager namespace.** The docs define `configMap` and
+   `secret` sources as *"a … resource in the trust-manager namespace"* (installed into
+   `cert-manager`). `88-internal-ca.yaml` creates `internal-root-ca` in `mongodb-poc`, so
+   the internal root would have to be issued in the trust-manager namespace instead — the
+   way `65-enterprise-ca.yaml` keeps its root in `cert-manager` — and the company root
+   stored there as `company-root-ca`.
+2. **It updates the ConfigMap, not the pods.** mongot reads certificates only at startup
+   (MongoDB FAQ) and Envoy does not reload them (measured, TLS.md section 8), so a bundle
+   change still needs both restarted.
+
+**Status on this stack.** The `Bundle` API is still `v1alpha1` and the project is 0.x;
+the docs warn that a future release **will** change what an empty `namespaceSelector`
+does. On OpenShift, the cert-manager Operator for Red Hat OpenShift ships it as the
+trust-manager operand, **Technology Preview**. On this cluster the `Bundle` CRD is already
+installed by that operator (`managed-by: cert-manager-operator`, `version: v0.20.3`) but no
+trust-manager controller runs, so a `Bundle` would do nothing until the operand is enabled.
+The upstream Helm chart (`oci://quay.io/jetstack/charts/trust-manager`) would collide with
+that operator-owned CRD here, and is outside Red Hat support.
+
 ### Deploy
 
 ```bash
@@ -378,3 +450,7 @@ HTTP/2 on the router does not affect a passthrough Route, so it can stay on for 
 
 See [TLS.md](TLS.md) for the Secret naming contract, the source-TLS coupling, and
 certificate rotation in general.
+
+The two figures come from `docs/diagrams/route-tls-options/source.html`, rendered to a
+light and a dark PNG each; this document embeds the light one. To change a figure, edit the
+page, re-render both PNGs, and update its `alt` text and its `text` twin in the same commit.
