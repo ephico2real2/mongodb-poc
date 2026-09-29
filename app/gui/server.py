@@ -13,12 +13,23 @@ import html, json, os, re, subprocess, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-MONGO_URI = os.environ["MONGO_URI"]
-DB        = os.environ.get("DB", "sample_mflix")
-COLL      = os.environ.get("COLL", "movies")
-SVC       = os.environ.get("MONGOT_SVC", "mongot-search-0-svc")
-REPLICAS  = int(os.environ.get("MONGOT_REPLICAS", "3"))
-PODS      = [f"mongot-search-0-{i}" for i in range(REPLICAS)]
+# Every default reproduces the original lab (CR "mongot", cluster 0, sample_mflix), so
+# an existing deployment behaves the same. See app/gui/README.md to reuse it elsewhere.
+MONGO_URI    = os.environ["MONGO_URI"]
+DB           = os.environ.get("DB", "sample_mflix")
+COLL         = os.environ.get("COLL", "movies")
+# The operator names mongot pods <CR name>-search-<cluster index>-<ordinal> behind the
+# headless Service <CR name>-search-<cluster index>-svc.
+SEARCH_NAME  = os.environ.get("SEARCH_NAME", "mongot")
+CLUSTER_IDX  = int(os.environ.get("CLUSTER_INDEX", "0"))
+SVC          = os.environ.get("MONGOT_SVC", f"{SEARCH_NAME}-search-{CLUSTER_IDX}-svc")
+REPLICAS     = int(os.environ.get("MONGOT_REPLICAS", "3"))
+PODS         = [f"{SEARCH_NAME}-search-{CLUSTER_IDX}-{i}" for i in range(REPLICAS)]
+# spec.observability.prometheus.port on the MongoDBSearch CR.
+METRICS_PORT = int(os.environ.get("METRICS_PORT", "9946"))
+TEXT_INDEX   = os.environ.get("TEXT_INDEX", "default")
+VEC_INDEX    = os.environ.get("VECTOR_INDEX", "vector_index")
+VEC_PATH     = os.environ.get("VECTOR_PATH", "plot_embedding")
 
 TEXT_METRIC = "mongot_command_searchCommandTotalLatency_seconds_count"
 VEC_METRIC  = "mongot_command_vectorSearchCommandTotalLatency_seconds_count"
@@ -36,7 +47,7 @@ def counters(metric):
     out = {}
     for p in PODS:
         try:
-            with urllib.request.urlopen(f"http://{p}.{SVC}:9946/metrics", timeout=4) as r:
+            with urllib.request.urlopen(f"http://{p}.{SVC}:{METRICS_PORT}/metrics", timeout=4) as r:
                 body = r.read().decode()
             m = re.search(rf"^{metric}\{{[^}}]*\}}\s+([0-9.]+)", body, re.M) \
                 or re.search(rf"^{metric}\s+([0-9.]+)", body, re.M)
@@ -48,18 +59,23 @@ def counters(metric):
 def run_query(q, mode):
     if mode == "vector":
         vec = THEMES.get(q.lower().strip(), [0.2, 0.2, 0.2, 0.2, 0.2])
-        stage = (f'{{$vectorSearch:{{index:"vector_index",path:"plot_embedding",'
-                 f'queryVector:{json.dumps(vec)},numCandidates:200,limit:8}}}}')
+        stage = {"$vectorSearch": {"index": VEC_INDEX, "path": VEC_PATH, "queryVector": vec,
+                                   "numCandidates": 200, "limit": 8}}
         meta = "vectorSearchScore"
     else:
-        safe = q.replace('"', '\\"')
-        stage = (f'{{$search:{{index:"default",text:{{query:"{safe}",'
-                 f'path:{{wildcard:"*"}}}}}}}}')
+        stage = {"$search": {"index": TEXT_INDEX, "text": {"query": q, "path": {"wildcard": "*"}}}}
         meta = "searchScore"
-    js = (f'const r=db.getSiblingDB("{DB}").{COLL}.aggregate([{stage},'
-          f'{{$project:{{title:1,year:1,genre:1,score:{{$meta:"{meta}"}}}}}},'
-          f'{{$limit:8}}]).toArray(); print(JSON.stringify(r));')
-    p = subprocess.run(["mongosh", MONGO_URI, "--quiet", "--eval", js],
+    pipeline = [stage,
+                {"$project": {"title": 1, "year": 1, "genre": 1, "score": {"$meta": meta}}},
+                {"$limit": 8}]
+    # Every value reaches the script through json.dumps - JSON is valid JavaScript, so the
+    # query text (and DB, COLL, index names) can only ever be a string literal, never code.
+    # The connection string is read from the environment inside mongosh, never passed on
+    # the command line, so it does not appear in the pod's process list.
+    js = (f'const r=connect(process.env.MONGO_URI)'
+          f'.getSiblingDB({json.dumps(DB)}).getCollection({json.dumps(COLL)})'
+          f'.aggregate({json.dumps(pipeline)}).toArray(); print(JSON.stringify(r));')
+    p = subprocess.run(["mongosh", "--nodb", "--quiet", "--eval", js],
                        capture_output=True, text=True, timeout=45)
     line = [l for l in p.stdout.strip().split("\n") if l.startswith("[")]
     if not line:

@@ -1,0 +1,134 @@
+# Option 88 with EXPLICIT certificate names - no certsSecretPrefix.
+#
+# Same topology, same Secrets, same trust bundle as 88-tls-search-managed-envoy.yaml; only
+# how the CR points at the Secrets changes. It reuses what 88 created:
+#
+#   88-internal-ca.yaml       internal-ca Issuer
+#   88-internal-certs.yaml    ent-mongot-search-lb-0-client-cert, ent-mongot-search-cert
+#   imported                  ent-mongot-search-lb-0-cert (company CA, hostname)
+#   ConfigMap                 ent-trust-bundle (company root + internal root)
+#
+# The names are free choice here; they stay ent-* only so nothing has to be reissued.
+#
+# ---------------------------------------------------------------------------------
+# HOW EACH NAME IS SET (read from operator 1.12.0)
+# ---------------------------------------------------------------------------------
+#   mongot server cert    spec.security.tls.certificateKeySecretRef - a real CRD field.
+#                         TLSSecretNamespacedName() checks it before the prefix.
+#   Envoy server cert     NO CRD field. LoadBalancerServerCert() derives
+#   Envoy client cert     "<name>-search-lb-<idx>-cert" / "-client-cert" when there is no
+#                         prefix. The derived name is used in exactly one place - the
+#                         envoy-server-cert / envoy-client-cert volumes in
+#                         buildEnvoyPodSpec - and nothing checks that it exists.
+#                         loadBalancer.managed.deployment is merged over the operator's
+#                         Deployment: DeploymentSpecs -> PodTemplateSpecs -> Volumes ->
+#                         Volume, where a same-named Secret volume takes the override's
+#                         secretName (pkg/util/merge/merge.go).
+#   trust bundle          spec.source.external.tls.ca.name - already explicit.
+#
+# The Envoy override relies on the merge behaviour above, not on a field documented for
+# certificates. Re-check it after an operator upgrade: if the volume names change, the
+# override stops matching and Envoy mounts the derived names instead.
+#
+# This REPLACES the live CR. Apply 20, 77, 88, 89 or 99 - never more than one. Coming from
+# 88, `oc apply` removes certsSecretPrefix because 88's apply recorded it; coming from a CR
+# where it was added by `kubectl patch`, remove it explicitly (see 77's header).
+apiVersion: mongodb.com/v1
+kind: MongoDBSearch
+metadata:
+  name: mongot
+  namespace: mongodb-poc
+spec:
+  version: "1.70.1"
+
+  security:
+    tls:
+      # mongot's server certificate, by name. No certsSecretPrefix anywhere in this CR.
+      certificateKeySecretRef:
+        name: ent-mongot-search-cert
+
+  source:
+    external:
+      hostAndPorts:
+      - "192.168.64.4:27017"
+      - "192.168.64.4:27018"
+      - "192.168.64.4:27019"
+      # Every hop verifies against this one ca.crt, so it bundles the company root
+      # (mongod's certificates) and the internal root (Envoy <-> mongot). See
+      # ENTERPRISE-TLS.md section 4 for the one-root failure measured without it.
+      tls:
+        ca:
+          name: ent-trust-bundle
+    username: search-sync-source
+    passwordSecretRef:
+      name: mongot-search-sync-source-password
+
+  clusters:
+  - replicas: 3
+    # CRC has ~7GiB allocatable headroom; defaults are 2 CPU / 4Gi PER mongot.
+    resourceRequirements:
+      requests: { cpu: "200m", memory: "1Gi" }
+      limits:   { cpu: "1",    memory: "2Gi" }
+    persistence:
+      single:
+        storage: 2Gi
+        storageClass: crc-csi-hostpath-provisioner
+    loadBalancer:
+      managed:
+        # Must equal the Route host AND the first SAN on ent-mongot-search-lb-0-cert.
+        externalHostname: grpc-search.apps-crc.testing
+        replicas: 2
+        retryPolicy:
+          numRetries: 2
+          perTryTimeout: 60s
+        # Envoy's two certificates, by name. The volume names must match the operator's
+        # exactly - envoy-server-cert and envoy-client-cert - or the merge adds new,
+        # unmounted volumes instead of replacing these.
+        deployment:
+          spec:
+            template:
+              spec:
+                # Envoy's image, per CR. The operator sets it from MDB_ENVOY_IMAGE on the
+                # operator Deployment (here envoyproxy/envoy:v1.37-latest). Containers merge
+                # by name (merge.Containers -> merge.Container, which replaces Image when
+                # set), so this overrides it for this CR only.
+                #
+                # A MIRROR of docker.io/envoyproxy/envoy:v1.37-latest, copied 2026-09-28 with
+                #   skopeo copy --all --preserve-digests \
+                #     docker://docker.io/envoyproxy/envoy:v1.37-latest \
+                #     docker://quay.io/ephico2real/envoy:v1.37-latest
+                # Verified identical: index sha256:ea33a83e..., linux/amd64 sha256:b99d871c...,
+                # linux/arm64 sha256:d42be4c1... - the same image index as v1.37.6 and the CSV's
+                # RELATED_IMAGE_MDB_ENVOY_IMAGE, which ran the 77 and 88 tests. The repo is
+                # public (anonymous manifest pull: HTTP 200), so no pull Secret is needed.
+                #
+                # The mirror does NOT follow upstream: when Docker Hub moves v1.37-latest to
+                # the next patch, this tag stays until it is copied again. Re-run the copy
+                # with --all: a plain docker pull/tag/push carries only the local
+                # architecture, and the other nodes cannot pull.
+                #
+                # Never pin a pod's imageID - that is the per-architecture digest (arm64 here:
+                # sha256:d42be4c1...). Pin a tag or the INDEX digest.
+                #
+                # Operator-wide instead: MDB_ENVOY_IMAGE through the OLM Subscription's
+                # spec.config.env - a direct edit to the operator Deployment is reverted by OLM.
+                containers:
+                - name: envoy
+                  image: quay.io/ephico2real/envoy:v1.37-latest
+                volumes:
+                - name: envoy-server-cert
+                  secret:
+                    secretName: ent-mongot-search-lb-0-cert
+                - name: envoy-client-cert
+                  secret:
+                    secretName: ent-mongot-search-lb-0-client-cert
+
+  observability:
+    prometheus:
+      mode: enabled
+      port: 9946
+    metricsForwarder:
+      mode: auto
+      resourceRequirements:
+        requests: { cpu: "100m", memory: "128Mi" }
+        limits:   { cpu: "250m", memory: "256Mi" }

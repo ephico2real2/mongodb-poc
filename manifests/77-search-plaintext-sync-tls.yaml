@@ -1,0 +1,101 @@
+# TLS ends at the OpenShift router; NO certificates for Envoy or mongot.
+#
+#   mongod --TLS--> router (edge Route, company cert) --h2c--> Envoy --h2c--> mongot
+#     ^                                                                          |
+#     +------------------ TLS, verified with the CA ConfigMap only --------------+
+#
+#   77-search-plaintext-sync-tls.yaml   this CR
+#   77-envoy-h2c-service.yaml           Service that tells the router to speak h2c
+#   77-route-edge.yaml                  edge Route with the company hostname certificate
+#
+# From operator 1.12.0 (mongodbsearch_reconcile_helper.go, envoy_config_builder.go):
+#
+#   no spec.security.tls        ensureIngressTlsConfig returns NOOP, so mongot's gRPC
+#                               listener stays Disabled (baseMongotConfig). Envoy gets
+#                               tlsEnabled=false: plaintext listener, no cert mounts, and
+#                               no SNI filter-chain match.
+#   source.external.tls.ca      ensureEgressTlsConfig puts the mongot -> mongod sync leg on
+#                               TLS, verified with this ConfigMap. It flips mongot to mTLS
+#                               ONLY when gRPC is already TLS - it is not here, so mongot
+#                               needs no certificate of its own.
+#
+# The only certificate in the path is the company hostname cert on the Route. The mongod
+# side does not change: mongotHost stays grpc-search.apps-crc.testing:443 and
+# searchTLSMode stays requireTLS.
+#
+# VERIFIED 2026-09-28 on CRC (OCP 4.22.7, operator 1.12.0), with HTTP/2 enabled on the
+# default router: ALPN h2 at the router, certificate verified against the enterprise root;
+# $search, $vectorSearch and filtered $vectorSearch PASS through the edge Route; 40 queries
+# split 12/14/14 across mongot and 21/22 across the two Envoy replicas (passthrough put
+# 43/0 on one). mongot gRPC `mode: Disabled`, sync leg `tls.enabled: true`, Envoy with
+# only its config volume and no TLS transport sockets. A query after 75s idle (router
+# `timeout client 30s`) succeeded in 20ms. Not measured: one query running longer than 30s.
+#
+# APPLYING OVER A PATCHED CR: `oc apply` does NOT remove spec.security if it was added by
+# `kubectl patch` - client-side apply only deletes fields recorded in its
+# last-applied-configuration. Measured here: the apply reported `configured` and changed
+# nothing. Remove it explicitly, then apply this file:
+#
+#   oc patch mongodbsearch mongot -n mongodb-poc --type=json -p '[{"op":"remove","path":"/spec/security"}]'
+#
+# This REPLACES the live CR - same name, same namespace, so the Envoy pod labels that
+# 30-envoy-*-service.yaml and 77-envoy-h2c-service.yaml select on do not move.
+# Apply 20, 77, 88, 89 or 99 - never more than one.
+#
+# The sync-source password Secret is unchanged and still NOT in git - see 20.
+apiVersion: mongodb.com/v1
+kind: MongoDBSearch
+metadata:
+  name: mongot
+  namespace: mongodb-poc
+spec:
+  version: "1.70.1"
+
+  # No spec.security - that absence is what keeps Envoy and mongot certificate-free.
+
+  source:
+    external:
+      hostAndPorts:
+      - "192.168.64.4:27017"
+      - "192.168.64.4:27018"
+      - "192.168.64.4:27019"
+      # The CA that issued mongod's certificate, key ca.crt. Only the sync leg reads it
+      # here; without security.tls it gates no Envoy mounts and adds no mTLS.
+      tls:
+        ca:
+          name: external-mongod-ca
+    username: search-sync-source
+    passwordSecretRef:
+      name: mongot-search-sync-source-password
+
+  clusters:
+  - replicas: 3
+    # CRC has ~7GiB allocatable headroom; defaults are 2 CPU / 4Gi PER mongot.
+    resourceRequirements:
+      requests: { cpu: "200m", memory: "1Gi" }
+      limits:   { cpu: "1",    memory: "2Gi" }
+    persistence:
+      single:
+        storage: 2Gi
+        storageClass: crc-csi-hostpath-provisioner
+    loadBalancer:
+      managed:
+        # Required by the validator for an external source with a managed LB, but unused
+        # on the wire: without TLS there is no SNI, so Envoy matches no server_names.
+        # The Route host is what carries the name now.
+        externalHostname: grpc-search.apps-crc.testing
+        # The router balances per request in HTTP mode, so both replicas take traffic.
+        replicas: 2
+        retryPolicy:
+          numRetries: 2
+          perTryTimeout: 60s
+
+  observability:
+    prometheus:
+      mode: enabled
+      port: 9946
+    metricsForwarder:
+      mode: auto
+      resourceRequirements:
+        requests: { cpu: "100m", memory: "128Mi" }
+        limits:   { cpu: "250m", memory: "256Mi" }

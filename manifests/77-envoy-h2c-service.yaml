@@ -1,0 +1,30 @@
+# The backend for 77-route-edge.yaml: Envoy's plaintext listener, declared as h2c.
+#
+# appProtocol is the switch. From the router template on this cluster (OCP 4.22.7,
+# /var/lib/haproxy/conf/haproxy-config.template), for an edge or insecure Route:
+#
+#   {{- if or (eq $endpoint.AppProtocol "h2c") (eq $endpoint.AppProtocol "kubernetes.io/h2c") }} proto h2
+#
+# Without it the router speaks HTTP/1.1 to the backend and gRPC breaks.
+#
+# A separate Service rather than a change to 30-envoy-direct-service.yaml, so the
+# passthrough Route's backend stays exactly as measured. Same selector, same pods.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongot-search-lb-h2c
+  namespace: mongodb-poc
+  labels:
+    app.kubernetes.io/part-of: mongot-poc
+    app.kubernetes.io/component: ingress
+spec:
+  type: ClusterIP
+  clusterIP: None                  # headless: the router needs the pod IPs, not a VIP
+  selector:
+    app: mongot-search-lb-0        # <MongoDBSearch name>-search-lb-<clusterIndex>
+  ports:
+  - name: grpc
+    port: 27028
+    targetPort: 27028
+    protocol: TCP
+    appProtocol: kubernetes.io/h2c

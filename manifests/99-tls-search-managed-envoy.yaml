@@ -1,0 +1,91 @@
+# Phase B with the demo CA: the same MongoDBSearch as 20-tls-search-managed-envoy.yaml,
+# with certsSecretPrefix=demo and the namespace-scoped CA from 99-tls-certs.yaml.
+#
+# This REPLACES the live CR - same name (mongot), same namespace. The name is kept on
+# purpose: it drives the pod labels and Service names that 30-envoy-*-service.yaml and
+# 80-route-passthrough.yaml select on (mongot-search-lb-0, mongot-search-0-proxy-svc).
+# Apply 20, 77, 88, 89 or 99 - never more than one; whichever is applied last wins.
+#
+# Only two fields differ from 20-tls-search-managed-envoy.yaml:
+#
+#   spec.security.tls.certsSecretPrefix     lab                  -> demo
+#   spec.source.external.tls.ca.name        external-mongod-ca   -> demo-external-mongod-ca
+#
+# The one-hostname / two-entry-path design, the SNI behaviour, and the verified failure
+# modes of a non-matching name are unchanged and documented at the top of 20.
+#
+# Order:
+#   1. oc apply -f manifests/99-tls-certs.yaml, and wait for every Certificate to be Ready
+#   2. create the demo-external-mongod-ca ConfigMap (commands in 99-tls-certs.yaml)
+#   3. give the external mongod the demo-signed mongod.pem and ca.crt, restart the replica set
+#   4. oc apply -f manifests/99-tls-search-managed-envoy.yaml
+#   5. oc rollout restart deploy/mongot-search-lb-0 -n mongodb-poc
+#      Envoy mounts the Secrets directly and does not reload them (TLS.md section 8);
+#      mongot restarts on its own because the operator's copy is a hash-named PEM.
+#
+# The sync-source password Secret is unchanged and still NOT in git - see 20.
+apiVersion: mongodb.com/v1
+kind: MongoDBSearch
+metadata:
+  name: mongot
+  namespace: mongodb-poc
+spec:
+  version: "1.70.1"
+
+  security:
+    tls:
+      # The operator DERIVES the Secret names from this prefix and the CR name:
+      #   demo-mongot-search-lb-0-cert          Envoy server cert  (faces mongod)
+      #   demo-mongot-search-lb-0-client-cert   Envoy -> mongot client cert
+      #   demo-mongot-search-cert               mongot server cert
+      # A name that does not exist is not an error - the operator just does not find it.
+      certsSecretPrefix: demo
+
+  source:
+    external:
+      hostAndPorts:
+      - "192.168.64.4:27017"
+      - "192.168.64.4:27018"
+      - "192.168.64.4:27019"
+      # REQUIRED, and not only for the sync leg: Envoy's certificate volumes are gated on
+      # it (see 20). This ConfigMap is also Envoy's ca-cert and mongot's ca volume, so it
+      # must hold the anchor every certificate on all three legs chains to - here, the
+      # demo root. Key must be ca.crt.
+      tls:
+        ca:
+          name: demo-external-mongod-ca
+    username: search-sync-source
+    passwordSecretRef:
+      name: mongot-search-sync-source-password
+
+  clusters:
+  - replicas: 3
+    # CRC has ~7GiB allocatable headroom; defaults are 2 CPU / 4Gi PER mongot.
+    resourceRequirements:
+      requests: { cpu: "200m", memory: "1Gi" }
+      limits:   { cpu: "1",    memory: "2Gi" }
+    persistence:
+      single:
+        storage: 2Gi
+        storageClass: crc-csi-hostpath-provisioner
+    loadBalancer:
+      managed:
+        # The SNI name Envoy matches. Must equal the Route host AND be a SAN on
+        # demo-mongot-search-lb-0-cert.
+        externalHostname: grpc-search.apps-crc.testing
+        # A second replica is restart tolerance, not throughput: mongod holds ONE
+        # long-lived connection, and whichever L4 hop is in front pins it to one Envoy.
+        replicas: 2
+        retryPolicy:
+          numRetries: 2
+          perTryTimeout: 60s
+
+  observability:
+    prometheus:
+      mode: enabled
+      port: 9946
+    metricsForwarder:
+      mode: auto
+      resourceRequirements:
+        requests: { cpu: "100m", memory: "128Mi" }
+        limits:   { cpu: "250m", memory: "256Mi" }

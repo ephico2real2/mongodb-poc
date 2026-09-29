@@ -1,0 +1,129 @@
+# Edge Route: the OpenShift router terminates TLS with the company hostname certificate
+# and forwards h2c to Envoy. No MetalLB, no F5, no certificate on Envoy or mongot.
+#
+# SAME NAME AND HOST as 80-route-passthrough.yaml on purpose. A second Route on the same
+# host would be rejected (HostAlreadyClaimed, oldest wins), and keeping the host means
+# mongod does not change: mongotHost stays grpc-search.apps-crc.testing:443. Applying this
+# file switches the live Route from passthrough to edge; `oc apply -f
+# manifests/80-route-passthrough.yaml` switches it back. Nothing is deleted.
+#
+# VERIFIED 2026-09-28 (see 77-search-plaintext-sync-tls.yaml for the search results). The
+# router generated this backend for the Route - h2c to both Envoy pods, the 1h server
+# timeout from the annotation, per-request round robin:
+#
+#   backend be_edge_http:mongodb-poc:mongot-grpc
+#     balance roundrobin
+#     timeout server  1h
+#     server ...:10.217.0.71:27028 ... proto h2 check inter 5000ms
+#     server ...:10.217.0.76:27028 ... proto h2 check inter 5000ms
+#
+# ---------------------------------------------------------------------------------
+# PREREQUISITE: HTTP/2 on the default router - OFF by default on this cluster
+# ---------------------------------------------------------------------------------
+# Without it the router pod runs with ROUTER_DISABLE_HTTP2=true and an edge Route
+# negotiates no ALPN (measured: `No ALPN negotiated`), so a gRPC client cannot get h2.
+#
+# It is an ANNOTATION on the IngressController, not an env var you set and not a Route
+# field. The ingress operator owns the router Deployment and translates the annotation
+# into ROUTER_DISABLE_HTTP2=false, then rolls the router - measured: `true` on the old pod,
+# `false` on the new one. Setting the env var on the Deployment directly is reverted by the
+# operator. There is no per-Route switch: it applies to every edge/reencrypt Route with
+# its own certificate on this IngressController (the default certificate stays no-alpn).
+#
+#   oc annotate ingresscontroller default -n openshift-ingress-operator \
+#     ingress.operator.openshift.io/default-enable-http2=true
+#   oc rollout status deploy/router-default -n openshift-ingress --timeout=300s
+#
+#   # undo:
+#   oc annotate ingresscontroller default -n openshift-ingress-operator \
+#     ingress.operator.openshift.io/default-enable-http2-
+#
+# Verify after the rollout, before pointing mongod at it:
+#
+#   oc exec -n openshift-ingress deploy/router-default -- printenv ROUTER_DISABLE_HTTP2
+#   #   expect: false
+#   openssl s_client -connect 192.168.64.1:443 -servername grpc-search.apps-crc.testing \
+#     -alpn h2 </dev/null 2>/dev/null | grep -E 'ALPN|Verify return'
+#   #   expect: ALPN protocol: h2
+#
+# ---------------------------------------------------------------------------------
+# THE CERTIFICATE: imported from the company CA, referenced - not inlined
+# ---------------------------------------------------------------------------------
+# spec.tls.externalCertificate keeps the private key out of the Route object and out of
+# git. Per the Route CRD it must be "a single serving certificate, not a certificate
+# chain" and must not include the CA. The first SAN must be the Route host.
+#
+#   Enterprise - from the company CA's files:
+#     oc create secret tls grpc-search-route-tls -n mongodb-poc \
+#       --cert=grpc-search.crt --key=grpc-search.key
+#
+#   This lab - the enterprise-root-signed hostname cert already in the namespace stands
+#   in for the company certificate (mongod already trusts that root):
+#     oc create secret tls grpc-search-route-tls -n mongodb-poc \
+#       --cert=<(oc get secret lab-mongot-search-lb-0-cert -n mongodb-poc -o jsonpath='{.data.tls\.crt}' | base64 -d) \
+#       --key=<(oc get secret lab-mongot-search-lb-0-cert -n mongodb-poc -o jsonpath='{.data.tls\.key}' | base64 -d)
+#
+# The router reads the Secret with its own service account, which the Role and
+# RoleBinding below allow for this one Secret only. The Route API checks this at
+# admission - verified with a server dry run, which rejects the Route with "router
+# serviceaccount does not have permission to get/list/watch this secret" and "not found".
+# So the Secret must exist before this file is applied. `oc apply` creates the Role and
+# RoleBinding ahead of the Route because they come first in the file, but that does not
+# guarantee the API server's authorizer already sees the binding when the Route is
+# admitted. If the first apply rejects the Route with "does not have permission to
+# get/list/watch this secret", apply the file again - the RBAC is in place by then.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: router-read-grpc-search-route-tls
+  namespace: mongodb-poc
+rules:
+- apiGroups: [""]
+  resources: [secrets]
+  resourceNames: [grpc-search-route-tls]
+  verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: router-read-grpc-search-route-tls
+  namespace: mongodb-poc
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: router-read-grpc-search-route-tls
+subjects:
+- kind: ServiceAccount
+  name: router
+  namespace: openshift-ingress
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: mongot-grpc
+  namespace: mongodb-poc
+  annotations:
+    # Edge Routes run HAProxy in HTTP mode, where `timeout server` (default 30s) bounds
+    # the wait for a response. 30s cuts long search cursors - the reason 80 chose
+    # passthrough. This annotation raises it for this Route only.
+    haproxy.router.openshift.io/timeout: 1h
+    # In HTTP mode the router balances each request (gRPC stream), not each connection,
+    # so both Envoy replicas take traffic even over mongod's one long-lived connection.
+    haproxy.router.openshift.io/balance: roundrobin
+spec:
+  # Must equal the first SAN on grpc-search-route-tls. Envoy no longer matches it (no TLS,
+  # no SNI there); the router is the only hop that uses the name.
+  host: grpc-search.apps-crc.testing
+  to:
+    kind: Service
+    name: mongot-search-lb-h2c          # 77-envoy-h2c-service.yaml - appProtocol h2c
+    weight: 100
+  port:
+    targetPort: 27028
+  tls:
+    termination: edge
+    externalCertificate:
+      name: grpc-search-route-tls
+    insecureEdgeTerminationPolicy: None # no plaintext :80 listener for this host
+  wildcardPolicy: None
