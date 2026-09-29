@@ -34,10 +34,12 @@ elif ! oc get secret mongot-gui-mongo-uri -n "$NS" >/dev/null 2>&1; then
   exit 1
 fi
 
-# 4. Deployment, Service, Route. The server reads its code and settings only at startup,
-#    so a hash of both goes on the pod template IN THE SAME APPLY: a change rolls the pod
-#    once, an unchanged hash is a no-op.
-hash=$( { cat server.py; oc get configmap mongot-gui-config -n "$NS" -o jsonpath='{.data}'; } \
+# 4. Deployment, Service, Route. The server reads its code, settings and connection string
+#    only at startup, so a hash of all three goes on the pod template IN THE SAME APPLY: a
+#    change rolls the pod once, an unchanged hash is a no-op. Only the hash is stored.
+hash=$( { cat server.py
+          oc get configmap mongot-gui-config -n "$NS" -o jsonpath='{.data}'
+          oc get secret mongot-gui-mongo-uri -n "$NS" -o jsonpath='{.data.uri}'; } \
         | shasum -a 256 | cut -c1-16 )
 sed "s|mongot-gui/config-hash: \"unset\"|mongot-gui/config-hash: \"$hash\"|" mongot-gui.yaml \
   | oc apply -n "$NS" -f -
