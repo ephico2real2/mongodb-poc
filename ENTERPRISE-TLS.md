@@ -186,6 +186,12 @@ certsSecretPrefix:           lab                -> ent
 source.external.tls.ca.name: external-mongod-ca -> ent-trust-bundle
 ```
 
+Both fields change only which Secrets and CA ConfigMap are mounted, so Envoy's side of the
+two mTLS legs is the one [ENVOY-FLOW.md](ENVOY-FLOW.md#figure-1--one-request-config-line-by-line)
+walks through, dumped from the `20-` deployment: the SNI filter chain (step 3), the listener's
+`DownstreamTlsContext` requiring a client certificate (step 4), and the
+`UpstreamTlsContext` toward mongot (step 10).
+
 ### Who issues what
 
 | Secret / file | Role | Issuer |
