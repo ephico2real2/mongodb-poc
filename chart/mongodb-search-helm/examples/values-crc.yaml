@@ -1,6 +1,7 @@
 # The lab: CRC, namespace mongodb-poc, with the values of manifests/88-tls-search-managed-envoy.yaml and
 # 80-route-passthrough.yaml. The secrets and the trust bundle already in the namespace are used as they are.
 #   helm install mongot chart/mongodb-search-helm -n mongodb-poc -f chart/mongodb-search-helm/examples/values-crc.yaml --timeout 20m
+namespace: mongodb-poc
 search:
   resources:
     requests: {cpu: 200m, memory: 1Gi}
@@ -19,9 +20,7 @@ source:
   passwordSecret:
     name: mongot-search-sync-source-password
 route:
-  name: mongot-grpc
-  serviceName: mongot-search-lb        # the lab's own headless Service (manifests/30-envoy-direct-service.yaml)
-  targetPort: 27028
+  name: mongot-grpc                    # the lab's Route name; it targets the operator's mongot-search-0-proxy-svc
 monitoring:
   serviceMonitors:
     enabled: true

@@ -1,9 +1,9 @@
-MongoDB Search "{{ .Values.search.name }}" in {{ .Release.Namespace }}: mongot x{{ .Values.search.replicas }} behind Envoy x{{ .Values.loadBalancer.replicas }}{{ if .Values.route.enabled }}, reached through Route {{ .Values.route.name }} on {{ .Values.loadBalancer.externalHostname }}:443{{ end }}.
+MongoDB Search "{{ .Values.search.name }}" in {{ include "mongodb-search-helm.namespace" . }}: mongot x{{ .Values.search.replicas }} behind Envoy x{{ .Values.loadBalancer.replicas }}{{ if .Values.route.enabled }}, reached through Route {{ .Values.route.name }} on {{ .Values.loadBalancer.externalHostname }}:443{{ end }}.
 
-  The gate's verdict:  oc logs -n {{ .Release.Namespace }} job/{{ include "mongodb-search-helm.fullname" . }}-wait   (kept {{ .Values.jobs.ttlSecondsAfterFinished }} s)
-  The resource:        oc get mongodbsearch {{ .Values.search.name }} -n {{ .Release.Namespace }}
+  The gate's verdict:  oc logs -n {{ include "mongodb-search-helm.namespace" . }} job/{{ include "mongodb-search-helm.fullname" . }}-wait   (kept {{ .Values.jobs.ttlSecondsAfterFinished }} s)
+  The resource:        oc get mongodbsearch {{ .Values.search.name }} -n {{ include "mongodb-search-helm.namespace" . }}
 {{- if .Values.operator.install }}
-  The operator:        oc get subscription,installplan,csv -n {{ .Release.Namespace }}
+  The operator:        oc get subscription,installplan,csv -n {{ include "mongodb-search-helm.namespace" . }}
 
 Upgrades: only operator {{ .Values.operator.version }} is approved. A newer version OLM stages waits; to take it, set
 operator.version and upgrade this release.

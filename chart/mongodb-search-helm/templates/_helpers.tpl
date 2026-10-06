@@ -6,6 +6,11 @@ app.kubernetes.io/version: {{ .Values.operator.version | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 
+{{- /* Where every object of the chart goes: the namespace value, or the release's namespace when it is empty. */ -}}
+{{- define "mongodb-search-helm.namespace" -}}
+{{ .Values.namespace | default .Release.Namespace }}
+{{- end -}}
+
 {{- /* The one CSV the approver approves and the gate waits for: <package>.v<version>. */ -}}
 {{- define "mongodb-search-helm.csv" -}}
 {{ printf "%s.v%s" .Values.operator.package .Values.operator.version }}

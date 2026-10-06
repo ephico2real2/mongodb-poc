@@ -15,7 +15,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ include "mongodb-search-helm.fullname" . }}-wait
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
   labels:
     {{- include "mongodb-search-helm.labels" . | nindent 4 }}
   annotations:
@@ -26,7 +26,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: {{ include "mongodb-search-helm.fullname" . }}-wait
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
   labels:
     {{- include "mongodb-search-helm.labels" . | nindent 4 }}
   annotations:
@@ -52,7 +52,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: {{ include "mongodb-search-helm.fullname" . }}-wait
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
   labels:
     {{- include "mongodb-search-helm.labels" . | nindent 4 }}
   annotations:
@@ -64,13 +64,13 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: {{ include "mongodb-search-helm.fullname" . }}-wait
-    namespace: {{ .Release.Namespace }}
+    namespace: {{ include "mongodb-search-helm.namespace" . }}
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ include "mongodb-search-helm.fullname" . }}-wait
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
   labels:
     {{- include "mongodb-search-helm.labels" . | nindent 4 }}
   annotations:
@@ -96,7 +96,7 @@ spec:
           {{- include "mongodb-search-helm.jobContainer" . | nindent 10 }}
           env:
             - name: NAMESPACE
-              value: {{ .Release.Namespace | quote }}
+              value: {{ include "mongodb-search-helm.namespace" . | quote }}
             - name: OPERATOR_INSTALL
               value: {{ .Values.operator.install | quote }}
             - name: SUBSCRIPTION

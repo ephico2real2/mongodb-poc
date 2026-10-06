@@ -1,10 +1,14 @@
 # mongodb-search-helm: MongoDB Search (mongot) behind the operator-managed Envoy, from one values file.
 # It replaces Steps 6a, 6b and 6d of docs/mongot-envoy-mtls-fresh-install-runbook.md and adds the operator install.
 #
-# WHERE THE RELEASE LIVES. Every object goes to the release's namespace, which must already exist and already hold
-# the hand-made objects of runbook Steps 1 to 5 (three TLS secrets, the sync password secret, the trust bundle):
+# The chart never creates the hand-made objects of runbook Steps 1 to 5 (three TLS secrets, the sync password
+# secret, the trust bundle) and never reads their contents; the preflight checks they exist.
 #   helm install mongot chart/mongodb-search-helm -n <namespace> -f my-values.yaml --timeout 20m
-# The chart never creates those objects and never reads their contents; the preflight checks they exist.
+
+# The namespace every object of the chart goes to. It must already exist and already hold the hand-made objects.
+# Pass the same namespace to helm with -n, so Helm's record of the release sits beside what it installed.
+# Empty: the namespace given to helm with -n.
+namespace: ""
 
 operator:
   # true: install the MongoDB operator here through OLM. false: an operator already serves this namespace (installed

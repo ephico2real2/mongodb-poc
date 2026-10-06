@@ -102,10 +102,11 @@ Expected: `tls.crt` and `tls.key` on the three TLS secrets, `password` on the pa
 
 ### Step 6: Write the values file
 
-Two values have no default: the public hostname and the source mongod. Everything else defaults to the runbook's values; the full list is in the [chart README](../chart/mongodb-search-helm/README.md#values).
+Set the namespace, and the two values that have no default: the public hostname and the source mongod. Everything else defaults to the runbook's values; the full list is in the [chart README](../chart/mongodb-search-helm/README.md#values).
 
 ```yaml
 # my-values.yaml
+namespace: dvh-gp6-rnd                              # where everything goes; must hold the five prerequisites
 loadBalancer:
   externalHostname: mongot-search-rnd.company.net   # also the Route's host; must be a SAN of the lb cert
   image: quay.io/ephico2real/envoy:v1.37-latest      # optional Envoy image override
@@ -126,11 +127,23 @@ helm install mongot chart/mongodb-search-helm -n $NS -f my-values.yaml --dry-run
 
 ### Step 8: Install
 
+From the published package, with no clone of the repository:
+
+```bash
+helm install mongot \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.1.0/mongodb-search-helm-0.1.0.tgz \
+  -n $NS -f my-values.yaml --timeout 20m
+```
+
+Or from a checkout:
+
 ```bash
 helm install mongot chart/mongodb-search-helm -n $NS -f my-values.yaml --timeout 20m
 ```
 
 `--timeout 20m` matters: Helm waits for the last check only as long as its timeout, which defaults to 5 minutes.
+
+Every object goes to the `namespace` in the values file. Pass the same namespace with `-n`, so Helm's own record of the release sits beside what it installed.
 
 What happens, in order:
 
@@ -238,6 +251,12 @@ Search against the external replica set, through the chart's Route:
 - Text and vector queries returned results, for example "The Karate Kid" for `karate`.
 - 30 text queries split 10 / 10 / 10 across the three mongot pods.
 - Envoy logged 37 requests, all gRPC `OK`, split 12 / 12 / 13 across mongot. One Envoy pod carried all 37: the replica set holds one connection, and the Route places connections, not requests.
+
+Monitoring, which the lab values switch on (`monitoring.serviceMonitors.enabled` and `monitoring.alerts.enabled`; both are off by default and need user workload monitoring on the cluster):
+
+- Prometheus scrapes all five pods: `up` is 1 for the three mongot pods and the two Envoy pods.
+- The rule group `mongot.distribution` is loaded and healthy: three recording rules and four alerts, none firing.
+- The recorded share of search traffic is 0.33 for each mongot pod.
 
 Not tested:
 

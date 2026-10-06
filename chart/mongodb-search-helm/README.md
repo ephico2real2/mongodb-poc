@@ -24,17 +24,28 @@ Steps 1 to 5 of the runbook stay manual: the chart never creates a certificate, 
 The step-by-step procedure, from creating the five prerequisite objects by hand to installing, upgrading and
 removing the chart, is in [`docs/prerequisite-and-setup-doc.md`](../../docs/prerequisite-and-setup-doc.md).
 
-In short, once the prerequisites exist in the namespace:
+In short, once the prerequisites exist in the namespace, install the published package (no clone needed):
+
+```bash
+helm install mongot \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.1.0/mongodb-search-helm-0.1.0.tgz \
+  -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
+```
+
+Or from a checkout of this repository:
 
 ```bash
 helm install mongot chart/mongodb-search-helm -n dvh-gp6-rnd \
   -f chart/mongodb-search-helm/examples/values-dvh-gp6-rnd.yaml --timeout 20m
 ```
 
+Each chart version is published as a GitHub release named `mongodb-search-helm-<version>`, with the package attached.
+
 ## Values
 
 | Value | Default | Runbook |
 | --- | --- | --- |
+| `namespace` | empty: the namespace given with `-n` | Where every object goes; it must hold the prerequisites |
 | `operator.install` | `true` | `false` when an operator already serves the namespace |
 | `operator.version` | `1.13.0` | The only version the approver approves |
 | `operator.channel`, `.package`, `.source`, `.sourceNamespace` | `stable`, `mongodb-kubernetes`, `certified-operators`, `openshift-marketplace` | |
