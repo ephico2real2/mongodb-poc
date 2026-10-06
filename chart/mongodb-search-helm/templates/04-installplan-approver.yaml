@@ -1,0 +1,190 @@
+{{- /*
+Approves the InstallPlan for operator.version, and no other, so the Manual-approval install is unattended while
+any other version waits for a human. The openshift-coo chart's approver, with one change: the plan's CSV list
+must equal <package>.v<version>, not merely contain it.
+
+It reads the plan through the Subscription's installPlanRef, never by scanning the namespace. When that version
+is already installed it approves nothing and exits; a newer plan that OLM has staged is left for a human.
+
+Helm: post-install/post-upgrade, weight -1, after the reclaim (-2), before the gate (0). Argo CD: a Sync hook at
+the Subscription's wave (-1); one wave later deadlocks a first sync, because Argo CD holds a Manual Subscription
+at Progressing. Rendered only with the Subscription.
+*/ -}}
+{{- if .Values.operator.install }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "mongodb-search-helm.fullname" . }}-approver
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+---
+# A Role, not a ClusterRole: approving a plan installs an operator, so the grant stays in this namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "mongodb-search-helm.fullname" . }}-approver
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+rules:
+  # patch, not update: approval sets one field.
+  - apiGroups: ["operators.coreos.com"]
+    resources: ["installplans"]
+    verbs: ["get", "list", "patch"]
+  - apiGroups: ["operators.coreos.com"]
+    resources: ["subscriptions"]
+    verbs: ["get"]
+  - apiGroups: ["operators.coreos.com"]
+    resources: ["clusterserviceversions"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "mongodb-search-helm.fullname" . }}-approver
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "mongodb-search-helm.fullname" . }}-approver
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "mongodb-search-helm.fullname" . }}-approver
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "mongodb-search-helm.fullname" . }}-approver
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-1"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ add .Values.installPlanApprover.waitSeconds 120 }}
+  ttlSecondsAfterFinished: {{ .Values.jobs.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "mongodb-search-helm.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "mongodb-search-helm.fullname" . }}-approver
+      {{- include "mongodb-search-helm.jobPod" . | nindent 6 }}
+      containers:
+        - name: approve
+          {{- include "mongodb-search-helm.jobContainer" . | nindent 10 }}
+          env:
+            - name: NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: SUBSCRIPTION
+              value: {{ .Values.operator.package | quote }}
+            - name: TARGET
+              value: {{ include "mongodb-search-helm.csv" . | quote }}
+            - name: RECLAIM_ENABLED
+              value: {{ .Values.csvReclaim.enabled | quote }}
+            - name: WAIT_SECONDS
+              value: {{ .Values.installPlanApprover.waitSeconds | quote }}
+          args:
+            - |
+              set -uo pipefail
+              : "${NAMESPACE:?}" "${SUBSCRIPTION:?}" "${TARGET:?}" "${WAIT_SECONDS:?}"
+              log()  { printf '[approver %s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
+              fail() { printf '[approver] FAILED: %s\n' "$*" >&2; exit 1; }
+              DEADLINE=$(( $(date +%s) + WAIT_SECONDS ))
+              out_of_time() { [ "$(date +%s)" -ge "$DEADLINE" ]; }
+
+              SUBS=subscriptions.operators.coreos.com
+              PLANS=installplans.operators.coreos.com
+              # stderr is kept: a Forbidden must look like one, not like "OLM has staged nothing".
+              sub_field()  { oc get "$SUBS" "$SUBSCRIPTION" -n "$NAMESPACE" -o jsonpath="{$1}"; }
+              plan_field() { oc get "$PLANS" "$1" -n "$NAMESPACE" -o jsonpath="{$2}"; }
+              # The plan must install exactly TARGET and nothing else: this package has no dependencies, and a plan
+              # that also names another operator's CSV (a shared namespace) is not this chart's to approve. Whole
+              # names: "<package>.v1.13.0" must not match "<package>.v1.13.01".
+              names_target() { [ "$1" = "$TARGET" ]; }
+              list_plans() {
+                oc get "$PLANS" -n "$NAMESPACE" \
+                  -o custom-columns=NAME:.metadata.name,PHASE:.status.phase,APPROVED:.spec.approved,CSV:.spec.clusterServiceVersionNames \
+                  2>&1 | sed 's/^/  /'
+              }
+
+              log "target ${TARGET} in ${NAMESPACE}"
+
+              # Already installed: nothing to approve. A newer plan OLM has staged is left for a human.
+              if [ "$(sub_field .status.installedCSV 2>/dev/null)" = "$TARGET" ]; then
+                log "${TARGET} is the installed CSV; nothing to approve"
+                ref="$(sub_field .status.installPlanRef.name 2>/dev/null)"
+                if [ -n "$ref" ] && [ "$(plan_field "$ref" .spec.approved 2>/dev/null)" != "true" ]; then
+                  log "InstallPlan ${ref} ($(plan_field "$ref" '.spec.clusterServiceVersionNames[*]' 2>/dev/null)) is not operator.version: left for a human; to take it, set operator.version and upgrade the release"
+                fi
+                exit 0
+              fi
+
+              # Wait for a plan that names TARGET. OLM keeps one pending plan per Subscription.
+              PLAN=""
+              while :; do
+                rf="$(sub_field '.status.conditions[?(@.type=="ResolutionFailed")].status' 2>/dev/null)"
+                if [ "$rf" = "True" ]; then
+                  msg="$(sub_field '.status.conditions[?(@.type=="ResolutionFailed")].message' 2>/dev/null)"
+                  case "$msg" in
+                    *"is not referenced by a subscription"*)
+                      if [ "$RECLAIM_ENABLED" = "true" ] && ! out_of_time; then
+                        log "ResolutionFailed: a CSV left by an earlier uninstall blocks OLM; the csv-reclaim Job clears it, waiting"
+                        sleep 5; continue
+                      fi
+                      fail "OLM cannot resolve ${SUBSCRIPTION}: a CSV left by an earlier uninstall blocks it. Delete it and sync again:
+                $(oc get clusterserviceversions.operators.coreos.com -n "$NAMESPACE" -o name 2>/dev/null | grep "/${SUBSCRIPTION}\.v" | sed "s|^|  oc delete -n ${NAMESPACE} |")" ;;
+                    *) fail "OLM cannot resolve ${SUBSCRIPTION}: ${msg}" ;;
+                  esac
+                fi
+                ref="$(sub_field .status.installPlanRef.name 2>/dev/null)"
+                if [ -n "$ref" ]; then
+                  names="$(plan_field "$ref" '.spec.clusterServiceVersionNames[*]' 2>/dev/null)"
+                  if names_target "$names"; then PLAN="$ref"; break; fi
+                  # OLM offers another version, and will not stage a second plan while this one is pending.
+                  fail "OLM staged InstallPlan ${ref} for '${names}', not ${TARGET}: not approving it. Set operator.version
+                to the version OLM offers, or pick a version this channel can reach. InstallPlans:
+                $(list_plans)"
+                fi
+                out_of_time && fail "no InstallPlan for ${TARGET} within ${WAIT_SECONDS}s. Inspect:
+                  oc describe ${SUBS} ${SUBSCRIPTION} -n ${NAMESPACE}
+                A missing catalog source, or a version the channel does not carry, presents like this. InstallPlans:
+                $(list_plans)"
+                log "waiting for OLM to stage an InstallPlan for ${TARGET}"
+                sleep 5
+              done
+
+              log "InstallPlan ${PLAN} installs: $(plan_field "$PLAN" '.spec.clusterServiceVersionNames[*]')"
+              if [ "$(plan_field "$PLAN" .spec.approved)" != "true" ]; then
+                oc patch "$PLANS" "$PLAN" -n "$NAMESPACE" --type merge -p '{"spec":{"approved":true}}' \
+                  || fail "could not approve InstallPlan ${PLAN}"
+                log "approved ${PLAN}"
+              fi
+
+              # Approving is not installing: wait for the plan to complete, or the failure lands on the gate.
+              while :; do
+                phase="$(plan_field "$PLAN" .status.phase 2>/dev/null)"
+                [ "$phase" = "Complete" ] && { log "${PLAN} is Complete"; break; }
+                [ "$phase" = "Failed" ] && fail "InstallPlan ${PLAN} Failed. Inspect: oc describe ${PLANS} ${PLAN} -n ${NAMESPACE}"
+                out_of_time && fail "InstallPlan ${PLAN} is '${phase:-<none>}' after ${WAIT_SECONDS}s. Inspect: oc describe ${PLANS} ${PLAN} -n ${NAMESPACE}"
+                log "InstallPlan ${PLAN}: ${phase:-<none>}"
+                sleep 5
+              done
+              list_plans
+{{- end }}

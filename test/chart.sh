@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# Template tests for chart/mongodb-search-helm, no cluster needed:  test/chart.sh
+# Needs helm (3 or 4) and python3; uses yq and shellcheck when they are installed.
+set -uo pipefail
+cd "$(dirname "$0")/.."
+CHART=chart/mongodb-search-helm
+RUNBOOK=docs/mongot-envoy-mtls-fresh-install-runbook.md
+REMOTE=${CHART}/examples/values-dvh-gp6-rnd.yaml
+LAB=${CHART}/examples/values-crc.yaml
+fails=0
+ok()   { printf 'ok    %s\n' "$1"; }
+bad()  { printf 'FAIL  %s\n' "$1"; fails=$((fails + 1)); }
+render() { helm template mongot "${CHART}" -n dvh-gp6-rnd -f "${REMOTE}" "$@" 2>&1; }
+# kinds/names of one rendering, one per line: "Kind/name"
+objects() { render "$@" | python3 -c '
+import sys, re
+for doc in sys.stdin.read().split("\n---"):
+    k = re.search(r"^kind: (\S+)", doc, re.M); n = re.search(r"^  name: (\S+)", doc, re.M)
+    if k and n: print(f"{k.group(1)}/{n.group(1)}")'; }
+has()  { grep -qx "$2" <<<"$1"; }
+refused() { render "$@" >/dev/null 2>&1 && bad "the schema refuses $1" || ok "the schema refuses $1"; }
+
+helm lint "${CHART}" -f "${REMOTE}" >/dev/null 2>&1 && ok "helm lint (runbook values)" || bad "helm lint (runbook values)"
+helm lint "${CHART}" -f "${LAB}" >/dev/null 2>&1 && ok "helm lint (lab values)" || bad "helm lint (lab values)"
+
+out="$(render)"; [[ $? -eq 0 ]] && ok "renders with the runbook values" || bad "renders with the runbook values: ${out:0:300}"
+helm template mongot "${CHART}" -n mongodb-poc -f "${LAB}" >/dev/null 2>&1 && ok "renders with the lab values" || bad "renders with the lab values"
+helm template mongot "${CHART}" -n x >/dev/null 2>&1 && bad "the defaults alone are refused (no hostname, no source)" || ok "the defaults alone are refused (no hostname, no source)"
+
+# The operator: Manual, pinned, and both the approver and the gate aim at the same CSV.
+grep -q '^  installPlanApproval: Manual$' <<<"$out" && ok "Manual approval" || bad "Manual approval"
+grep -q '^  startingCSV: mongodb-kubernetes.v1.13.0$' <<<"$out" && ok "the Subscription starts at the pinned CSV" || bad "startingCSV"
+[[ "$(grep -c 'value: "mongodb-kubernetes.v1.13.0"' <<<"$out")" == 2 ]] && ok "the approver and the gate target the pinned CSV" || bad "TARGET in approver and gate"
+app="$(sed -n 's/^appVersion: *"\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' ${CHART}/Chart.yaml)"
+grep -q "^  version: \"${app}\"$" ${CHART}/values.yaml && ok "appVersion equals operator.version" || bad "appVersion ${app} differs from operator.version"
+grep -q "as mongodb-kubernetes ${app} installs it" ${CHART}/crds/mongodbsearch.mongodb.com.yaml && ok "the CRD copy is from the same operator version" || bad "the CRD copy is not from operator ${app}: run scripts/refresh-mongodbsearch-crd.sh"
+! grep -q 'kind: ClusterRole' <<<"$out" && ok "no ClusterRole or ClusterRoleBinding anywhere" || bad "the chart renders cluster-scoped RBAC"
+
+# The MongoDBSearch and the Route equal the runbook's Steps 6a and 6d (needs yq to read both sides).
+if command -v yq >/dev/null; then
+  rb="$(mktemp -d)"
+  awk -v d="${rb}" '/^```yaml/{f=1;n++;next} /^```/{f=0} f{print > (d "/" n ".yaml")}' "${RUNBOOK}"
+  for kind in MongoDBSearch Route; do
+    want="$(yq -o=json -I=0 '.spec | sort_keys(..)' "$(grep -l "^kind: ${kind}$" "${rb}"/*.yaml)")"
+    got="$(render | yq -o=json -I=0 "select(.kind == \"${kind}\") | .spec | sort_keys(..)")"
+    [[ -n "$want" && "$got" == "$want" ]] && ok "${kind} spec equals the runbook's" || bad "${kind} spec differs from the runbook: ${got:0:200} != ${want:0:200}"
+  done
+  rm -rf "${rb}"
+else
+  printf 'skip  runbook comparison (yq is not installed)\n'
+fi
+
+# search.version: left out when empty, present when set.
+! render -s templates/10-mongodbsearch.yaml | grep -q '^  version:' && ok "spec.version is left out by default" || bad "spec.version rendered by default"
+render -s templates/10-mongodbsearch.yaml --set search.version=1.70.1 | grep -q '^  version: "1.70.1"$' && ok "search.version reaches the resource" || bad "search.version"
+! render -s templates/10-mongodbsearch.yaml --set loadBalancer.image= | grep -q 'deployment:' && ok "no Envoy override without loadBalancer.image" || bad "Envoy override rendered without an image"
+render -s templates/10-mongodbsearch.yaml | grep -q 'name: ent-trust-bundle' && ok "the source CA is always rendered" || bad "source.external.tls.ca missing"
+render -s templates/10-mongodbsearch.yaml --set search.keepOnUninstall=true | grep -q 'helm.sh/resource-policy: keep' && ok "keepOnUninstall keeps the resource" || bad "keepOnUninstall"
+render -s templates/20-route.yaml | grep -q '^  host: mongot-search-rnd.company.net$' && ok "the Route host is externalHostname" || bad "Route host"
+helm template mongot "${CHART}" -n mongodb-poc -f "${LAB}" -s templates/20-route.yaml | grep -A1 'kind: Service' | grep -q 'name: mongot-search-lb$' \
+  && ok "route.serviceName overrides the target Service" || bad "route.serviceName"
+
+# Toggles.
+o="$(objects --set operator.install=false)"
+{ has "$o" "Subscription/mongodb-kubernetes" || has "$o" "OperatorGroup/mongot-mongodb-search-helm" || has "$o" "Job/mongot-mongodb-search-helm-approver" || has "$o" "Job/mongot-mongodb-search-helm-csv-reclaim"; } \
+  && bad "operator.install=false renders no Subscription, OperatorGroup, approver or reclaim" || ok "operator.install=false renders no Subscription, OperatorGroup, approver or reclaim"
+has "$o" "Job/mongot-mongodb-search-helm-wait" && ok "operator.install=false keeps the gate" || bad "gate missing without operator.install"
+render --set operator.install=false -s templates/00-preflight.yaml | grep -q 'mongodb-kubernetes-database-pods' && ok "without operator.install the preflight checks mongot's ServiceAccount" || bad "preflight ServiceAccount check"
+o="$(objects)"; has "$o" "OperatorGroup/mongot-mongodb-search-helm" && ok "an OperatorGroup by default" || bad "OperatorGroup missing"
+o="$(objects --set operatorGroup.create=false)"; has "$o" "OperatorGroup/mongot-mongodb-search-helm" && bad "operatorGroup.create=false renders none" || ok "operatorGroup.create=false renders none"
+o="$(objects --set csvReclaim.enabled=false)"; has "$o" "Job/mongot-mongodb-search-helm-csv-reclaim" && bad "csvReclaim.enabled=false renders no reclaim" || ok "csvReclaim.enabled=false renders no reclaim"
+o="$(objects --set preflight.enabled=false)"; grep -q 'preflight' <<<"$o" && bad "preflight.enabled=false renders no preflight" || ok "preflight.enabled=false renders no preflight"
+o="$(objects --set route.enabled=false)"; has "$o" "Route/mongot-search" && bad "route.enabled=false renders no Route" || ok "route.enabled=false renders no Route"
+
+# Preflight: reads five objects by name and nothing else of theirs.
+p="$(render -s templates/00-preflight.yaml)"
+for n in ent-mongot-search-cert ent-mongot-search-lb-0-cert ent-mongot-search-lb-0-client-cert search-sync-source-password ent-trust-bundle; do
+  grep -q "\"${n}\"" <<<"$p" || bad "preflight Role does not name ${n}"
+done
+[[ "$(grep -c 'resourceNames' <<<"$p")" == 2 ]] && ok "the preflight reads Secrets and the ConfigMap by name only" || bad "preflight resourceNames"
+[[ "$(grep -c 'helm.sh/hook: pre-install,pre-upgrade' <<<"$p")" == 4 ]] && ok "preflight: four pre-install hooks" || bad "preflight hooks"
+
+# Monitoring: off by default, named after search.name.
+o="$(objects)"
+{ has "$o" "ServiceMonitor/mongot" || has "$o" "PrometheusRule/mongot-distribution" || has "$o" "Service/mongot-envoy-stats"; } && bad "no monitoring objects by default" || ok "no monitoring objects by default"
+o="$(objects --set monitoring.serviceMonitors.enabled=true --set monitoring.alerts.enabled=true --set search.name=srch)"
+{ has "$o" "ServiceMonitor/srch" && has "$o" "ServiceMonitor/srch-envoy" && has "$o" "Service/srch-envoy-stats" && has "$o" "PrometheusRule/srch-distribution"; } \
+  && ok "monitoring objects follow search.name" || bad "monitoring object names: ${o//$'\n'/ }"
+m="$(render --set monitoring.alerts.enabled=true --set search.name=srch -s templates/30-monitoring.yaml)"
+grep -q 'job=~"srch-search-0-svc|srch-envoy-stats"' <<<"$m" && ok "the no-traffic alert's job pattern follows search.name" || bad "alert job pattern"
+[[ "$(grep -c -- '- alert:' <<<"$m")" == 4 && "$(grep -c -- '- record:' <<<"$m")" == 3 ]] && ok "four alerts and three recording rules" || bad "alert or rule count"
+grep -q '{{ $value | humanizePercentage }}' <<<"$m" && ok "Prometheus templating survives Helm" || bad "alert templating was eaten by Helm"
+
+# Schema refusals.
+refused "an unknown key" --set operator.typo=1
+refused "a version with a v" --set operator.version=v1.13.0
+refused "an IP address as hostname" --set loadBalancer.externalHostname=10.1.2.3
+refused "an empty hostname" --set loadBalancer.externalHostname=
+refused "a source without a port" --set 'source.hostAndPorts={abc234.uat.company.net}'
+refused "an unknown balance algorithm" --set route.balance=first
+refused "a search name the operator's suffixes would overflow" --set search.name=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+# Argo CD: every hook Job is also an Argo hook, and the example never lets Argo own the CRD.
+[[ "$(render | grep -c 'argocd.argoproj.io/hook: \(Sync\|PreSync\)')" == 7 ]] && ok "every hook object carries an Argo CD hook" || bad "Argo CD hook annotations"
+grep -q 'skipCrds: true' ${CHART}/examples/argocd-application.yaml && ok "the Argo CD example skips the CRD" || bad "argocd example: skipCrds"
+
+# The Jobs' scripts: bash syntax, and shellcheck when available.
+tmp="$(mktemp -d)"; trap 'rm -rf "${tmp}"' EXIT
+render | python3 -c '
+import sys, re
+for doc in sys.stdin.read().split("\n---"):
+    if "kind: Job" not in doc: continue
+    name = re.search(r"^  name: (\S+)", doc, re.M).group(1)
+    m = re.search(r"\n          args:\n            - \|\n(.*)", doc, re.S)
+    lines = [l[14:] if l.startswith(" " * 14) else l.strip() for l in m.group(1).splitlines()]
+    open(sys.argv[1] + "/" + name + ".sh", "w").write("\n".join(lines) + "\n")' "${tmp}"
+n=0
+for f in "${tmp}"/*.sh; do
+  n=$((n + 1))
+  bash -n "$f" 2>/dev/null && ok "bash -n $(basename "$f" .sh)" || bad "bash -n $(basename "$f" .sh): $(bash -n "$f" 2>&1)"
+  if command -v shellcheck >/dev/null; then
+    shellcheck -S warning -s bash "$f" >/dev/null && ok "shellcheck $(basename "$f" .sh)" || bad "shellcheck $(basename "$f" .sh): $(shellcheck -S warning -s bash -f gcc "$f" | head -5)"
+  fi
+done
+[[ $n == 4 ]] && ok "four Job scripts checked" || bad "expected four Job scripts, found $n"
+bash -n scripts/refresh-mongodbsearch-crd.sh && ok "bash -n scripts/refresh-mongodbsearch-crd.sh" || bad "bash -n scripts/refresh-mongodbsearch-crd.sh"
+
+[[ $fails == 0 ]] && echo "all chart tests passed" || { echo "${fails} failed"; exit 1; }

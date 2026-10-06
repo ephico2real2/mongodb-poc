@@ -1,0 +1,200 @@
+{{- /*
+The preflight: fails the install, before anything is created, when a hand-made object of runbook Steps 1 to 5 is
+missing or lacks a key. The operator finds the three TLS secrets by name and does not report a wrong name, so
+without this a typo shows up later as pods that never start.
+
+It reads five objects by name (the Role names them; Kubernetes has no metadata-only read for Secrets) and prints
+types and key names, never contents. A pre-install/pre-upgrade hook, so its RBAC are hooks too, created first
+(weight -10) and removed once the hooks have succeeded; a failed Job is kept for its log. Argo CD: PreSync.
+*/ -}}
+{{- if .Values.preflight.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "mongodb-search-helm.fullname" . }}-preflight
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "mongodb-search-helm.fullname" . }}-preflight
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+rules:
+  # get, by name: these five objects and no other Secret or ConfigMap in the namespace.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames:
+      - {{ include "mongodb-search-helm.mongotCertSecret" . | quote }}
+      - {{ include "mongodb-search-helm.lbCertSecret" . | quote }}
+      - {{ include "mongodb-search-helm.lbClientCertSecret" . | quote }}
+      - {{ .Values.source.passwordSecret.name | quote }}
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: [{{ .Values.tls.trustBundleConfigMap | quote }}]
+    verbs: ["get"]
+  {{- if .Values.operator.install }}
+  # A second OperatorGroup in a namespace stops OLM for every operator in it.
+  - apiGroups: ["operators.coreos.com"]
+    resources: ["operatorgroups"]
+    verbs: ["list"]
+  {{- else }}
+  # Without operator.install an operator must already serve this namespace.
+  - apiGroups: ["operators.coreos.com"]
+    resources: ["clusterserviceversions"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    resourceNames: ["mongodb-kubernetes-database-pods"]
+    verbs: ["get"]
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "mongodb-search-helm.fullname" . }}-preflight
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "mongodb-search-helm.fullname" . }}-preflight
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "mongodb-search-helm.fullname" . }}-preflight
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "mongodb-search-helm.fullname" . }}-preflight
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 180
+  ttlSecondsAfterFinished: {{ .Values.jobs.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "mongodb-search-helm.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "mongodb-search-helm.fullname" . }}-preflight
+      {{- include "mongodb-search-helm.jobPod" . | nindent 6 }}
+      containers:
+        - name: preflight
+          {{- include "mongodb-search-helm.jobContainer" . | nindent 10 }}
+          env:
+            - name: NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: TLS_SECRETS
+              value: {{ printf "%s %s %s" (include "mongodb-search-helm.mongotCertSecret" .) (include "mongodb-search-helm.lbCertSecret" .) (include "mongodb-search-helm.lbClientCertSecret" .) | quote }}
+            - name: PASSWORD_SECRET
+              value: {{ .Values.source.passwordSecret.name | quote }}
+            - name: PASSWORD_KEY
+              value: {{ .Values.source.passwordSecret.key | default "password" | quote }}
+            - name: TRUST_CM
+              value: {{ .Values.tls.trustBundleConfigMap | quote }}
+            - name: OPERATOR_INSTALL
+              value: {{ .Values.operator.install | quote }}
+            - name: OPERATORGROUP
+              value: {{ ternary (include "mongodb-search-helm.fullname" .) "" .Values.operatorGroup.create | quote }}
+            - name: PACKAGE
+              value: {{ .Values.operator.package | quote }}
+          args:
+            - |
+              set -uo pipefail
+              : "${NAMESPACE:?}" "${TLS_SECRETS:?}" "${PASSWORD_SECRET:?}" "${PASSWORD_KEY:?}" "${TRUST_CM:?}"
+              log() { printf '[preflight %s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
+              PROBLEMS=0
+              bad() { printf '[preflight] MISSING: %s\n' "$*" >&2; PROBLEMS=$((PROBLEMS + 1)); }
+
+              # keys_of <kind> <name>: the key names of .data, one per line; the values never leave the API call.
+              # stderr is kept, so a Forbidden reads as one and not as "not found".
+              keys_of() { oc get "$1" "$2" -n "$NAMESPACE" -o go-template='{{`{{range $k, $v := .data}}{{$k}}{{"\n"}}{{end}}`}}'; }
+              # need_keys <kind> <name> <key>...: reports the object when absent, else each key it lacks.
+              need_keys() {
+                local kind="$1" name="$2" keys k; shift 2
+                if ! keys="$(keys_of "$kind" "$name" 2>&1)"; then
+                  bad "${kind} ${name}: $(printf '%s' "$keys" | tail -1)"
+                  return
+                fi
+                for k in "$@"; do
+                  grep -qxF "$k" <<<"$keys" || bad "${kind} ${name}: no key ${k} (it has: $(printf '%s' "$keys" | tr '\n' ' '))"
+                done
+                log "ok: ${kind} ${name} ($(printf '%s' "$keys" | tr '\n' ' '))"
+              }
+
+              log "checking the hand-made objects in ${NAMESPACE}"
+              for s in $TLS_SECRETS; do
+                need_keys secret "$s" tls.crt tls.key
+                # The runbook creates kubernetes.io/tls; whether the operator requires the type is not measured,
+                # so another type is reported, not refused.
+                t="$(oc get secret "$s" -n "$NAMESPACE" -o jsonpath='{.type}' 2>/dev/null)"
+                [ -z "$t" ] || [ "$t" = "kubernetes.io/tls" ] || log "note: secret ${s} has type ${t}; the runbook creates kubernetes.io/tls"
+              done
+              need_keys secret "$PASSWORD_SECRET" "$PASSWORD_KEY"
+              need_keys configmap "$TRUST_CM" ca.crt
+
+              if [ "$OPERATOR_INSTALL" = "true" ]; then
+                if [ -n "$OPERATORGROUP" ]; then
+                  # OLM allows one OperatorGroup per namespace; the chart is about to create OPERATORGROUP.
+                  others="$(oc get operatorgroups.operators.coreos.com -n "$NAMESPACE" -o name 2>&1)" \
+                    || { bad "cannot list OperatorGroups: ${others}"; others=""; }
+                  for og in $others; do
+                    [ "${og##*/}" = "$OPERATORGROUP" ] || bad "OperatorGroup ${og##*/} already exists in ${NAMESPACE}: set operatorGroup.create=false to use it"
+                  done
+                fi
+              else
+                # An operator installed elsewhere: its CSV must be visible here, and mongot's ServiceAccount must exist.
+                found=""
+                for c in $(oc get clusterserviceversions.operators.coreos.com -n "$NAMESPACE" -o name 2>/dev/null); do
+                  case "${c##*/}" in "${PACKAGE}.v"*) ;; *) continue ;; esac
+                  [ "$(oc get "$c" -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null)" = "Succeeded" ] && found="${c##*/}"
+                done
+                [ -n "$found" ] && log "ok: operator ${found} serves ${NAMESPACE}" \
+                  || bad "no Succeeded ${PACKAGE} CSV in ${NAMESPACE}: install the operator, or set operator.install=true"
+                oc get serviceaccount mongodb-kubernetes-database-pods -n "$NAMESPACE" >/dev/null 2>&1 \
+                  || bad "ServiceAccount mongodb-kubernetes-database-pods (mongot pods run as it; the operator's bundle creates it in the operator's own namespace only)"
+              fi
+
+              if [ "$PROBLEMS" -gt 0 ]; then
+                printf '[preflight] FAILED: %s problem(s). Create the objects as in docs/mongot-envoy-mtls-fresh-install-runbook.md, Steps 1 to 5; nothing was installed.\n' "$PROBLEMS" >&2
+                exit 1
+              fi
+              log "all hand-made objects are present"
+{{- end }}

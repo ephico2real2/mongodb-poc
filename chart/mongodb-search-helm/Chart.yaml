@@ -1,0 +1,16 @@
+apiVersion: v2
+name: mongodb-search-helm
+description: >-
+  MongoDB Search (mongot) behind the operator-managed Envoy on OpenShift: the MongoDB operator through OLM with a
+  Manual InstallPlan the chart approves for the pinned version only, the MongoDBSearch resource and the passthrough
+  Route from values, a check that the hand-made secrets exist, and a gate that returns only when search is serving.
+type: application
+version: 0.1.0
+# The operator version this chart installs and was measured with; values.yaml sets operator.version to the same version.
+appVersion: "1.13.0"
+keywords: [openshift, mongodb, mongot, search, envoy, olm]
+home: https://github.com/ephico2real2/mongodb-poc
+sources:
+  - https://github.com/ephico2real2/mongodb-poc/tree/main/chart/mongodb-search-helm
+maintainers:
+  - name: ephico2real2

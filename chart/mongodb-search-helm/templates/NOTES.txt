@@ -1,0 +1,25 @@
+MongoDB Search "{{ .Values.search.name }}" in {{ .Release.Namespace }}: mongot x{{ .Values.search.replicas }} behind Envoy x{{ .Values.loadBalancer.replicas }}{{ if .Values.route.enabled }}, reached through Route {{ .Values.route.name }} on {{ .Values.loadBalancer.externalHostname }}:443{{ end }}.
+
+  The gate's verdict:  oc logs -n {{ .Release.Namespace }} job/{{ include "mongodb-search-helm.fullname" . }}-wait   (kept {{ .Values.jobs.ttlSecondsAfterFinished }} s)
+  The resource:        oc get mongodbsearch {{ .Values.search.name }} -n {{ .Release.Namespace }}
+{{- if .Values.operator.install }}
+  The operator:        oc get subscription,installplan,csv -n {{ .Release.Namespace }}
+
+Upgrades: only operator {{ .Values.operator.version }} is approved. A newer version OLM stages waits; to take it, set
+operator.version and upgrade this release.
+{{- else }}
+
+The operator is not installed by this release (operator.install=false); its upgrades are not gated here.
+{{- end }}
+{{- if .Values.search.version }}
+mongot is pinned to {{ .Values.search.version }} (search.version).
+{{- else }}
+mongot runs the operator's default version and moves only with the operator (search.version is empty).
+{{- end }}
+
+Still by hand (docs/mongot-envoy-mtls-fresh-install-runbook.md): point DNS for {{ .Values.loadBalancer.externalHostname }} at the router, and
+have the mongod hosts trust the company CA and use {{ .Values.loadBalancer.externalHostname }}:443 for search (Steps 6c, 6d).
+{{- if not .Values.search.keepOnUninstall }}
+
+`helm uninstall` removes the MongoDBSearch, and the operator then deletes the mongot volumes and the index.
+{{- end }}

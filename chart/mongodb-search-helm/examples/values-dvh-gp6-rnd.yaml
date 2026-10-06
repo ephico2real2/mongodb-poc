@@ -1,0 +1,10 @@
+# The values that reproduce docs/mongot-envoy-mtls-fresh-install-runbook.md, Steps 6a and 6d, in dvh-gp6-rnd.
+# test/chart.sh compares the rendering with the runbook's YAML, so the two cannot drift apart unnoticed.
+#   helm install mongot chart/mongodb-search-helm -n dvh-gp6-rnd -f chart/mongodb-search-helm/examples/values-dvh-gp6-rnd.yaml --timeout 20m
+# Everything not listed keeps the chart's default, which is the runbook's value.
+loadBalancer:
+  externalHostname: mongot-search-rnd.company.net
+  image: quay.io/ephico2real/envoy:v1.37-latest
+source:
+  hostAndPorts:
+    - abc234.uat.company.net:26018

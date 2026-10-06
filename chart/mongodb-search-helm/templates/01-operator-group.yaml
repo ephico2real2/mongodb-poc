@@ -1,0 +1,19 @@
+{{- /*
+OwnNamespace: the operator serves the release's namespace only. OLM allows one OperatorGroup per namespace, so a
+namespace that already has one sets operatorGroup.create=false and the existing group is used; the preflight
+refuses to add a second. Rendered only with the Subscription.
+*/ -}}
+{{- if and .Values.operator.install .Values.operatorGroup.create }}
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: {{ include "mongodb-search-helm.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  targetNamespaces:
+    - {{ .Release.Namespace }}
+{{- end }}

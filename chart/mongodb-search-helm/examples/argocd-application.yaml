@@ -1,0 +1,29 @@
+# MongoDB Search through Argo CD (OpenShift GitOps). The namespace and the hand-made objects of runbook Steps 1 to 5
+# must exist first, so there is no CreateNamespace here. Not run in the lab: see the chart README, "Tested".
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mongodb-search
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ephico2real2/mongodb-poc.git
+    targetRevision: main
+    path: chart/mongodb-search-helm
+    helm:
+      # The MongoDBSearch CRD then comes from OLM, before the resource's wave. Without this Argo CD would track a
+      # CRD that OLM manages and other namespaces may use, and could delete it with the Application.
+      skipCrds: true
+      valueFiles:
+        - examples/values-dvh-gp6-rnd.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dvh-gp6-rnd
+  # The router writes the Route's status; do not report it as drift.
+  ignoreDifferences:
+    - group: route.openshift.io
+      kind: Route
+      jsonPointers: [/status]
+  # No automated prune or self-heal: pruning the MongoDBSearch makes the operator delete the mongot volumes.
+  syncPolicy: {}

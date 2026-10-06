@@ -1,0 +1,153 @@
+{{- /*
+Optional: per-pod scraping and the distribution alerts of manifests/50, 90 and 96. Losing L7 balancing produces
+no error (queries succeed, pods stay Ready), so the only way to see it is to compare the pods' shares.
+
+The objects are named after search.name, as the hand-applied ones are, so an existing set can be adopted.
+A ServiceMonitor scrapes endpoints, not the Service's address, so each pod is its own series.
+*/ -}}
+{{- if .Values.monitoring.serviceMonitors.enabled }}
+# Envoy's admin port, read-only: the operator restricts it to /stats, /ready, /logging and /drain_listeners.
+# ClusterIP only; never give it a Route.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mongodb-search-helm.envoyStatsService" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: observability
+    mongodb.com/search-name: {{ .Values.search.name }}
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ include "mongodb-search-helm.lbDeployment" . }}
+  ports:
+    - name: admin
+      port: 9901
+      targetPort: 9901
+      protocol: TCP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Values.search.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.serviceMonitors.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ include "mongodb-search-helm.mongotService" . }}
+  endpoints:
+    - port: prometheus
+      path: /metrics
+      interval: {{ .Values.monitoring.serviceMonitors.interval }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Values.search.name }}-envoy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.serviceMonitors.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: observability
+      mongodb.com/search-name: {{ .Values.search.name }}
+  endpoints:
+    - port: admin
+      # The operator's admin allowlist matches on the prefix /stats.
+      path: /stats/prometheus
+      interval: {{ .Values.monitoring.serviceMonitors.interval }}
+{{- end }}
+{{- if .Values.monitoring.alerts.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Values.search.name }}-distribution
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.alerts.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: mongot.distribution
+      rules:
+        # Per-pod share of search traffic.
+        - record: mongot:search_rate:pod
+          expr: |
+            sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count[5m]))
+              + sum by (pod) (rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count[5m]))
+        - record: mongot:search_rate:total
+          expr: sum(mongot:search_rate:pod)
+        - record: mongot:search_share:pod
+          expr: mongot:search_rate:pod / ignoring(pod) group_left mongot:search_rate:total
+
+        - alert: MongotTrafficNotDistributed
+          expr: |
+            max(mongot:search_share:pod) > 0.90
+              and on() (mongot:search_rate:total > 0.2)
+              and on() (count(count by (pod) (mongot:search_rate:pod)) > 1)
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: {{`"One mongot pod is serving {{ $value | humanizePercentage }} of search traffic"`}}
+            description: >-
+              Search traffic is concentrated on a single mongot pod while others are idle.
+              Queries will still succeed and every pod will still report Ready, so nothing
+              else will alert. The usual cause is that the L7 proxy has been bypassed: check
+              that the entry Service selects app={{ include "mongodb-search-helm.lbDeployment" . }} (the Envoy pods)
+              and not the mongot pods, and that Envoy is running.
+            runbook: {{ .Values.monitoring.alerts.runbookUrl | quote }}
+
+        - alert: MongotPodReceivingNoTraffic
+          expr: |
+            (mongot:search_rate:pod == 0)
+              and on() (mongot:search_rate:total > 0.5)
+          for: 15m
+          labels:
+            severity: info
+          annotations:
+            summary: {{`"mongot pod {{ $labels.pod }} has served nothing for 15m while others are busy"`}}
+            description: >-
+              The pod is Ready and scraped, but Envoy is sending it no requests. Expected
+              briefly after a restart while it re-syncs; sustained, it suggests the pod is
+              missing from Envoy's upstream set.
+
+        - alert: MongotEnvoyRetriesElevated
+          expr: sum(rate(envoy_cluster_upstream_rq_retry[5m])) > 1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: {{`"Envoy is retrying {{ $value | printf \"%.1f\" }} req/s to mongot"`}}
+            description: >-
+              mongot is returning RESOURCE_EXHAUSTED (load shedding) or resetting streams, and
+              Envoy is retrying onto a different pod. Sustained retries mean the mongot tier is
+              undersized for the query rate.
+
+        - alert: MongotNoSearchTraffic
+          # The jobs are named after the two scraped Services, so the pattern follows search.name.
+          expr: |
+            sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="mongot_rs_cluster"}[5m])) == 0
+              and on() (count(up{job=~"{{ include "mongodb-search-helm.mongotService" . }}|{{ include "mongodb-search-helm.envoyStatsService" . }}"} == 1) > 0)
+          for: 30m
+          labels:
+            severity: info
+          annotations:
+            summary: "Envoy has forwarded no requests to mongot for 30m"
+            description: >-
+              Either genuinely idle, or mongod has stopped reaching the load balancer. Check
+              mongotHost on the external mongod and that the Route still resolves.
+{{- end }}
