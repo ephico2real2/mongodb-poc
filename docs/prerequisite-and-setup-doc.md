@@ -127,6 +127,16 @@ helm install mongot chart/mongodb-search-helm -n $NS -f my-values.yaml --dry-run
 
 ### Step 8: Install
 
+From the published package, with no clone of the repository:
+
+```bash
+helm install mongot \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.1.0/mongodb-search-helm-0.1.0.tgz \
+  -n $NS -f my-values.yaml --timeout 20m
+```
+
+Or from a checkout:
+
 ```bash
 helm install mongot chart/mongodb-search-helm -n $NS -f my-values.yaml --timeout 20m
 ```
