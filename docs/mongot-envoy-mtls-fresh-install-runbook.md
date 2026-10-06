@@ -29,11 +29,7 @@ A typo, a different prefix or a renamed resource means the operator cannot find 
 Each PEM holds the password-protected private key, the company CA bundle, then the leaf cert. This runbook assumes the public endpoint PEM uses the same layout.
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="diagrams/mongot-runbooks/fresh-install-path.dark.png">
-  <source srcset="diagrams/mongot-runbooks/fresh-install-path.light.png">
-  <img alt="What this runbook sets up: mongod servers outside OpenShift open TLS to the Route mongot-search on port 443; the passthrough Route hands each connection to one of two Envoy pods using balance roundrobin; each Envoy pod picks one of three mongot pods for every query over mTLS on port 27028; mongot syncs straight back to mongod, not through the Route or Envoy. A table lists the certificate presented on each hop." src="diagrams/mongot-runbooks/fresh-install-path.light.png">
-</picture>
+<img alt="What this runbook sets up: mongod servers outside OpenShift open TLS to the Route mongot-search on port 443; the passthrough Route hands each connection to one of two Envoy pods using balance roundrobin; each Envoy pod picks one of three mongot pods for every query over mTLS on port 27028; mongot syncs straight back to mongod, not through the Route or Envoy. A table lists the certificate presented on each hop." src="diagrams/mongot-runbooks/fresh-install-path.light.png">
 <!-- markdownlint-enable MD033 -->
 
 *What this runbook sets up. The router places each mongod connection on one Envoy pod; Envoy spreads every query across the three mongot pods; mongot syncs straight back to mongod.*
@@ -594,4 +590,4 @@ rm cert-*.pem
 
 ## Diagram sources
 
-The figure in the Overview comes from `diagrams/mongot-runbooks/source.html`, rendered to a light and a dark PNG. The page holds two figures, in this order: `fresh-install-path` and `cert-parties`. To change a figure, edit the page, re-render both PNGs, and update its `alt` text and its `text` twin in the same commit.
+The figure in the Overview comes from `diagrams/mongot-runbooks/source.html`, rendered to a light and a dark PNG; this document embeds the light one. The page holds two figures, in this order: `fresh-install-path` and `cert-parties`. To change a figure, edit the page, re-render both PNGs, and update its `alt` text and its `text` twin in the same commit.

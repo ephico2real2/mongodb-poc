@@ -14,11 +14,7 @@ This runbook turns two company-signed PEM files into the Kubernetes TLS secrets 
 Each PEM holds three things, in this order: the password-protected private key, the company CA bundle, then the leaf (service) certificate.
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="diagrams/mongot-runbooks/cert-parties.dark.png">
-  <source srcset="diagrams/mongot-runbooks/cert-parties.light.png">
-  <img alt="The three TLS parties of this runbook: mongod sends search queries to Envoy; Envoy connects to mongot with mTLS, presenting its client cert; mongot syncs from mongod, presenting the mongot cert as a client. All three trust the company CA, held in ent-trust-bundle and in ca.crt in each secret." src="diagrams/mongot-runbooks/cert-parties.light.png">
-</picture>
+<img alt="The three TLS parties of this runbook: mongod sends search queries to Envoy; Envoy connects to mongot with mTLS, presenting its client cert; mongot syncs from mongod, presenting the mongot cert as a client. All three trust the company CA, held in ent-trust-bundle and in ca.crt in each secret." src="diagrams/mongot-runbooks/cert-parties.light.png">
 <!-- markdownlint-enable MD033 -->
 
 *The three parties and the certificate each one presents. All three need the company CA.*
@@ -393,4 +389,4 @@ Keep the original PEM files and Step 4 backups somewhere access-controlled. Dele
 
 ## Diagram sources
 
-The figure in the Overview comes from `diagrams/mongot-runbooks/source.html`, rendered to a light and a dark PNG. The page holds two figures, in this order: `fresh-install-path` and `cert-parties`. To change a figure, edit the page, re-render both PNGs, and update its `alt` text and its `text` twin in the same commit.
+The figure in the Overview comes from `diagrams/mongot-runbooks/source.html`, rendered to a light and a dark PNG; this document embeds the light one. The page holds two figures, in this order: `fresh-install-path` and `cert-parties`. To change a figure, edit the page, re-render both PNGs, and update its `alt` text and its `text` twin in the same commit.
