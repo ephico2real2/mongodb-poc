@@ -2,7 +2,6 @@
 # 80-route-passthrough.yaml. The secrets and the trust bundle already in the namespace are used as they are.
 #   helm install mongot chart/mongodb-search-helm -n mongodb-poc -f chart/mongodb-search-helm/examples/values-crc.yaml --timeout 20m
 search:
-  replicas: 0                          # as left on the lab; raise it to serve
   resources:
     requests: {cpu: 200m, memory: 1Gi}
     limits: {cpu: "1", memory: 2Gi}

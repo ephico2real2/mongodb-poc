@@ -315,6 +315,8 @@ oc get secret $SYNC_PW_SECRET -n $NS -o jsonpath='{.data.password}' | base64 -d 
 
 With the ConfigMap and secrets in place, the operator finds them on the first reconcile, and the pods start without crash-looping on missing files.
 
+The Helm chart `chart/mongodb-search-helm` does 6a, 6b and 6d in one `helm install`, and installs the operator as well: see [Prerequisites and Setup](prerequisite-and-setup-doc.md). The steps below are the same thing by hand.
+
 **6a. Apply the MongoDBSearch resource**
 
 The resource never names the TLS secrets directly. `certsSecretPrefix: ent` plus the resource name `mongot` tells the operator to look for `ent-mongot-search-cert`, `ent-mongot-search-lb-0-cert` and `ent-mongot-search-lb-0-client-cert`, the names created in Step 5. The sync password is referenced by name in `passwordSecretRef`.

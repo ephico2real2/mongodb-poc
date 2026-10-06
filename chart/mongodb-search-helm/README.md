@@ -19,46 +19,17 @@ Steps 1 to 5 of the runbook stay manual: the chart never creates a certificate, 
 | 3 | approver Job | Approves the InstallPlan for `operator.version`, and no other |
 | 4 | gate Job | Returns only when the operator, mongot, Envoy and the Route are ready |
 
-## Before you install
-
-The namespace must exist and hold the five objects of runbook Steps 1 to 5. With the default values
-(`tls.certsSecretPrefix: ent`, `search.name: mongot`) they are:
-
-| Object | Kind | Keys |
-| --- | --- | --- |
-| `ent-mongot-search-cert` | Secret | `tls.crt`, `tls.key` |
-| `ent-mongot-search-lb-0-cert` | Secret | `tls.crt`, `tls.key` |
-| `ent-mongot-search-lb-0-client-cert` | Secret | `tls.crt`, `tls.key` |
-| `search-sync-source-password` | Secret | `password` |
-| `ent-trust-bundle` | ConfigMap | `ca.crt` |
-
-The operator finds the three TLS secrets by name and says nothing when a name is wrong. The preflight turns that
-into an install error that names the missing object. It reads the five objects by name and prints their key
-names, never their contents.
-
-The `certified-operators` catalog must be enabled on the cluster.
-
 ## Install
+
+The step-by-step procedure, from creating the five prerequisite objects by hand to installing, upgrading and
+removing the chart, is in [`docs/prerequisite-and-setup-doc.md`](../../docs/prerequisite-and-setup-doc.md).
+
+In short, once the prerequisites exist in the namespace:
 
 ```bash
 helm install mongot chart/mongodb-search-helm -n dvh-gp6-rnd \
   -f chart/mongodb-search-helm/examples/values-dvh-gp6-rnd.yaml --timeout 20m
 ```
-
-`--timeout 20m` matters: Helm waits for the gate only as long as its timeout, which defaults to 5 minutes.
-
-Two values have no default and must be set: `loadBalancer.externalHostname` and `source.hostAndPorts`.
-
-If a Job fails, its log says why:
-
-```bash
-oc logs -n dvh-gp6-rnd job/mongot-mongodb-search-helm-preflight   # a missing secret or key
-oc logs -n dvh-gp6-rnd job/mongot-mongodb-search-helm-approver    # the InstallPlan
-oc logs -n dvh-gp6-rnd job/mongot-mongodb-search-helm-wait        # which readiness check did not pass
-```
-
-Still by hand after the install, as in the runbook: point DNS for the public name at the router (Step 6d), and
-have the mongod hosts trust the company CA and use the public name on port 443 (Step 6c).
 
 ## Values
 
@@ -95,27 +66,10 @@ have the mongod hosts trust the company CA and use the public name on port 443 (
 
 `values.schema.json` refuses an unknown key, an IP address as hostname and a source without a port.
 
-## Upgrades
-
-The Subscription is on Manual approval, so the operator never upgrades by itself. To upgrade it, set
-`operator.version` and run `helm upgrade`; the approver approves that version's InstallPlan.
-
-mongot follows the operator. With `search.version` empty the operator runs its own default mongot version
-(1.70.1 for operator 1.13.0), so mongot changes only when `operator.version` does. Set `search.version` to hold
-mongot on one version across operator upgrades.
+## Maintaining the chart
 
 When you change `operator.version`, change `appVersion` in `Chart.yaml` to match and run
 `scripts/refresh-mongodbsearch-crd.sh` against a cluster on that version.
-
-## Uninstall
-
-`helm uninstall` removes the Subscription, the MongoDBSearch, the Route and the monitoring objects.
-
-- **The search index is deleted.** The operator sets the mongot volumes to be deleted with the resource, so a
-  reinstall syncs from the source again. Set `search.keepOnUninstall=true` to leave the resource in place.
-- **The operator keeps running.** OLM leaves the operator's CSV when its Subscription goes. The next install
-  clears it (the csv-reclaim Job). To remove it now: `oc delete csv mongodb-kubernetes.v1.13.0 -n <namespace>`.
-- **The CRDs, the hand-made secrets and the trust bundle stay.**
 
 ## Argo CD
 
@@ -130,18 +84,5 @@ test/chart.sh        # no cluster: lint, renders, the runbook comparison, schema
 
 ## Tested
 
-On 2026-10-06, against the CRC lab (OpenShift 4.22.7, operator 1.13.0, Helm 4.3.0):
-
-- `test/chart.sh` passes.
-- Every rendered object passes a server-side dry run against the lab's API (`oc apply --dry-run=server`).
-- The preflight script, run read-only against the lab's existing secrets, passes; with a wrong prefix and a wrong
-  trust bundle name it fails and names the four missing objects.
-- The gate script, run read-only against the running lab, passes; told to expect three mongot pods, or another
-  certificate secret name, it fails and names that check.
-
-Not run yet:
-
-- A real `helm install`: the Jobs in the cluster under their own Roles, the approver approving an InstallPlan,
-  the csv-reclaim, and an uninstall followed by a reinstall.
-- An end-to-end `$search` through the chart's Route.
-- `operator.install=false`, and Argo CD.
+Installed, reinstalled and searched end to end on CRC on 2026-10-06. The runs, the timings and what was not tested
+are in [`docs/prerequisite-and-setup-doc.md`](../../docs/prerequisite-and-setup-doc.md#tested-on-crc).
