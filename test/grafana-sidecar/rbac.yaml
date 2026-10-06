@@ -1,0 +1,14 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: grafana-validate-configmaps, namespace: mongodb-poc}
+rules:
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: grafana-validate-configmaps, namespace: mongodb-poc}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: grafana-validate-configmaps}
+subjects:
+  - {kind: ServiceAccount, name: grafana-validate, namespace: mongodb-poc}

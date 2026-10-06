@@ -1,0 +1,38 @@
+# A throw-away Grafana with the dashboard sidecar, to prove the chart's ConfigMap is loaded by one (the method of
+# openshift-ipsec-nas evidence kind/03, here on OpenShift). Removed after the measurement.
+fullnameOverride: grafana-validate
+testFramework: {enabled: false}
+persistence: {enabled: false}
+# OpenShift's restricted profile picks the user; the chart's fixed 472 would be refused.
+securityContext: {runAsNonRoot: true, runAsUser: null, runAsGroup: null, fsGroup: null}
+# The chart's own Role would let this Grafana read every Secret in the namespace; the Role beside this file
+# gives the sidecar ConfigMaps only.
+rbac: {create: false, pspEnabled: false}
+resources: {requests: {cpu: 20m, memory: 128Mi}, limits: {memory: 384Mi}}
+sidecar:
+  resources: {requests: {cpu: 10m, memory: 64Mi}, limits: {memory: 128Mi}}
+  dashboards:
+    enabled: true
+    resource: configmap
+    label: grafana_dashboard
+    labelValue: "1"
+grafana.ini:
+  auth.anonymous: {enabled: true, org_role: Viewer}
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Thanos Querier
+        uid: thanos
+        type: prometheus
+        access: proxy
+        isDefault: true
+        url: https://thanos-querier.openshift-monitoring.svc:9091
+        jsonData:
+          httpHeaderName1: Authorization
+          tlsAuthWithCACert: true
+          timeInterval: 30s
+        # The pod's own ServiceAccount token and the service CA, read from the files OpenShift mounts.
+        secureJsonData:
+          httpHeaderValue1: Bearer $__file{/var/run/secrets/kubernetes.io/serviceaccount/token}
+          tlsCACert: $__file{/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt}

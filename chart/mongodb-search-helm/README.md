@@ -30,7 +30,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.2.0/mongodb-search-helm-0.2.0.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.2.1/mongodb-search-helm-0.2.1.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -85,27 +85,42 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 
 The chart ships one dashboard, **MongoDB Search**, in two forms from one source. Its four sections each answer a question: is search up, is traffic spread across the mongot pods, is Envoy healthy, and how is each mongot pod doing.
 
-The captures below were taken on 2026-10-06 with the lab's data, read through Thanos Querier as the console reads it, a few minutes after searches started through the lab's search GUI. Click an image to open it full size. The dark captures are beside them in [`docs/screenshots/`](../../docs/screenshots/).
+The captures below were taken on the lab on 2026-10-06, a few minutes after searches started through the lab's search GUI. Click an image to open it full size. The dark captures, and earlier ones from a Perses and a Grafana run on a workstation, are beside them in [`docs/screenshots/`](../../docs/screenshots/).
 
 ### Perses, in the OpenShift console
 
 On by default (`monitoring.persesDashboard.enabled`). In the console it is under **Observe → Dashboards (Perses)**, in the release's project.
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The MongoDB Search dashboard in Perses 0.54.0, last 15 minutes, in four sections, with no warning sign on any panel. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods in Envoy, 0.23 searches per second, largest share on one pod 33 percent. Is traffic spread: three per-pod lines that rise together once searches start, each near a third. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, 95th percentile latency of 3 to 5 milliseconds. How is each mongot pod doing: average search latency of 4 to 5 milliseconds, no failures, no replication lag, JVM memory per pod." src="../../docs/screenshots/dashboard-perses.light.png">
+<img alt="The OpenShift console, logged in as developer, project mongodb-poc, Dashboards, dashboard MongoDB Search, last 15 minutes, in four sections, with no warning sign on any panel. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods in Envoy, 0.56 searches per second, largest share on one pod 34 percent. Is traffic spread: three per-pod lines that rise together and level near 0.2 per second, each share near a third. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, 95th percentile latency of 2 to 3.5 milliseconds. How is each mongot pod doing: average search latency of 4 to 8 milliseconds, no failures, replication lag at 0 but for two short readings of 3 seconds on one pod, JVM memory per pod." src="../../docs/screenshots/dashboard-console.light.png">
 <!-- markdownlint-enable MD033 -->
 
-*The dashboard as the chart renders it, in Perses 0.54.0, the Perses version of the lab's Cluster Observability Operator. Captured in a local Perses of that version reading the lab's Thanos Querier; the page inside the OpenShift console was not captured. The retries and responses panels start at 16:02 because the chart had just begun scraping those two counters under their new names ([Envoy counters](#envoy-counters-without-_total)).*
+*The dashboard in the lab's own OpenShift console (4.22.7, Cluster Observability Operator 1.5.3), opened by [`scripts/capture-console-dashboard.py`](../../scripts/capture-console-dashboard.py) as the lab's `developer` user, who held only the roles below.*
+
+**Who can see it.** Measured with that user: before the roles below, the API refused it the dashboard (`oc auth can-i get persesdashboards`: `no`); with them, every panel drew. The three namespace roles were given together; whether fewer would do was not measured.
+
+| To | The viewer held | Where it comes from |
+| --- | --- | --- |
+| Open the project and the dashboard | `view`, `persesdashboard-viewer-role` and `persesdatasource-viewer-role` in the release's namespace | RoleBindings you create; the two Perses roles are ClusterRoles of the Cluster Observability Operator. The chart creates no RoleBinding |
+| See the data | `cluster-monitoring-view` | The platform; the data source is Thanos Querier on port 9091, which checks it |
+
+```bash
+for role in view persesdashboard-viewer-role persesdatasource-viewer-role; do
+  oc create rolebinding "search-dashboard-$role" -n <namespace> --clusterrole="$role" --group=<team>
+done
+```
 
 ### Grafana
 
-Off by default (`monitoring.grafanaDashboard`). The chart ships it as a ConfigMap labelled `grafana_dashboard: "1"`, for a Grafana dashboard sidecar.
+Off by default (`monitoring.grafanaDashboard`). The chart ships it as a ConfigMap labelled `grafana_dashboard: "1"`, for a Grafana dashboard sidecar that watches the release's namespace.
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The MongoDB Search dashboard in Grafana 13.2.3, last 15 minutes, in four sections, with no warning sign on any panel. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods in Envoy, 0.30 searches per second, largest share on one pod 35 percent. Is traffic spread: three per-pod lines that rise together once searches start, their shares settling near a third. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, 95th percentile latency falling from 8 to 3 milliseconds. How is each mongot pod doing: average search latency settling near 4 milliseconds, no failures, no replication lag, JVM memory per pod." src="../../docs/screenshots/dashboard-grafana.light.png">
+<img alt="The MongoDB Search dashboard in a Grafana 12.3.1 running in the lab namespace, data source Thanos Querier, last 15 minutes, in four sections, with no warning sign on any panel. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods in Envoy, 0.56 searches per second, largest share on one pod 34 percent. Is traffic spread: three per-pod lines that rise together to 0.2 per second, their shares settling between 32 and 34 percent. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, 95th percentile latency between 0.5 and 3.5 milliseconds. How is each mongot pod doing: average search latency of 4 to 8 milliseconds, no failures, replication lag at 0 but for two short readings of 3 seconds on one pod, JVM memory per pod." src="../../docs/screenshots/dashboard-grafana-sidecar.light.png">
 <!-- markdownlint-enable MD033 -->
 
-*The dashboard as the chart's ConfigMap carries it, loaded from a file by a local Grafana 13.2.3 reading the lab's Thanos Querier.*
+*The chart's ConfigMap, loaded by the dashboard sidecar of a Grafana installed in the lab namespace for this measurement and removed afterwards (the Grafana Helm chart 10.5.15, Grafana 12.3.1, sidecar 2.5.0; [`test/grafana-sidecar/`](../../test/grafana-sidecar/)). Measured: the Grafana held no such dashboard before `monitoring.grafanaDashboard=true`; 37 s after that upgrade started, the sidecar had written the file and Grafana listed the dashboard with 16 panels; all 16 queries answered through its Thanos Querier data source.*
+
+Two things that Grafana needed, which the chart does not provide: a Prometheus data source (the dashboard takes the default one; here Thanos Querier on port 9091 with the Grafana pod's own token), and a Role that lets the sidecar read ConfigMaps. The Grafana Helm chart's own Role also lets it read every Secret in the namespace; `test/grafana-sidecar/` replaces it with one for ConfigMaps only.
 
 How the Perses form is generated from the Grafana one, and how both were validated, is in [`docs/grafana-to-perses-conversion.md`](../../docs/grafana-to-perses-conversion.md).
 
