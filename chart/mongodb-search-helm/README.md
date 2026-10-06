@@ -16,6 +16,7 @@ Steps 1 to 5 of the runbook stay manual: the chart never creates a certificate, 
 | 1 | Route | The passthrough Route of runbook Step 6d, with `balance: roundrobin` |
 | 1 | ServiceMonitors | Per-pod scraping of mongot and Envoy; on by default |
 | 1 | Alerts | Optional, off by default |
+| 1 | Dashboard | Optional, off by default: Perses (OpenShift console) and Grafana |
 | 2 | csv-reclaim Job | Clears an operator CSV left behind by an earlier uninstall |
 | 3 | approver Job | Approves the InstallPlan for `operator.version`, and no other |
 | 4 | gate Job | Returns only when the operator, mongot, Envoy and the Route are ready |
@@ -73,12 +74,19 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 | `route.balance` | `roundrobin` | Step 6d; see the [rationale](../../docs/mongot-route-balance-rationale.md) |
 | `monitoring.serviceMonitors.enabled` | `true` | Per-pod scraping of mongot and Envoy; needs user workload monitoring |
 | `monitoring.alerts.enabled` | `false` | Alerts when traffic concentrates on one mongot pod |
+| `monitoring.persesDashboard.enabled`, `.thanosURL` | `false`, Thanos Querier port 9091 | The "MongoDB Search" dashboard in the console; needs the Cluster Observability Operator |
+| `monitoring.grafanaDashboard` | `false` | The same dashboard as a ConfigMap for a Grafana dashboard sidecar |
 | `preflight.enabled` | `true` | |
 | `installPlanApprover.waitSeconds`, `csvReclaim.*`, `wait.*`, `jobs.*` | see `values.yaml` | |
 
 `values.schema.json` refuses an unknown key, an IP address as hostname and a source without a port.
 
 ## Maintaining the chart
+
+The dashboard has one source, `files/mongodb-search.json` (Grafana). After changing it, run
+`scripts/perses-dashboard.sh` to regenerate `files/mongodb-search.perses.json`; never edit that file by hand.
+The script uses `percli` 0.54.0 from the PATH, or from the official Perses image with podman or docker. The commands, step by step,
+are in [`docs/grafana-to-perses-conversion.md`](../../docs/grafana-to-perses-conversion.md).
 
 When you change `operator.version`, change `appVersion` in `Chart.yaml` to match and run
 `scripts/refresh-mongodbsearch-crd.sh` against a cluster on that version.

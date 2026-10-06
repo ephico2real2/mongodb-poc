@@ -106,6 +106,23 @@ grep -q 'job=~"srch-search-0-svc|srch-envoy-stats"' <<<"$m" && ok "the no-traffi
 [[ "$(grep -c -- '- alert:' <<<"$m")" == 4 && "$(grep -c -- '- record:' <<<"$m")" == 3 ]] && ok "four alerts and three recording rules" || bad "alert or rule count"
 grep -q '{{ $value | humanizePercentage }}' <<<"$m" && ok "Prometheus templating survives Helm" || bad "alert templating was eaten by Helm"
 
+# Dashboards: off by default; one Grafana source, a generated Perses copy, both scoped to this namespace and name.
+o="$(objects)"
+{ has "$o" "PersesDashboard/mongot-search" || has "$o" "PersesDatasource/mongot-thanos" || has "$o" "ConfigMap/mongot-grafana-dashboard"; } && bad "no dashboard objects by default" || ok "no dashboard objects by default"
+o="$(objects --set monitoring.persesDashboard.enabled=true --set monitoring.grafanaDashboard=true --set search.name=srch)"
+{ has "$o" "PersesDashboard/srch-search" && has "$o" "PersesDatasource/srch-thanos" && has "$o" "ConfigMap/srch-grafana-dashboard"; } && ok "dashboard objects follow search.name" || bad "dashboard object names"
+d="$(render --set monitoring.persesDashboard.enabled=true --set monitoring.grafanaDashboard=true --set search.name=srch -s templates/31-dashboards.yaml)"
+! grep -q '__NAMESPACE__\|__SEARCH__' <<<"$d" && ok "no token is left in the rendered dashboards" || bad "a token survived rendering"
+grep -q 'namespace=\\"dvh-gp6-rnd\\",job=\\"srch-search-0-svc\\"' <<<"$d" && ok "the dashboard queries name this namespace and search" || bad "dashboard query scope"
+grep -q '"name": "srch-thanos"' <<<"$d" && grep -q 'secret: srch-thanos-secret' <<<"$d" && ok "every Perses query names the chart's datasource" || bad "Perses datasource name"
+python3 - "${CHART}/files/mongodb-search.json" "${CHART}/files/mongodb-search.perses.json" <<'PY' && ok "the Perses dashboard has the Grafana one's panels and queries" || bad "the Perses dashboard is stale: run scripts/perses-dashboard.sh"
+import json, sys
+g = json.load(open(sys.argv[1])); p = json.load(open(sys.argv[2]))
+want = {x["title"]: x["targets"][0]["expr"] for x in g["panels"] if x["type"] != "row"}
+got = {x["spec"]["display"]["name"]: x["spec"]["queries"][0]["spec"]["plugin"]["spec"]["query"] for x in p["panels"].values()}
+sys.exit(0 if want == got and not any(x["spec"]["plugin"]["kind"] == "Markdown" for x in p["panels"].values()) else 1)
+PY
+
 # Schema refusals.
 refused "an unknown key" --set operator.typo=1
 refused "a version with a v" --set operator.version=v1.13.0
@@ -138,6 +155,8 @@ for f in "${tmp}"/*.sh; do
   fi
 done
 [[ $n == 4 ]] && ok "four Job scripts checked" || bad "expected four Job scripts, found $n"
-bash -n scripts/refresh-mongodbsearch-crd.sh && ok "bash -n scripts/refresh-mongodbsearch-crd.sh" || bad "bash -n scripts/refresh-mongodbsearch-crd.sh"
+for s in scripts/refresh-mongodbsearch-crd.sh scripts/perses-dashboard.sh; do
+  bash -n "$s" && ok "bash -n $s" || bad "bash -n $s"
+done
 
 [[ $fails == 0 ]] && echo "all chart tests passed" || { echo "${fails} failed"; exit 1; }

@@ -136,6 +136,18 @@ monitoring:
     enabled: false
     labels: {}
     runbookUrl: https://github.com/ephico2real2/mongodb-poc/blob/main/README.md#the-failure-that-produces-no-error
+  # The "MongoDB Search" dashboard in the OpenShift console (Observe -> Dashboards (Perses)): a PersesDashboard
+  # and the PersesDatasource it queries, in this namespace. Needs the Cluster Observability Operator (COO 1.5 or
+  # later) on the cluster, and the ServiceMonitors above for data. Off by default: without COO its kinds do not
+  # exist and the install would fail. Viewers need view in this namespace and cluster-monitoring-view.
+  persesDashboard:
+    enabled: false
+    # Thanos Querier's cluster-wide port. The per-namespace port (9092) refuses the Perses UI's POST queries
+    # for readers.
+    thanosURL: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
+  # The same dashboard for Grafana: a ConfigMap labelled grafana_dashboard: "1", which a Grafana dashboard
+  # sidecar loads. Without such a Grafana the ConfigMap is simply unused. Off by default.
+  grafanaDashboard: false
 
 # The post-install gate: returns when the operator's CSV is Succeeded, the MongoDBSearch has observed its current
 # generation and is Running, mongot and Envoy are rolled out to the requested replicas, Envoy mounts the expected

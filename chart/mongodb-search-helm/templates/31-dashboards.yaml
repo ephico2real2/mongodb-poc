@@ -1,0 +1,73 @@
+{{- /*
+Optional: the "MongoDB Search" dashboard, for Perses and for Grafana.
+
+files/mongodb-search.json (Grafana) is the only source; files/mongodb-search.perses.json is generated from it
+by scripts/perses-dashboard.sh. Both carry the tokens __NAMESPACE__ and __SEARCH__, replaced here, so every
+query reads this namespace's search and no other.
+
+Perses: the dashboard appears in the OpenShift console under Observe -> Dashboards (Perses), which needs the
+Cluster Observability Operator (its perses.dev CRDs). The datasource is Thanos Querier's cluster-wide port and
+sends each viewer's own token, so nothing is stored: a viewer needs view in this namespace and
+cluster-monitoring-view. The per-namespace port (9092) refuses the Perses UI's POST queries for readers.
+*/ -}}
+{{- $ns := include "mongodb-search-helm.namespace" . }}
+{{- if .Values.monitoring.persesDashboard.enabled }}
+apiVersion: perses.dev/v1alpha2
+kind: PersesDatasource
+metadata:
+  name: {{ .Values.search.name }}-thanos
+  namespace: {{ $ns }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  client:
+    tls:
+      enable: true
+      caCert:
+        type: file
+        certPath: /ca/service-ca.crt
+  config:
+    display:
+      name: OpenShift Thanos (cluster)
+    # false: every query names this datasource, and the namespace's default one stays untouched.
+    default: false
+    plugin:
+      kind: PrometheusDatasource
+      spec:
+        proxy:
+          kind: HTTPProxy
+          spec:
+            url: {{ .Values.monitoring.persesDashboard.thanosURL }}
+            # the Perses secret COO derives from spec.client.tls; the proxy must name it
+            secret: {{ .Values.search.name }}-thanos-secret
+---
+apiVersion: perses.dev/v1alpha2
+kind: PersesDashboard
+metadata:
+  name: {{ .Values.search.name }}-search
+  namespace: {{ $ns }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  config:
+{{ .Files.Get "files/mongodb-search.perses.json" | replace "__NAMESPACE__" $ns | replace "__SEARCH__" .Values.search.name | trimSuffix "\n" | indent 4 }}
+{{- end }}
+{{- if .Values.monitoring.grafanaDashboard }}
+---
+# The label grafana_dashboard: "1" is the convention Grafana dashboard sidecars watch for.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.search.name }}-grafana-dashboard
+  namespace: {{ $ns }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  mongodb-search.json: |
+{{ .Files.Get "files/mongodb-search.json" | replace "__NAMESPACE__" $ns | replace "__SEARCH__" .Values.search.name | trimSuffix "\n" | indent 4 }}
+{{- end }}

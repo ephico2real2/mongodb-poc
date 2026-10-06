@@ -24,3 +24,5 @@ route:
 monitoring:
   alerts:
     enabled: true
+  persesDashboard:
+    enabled: true                      # the lab has the Cluster Observability Operator
