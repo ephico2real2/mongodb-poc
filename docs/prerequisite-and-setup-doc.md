@@ -242,6 +242,12 @@ Search against the external replica set, through the chart's Route:
 - 30 text queries split 10 / 10 / 10 across the three mongot pods.
 - Envoy logged 37 requests, all gRPC `OK`, split 12 / 12 / 13 across mongot. One Envoy pod carried all 37: the replica set holds one connection, and the Route places connections, not requests.
 
+Monitoring, which the lab values switch on (`monitoring.serviceMonitors.enabled` and `monitoring.alerts.enabled`; both are off by default and need user workload monitoring on the cluster):
+
+- Prometheus scrapes all five pods: `up` is 1 for the three mongot pods and the two Envoy pods.
+- The rule group `mongot.distribution` is loaded and healthy: three recording rules and four alerts, none firing.
+- The recorded share of search traffic is 0.33 for each mongot pod.
+
 Not tested:
 
 - **Part 1 on this date.** The commands are the runbook's Steps 4 and 5. They were not rerun, because recreating the lab's secrets would mean writing its private keys to disk; the existing objects were used.
