@@ -427,6 +427,8 @@ The Route targets the Service the operator already creates for Envoy. No extra S
 
 Envoy does not need a headless Service. Only mongot is headless, because Envoy load-balances and retries across individual mongot pods. The router sends traffic straight to the Service's pod endpoints, so ClusterIP and headless behave the same behind a Route.
 
+The Route also sets `haproxy.router.openshift.io/balance: roundrobin`. A passthrough Route defaults to `source`, which picks the Envoy pod from the client's address and can send every connection to the same pod. `roundrobin` hands new connections to the two Envoy pods in turn. It places connections, not requests; Envoy still spreads each query across the mongot pods. The reasoning and the lab measurements are in [mongot Route Balance Rationale](mongot-route-balance-rationale.md).
+
 Save as `mongot-search-route.yaml`:
 
 ```yaml
@@ -435,6 +437,8 @@ kind: Route
 metadata:
   name: mongot-search
   namespace: dvh-gp6-rnd
+  annotations:
+    haproxy.router.openshift.io/balance: roundrobin   # passthrough default is source
 spec:
   host: mongot-search-rnd.company.net     # must equal externalHostname
   to:
@@ -454,13 +458,17 @@ oc apply -f mongot-search-route.yaml -n $NS
 oc get route mongot-search -n $NS                      # TERMINATION column must read passthrough
 oc get endpoints mongot-search-0-proxy-svc -n $NS      # lists both Envoy pod IPs on 27028
 
+# Balance algorithm set on the Route (prints roundrobin)
+oc get route mongot-search -n $NS \
+  -o jsonpath='{.metadata.annotations.haproxy\.router\.openshift\.io/balance}{"\n"}'
+
 # Router hostname to give the DNS owner for the CNAME
 oc get route mongot-search -n $NS -o jsonpath='{.status.ingress[0].routerCanonicalHostname}{"\n"}'
 ```
 
 Ask the DNS owner to point `mongot-search-rnd.company.net` at that router hostname. mongod then connects to `mongot-search-rnd.company.net:443`; the router listens on 443 and forwards to Envoy on 27028.
 
-If you use an Ingress instead of a Route, it needs the passthrough annotation. Without it, OpenShift defaults to edge:
+If you use an Ingress instead of a Route, it needs the passthrough annotation. Without it, OpenShift defaults to edge. Set the balance annotation on the Ingress as well; OpenShift copies the Ingress annotations onto the Route it generates:
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -470,6 +478,7 @@ metadata:
   namespace: dvh-gp6-rnd
   annotations:
     route.openshift.io/termination: passthrough
+    haproxy.router.openshift.io/balance: roundrobin
 spec:
   rules:
     - host: mongot-search-rnd.company.net
@@ -487,6 +496,10 @@ spec:
 ```bash
 oc apply -f mongot-search-ingress.yaml -n $NS
 oc get route -n $NS        # the generated Route must show passthrough
+
+# Name, termination and balance of each Route (the generated one prints passthrough and roundrobin)
+oc get route -n $NS \
+  -o jsonpath='{range .items[*]}{.metadata.name}{"  "}{.spec.tls.termination}{"  "}{.metadata.annotations.haproxy\.router\.openshift\.io/balance}{"\n"}{end}'
 ```
 
 ## Step 7: Verify end to end, then clean up
@@ -514,6 +527,16 @@ Expected: the subject shows the public FQDN, the issuer is the company CA, and `
 **7c. Confirm search works**
 
 Run a `$search` query against a collection that has a search index. Results back means every hop is working.
+
+To see which Envoy pod carried the queries, count the requests each one logged:
+
+```bash
+for p in $(oc get pods -n $NS -l app=mongot-search-lb-0 -o name); do
+  echo "$p $(oc logs -n $NS $p -c envoy --since=1h | grep -c '"upstream_host"')"
+done
+```
+
+Each mongod keeps one long-lived connection, and a connection stays on the Envoy pod it first landed on. With one mongod sending queries, one pod showing every request and the other showing 0 is expected. Once several mongod servers are connected, a pod that stays at 0 means the connections are not being spread: check the balance annotation from Step 6d.
 
 **7d. Delete the decrypted keys**
 
@@ -547,6 +570,7 @@ Keep the original PEM files somewhere access-controlled.
 | `-ext` option not recognised | macOS LibreSSL | Use the `-text \| grep` forms in this runbook |
 | Operator reports a missing secret, or mongot or Envoy pods never start | TLS secret name does not follow the `certsSecretPrefix` convention | Compare `oc get secret -n $NS \| grep ent-mongot-search` with the Overview naming table; recreate any misnamed secret |
 | Step 7b shows the router's certificate, not the company-signed one | Route uses edge or reencrypt termination | Step 6d: set `tls.termination: passthrough` on the `mongot-search` Route |
+| One Envoy pod logs every request and the other logs none, with several mongod servers connected | Route has no balance annotation, so the router uses `source` | Step 6d: set `haproxy.router.openshift.io/balance: roundrobin`; connections already open move only when they reconnect |
 
 Commands referenced in the table:
 
