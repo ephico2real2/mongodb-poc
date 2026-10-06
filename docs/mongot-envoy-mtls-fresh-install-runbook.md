@@ -448,6 +448,7 @@ spec:
     targetPort: mongot-grpc               # named port on the Service (27028)
   tls:
     termination: passthrough              # Envoy terminates TLS, not the router
+  wildcardPolicy: None                    # this exact host only, never a wildcard
 ```
 
 Apply and check it:

@@ -130,5 +130,18 @@ test/chart.sh        # no cluster: lint, renders, the runbook comparison, schema
 
 ## Tested
 
-See [`docs/mongodb-search-helm-lab-test.md`](../../docs/mongodb-search-helm-lab-test.md) for what was run on CRC and
-what was not.
+On 2026-10-06, against the CRC lab (OpenShift 4.22.7, operator 1.13.0, Helm 4.3.0):
+
+- `test/chart.sh` passes.
+- Every rendered object passes a server-side dry run against the lab's API (`oc apply --dry-run=server`).
+- The preflight script, run read-only against the lab's existing secrets, passes; with a wrong prefix and a wrong
+  trust bundle name it fails and names the four missing objects.
+- The gate script, run read-only against the running lab, passes; told to expect three mongot pods, or another
+  certificate secret name, it fails and names that check.
+
+Not run yet:
+
+- A real `helm install`: the Jobs in the cluster under their own Roles, the approver approving an InstallPlan,
+  the csv-reclaim, and an uninstall followed by a reinstall.
+- An end-to-end `$search` through the chart's Route.
+- `operator.install=false`, and Argo CD.

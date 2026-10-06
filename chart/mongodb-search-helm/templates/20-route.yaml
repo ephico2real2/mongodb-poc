@@ -30,4 +30,6 @@ spec:
     targetPort: {{ .Values.route.targetPort }}
   tls:
     termination: passthrough
+  # This exact host and no other: never a wildcard Route.
+  wildcardPolicy: None
 {{- end }}
