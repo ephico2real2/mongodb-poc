@@ -2,7 +2,7 @@
 # Template tests for chart/mongodb-search-helm, no cluster needed:  test/chart.sh
 # Needs helm (3 or 4) and python3; uses yq and shellcheck when they are installed.
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 CHART=chart/mongodb-search-helm
 RUNBOOK=docs/mongot-envoy-mtls-fresh-install-runbook.md
 REMOTE=${CHART}/examples/values-dvh-gp6-rnd.yaml
@@ -92,9 +92,25 @@ done
 [[ "$(grep -c 'resourceNames' <<<"$p")" == 2 ]] && ok "the preflight reads Secrets and the ConfigMap by name only" || bad "preflight resourceNames"
 [[ "$(grep -c 'helm.sh/hook: pre-install,pre-upgrade' <<<"$p")" == 4 ]] && ok "preflight: four pre-install hooks" || bad "preflight hooks"
 
-# Monitoring: off by default, named after search.name.
+# Monitoring: the ServiceMonitors and the alerts are on by default; all named after search.name.
 o="$(objects)"
-{ has "$o" "ServiceMonitor/mongot" || has "$o" "PrometheusRule/mongot-distribution" || has "$o" "Service/mongot-envoy-stats"; } && bad "no monitoring objects by default" || ok "no monitoring objects by default"
+{ has "$o" "ServiceMonitor/mongot" && has "$o" "ServiceMonitor/mongot-envoy" && has "$o" "Service/mongot-envoy-stats"; } && ok "ServiceMonitors and the Envoy stats Service by default" || bad "ServiceMonitors missing by default"
+has "$o" "PrometheusRule/mongot-distribution" && ok "the alert rules by default" || bad "alert rules missing by default"
+# Envoy's two counters without _total get the suffix at the scrape, and nothing uses the bare names: rate() on
+# those is answered with "metric might not be a counter", which both dashboards show as a warning.
+m="$(render -s templates/30-monitoring.yaml)"
+{ grep -q 'regex: (envoy_cluster_upstream_rq_(?:retry|xx))' <<<"$m" && grep -q 'replacement: ${1}_total' <<<"$m"; } \
+  && ok "the Envoy scrape gives upstream_rq_retry and upstream_rq_xx the _total suffix" || bad "Envoy counter rename"
+bare="$({ echo "$m"; cat "${CHART}/files/mongodb-search.json" "${CHART}/files/mongodb-search.perses.json"; } | grep -o -E 'rate\(envoy_cluster_upstream_rq_(retry|xx)[{[]' || true)"
+[[ -z "${bare}" ]] && ok "no alert or panel takes a rate of the bare Envoy counter names" || bad "bare Envoy counter in a rate: ${bare}"
+# 0 / 0 is NaN: the share panel divides only when there were searches, and reads 0 otherwise.
+for f in mongodb-search.json mongodb-search.perses.json; do
+  grep -q -F '[5m]))) > 0)) or vector(0)' "${CHART}/files/${f}" && ok "${f}: the largest-share panel does not divide by zero" || bad "${f}: largest share divides by zero"
+done
+o="$(objects --set monitoring.alerts.enabled=false)"; has "$o" "PrometheusRule/mongot-distribution" && bad "alerts.enabled=false renders no rules" || ok "alerts.enabled=false renders no rules"
+o="$(objects)"
+o="$(objects --set monitoring.serviceMonitors.enabled=false)"
+{ has "$o" "ServiceMonitor/mongot" || has "$o" "ServiceMonitor/mongot-envoy" || has "$o" "Service/mongot-envoy-stats"; } && bad "serviceMonitors.enabled=false renders none" || ok "serviceMonitors.enabled=false renders none"
 o="$(objects --set monitoring.serviceMonitors.enabled=true --set monitoring.alerts.enabled=true --set search.name=srch)"
 { has "$o" "ServiceMonitor/srch" && has "$o" "ServiceMonitor/srch-envoy" && has "$o" "Service/srch-envoy-stats" && has "$o" "PrometheusRule/srch-distribution"; } \
   && ok "monitoring objects follow search.name" || bad "monitoring object names: ${o//$'\n'/ }"
@@ -102,6 +118,26 @@ m="$(render --set monitoring.alerts.enabled=true --set search.name=srch -s templ
 grep -q 'job=~"srch-search-0-svc|srch-envoy-stats"' <<<"$m" && ok "the no-traffic alert's job pattern follows search.name" || bad "alert job pattern"
 [[ "$(grep -c -- '- alert:' <<<"$m")" == 4 && "$(grep -c -- '- record:' <<<"$m")" == 3 ]] && ok "four alerts and three recording rules" || bad "alert or rule count"
 grep -q '{{ $value | humanizePercentage }}' <<<"$m" && ok "Prometheus templating survives Helm" || bad "alert templating was eaten by Helm"
+
+# Dashboards: Perses on by default, Grafana off; one Grafana source, a generated Perses copy, scoped to this namespace and name.
+o="$(objects)"
+{ has "$o" "PersesDashboard/mongot-search" && has "$o" "PersesDatasource/mongot-thanos"; } && ok "the Perses dashboard and its datasource by default" || bad "Perses dashboard missing by default"
+has "$o" "ConfigMap/mongot-grafana-dashboard" && bad "no Grafana dashboard by default" || ok "no Grafana dashboard by default"
+o="$(objects --set monitoring.persesDashboard.enabled=false)"
+{ has "$o" "PersesDashboard/mongot-search" || has "$o" "PersesDatasource/mongot-thanos"; } && bad "persesDashboard.enabled=false renders none" || ok "persesDashboard.enabled=false renders none"
+o="$(objects --set monitoring.persesDashboard.enabled=true --set monitoring.grafanaDashboard=true --set search.name=srch)"
+{ has "$o" "PersesDashboard/srch-search" && has "$o" "PersesDatasource/srch-thanos" && has "$o" "ConfigMap/srch-grafana-dashboard"; } && ok "dashboard objects follow search.name" || bad "dashboard object names"
+d="$(render --set monitoring.persesDashboard.enabled=true --set monitoring.grafanaDashboard=true --set search.name=srch -s templates/31-dashboards.yaml)"
+! grep -q '__NAMESPACE__\|__SEARCH__' <<<"$d" && ok "no token is left in the rendered dashboards" || bad "a token survived rendering"
+grep -q 'namespace=\\"dvh-gp6-rnd\\",job=\\"srch-search-0-svc\\"' <<<"$d" && ok "the dashboard queries name this namespace and search" || bad "dashboard query scope"
+grep -q '"name": "srch-thanos"' <<<"$d" && grep -q 'secret: srch-thanos-secret' <<<"$d" && ok "every Perses query names the chart's datasource" || bad "Perses datasource name"
+python3 - "${CHART}/files/mongodb-search.json" "${CHART}/files/mongodb-search.perses.json" <<'PY' && ok "the Perses dashboard has the Grafana one's panels and queries" || bad "the Perses dashboard is stale: run scripts/perses-dashboard.sh"
+import json, sys
+g = json.load(open(sys.argv[1])); p = json.load(open(sys.argv[2]))
+want = {x["title"]: x["targets"][0]["expr"] for x in g["panels"] if x["type"] != "row"}
+got = {x["spec"]["display"]["name"]: x["spec"]["queries"][0]["spec"]["plugin"]["spec"]["query"] for x in p["panels"].values()}
+sys.exit(0 if want == got and not any(x["spec"]["plugin"]["kind"] == "Markdown" for x in p["panels"].values()) else 1)
+PY
 
 # Schema refusals.
 refused "an unknown key" --set operator.typo=1
@@ -135,6 +171,8 @@ for f in "${tmp}"/*.sh; do
   fi
 done
 [[ $n == 4 ]] && ok "four Job scripts checked" || bad "expected four Job scripts, found $n"
-bash -n scripts/refresh-mongodbsearch-crd.sh && ok "bash -n scripts/refresh-mongodbsearch-crd.sh" || bad "bash -n scripts/refresh-mongodbsearch-crd.sh"
+for s in scripts/refresh-mongodbsearch-crd.sh scripts/perses-dashboard.sh; do
+  bash -n "$s" && ok "bash -n $s" || bad "bash -n $s"
+done
 
 [[ $fails == 0 ]] && echo "all chart tests passed" || { echo "${fails} failed"; exit 1; }

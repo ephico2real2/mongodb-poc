@@ -122,20 +122,33 @@ route:
   annotations: {}
   labels: {}
 
-# Optional, off by default. Needs user workload monitoring on the cluster.
+# Needs user workload monitoring on the cluster; without it the objects are created and nothing scrapes them.
 monitoring:
   serviceMonitors:
     # Scrapes each mongot pod (port prometheus) and each Envoy pod (admin port 9901, /stats/prometheus) through
-    # a ClusterIP Service the chart adds for Envoy's admin port.
-    enabled: false
+    # a ClusterIP Service the chart adds for Envoy's admin port. On by default.
+    enabled: true
     interval: 15s
     labels: {}
   alerts:
     # A PrometheusRule with per-pod share recording rules and four alerts, the first of which fires when one
-    # mongot pod serves over 90% of search traffic.
-    enabled: false
+    # mongot pod serves over 90% of search traffic. On by default.
+    enabled: true
     labels: {}
     runbookUrl: https://github.com/ephico2real2/mongodb-poc/blob/main/README.md#the-failure-that-produces-no-error
+  # The "MongoDB Search" dashboard in the OpenShift console (Observe -> Dashboards (Perses)): a PersesDashboard
+  # and the PersesDatasource it queries, in this namespace. Needs the Cluster Observability Operator (COO 1.5 or
+  # later) on the cluster, and the ServiceMonitors above for data. On by default: set it to false on a cluster
+  # without COO, where its kinds do not exist and the install would fail. Viewers need view in this namespace
+  # and cluster-monitoring-view.
+  persesDashboard:
+    enabled: true
+    # Thanos Querier's cluster-wide port. The per-namespace port (9092) refuses the Perses UI's POST queries
+    # for readers.
+    thanosURL: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
+  # The same dashboard for Grafana: a ConfigMap labelled grafana_dashboard: "1", which a Grafana dashboard
+  # sidecar loads. Without such a Grafana the ConfigMap is simply unused. Off by default.
+  grafanaDashboard: false
 
 # The post-install gate: returns when the operator's CSV is Succeeded, the MongoDBSearch has observed its current
 # generation and is Running, mongot and Envoy are rolled out to the requested replicas, Envoy mounts the expected

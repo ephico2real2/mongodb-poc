@@ -27,6 +27,7 @@ The three TLS secret names are fixed by the operator: `<prefix>-<name>-search-ce
 - [ ] The namespace exists
 - [ ] `helm` 3.17 or later (tested with 4.3.0)
 - [ ] The `certified-operators` catalog is enabled on the cluster
+- [ ] The Cluster Observability Operator is installed, for the dashboard in the console; if it is not, set `monitoring.persesDashboard.enabled: false` in the values file
 - [ ] The certificate files are split and verified as in Steps 1 to 3 of the [fresh install runbook](mongot-envoy-mtls-fresh-install-runbook.md): for each of `mongot`, `envoy-client` and `lb` you have `<name>.crt` (leaf, then chain), `<name>.key` (no password) and `<name>-ca.crt`
 
 ## Part 1: Create the prerequisites
@@ -252,7 +253,7 @@ Search against the external replica set, through the chart's Route:
 - 30 text queries split 10 / 10 / 10 across the three mongot pods.
 - Envoy logged 37 requests, all gRPC `OK`, split 12 / 12 / 13 across mongot. One Envoy pod carried all 37: the replica set holds one connection, and the Route places connections, not requests.
 
-Monitoring, which the lab values switch on (`monitoring.serviceMonitors.enabled` and `monitoring.alerts.enabled`; both are off by default and need user workload monitoring on the cluster):
+Monitoring (the ServiceMonitors and the alerts are on by default; both need user workload monitoring on the cluster):
 
 - Prometheus scrapes all five pods: `up` is 1 for the three mongot pods and the two Envoy pods.
 - The rule group `mongot.distribution` is loaded and healthy: three recording rules and four alerts, none firing.

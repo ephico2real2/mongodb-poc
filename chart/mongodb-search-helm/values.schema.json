@@ -118,7 +118,12 @@
         "alerts": {
           "type": "object", "additionalProperties": false,
           "properties": {"enabled": {"type": "boolean"}, "labels": {"type": "object"}, "runbookUrl": {"type": "string"}}
-        }
+        },
+        "persesDashboard": {
+          "type": "object", "additionalProperties": false,
+          "properties": {"enabled": {"type": "boolean"}, "thanosURL": {"type": "string", "pattern": "^https?://"}}
+        },
+        "grafanaDashboard": {"type": "boolean"}
       }
     },
     "wait": {
