@@ -37,6 +37,14 @@ across the `mongot` pods.
 | [TESTING.md](TESTING.md) | the test suite, and the failure each assertion guards against |
 | [OBSERVE.md](OBSERVE.md) | watching traffic land on the pods, five different ways |
 
+**Install it with Helm**
+
+| Doc | What it covers |
+|---|---|
+| [chart/mongodb-search-helm](chart/mongodb-search-helm/README.md) | the Helm chart: its values, monitoring, and the dashboard in Perses and Grafana, with screenshots |
+| [docs/prerequisite-and-setup-doc.md](docs/prerequisite-and-setup-doc.md) | creating the prerequisites by hand, then installing, upgrading and removing the chart |
+| [docs/grafana-to-perses-conversion.md](docs/grafana-to-perses-conversion.md) | converting the Grafana dashboard to Perses, and how both were validated |
+
 **Background**
 
 | Doc | What it covers |

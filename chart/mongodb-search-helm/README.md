@@ -81,6 +81,38 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 
 `values.schema.json` refuses an unknown key, an IP address as hostname and a source without a port.
 
+## Dashboards
+
+The chart ships one dashboard, **MongoDB Search**, in two forms from one source. Its four sections each answer a question: is search up, is traffic spread across the mongot pods, is Envoy healthy, and how is each mongot pod doing.
+
+The captures below were taken on 2026-10-06 with the lab's data, while searches were being sent through the lab's search GUI. Click an image to open it full size.
+
+### Perses, in the OpenShift console
+
+On by default (`monitoring.persesDashboard.enabled`). In the console it is under **Observe → Dashboards (Perses)**, in the release's project.
+
+<!-- markdownlint-disable MD033 -->
+| Light | Dark |
+| --- | --- |
+| <img alt="The MongoDB Search dashboard in Perses 0.54.0, light theme, last 15 minutes, in four sections. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods Envoy can reach, under one search per second, largest share on one mongot pod 33 to 34 percent. Is traffic spread: three per-pod lines that sit together, each near a third. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, latency of a few milliseconds. How is each mongot pod doing: average search latency of 3 to 5 milliseconds, no failures, no replication lag, JVM memory per pod." src="../../docs/screenshots/dashboard-perses.light.png"> | <img alt="The MongoDB Search dashboard in Perses 0.54.0, dark theme, last 15 minutes, in four sections. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods Envoy can reach, under one search per second, largest share on one mongot pod 33 to 34 percent. Is traffic spread: three per-pod lines that sit together, each near a third. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, latency of a few milliseconds. How is each mongot pod doing: average search latency of 3 to 5 milliseconds, no failures, no replication lag, JVM memory per pod." src="../../docs/screenshots/dashboard-perses.dark.png"> |
+<!-- markdownlint-enable MD033 -->
+
+*The dashboard as the chart renders it, in Perses 0.54.0, the Perses version of the lab's Cluster Observability Operator. Captured in a local Perses of that version reading the lab's Prometheus; the page inside the OpenShift console was not captured.*
+
+### Grafana
+
+Off by default (`monitoring.grafanaDashboard`). The chart ships it as a ConfigMap labelled `grafana_dashboard: "1"`, for a Grafana dashboard sidecar.
+
+<!-- markdownlint-disable MD033 -->
+| Light | Dark |
+| --- | --- |
+| <img alt="The MongoDB Search dashboard in Grafana 13.2.3, light theme, last 15 minutes, in four sections. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods Envoy can reach, under one search per second, largest share on one mongot pod 33 to 34 percent. Is traffic spread: three per-pod lines that sit together, each near a third. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, latency of a few milliseconds. How is each mongot pod doing: average search latency of 3 to 5 milliseconds, no failures, no replication lag, JVM memory per pod." src="../../docs/screenshots/dashboard-grafana.light.png"> | <img alt="The MongoDB Search dashboard in Grafana 13.2.3, dark theme, last 15 minutes, in four sections. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods Envoy can reach, under one search per second, largest share on one mongot pod 33 to 34 percent. Is traffic spread: three per-pod lines that sit together, each near a third. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, latency of a few milliseconds. How is each mongot pod doing: average search latency of 3 to 5 milliseconds, no failures, no replication lag, JVM memory per pod." src="../../docs/screenshots/dashboard-grafana.dark.png"> |
+<!-- markdownlint-enable MD033 -->
+
+*The dashboard as the chart's ConfigMap carries it, loaded from a file by a local Grafana 13.2.3 reading the lab's Prometheus.*
+
+How the Perses form is generated from the Grafana one, and how both were validated, is in [`docs/grafana-to-perses-conversion.md`](../../docs/grafana-to-perses-conversion.md).
+
 ## Maintaining the chart
 
 The dashboard has one source, `files/mongodb-search.json` (Grafana). After changing it, run

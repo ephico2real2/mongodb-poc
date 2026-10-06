@@ -2,6 +2,7 @@
   "display": {
     "name": "MongoDB Search"
   },
+  "variables": [],
   "panels": {
     "0_0": {
       "kind": "Panel",
@@ -844,28 +845,19 @@
           {
             "x": 0,
             "y": 15,
-            "width": 8,
+            "width": 12,
             "height": 8,
             "content": {
               "$ref": "#/spec/panels/2_0"
             }
           },
           {
-            "x": 8,
+            "x": 12,
             "y": 15,
-            "width": 8,
+            "width": 12,
             "height": 8,
             "content": {
               "$ref": "#/spec/panels/2_1"
-            }
-          },
-          {
-            "x": 16,
-            "y": 15,
-            "width": 8,
-            "height": 8,
-            "content": {
-              "$ref": "#/spec/panels/2_2"
             }
           },
           {
@@ -874,13 +866,22 @@
             "width": 12,
             "height": 8,
             "content": {
-              "$ref": "#/spec/panels/2_3"
+              "$ref": "#/spec/panels/2_2"
             }
           },
           {
             "x": 12,
             "y": 23,
             "width": 12,
+            "height": 8,
+            "content": {
+              "$ref": "#/spec/panels/2_3"
+            }
+          },
+          {
+            "x": 0,
+            "y": 31,
+            "width": 24,
             "height": 8,
             "content": {
               "$ref": "#/spec/panels/2_4"
@@ -901,7 +902,7 @@
         "items": [
           {
             "x": 0,
-            "y": 32,
+            "y": 40,
             "width": 12,
             "height": 8,
             "content": {
@@ -910,7 +911,7 @@
           },
           {
             "x": 12,
-            "y": 32,
+            "y": 40,
             "width": 12,
             "height": 8,
             "content": {
@@ -919,7 +920,7 @@
           },
           {
             "x": 0,
-            "y": 40,
+            "y": 48,
             "width": 12,
             "height": 8,
             "content": {
@@ -928,7 +929,7 @@
           },
           {
             "x": 12,
-            "y": 40,
+            "y": 48,
             "width": 12,
             "height": 8,
             "content": {
@@ -939,6 +940,5 @@
       }
     }
   ],
-  "duration": "1h",
-  "variables": []
+  "duration": "1h"
 }

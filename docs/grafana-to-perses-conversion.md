@@ -166,4 +166,21 @@ Oct 6, 2026, Perses 0.54.0. Ways 1 and 3 were run, and after Step 2 they gave th
 | 2. `percli` binary | No: no `percli` is installed on this workstation | Same command as Way 1 without the container |
 | 3. Server `/api/migrate` on the lab | Yes | Same 16 panels, queries, units and sections as Way 1 |
 
-On the lab, the Perses operator reported both objects `Available=True` after `helm upgrade`, and all 16 queries returned series when run against the lab's Prometheus. The dashboard was not opened in the console for this document.
+## Validated
+
+Oct 6, 2026, on the lab (namespace `mongodb-poc`), with searches sent through the lab's search GUI during the checks. Screenshots of both forms, light and dark, are in the [chart README](../chart/mongodb-search-helm/README.md#dashboards).
+
+| Check | How | Result |
+| --- | --- | --- |
+| The Perses objects are accepted | `oc get persesdashboard,persesdatasource` conditions | Both `Available=True` |
+| The lab's Perses server holds the dashboard | `GET /api/v1/projects/mongodb-poc/dashboards/mongot-search` on the server, with a login | 16 panels, 4 sections |
+| Every panel gets data through the Perses datasource | Each panel's query sent as the Perses UI sends it: `POST /proxy/projects/mongodb-poc/datasources/mongot-thanos/api/v1/query`, with a viewer's login | 16 of 16 panels returned series |
+| The Perses dashboard draws | The chart's rendering loaded into a local Perses 0.54.0 with its web page, reading the lab's Prometheus | All 16 panels drawn, light and dark |
+| The Grafana dashboard draws | The chart's ConfigMap JSON loaded from a file by a local Grafana 13.2.3, reading the lab's Prometheus | All 16 panels drawn, light and dark |
+
+Two defects were found by these checks and fixed in the Grafana source:
+
+- **Every Grafana panel read "No data".** The file named its data source `${DS_PROMETHEUS}` but defined no variable of that name, so a Grafana that loads the file from a ConfigMap reported `Datasource ${DS_PROMETHEUS} was not found`. The dashboard now carries its own data source variable.
+- **Legends were cut off in Perses.** Three Envoy panels shared a row, and the second pod name did not fit. They are now two to a row.
+
+Not validated: the dashboard inside the OpenShift console page itself (the lab's Perses server has no web page of its own, and the console needs a browser login), and loading the ConfigMap through a Grafana dashboard sidecar or the grafana-operator.
