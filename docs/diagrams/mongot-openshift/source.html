@@ -6,7 +6,7 @@
 :root {
   --ground: #f5f6f8; --surface: #ffffff; --ink: #18212c; --muted: #58636f; --rule: #d7dce3;
   --host: #a55a0b; --host-wash: #fbf1e4; --remote: #0e6f68; --remote-wash: #e3f3f1;
-  --gap: #b3261e; --gap-wash: #fbe9e7; --none: #6b7684; --none-wash: #eef0f3;
+  --gap: #b3261e; --gap-wash: #fbe9e7; --none: #5f6a77; --none-wash: #eef0f3;
   --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
@@ -90,14 +90,14 @@ a { color: var(--remote); }
           <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
             <rect x="26" y="150" width="440" height="126" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
             <text x="44" y="172" font-weight="600" fill="var(--host)">gvisor-tap-vsock · crc daemon</text>
-            <text x="44" y="190">userspace TCP/IP stack over a unix socket</text>
+            <text x="44" y="190" fill="currentColor">userspace TCP/IP stack over a unix socket</text>
             <text x="44" y="208" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">~/.crc/sockets/crc-unixgram.sock</text>
             <text x="44" y="230" fill="var(--gap)" font-weight="600">No host interface exists for 192.168.126/127.x</text>
-            <text x="44" y="248">Reached only by port-forwards, not by routing:</text>
+            <text x="44" y="248" fill="currentColor">Reached only by port-forwards, not by routing:</text>
             <text x="44" y="266" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">api.crc.testing → 127.0.0.1 · :443 → 192.168.127.2</text>
 
             <rect x="26" y="292" width="440" height="212" rx="8" fill="var(--surface)" stroke="var(--rule)" stroke-width="1.5"/>
-            <text x="44" y="314" font-weight="600">CRC VM · OpenShift 4.22.7 · aarch64</text>
+            <text x="44" y="314" fill="currentColor" font-weight="600">CRC VM · OpenShift 4.22.7 · aarch64</text>
             <g font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">
               <text x="44" y="334">br-ex   192.168.127.2/24   ← default route</text>
               <text x="44" y="352">eth10   192.168.126.11/24</text>
@@ -111,14 +111,14 @@ a { color: var(--remote); }
 
             <rect x="514" y="150" width="440" height="126" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
             <text x="532" y="172" font-weight="600" fill="var(--remote)">colima VM · &quot;bgp-fabric&quot;</text>
-            <text x="532" y="190">socket_vmnet → a real bridge the Mac can route to</text>
+            <text x="532" y="190" fill="currentColor">socket_vmnet → a real bridge the Mac can route to</text>
             <text x="532" y="210" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">col0  192.168.64.4     (host-routable)</text>
             <text x="532" y="228" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">eth0  192.168.5.3      (lima slirp)</text>
-            <text x="532" y="250">Docker Engine 29.5.2 · 6 GiB · separate from CRC</text>
+            <text x="532" y="250" fill="currentColor">Docker Engine 29.5.2 · 6 GiB · separate from CRC</text>
             <text x="532" y="268" fill="var(--muted)">Also hosts a containerlab FRR/BGP fabric.</text>
 
             <rect x="514" y="292" width="440" height="212" rx="8" fill="var(--surface)" stroke="var(--rule)" stroke-width="1.5"/>
-            <text x="532" y="314" font-weight="600">MongoDB replica set rs0 — outside Kubernetes</text>
+            <text x="532" y="314" fill="currentColor" font-weight="600">MongoDB replica set rs0 — outside Kubernetes</text>
             <text x="532" y="332" fill="var(--muted)">network_mode: host — members advertise host:port,</text>
             <text x="532" y="350" fill="var(--muted)">so three ports avoid hairpin NAT on a bridge.</text>
             <g font-family="IBM Plex Mono, monospace" font-size="12">
@@ -160,7 +160,7 @@ a { color: var(--remote); }
 
           <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
             <rect x="286" y="16" width="360" height="56" rx="8" fill="var(--surface)" stroke="var(--none)" stroke-width="1.5"/>
-            <text x="466" y="38" text-anchor="middle" font-weight="600">mongod rs0 — outside Kubernetes</text>
+            <text x="466" y="38" fill="currentColor" text-anchor="middle" font-weight="600">mongod rs0 — outside Kubernetes</text>
             <text x="466" y="56" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">mongotHost = 192.168.64.1:27028</text>
 
             <rect x="286" y="102" width="360" height="52" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
@@ -222,7 +222,7 @@ a { color: var(--remote); }
 
           <g font-family="IBM Plex Sans, sans-serif" font-size="12">
             <rect x="20" y="16" width="240" height="94" rx="8" fill="var(--surface)" stroke="var(--rule)"/>
-            <text x="36" y="36" font-weight="600">Ownership</text>
+            <text x="36" y="36" fill="currentColor" font-weight="600">Ownership</text>
             <rect x="36" y="46" width="14" height="12" rx="3" fill="var(--remote-wash)" stroke="var(--remote)"/>
             <text x="58" y="56" fill="var(--muted)">operator-owned (MCK)</text>
             <rect x="36" y="66" width="14" height="12" rx="3" fill="var(--host-wash)" stroke="var(--host)"/>
@@ -427,7 +427,7 @@ a { color: var(--remote); }
             <line x1="490" y1="58" x2="490" y2="78" stroke="currentColor" stroke-width="1.4" marker-end="url(#ah5)"/>
 
             <rect x="250" y="82" width="480" height="92" rx="8" fill="var(--surface)" stroke="var(--none)" stroke-width="1.8"/>
-            <text x="490" y="104" text-anchor="middle" font-weight="600">MongoDB replica set &#8212; outside OpenShift</text>
+            <text x="490" y="104" fill="currentColor" text-anchor="middle" font-weight="600">MongoDB replica set &#8212; outside OpenShift</text>
             <g font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--muted)">
               <text x="490" y="124" text-anchor="middle">mongod-1.corp:27017 · mongod-2.corp:27017 · mongod-3.corp:27017</text>
               <text x="490" y="142" text-anchor="middle">mongotHost = grpc-search.corp.example:27028 or :443</text>
@@ -480,12 +480,12 @@ a { color: var(--remote); }
             <text x="490" y="659" text-anchor="middle" font-size="12" fill="var(--muted)">scale with spec.clusters[].replicas</text>
 
             <path d="M690,635 H916 V128 H734" stroke="var(--none)" stroke-width="1.4" fill="none" stroke-dasharray="5 4" marker-end="url(#ah5)"/>
-            <g font-family="IBM Plex Sans, sans-serif" font-size="12" fill="var(--none)">
-              <text x="740" y="440" font-weight="600">sync leg</text>
-              <text x="740" y="458">mongot pulls from the</text>
-              <text x="740" y="476">replica set directly</text>
-              <text x="740" y="494">SCRAM · searchCoordinator</text>
-              <text x="740" y="512">does NOT cross Envoy</text>
+            <g text-anchor="end" font-family="IBM Plex Sans, sans-serif" font-size="12" fill="var(--none)">
+              <text x="908" y="440" font-weight="600">sync leg</text>
+              <text x="908" y="458">mongot pulls from the</text>
+              <text x="908" y="476">replica set directly</text>
+              <text x="908" y="494">SCRAM · searchCoordinator</text>
+              <text x="908" y="512">does NOT cross Envoy</text>
             </g>
 
             <text x="48" y="700" font-size="12" fill="var(--muted)">Solid teal = operator-owned · solid amber = you own it · grey = outside the cluster.</text>
@@ -570,7 +570,7 @@ a { color: var(--remote); }
           <defs><marker id="ah7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
           <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
             <rect x="24" y="52" width="196" height="84" rx="8" fill="var(--surface)" stroke="var(--none)" stroke-width="1.8"/>
-            <text x="122" y="76" text-anchor="middle" font-weight="600">mongod rs0</text>
+            <text x="122" y="76" fill="currentColor" text-anchor="middle" font-weight="600">mongod rs0</text>
             <text x="122" y="94" text-anchor="middle" font-size="12" fill="var(--muted)">outside OpenShift</text>
             <text x="122" y="114" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">mongotHost =</text>
             <text x="122" y="128" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">grpc-search.corp:443</text>
@@ -627,7 +627,7 @@ a { color: var(--remote); }
           <defs><marker id="ah8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
           <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
             <rect x="20" y="58" width="168" height="84" rx="8" fill="var(--surface)" stroke="var(--none)" stroke-width="1.8"/>
-            <text x="104" y="82" text-anchor="middle" font-weight="600">mongod rs0</text>
+            <text x="104" y="82" fill="currentColor" text-anchor="middle" font-weight="600">mongod rs0</text>
             <text x="104" y="100" text-anchor="middle" font-size="11.5" fill="var(--muted)">3 members</text>
             <text x="104" y="120" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">mongotHost =</text>
             <text x="104" y="133" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--muted)">VIP:27028</text>
@@ -700,7 +700,7 @@ a { color: var(--remote); }
           <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
 
             <rect x="310" y="14" width="360" height="86" rx="8" fill="var(--surface)" stroke="var(--none)" stroke-width="1.8"/>
-            <text x="490" y="38" text-anchor="middle" font-weight="600">mongod rs0 &#8212; outside OpenShift</text>
+            <text x="490" y="38" fill="currentColor" text-anchor="middle" font-weight="600">mongod rs0 &#8212; outside OpenShift</text>
             <text x="490" y="56" text-anchor="middle" font-size="12" fill="var(--muted)">3 members</text>
             <text x="490" y="76" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--muted)">mongotHost = &lt;vip&gt;:27028</text>
             <text x="490" y="92" text-anchor="middle" font-size="11" fill="var(--gap)">ONE long-lived HTTP/2 connection per member</text>
@@ -752,11 +752,11 @@ a { color: var(--remote); }
             </g>
 
             <path d="M890,578 H948 V57 H674" stroke="var(--none)" stroke-width="1.4" fill="none" stroke-dasharray="5 4" marker-end="url(#ah9)"/>
-            <g font-family="IBM Plex Sans, sans-serif" font-size="11.5" fill="var(--none)">
-              <text x="700" y="150" font-weight="600">sync leg</text>
-              <text x="700" y="168">mongot pulls from rs0</text>
-              <text x="700" y="186">SCRAM · searchCoordinator</text>
-              <text x="700" y="204">does NOT cross Envoy</text>
+            <g text-anchor="end" font-family="IBM Plex Sans, sans-serif" font-size="11.5" fill="var(--none)">
+              <text x="940" y="150" font-weight="600">sync leg</text>
+              <text x="940" y="168">mongot pulls from rs0</text>
+              <text x="940" y="186">SCRAM · searchCoordinator</text>
+              <text x="940" y="204">does NOT cross Envoy</text>
             </g>
 
             <g font-family="IBM Plex Sans, sans-serif" font-size="11.5">
@@ -785,7 +785,7 @@ a { color: var(--remote); }
           <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
 
             <rect x="300" y="14" width="380" height="82" rx="8" fill="var(--surface)" stroke="var(--none)" stroke-width="1.8"/>
-            <text x="490" y="37" text-anchor="middle" font-weight="600">mongod rs0 &#8212; outside OpenShift</text>
+            <text x="490" y="37" fill="currentColor" text-anchor="middle" font-weight="600">mongod rs0 &#8212; outside OpenShift</text>
             <text x="490" y="55" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)">mongotHost = grpc-search.corp:443</text>
             <text x="490" y="73" text-anchor="middle" font-size="11.5" fill="var(--muted)">searchTLSMode: requireTLS</text>
             <text x="490" y="89" text-anchor="middle" font-size="11" fill="var(--gap)">sends the hostname as SNI — never an IP</text>
@@ -798,7 +798,7 @@ a { color: var(--remote); }
             <line x1="490" y1="196" x2="490" y2="218" stroke="currentColor" stroke-width="1.5" marker-end="url(#ahA)"/>
 
             <rect x="300" y="222" width="380" height="58" rx="8" fill="var(--surface)" stroke="var(--rule)" stroke-width="1.5"/>
-            <text x="490" y="245" text-anchor="middle" font-weight="600">OpenShift infra nodes :443</text>
+            <text x="490" y="245" fill="currentColor" text-anchor="middle" font-weight="600">OpenShift infra nodes :443</text>
             <text x="490" y="264" text-anchor="middle" font-size="11.5" fill="var(--muted)">the F5 pool members</text>
             <line x1="490" y1="280" x2="490" y2="302" stroke="currentColor" stroke-width="1.5" marker-end="url(#ahA)"/>
 
@@ -840,12 +840,12 @@ a { color: var(--remote); }
             </g>
 
             <path d="M870,731 H952 V55 H684" stroke="var(--none)" stroke-width="1.4" fill="none" stroke-dasharray="5 4" marker-end="url(#ahA)"/>
-            <g font-size="11.5" fill="var(--none)">
-              <text x="706" y="238" font-weight="600">sync leg</text>
-              <text x="706" y="255">mongot pulls from rs0</text>
-              <text x="706" y="272">TLS + SCRAM</text>
-              <text x="706" y="289">bypasses F5, router</text>
-              <text x="706" y="306">and Envoy entirely</text>
+            <g text-anchor="end" font-size="11.5" fill="var(--none)">
+              <text x="944" y="238" font-weight="600">sync leg</text>
+              <text x="944" y="255">mongot pulls from rs0</text>
+              <text x="944" y="272">TLS + SCRAM</text>
+              <text x="944" y="289">bypasses F5, router</text>
+              <text x="944" y="306">and Envoy entirely</text>
             </g>
 
             <rect x="20" y="122" width="262" height="120" rx="8" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.5"/>
