@@ -66,6 +66,15 @@ spec:
       # The operator's admin allowlist matches on the prefix /stats.
       path: /stats/prometheus
       interval: {{ .Values.monitoring.serviceMonitors.interval }}
+      # Envoy names these two counters without the _total that Prometheus expects of a counter. rate() on such
+      # a name is answered with a notice, "metric might not be a counter", which Thanos Querier returns as a
+      # warning and both Perses and Grafana show as a warning sign on the panel. They get the suffix here, at
+      # the scrape; the dashboards and the alert below use the suffixed names.
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: (envoy_cluster_upstream_rq_(?:retry|xx))
+          targetLabel: __name__
+          replacement: ${1}_total
 {{- end }}
 {{- if .Values.monitoring.alerts.enabled }}
 ---
@@ -126,7 +135,7 @@ spec:
               missing from Envoy's upstream set.
 
         - alert: MongotEnvoyRetriesElevated
-          expr: sum(rate(envoy_cluster_upstream_rq_retry[5m])) > 1
+          expr: sum(rate(envoy_cluster_upstream_rq_retry_total[5m])) > 1
           for: 10m
           labels:
             severity: warning

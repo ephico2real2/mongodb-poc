@@ -2,7 +2,7 @@
 # Template tests for chart/mongodb-search-helm, no cluster needed:  test/chart.sh
 # Needs helm (3 or 4) and python3; uses yq and shellcheck when they are installed.
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 CHART=chart/mongodb-search-helm
 RUNBOOK=docs/mongot-envoy-mtls-fresh-install-runbook.md
 REMOTE=${CHART}/examples/values-dvh-gp6-rnd.yaml
@@ -96,6 +96,17 @@ done
 o="$(objects)"
 { has "$o" "ServiceMonitor/mongot" && has "$o" "ServiceMonitor/mongot-envoy" && has "$o" "Service/mongot-envoy-stats"; } && ok "ServiceMonitors and the Envoy stats Service by default" || bad "ServiceMonitors missing by default"
 has "$o" "PrometheusRule/mongot-distribution" && ok "the alert rules by default" || bad "alert rules missing by default"
+# Envoy's two counters without _total get the suffix at the scrape, and nothing uses the bare names: rate() on
+# those is answered with "metric might not be a counter", which both dashboards show as a warning.
+m="$(render -s templates/30-monitoring.yaml)"
+{ grep -q 'regex: (envoy_cluster_upstream_rq_(?:retry|xx))' <<<"$m" && grep -q 'replacement: ${1}_total' <<<"$m"; } \
+  && ok "the Envoy scrape gives upstream_rq_retry and upstream_rq_xx the _total suffix" || bad "Envoy counter rename"
+bare="$({ echo "$m"; cat "${CHART}/files/mongodb-search.json" "${CHART}/files/mongodb-search.perses.json"; } | grep -o -E 'rate\(envoy_cluster_upstream_rq_(retry|xx)[{[]' || true)"
+[[ -z "${bare}" ]] && ok "no alert or panel takes a rate of the bare Envoy counter names" || bad "bare Envoy counter in a rate: ${bare}"
+# 0 / 0 is NaN: the share panel divides only when there were searches, and reads 0 otherwise.
+for f in mongodb-search.json mongodb-search.perses.json; do
+  grep -q -F '[5m]))) > 0)) or vector(0)' "${CHART}/files/${f}" && ok "${f}: the largest-share panel does not divide by zero" || bad "${f}: largest share divides by zero"
+done
 o="$(objects --set monitoring.alerts.enabled=false)"; has "$o" "PrometheusRule/mongot-distribution" && bad "alerts.enabled=false renders no rules" || ok "alerts.enabled=false renders no rules"
 o="$(objects)"
 o="$(objects --set monitoring.serviceMonitors.enabled=false)"

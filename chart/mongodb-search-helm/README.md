@@ -85,33 +85,40 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 
 The chart ships one dashboard, **MongoDB Search**, in two forms from one source. Its four sections each answer a question: is search up, is traffic spread across the mongot pods, is Envoy healthy, and how is each mongot pod doing.
 
-The captures below were taken on 2026-10-06 with the lab's data, while searches were being sent through the lab's search GUI. Click an image to open it full size.
+The captures below were taken on 2026-10-06 with the lab's data, read through Thanos Querier as the console reads it, a few minutes after searches started through the lab's search GUI. Click an image to open it full size. The dark captures are beside them in [`docs/screenshots/`](../../docs/screenshots/).
 
 ### Perses, in the OpenShift console
 
 On by default (`monitoring.persesDashboard.enabled`). In the console it is under **Observe → Dashboards (Perses)**, in the release's project.
 
 <!-- markdownlint-disable MD033 -->
-| Light | Dark |
-| --- | --- |
-| <img alt="The MongoDB Search dashboard in Perses 0.54.0, light theme, last 15 minutes, in four sections. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods Envoy can reach, under one search per second, largest share on one mongot pod 33 to 34 percent. Is traffic spread: three per-pod lines that sit together, each near a third. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, latency of a few milliseconds. How is each mongot pod doing: average search latency of 3 to 5 milliseconds, no failures, no replication lag, JVM memory per pod." src="../../docs/screenshots/dashboard-perses.light.png"> | <img alt="The MongoDB Search dashboard in Perses 0.54.0, dark theme, last 15 minutes, in four sections. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods Envoy can reach, under one search per second, largest share on one mongot pod 33 to 34 percent. Is traffic spread: three per-pod lines that sit together, each near a third. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, latency of a few milliseconds. How is each mongot pod doing: average search latency of 3 to 5 milliseconds, no failures, no replication lag, JVM memory per pod." src="../../docs/screenshots/dashboard-perses.dark.png"> |
+<img alt="The MongoDB Search dashboard in Perses 0.54.0, last 15 minutes, in four sections, with no warning sign on any panel. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods in Envoy, 0.23 searches per second, largest share on one pod 33 percent. Is traffic spread: three per-pod lines that rise together once searches start, each near a third. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, 95th percentile latency of 3 to 5 milliseconds. How is each mongot pod doing: average search latency of 4 to 5 milliseconds, no failures, no replication lag, JVM memory per pod." src="../../docs/screenshots/dashboard-perses.light.png">
 <!-- markdownlint-enable MD033 -->
 
-*The dashboard as the chart renders it, in Perses 0.54.0, the Perses version of the lab's Cluster Observability Operator. Captured in a local Perses of that version reading the lab's Prometheus; the page inside the OpenShift console was not captured.*
+*The dashboard as the chart renders it, in Perses 0.54.0, the Perses version of the lab's Cluster Observability Operator. Captured in a local Perses of that version reading the lab's Thanos Querier; the page inside the OpenShift console was not captured. The retries and responses panels start at 16:02 because the chart had just begun scraping those two counters under their new names ([Envoy counters](#envoy-counters-without-_total)).*
 
 ### Grafana
 
 Off by default (`monitoring.grafanaDashboard`). The chart ships it as a ConfigMap labelled `grafana_dashboard: "1"`, for a Grafana dashboard sidecar.
 
 <!-- markdownlint-disable MD033 -->
-| Light | Dark |
-| --- | --- |
-| <img alt="The MongoDB Search dashboard in Grafana 13.2.3, light theme, last 15 minutes, in four sections. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods Envoy can reach, under one search per second, largest share on one mongot pod 33 to 34 percent. Is traffic spread: three per-pod lines that sit together, each near a third. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, latency of a few milliseconds. How is each mongot pod doing: average search latency of 3 to 5 milliseconds, no failures, no replication lag, JVM memory per pod." src="../../docs/screenshots/dashboard-grafana.light.png"> | <img alt="The MongoDB Search dashboard in Grafana 13.2.3, dark theme, last 15 minutes, in four sections. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods Envoy can reach, under one search per second, largest share on one mongot pod 33 to 34 percent. Is traffic spread: three per-pod lines that sit together, each near a third. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, latency of a few milliseconds. How is each mongot pod doing: average search latency of 3 to 5 milliseconds, no failures, no replication lag, JVM memory per pod." src="../../docs/screenshots/dashboard-grafana.dark.png"> |
+<img alt="The MongoDB Search dashboard in Grafana 13.2.3, last 15 minutes, in four sections, with no warning sign on any panel. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods in Envoy, 0.30 searches per second, largest share on one pod 35 percent. Is traffic spread: three per-pod lines that rise together once searches start, their shares settling near a third. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, 95th percentile latency falling from 8 to 3 milliseconds. How is each mongot pod doing: average search latency settling near 4 milliseconds, no failures, no replication lag, JVM memory per pod." src="../../docs/screenshots/dashboard-grafana.light.png">
 <!-- markdownlint-enable MD033 -->
 
-*The dashboard as the chart's ConfigMap carries it, loaded from a file by a local Grafana 13.2.3 reading the lab's Prometheus.*
+*The dashboard as the chart's ConfigMap carries it, loaded from a file by a local Grafana 13.2.3 reading the lab's Thanos Querier.*
 
 How the Perses form is generated from the Grafana one, and how both were validated, is in [`docs/grafana-to-perses-conversion.md`](../../docs/grafana-to-perses-conversion.md).
+
+### Envoy counters without `_total`
+
+Envoy exports `envoy_cluster_upstream_rq_retry` and `envoy_cluster_upstream_rq_xx` as counters (Prometheus records their type as `counter`), but without the `_total` that Prometheus expects at the end of a counter's name. `rate()` on such a name is answered with the notice *metric might not be a counter, name does not end in _total/_sum/_count/_bucket*. Thanos Querier returns that notice as a warning, and Perses and Grafana put a warning sign on the panel.
+
+The chart's Envoy ServiceMonitor therefore renames the two at the scrape, to `envoy_cluster_upstream_rq_retry_total` and `envoy_cluster_upstream_rq_xx_total`. The two dashboard panels and the `MongotEnvoyRetriesElevated` alert use those names. What follows from that:
+
+- with Envoy scraped by anything else (for example the hand-applied [`manifests/90-servicemonitors.yaml`](../../manifests/90-servicemonitors.yaml)), the retries and responses panels are empty and that alert never fires;
+- on an upgrade from a release without the rename, those two panels start again from the upgrade: the earlier samples stay under the old names.
+
+Measured on the lab on 2026-10-06, through Thanos Querier: before, each of the two queries came back with one warning; after, all 16 of the dashboard's queries came back with none.
 
 ## Maintaining the chart
 

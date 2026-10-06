@@ -179,7 +179,7 @@
     },
     {
       "type": "stat",
-      "title": "mongot pods Envoy can reach",
+      "title": "mongot pods in Envoy",
       "description": "The smallest number of healthy mongot pods any Envoy pod sees. Below the number of mongot pods, an Envoy pod has lost one.",
       "id": 4,
       "datasource": {
@@ -292,8 +292,8 @@
     },
     {
       "type": "stat",
-      "title": "Largest share on one mongot pod",
-      "description": "With three pods and even balancing this is about 33%. Near 100% means one pod serves everything while the others stay Ready: the failure that produces no error.",
+      "title": "Largest share on one pod",
+      "description": "The share of all searches that the busiest mongot pod served. With three pods and even balancing this is about 33%. Near 100% means one pod serves everything while the others stay Ready: the failure that produces no error. 0% when no search ran in the last 5 minutes.",
       "id": 6,
       "datasource": {
         "type": "prometheus",
@@ -307,7 +307,7 @@
       },
       "targets": [
         {
-          "expr": "max(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) / sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))",
+          "expr": "(max(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) / (sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) > 0)) or vector(0)",
           "refId": "A",
           "instant": true,
           "datasource": {
@@ -580,7 +580,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (pod) (rate(envoy_cluster_upstream_rq_retry{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_cluster_name=\"mongot_rs_cluster\"}[5m]))",
+          "expr": "sum by (pod) (rate(envoy_cluster_upstream_rq_retry_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_cluster_name=\"mongot_rs_cluster\"}[5m]))",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "datasource": {
@@ -626,7 +626,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (envoy_response_code_class) (rate(envoy_cluster_upstream_rq_xx{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_cluster_name=\"mongot_rs_cluster\"}[5m]))",
+          "expr": "sum by (envoy_response_code_class) (rate(envoy_cluster_upstream_rq_xx_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_cluster_name=\"mongot_rs_cluster\"}[5m]))",
           "legendFormat": "{{envoy_response_code_class}}xx",
           "refId": "A",
           "datasource": {

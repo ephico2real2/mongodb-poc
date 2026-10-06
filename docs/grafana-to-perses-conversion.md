@@ -155,7 +155,7 @@ Oct 6, 2026, Perses 0.54.0. Ways 1 and 3 were run, and after Step 2 they gave th
 
 | Section | Panels |
 | --- | --- |
-| Is search up? | mongot pods up; Envoy pods up; mongot pods Envoy can reach; searches per second; largest share on one mongot pod |
+| Is search up? | mongot pods up; Envoy pods up; mongot pods in Envoy; searches per second; largest share on one pod |
 | Is traffic spread across the mongot pods? | Searches per second, per pod; share of searches, per pod |
 | Is Envoy healthy? | Requests per second to mongot; open connections from mongod; retries per second; responses by class; latency, 95th percentile |
 | How is each mongot pod doing? | Average search latency; search failures per second; replication lag; JVM memory used |
@@ -168,7 +168,7 @@ Oct 6, 2026, Perses 0.54.0. Ways 1 and 3 were run, and after Step 2 they gave th
 
 ## Validated
 
-Oct 6, 2026, on the lab (namespace `mongodb-poc`), with searches sent through the lab's search GUI during the checks. Screenshots of both forms, light and dark, are in the [chart README](../chart/mongodb-search-helm/README.md#dashboards).
+Oct 6, 2026, on the lab (namespace `mongodb-poc`), with searches sent through the lab's search GUI during the checks. Screenshots of both forms are in the [chart README](../chart/mongodb-search-helm/README.md#dashboards).
 
 | Check | How | Result |
 | --- | --- | --- |
@@ -182,5 +182,13 @@ Two defects were found by these checks and fixed in the Grafana source:
 
 - **Every Grafana panel read "No data".** The file named its data source `${DS_PROMETHEUS}` but defined no variable of that name, so a Grafana that loads the file from a ConfigMap reported `Datasource ${DS_PROMETHEUS} was not found`. The dashboard now carries its own data source variable.
 - **Legends were cut off in Perses.** Three Envoy panels shared a row, and the second pod name did not fit. They are now two to a row.
+
+Three more were reported from the console's Perses page later the same day, and fixed in the Grafana source and the chart:
+
+- **A warning sign on two Envoy panels.** `rate()` on `envoy_cluster_upstream_rq_retry` and `envoy_cluster_upstream_rq_xx` came back from Thanos Querier with the warning *metric might not be a counter, name does not end in _total/_sum/_count/_bucket*. Both are counters; only their names lack the suffix. The chart's Envoy ServiceMonitor now adds `_total` at the scrape, and the panels and the retry alert use the new names ([chart README](../chart/mongodb-search-helm/README.md#envoy-counters-without-_total)). Measured through Thanos Querier after the change: 16 of 16 queries, no warning.
+- **"NaN%" for the largest share when no search ran.** The query divided zero by zero. It now divides only when there were searches, and reads 0% otherwise.
+- **A stat title cut short.** "Largest share on one mongot pod" did not fit its panel in the console, and "mongot pods Envoy can reach", as long and in a narrower panel, could not either. They are now "Largest share on one pod" and "mongot pods in Envoy".
+
+Both dashboards were drawn again after these changes, this time reading the lab's Thanos Querier, as the console does: all 16 panels drawn, none with a warning sign.
 
 Not validated: the dashboard inside the OpenShift console page itself (the lab's Perses server has no web page of its own, and the console needs a browser login), and loading the ConfigMap through a Grafana dashboard sidecar or the grafana-operator.
