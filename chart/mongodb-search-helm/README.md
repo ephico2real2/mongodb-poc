@@ -14,7 +14,8 @@ Steps 1 to 5 of the runbook stay manual: the chart never creates a certificate, 
 | 1 | OperatorGroup, Subscription | The MongoDB operator through OLM, on Manual approval, pinned to `operator.version` |
 | 1 | MongoDBSearch | The resource of runbook Step 6a |
 | 1 | Route | The passthrough Route of runbook Step 6d, with `balance: roundrobin` |
-| 1 | ServiceMonitors, alerts | Optional, off by default |
+| 1 | ServiceMonitors | Per-pod scraping of mongot and Envoy; on by default |
+| 1 | Alerts | Optional, off by default |
 | 2 | csv-reclaim Job | Clears an operator CSV left behind by an earlier uninstall |
 | 3 | approver Job | Approves the InstallPlan for `operator.version`, and no other |
 | 4 | gate Job | Returns only when the operator, mongot, Envoy and the Route are ready |
@@ -70,7 +71,7 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 | `route.serviceName` | empty: `<search.name>-search-0-proxy-svc` | Step 6d |
 | `route.targetPort` | `mongot-grpc` | Step 6d |
 | `route.balance` | `roundrobin` | Step 6d; see the [rationale](../../docs/mongot-route-balance-rationale.md) |
-| `monitoring.serviceMonitors.enabled` | `false` | Per-pod scraping of mongot and Envoy |
+| `monitoring.serviceMonitors.enabled` | `true` | Per-pod scraping of mongot and Envoy; needs user workload monitoring |
 | `monitoring.alerts.enabled` | `false` | Alerts when traffic concentrates on one mongot pod |
 | `preflight.enabled` | `true` | |
 | `installPlanApprover.waitSeconds`, `csvReclaim.*`, `wait.*`, `jobs.*` | see `values.yaml` | |

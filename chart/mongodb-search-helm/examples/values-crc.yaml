@@ -22,7 +22,5 @@ source:
 route:
   name: mongot-grpc                    # the lab's Route name; it targets the operator's mongot-search-0-proxy-svc
 monitoring:
-  serviceMonitors:
-    enabled: true
   alerts:
     enabled: true

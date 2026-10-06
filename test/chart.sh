@@ -92,9 +92,12 @@ done
 [[ "$(grep -c 'resourceNames' <<<"$p")" == 2 ]] && ok "the preflight reads Secrets and the ConfigMap by name only" || bad "preflight resourceNames"
 [[ "$(grep -c 'helm.sh/hook: pre-install,pre-upgrade' <<<"$p")" == 4 ]] && ok "preflight: four pre-install hooks" || bad "preflight hooks"
 
-# Monitoring: off by default, named after search.name.
+# Monitoring: the ServiceMonitors are on by default, the alerts are not; all named after search.name.
 o="$(objects)"
-{ has "$o" "ServiceMonitor/mongot" || has "$o" "PrometheusRule/mongot-distribution" || has "$o" "Service/mongot-envoy-stats"; } && bad "no monitoring objects by default" || ok "no monitoring objects by default"
+{ has "$o" "ServiceMonitor/mongot" && has "$o" "ServiceMonitor/mongot-envoy" && has "$o" "Service/mongot-envoy-stats"; } && ok "ServiceMonitors and the Envoy stats Service by default" || bad "ServiceMonitors missing by default"
+has "$o" "PrometheusRule/mongot-distribution" && bad "no alert rules by default" || ok "no alert rules by default"
+o="$(objects --set monitoring.serviceMonitors.enabled=false)"
+{ has "$o" "ServiceMonitor/mongot" || has "$o" "ServiceMonitor/mongot-envoy" || has "$o" "Service/mongot-envoy-stats"; } && bad "serviceMonitors.enabled=false renders none" || ok "serviceMonitors.enabled=false renders none"
 o="$(objects --set monitoring.serviceMonitors.enabled=true --set monitoring.alerts.enabled=true --set search.name=srch)"
 { has "$o" "ServiceMonitor/srch" && has "$o" "ServiceMonitor/srch-envoy" && has "$o" "Service/srch-envoy-stats" && has "$o" "PrometheusRule/srch-distribution"; } \
   && ok "monitoring objects follow search.name" || bad "monitoring object names: ${o//$'\n'/ }"

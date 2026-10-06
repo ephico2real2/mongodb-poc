@@ -122,17 +122,17 @@ route:
   annotations: {}
   labels: {}
 
-# Optional, off by default. Needs user workload monitoring on the cluster.
+# Needs user workload monitoring on the cluster; without it the objects are created and nothing scrapes them.
 monitoring:
   serviceMonitors:
     # Scrapes each mongot pod (port prometheus) and each Envoy pod (admin port 9901, /stats/prometheus) through
-    # a ClusterIP Service the chart adds for Envoy's admin port.
-    enabled: false
+    # a ClusterIP Service the chart adds for Envoy's admin port. On by default.
+    enabled: true
     interval: 15s
     labels: {}
   alerts:
     # A PrometheusRule with per-pod share recording rules and four alerts, the first of which fires when one
-    # mongot pod serves over 90% of search traffic.
+    # mongot pod serves over 90% of search traffic. Off by default.
     enabled: false
     labels: {}
     runbookUrl: https://github.com/ephico2real2/mongodb-poc/blob/main/README.md#the-failure-that-produces-no-error
