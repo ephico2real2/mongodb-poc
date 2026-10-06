@@ -96,6 +96,23 @@ done
 o="$(objects)"
 { has "$o" "ServiceMonitor/mongot" && has "$o" "ServiceMonitor/mongot-envoy" && has "$o" "Service/mongot-envoy-stats"; } && ok "ServiceMonitors and the Envoy stats Service by default" || bad "ServiceMonitors missing by default"
 has "$o" "PrometheusRule/mongot-distribution" && ok "the alert rules by default" || bad "alert rules missing by default"
+# The dashboard: 27 panels in 5 sections. The 16 it had before the mongot data and process panels keep their
+# titles: panels are added to this dashboard, not replaced.
+python3 - "${CHART}/files/mongodb-search.json" <<'PY' && ok "the dashboard has 27 panels in 5 sections, the first 16 among them" || bad "dashboard panels or sections"
+import json, sys
+g = json.load(open(sys.argv[1]))
+charts = [p["title"] for p in g["panels"] if p["type"] != "row"]; rows = [p["title"] for p in g["panels"] if p["type"] == "row"]
+first = ["mongot pods up", "Envoy pods up", "mongot pods in Envoy", "Searches per second", "Largest share on one pod",
+         "Searches per second, per mongot pod", "Share of searches, per mongot pod",
+         "Requests per second to mongot, per Envoy pod", "Open connections from mongod, per Envoy pod",
+         "Retries per second, per Envoy pod", "Responses per second from mongot, by class", "Envoy to mongot latency, 95th percentile",
+         "Average search latency, per mongot pod", "Search failures per second, per mongot pod",
+         "Replication lag, per mongot pod", "JVM memory used, per mongot pod"]
+sys.exit(0 if len(charts) == 27 and len(rows) == 5 and charts[:16] == first and rows[-1] == "Does every mongot pod hold the same data?" else 1)
+PY
+# The heap panel divides heap by heap: summed over every area, the maximum includes a -1 and the non-heap pools.
+grep -q -F 'mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}' "${CHART}/files/mongodb-search.json" \
+  && ok "the heap panel takes the heap's maximum only" || bad "heap maximum is not limited to the heap"
 # Envoy's two counters without _total get the suffix at the scrape, and nothing uses the bare names: rate() on
 # those is answered with "metric might not be a counter", which both dashboards show as a warning.
 m="$(render -s templates/30-monitoring.yaml)"

@@ -30,7 +30,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.2.1/mongodb-search-helm-0.2.1.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.0/mongodb-search-helm-0.3.0.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -83,7 +83,7 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 
 ## Dashboards
 
-The chart ships one dashboard, **MongoDB Search**, in two forms from one source. Its four sections each answer a question: is search up, is traffic spread across the mongot pods, is Envoy healthy, and how is each mongot pod doing.
+The chart ships one dashboard, **MongoDB Search**, in two forms from one source. Its five sections each answer a question: is search up, is traffic spread across the mongot pods, is Envoy healthy, how is each mongot pod doing, and does every mongot pod hold the same data. It has 27 panels; the last eleven, about mongot's process and its data, are [described below](#the-mongot-process-and-data-panels).
 
 The captures below were taken on the lab on 2026-10-06, a few minutes after searches started through the lab's search GUI. Click an image to open it full size. The dark captures, and earlier ones from a Perses and a Grafana run on a workstation, are beside them in [`docs/screenshots/`](../../docs/screenshots/).
 
@@ -92,7 +92,7 @@ The captures below were taken on the lab on 2026-10-06, a few minutes after sear
 On by default (`monitoring.persesDashboard.enabled`). In the console it is under **Observe → Dashboards (Perses)**, in the release's project.
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The OpenShift console, logged in as developer, project mongodb-poc, Dashboards, dashboard MongoDB Search, last 15 minutes, in four sections, with no warning sign on any panel. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods in Envoy, 0.56 searches per second, largest share on one pod 34 percent. Is traffic spread: three per-pod lines that rise together and level near 0.2 per second, each share near a third. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, 95th percentile latency of 2 to 3.5 milliseconds. How is each mongot pod doing: average search latency of 4 to 8 milliseconds, no failures, replication lag at 0 but for two short readings of 3 seconds on one pod, JVM memory per pod." src="../../docs/screenshots/dashboard-console.light.png">
+<img alt="The OpenShift console, logged in as developer, project mongodb-poc, Dashboards, dashboard MongoDB Search, last 15 minutes, in five sections, with no warning sign on any panel. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods in Envoy, 0.54 searches per second, largest share on one pod 33 percent. Is traffic spread: three per-pod lines that rise together once searches start, each share near a third. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, 95th percentile latency of 3 to 4.5 milliseconds. How is each mongot pod doing: average search latency of 5 to 9 milliseconds, no failures, replication lag readings of 4 and 9 seconds on two pods, JVM memory per pod, CPU of 2 to 6 percent, heap at 15 to 45 percent of its limit, about 0.1 percent of time in garbage collection, uptime near 5.6 hours on every pod, and no search work run outside the parallel pool. Does every mongot pod hold the same data: one flat line for all three pods in each panel, index size 4.6 MiB, 40 thousand documents, 0 indexes not STEADY, 5 indexes in the catalog, the data volume 82.5 percent used, and no indexing operations." src="../../docs/screenshots/dashboard-console.light.png">
 <!-- markdownlint-enable MD033 -->
 
 *The dashboard in the lab's own OpenShift console (4.22.7, Cluster Observability Operator 1.5.3), opened by [`scripts/capture-console-dashboard.py`](../../scripts/capture-console-dashboard.py) as the lab's `developer` user, who held only the roles below.*
@@ -115,14 +115,41 @@ done
 Off by default (`monitoring.grafanaDashboard`). The chart ships it as a ConfigMap labelled `grafana_dashboard: "1"`, for a Grafana dashboard sidecar that watches the release's namespace.
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The MongoDB Search dashboard in a Grafana 12.3.1 running in the lab namespace, data source Thanos Querier, last 15 minutes, in four sections, with no warning sign on any panel. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods in Envoy, 0.56 searches per second, largest share on one pod 34 percent. Is traffic spread: three per-pod lines that rise together to 0.2 per second, their shares settling between 32 and 34 percent. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, 95th percentile latency between 0.5 and 3.5 milliseconds. How is each mongot pod doing: average search latency of 4 to 8 milliseconds, no failures, replication lag at 0 but for two short readings of 3 seconds on one pod, JVM memory per pod." src="../../docs/screenshots/dashboard-grafana-sidecar.light.png">
+<img alt="The MongoDB Search dashboard in a Grafana 12.3.1 running in the lab namespace, data source Thanos Querier, last 15 minutes, in five sections, with no warning sign on any panel. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods in Envoy, 0.54 searches per second, largest share on one pod 34 percent. Is traffic spread: three per-pod lines that rise together once searches start, their shares settling between 32 and 34 percent. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, 95th percentile latency of 3 to 4.5 milliseconds. How is each mongot pod doing: average search latency of 5 to 9 milliseconds, no failures, replication lag readings of 4 and 9 seconds on two pods, JVM memory per pod, CPU of 2 to 6 percent, heap at 15 to 45 percent of its limit, about 0.1 percent of time in garbage collection, uptime near 5.6 hours on every pod, and no search work run outside the parallel pool. Does every mongot pod hold the same data: one flat line for all three pods in each panel, index size 4.6 MiB, 40 thousand documents, 0 indexes not STEADY, 5 indexes in the catalog, the data volume 82.5 percent used, and no indexing operations." src="../../docs/screenshots/dashboard-grafana-sidecar.light.png">
 <!-- markdownlint-enable MD033 -->
 
-*The chart's ConfigMap, loaded by the dashboard sidecar of a Grafana installed in the lab namespace for this measurement and removed afterwards (the Grafana Helm chart 10.5.15, Grafana 12.3.1, sidecar 2.5.0; [`test/grafana-sidecar/`](../../test/grafana-sidecar/)). Measured: the Grafana held no such dashboard before `monitoring.grafanaDashboard=true`; 37 s after that upgrade started, the sidecar had written the file and Grafana listed the dashboard with 16 panels; all 16 queries answered through its Thanos Querier data source.*
+*The chart's ConfigMap, loaded by the dashboard sidecar of a Grafana installed in the lab namespace for this measurement and removed afterwards (the Grafana Helm chart 10.5.15, Grafana 12.3.1, sidecar 2.5.0; [`test/grafana-sidecar/`](../../test/grafana-sidecar/)). Measured when the dashboard had 16 panels: the Grafana held no such dashboard before `monitoring.grafanaDashboard=true`, and 37 s after that upgrade started the sidecar had written the file and Grafana listed it. Measured again with the 27 panels shown here: listed with 27 panels in 5 rows, and all 27 queries answered through its Thanos Querier data source.*
 
 Two things that Grafana needed, which the chart does not provide: a Prometheus data source (the dashboard takes the default one; here Thanos Querier on port 9091 with the Grafana pod's own token), and a Role that lets the sidecar read ConfigMaps. The Grafana Helm chart's own Role also lets it read every Secret in the namespace; `test/grafana-sidecar/` replaces it with one for ConfigMaps only.
 
 How the Perses form is generated from the Grafana one, and how both were validated, is in [`docs/grafana-to-perses-conversion.md`](../../docs/grafana-to-perses-conversion.md).
+
+### The mongot process and data panels
+
+Eleven panels read mongot's own metrics, one line per mongot pod. Readings are the lab's, on 2026-10-06, pod 0 / 1 / 2.
+
+| Panel | What it reads | Lab reading |
+| --- | --- | --- |
+| CPU used | `mongot_process_cpu_usage`, 5 minute average: a share of the CPUs the process sees (`mongot_system_cpu_count`, 1 on the lab, the pod's CPU limit) | 4.8% / 3.1% / 3.3% |
+| JVM heap used, percent of limit | Heap used over the heap's maximum | 16% / 27% / 37% of 495 MiB |
+| Time in garbage collection | Rate of `mongot_jvm_gc_pause_seconds_sum`: the share of time paused | 0.05% / 0.05% / 0.06% |
+| Uptime | `mongot_process_uptime_seconds`; a fall to zero is a restart | 5.7 h on each |
+| Search work run outside the parallel pool | Rate of `mongot_rejectedConcurrentSearchExecutionCount_total` and its vector rescoring twin | 0 / 0 / 0 |
+| Index size | `mongot_index_stats_indexSizeBytes`, all indexes | 4,808,700 bytes on each |
+| Documents indexed | `mongot_index_stats_numLuceneDocs`, all indexes | 40,093 on each |
+| Indexes not STEADY | `mongot_index_stats_indexStatusCode` for every state but `STEADY` | 0 / 0 / 0 |
+| Indexes in catalog | `mongot_configState_indexesInCatalog` | 5 / 5 / 5 |
+| Data volume used | `mongot_system_disk_space_data_path_free_bytes` and `_total_bytes` | 82.5% on each |
+| Indexing operations per second | Rate of inserts, updates and deletes applied to the indexes | 0 / 0 / 0 |
+
+What to know when reading them:
+
+- **They show that every pod holds the same data, not how queries are spread.** Every mongot pod holds every index (the lab's three pods each report the same five). The second section shows the spread of queries.
+- **Documents indexed is the strict comparison; index size is a loose one.** On the lab both are equal on every pod, with no update, delete or merge recorded. Each pod writes and merges its own index files, so sizes on a busy cluster are expected to differ somewhat; that was not measured.
+- **Data volume used is the file system under mongot's data path.** With a volume of its own per pod, that is the volume. The lab's storage class is a hostpath provisioner, so there it is the node's disk: 160.5 GB in total and 82.5% used on every pod, while each pod's data takes about 18 MiB.
+- **The pool panel does not count refused searches.** mongot's source gives the counter to a caller-runs policy: when the concurrent search pool is full the work runs on the calling thread, and the search is still answered. Above zero, the pool is saturated.
+- **The heap limit is the JVM's, not the pod's.** On the lab it is 495 MiB, a quarter of the pod's 2 Gi memory limit. The older *JVM memory used* panel shows heap and non-heap together, in bytes.
+- **Not seen on the lab:** an index out of `STEADY`, indexing activity, and work outside the pool. Those three panels were flat at zero throughout; their queries answer, and what they look like in trouble was not observed.
 
 ### Envoy counters without `_total`
 
@@ -133,7 +160,7 @@ The chart's Envoy ServiceMonitor therefore renames the two at the scrape, to `en
 - with Envoy scraped by anything else (for example the hand-applied [`manifests/90-servicemonitors.yaml`](../../manifests/90-servicemonitors.yaml)), the retries and responses panels are empty and that alert never fires;
 - on an upgrade from a release without the rename, those two panels start again from the upgrade: the earlier samples stay under the old names.
 
-Measured on the lab on 2026-10-06, through Thanos Querier: before, each of the two queries came back with one warning; after, all 16 of the dashboard's queries came back with none.
+Measured on the lab on 2026-10-06, through Thanos Querier: before, each of the two queries came back with one warning; after, every query of the dashboard came back with none (16 queries then; 27 since chart 0.3.0).
 
 ## Maintaining the chart
 

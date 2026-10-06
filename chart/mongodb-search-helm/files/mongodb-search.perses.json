@@ -740,6 +740,501 @@
           }
         ]
       }
+    },
+    "3_4": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "name": "CPU used, per mongot pod",
+          "description": "mongot's own CPU use, averaged over 5 minutes, as a share of the CPUs the process sees (mongot_system_cpu_count; with a CPU limit of 1 that is one core)."
+        },
+        "plugin": {
+          "kind": "TimeSeriesChart",
+          "spec": {
+            "legend": {
+              "mode": "list",
+              "position": "bottom"
+            },
+            "visual": {
+              "areaOpacity": 0.1,
+              "lineWidth": 1
+            },
+            "yAxis": {
+              "format": {
+                "unit": "percent-decimal"
+              }
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "3_5": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "name": "JVM heap used, percent of limit, per mongot pod",
+          "description": "Heap in use against the heap's maximum. The panel above shows heap and non-heap together, in bytes."
+        },
+        "plugin": {
+          "kind": "TimeSeriesChart",
+          "spec": {
+            "legend": {
+              "mode": "list",
+              "position": "bottom"
+            },
+            "visual": {
+              "areaOpacity": 0.1,
+              "lineWidth": 1
+            },
+            "yAxis": {
+              "format": {
+                "unit": "percent-decimal"
+              }
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "3_6": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "name": "Time in garbage collection, per mongot pod",
+          "description": "Share of time the JVM spent paused for garbage collection, 5 minute rate."
+        },
+        "plugin": {
+          "kind": "TimeSeriesChart",
+          "spec": {
+            "legend": {
+              "mode": "list",
+              "position": "bottom"
+            },
+            "visual": {
+              "areaOpacity": 0.1,
+              "lineWidth": 1
+            },
+            "yAxis": {
+              "format": {
+                "unit": "percent-decimal"
+              }
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "3_7": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "name": "Uptime, per mongot pod",
+          "description": "Time since the mongot process started. A fall to zero is a restart."
+        },
+        "plugin": {
+          "kind": "TimeSeriesChart",
+          "spec": {
+            "legend": {
+              "mode": "list",
+              "position": "bottom"
+            },
+            "visual": {
+              "areaOpacity": 0.1,
+              "lineWidth": 1
+            },
+            "yAxis": {
+              "format": {
+                "unit": "seconds"
+              }
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "3_8": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "name": "Search work run outside the parallel pool, per mongot pod",
+          "description": "Tasks per second that found mongot's concurrent search or vector rescoring pool full and ran on the calling thread instead. The search is still answered; above zero, the pool is saturated."
+        },
+        "plugin": {
+          "kind": "TimeSeriesChart",
+          "spec": {
+            "legend": {
+              "mode": "list",
+              "position": "bottom"
+            },
+            "visual": {
+              "areaOpacity": 0.1,
+              "lineWidth": 1
+            },
+            "yAxis": {
+              "format": {
+                "unit": "ops/sec"
+              }
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "4_0": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "name": "Index size, per mongot pod",
+          "description": "Bytes of all search and vector indexes on the pod. Every pod holds every index, so the lines should sit close together; each pod merges its own segments, so they need not be equal."
+        },
+        "plugin": {
+          "kind": "TimeSeriesChart",
+          "spec": {
+            "legend": {
+              "mode": "list",
+              "position": "bottom"
+            },
+            "visual": {
+              "areaOpacity": 0.1,
+              "lineWidth": 1
+            },
+            "yAxis": {
+              "format": {
+                "unit": "bytes"
+              }
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "4_1": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "name": "Documents indexed, per mongot pod",
+          "description": "Documents in all indexes on the pod. Equal on every pod once each has caught up with mongod."
+        },
+        "plugin": {
+          "kind": "TimeSeriesChart",
+          "spec": {
+            "legend": {
+              "mode": "list",
+              "position": "bottom"
+            },
+            "visual": {
+              "areaOpacity": 0.1,
+              "lineWidth": 1
+            },
+            "yAxis": {
+              "format": {
+                "unit": "decimal"
+              }
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "4_2": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "name": "Indexes not STEADY, per mongot pod",
+          "description": "Indexes whose state is anything but STEADY: INITIAL_SYNC, STALE, FAILED, RECOVERING and the rest. Should be 0; above it, that pod's copy of an index is not ready."
+        },
+        "plugin": {
+          "kind": "TimeSeriesChart",
+          "spec": {
+            "legend": {
+              "mode": "list",
+              "position": "bottom"
+            },
+            "visual": {
+              "areaOpacity": 0.1,
+              "lineWidth": 1
+            },
+            "yAxis": {
+              "format": {
+                "unit": "decimal"
+              }
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "sum by (pod) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status!=\"STEADY\"})",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "4_3": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "name": "Indexes in catalog, per mongot pod",
+          "description": "How many indexes each pod knows about. The same on every pod."
+        },
+        "plugin": {
+          "kind": "TimeSeriesChart",
+          "spec": {
+            "legend": {
+              "mode": "list",
+              "position": "bottom"
+            },
+            "visual": {
+              "areaOpacity": 0.1,
+              "lineWidth": 1
+            },
+            "yAxis": {
+              "format": {
+                "unit": "decimal"
+              }
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "4_4": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "name": "Data volume used, per mongot pod",
+          "description": "Used share of the file system under mongot's data path, as mongot reports it. With a volume of its own per pod this is that volume; with a hostpath provisioner it is the node's disk, the same on every pod."
+        },
+        "plugin": {
+          "kind": "TimeSeriesChart",
+          "spec": {
+            "legend": {
+              "mode": "list",
+              "position": "bottom"
+            },
+            "visual": {
+              "areaOpacity": 0.1,
+              "lineWidth": 1
+            },
+            "yAxis": {
+              "format": {
+                "unit": "percent-decimal"
+              }
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "4_5": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "name": "Indexing operations per second, per mongot pod",
+          "description": "Inserts, updates and deletes applied to the indexes, 5 minute rate. Every pod applies the same changes, so the lines should move together."
+        },
+        "plugin": {
+          "kind": "TimeSeriesChart",
+          "spec": {
+            "legend": {
+              "mode": "list",
+              "position": "bottom"
+            },
+            "visual": {
+              "areaOpacity": 0.1,
+              "lineWidth": 1
+            },
+            "yAxis": {
+              "format": {
+                "unit": "ops/sec"
+              }
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          }
+        ]
+      }
     }
   },
   "layouts": [
@@ -934,6 +1429,118 @@
             "height": 8,
             "content": {
               "$ref": "#/spec/panels/3_3"
+            }
+          },
+          {
+            "x": 0,
+            "y": 56,
+            "width": 12,
+            "height": 8,
+            "content": {
+              "$ref": "#/spec/panels/3_4"
+            }
+          },
+          {
+            "x": 12,
+            "y": 56,
+            "width": 12,
+            "height": 8,
+            "content": {
+              "$ref": "#/spec/panels/3_5"
+            }
+          },
+          {
+            "x": 0,
+            "y": 64,
+            "width": 12,
+            "height": 8,
+            "content": {
+              "$ref": "#/spec/panels/3_6"
+            }
+          },
+          {
+            "x": 12,
+            "y": 64,
+            "width": 12,
+            "height": 8,
+            "content": {
+              "$ref": "#/spec/panels/3_7"
+            }
+          },
+          {
+            "x": 0,
+            "y": 72,
+            "width": 24,
+            "height": 8,
+            "content": {
+              "$ref": "#/spec/panels/3_8"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "kind": "Grid",
+      "spec": {
+        "display": {
+          "title": "Does every mongot pod hold the same data?",
+          "collapse": {
+            "open": true
+          }
+        },
+        "items": [
+          {
+            "x": 0,
+            "y": 81,
+            "width": 12,
+            "height": 8,
+            "content": {
+              "$ref": "#/spec/panels/4_0"
+            }
+          },
+          {
+            "x": 12,
+            "y": 81,
+            "width": 12,
+            "height": 8,
+            "content": {
+              "$ref": "#/spec/panels/4_1"
+            }
+          },
+          {
+            "x": 0,
+            "y": 89,
+            "width": 12,
+            "height": 8,
+            "content": {
+              "$ref": "#/spec/panels/4_2"
+            }
+          },
+          {
+            "x": 12,
+            "y": 89,
+            "width": 12,
+            "height": 8,
+            "content": {
+              "$ref": "#/spec/panels/4_3"
+            }
+          },
+          {
+            "x": 0,
+            "y": 97,
+            "width": 12,
+            "height": 8,
+            "content": {
+              "$ref": "#/spec/panels/4_4"
+            }
+          },
+          {
+            "x": 12,
+            "y": 97,
+            "width": 12,
+            "height": 8,
+            "content": {
+              "$ref": "#/spec/panels/4_5"
             }
           }
         ]

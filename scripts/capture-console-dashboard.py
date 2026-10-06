@@ -28,7 +28,8 @@ url = f"{console}/monitoring/v2/dashboards/view?dashboard={dashboard}&project={n
 
 with sync_playwright() as p:
     browser = p.chromium.launch()
-    ctx = browser.new_context(viewport={"width": 1600, "height": 2700}, device_scale_factor=1,
+    # Tall enough for the whole dashboard: Perses draws a panel only once it is in view.
+    ctx = browser.new_context(viewport={"width": 1600, "height": int(os.environ.get("CAPTURE_HEIGHT", "5000"))}, device_scale_factor=1,
                               ignore_https_errors=True, color_scheme=theme)
     page = ctx.new_page()
     page.goto(url, wait_until="networkidle", timeout=90000)
@@ -59,7 +60,8 @@ with sync_playwright() as p:
     drew = "dark" if "theme-dark" in page.evaluate("document.documentElement.className") else "light"
     print(f"user {page.locator('[data-test=user-dropdown-toggle], [data-test=username]').first.inner_text().strip()}, "
           f"project {namespace}, console theme drawn: {drew}")
-    sections = ("Is search up?", "Is traffic spread across the mongot pods?", "Is Envoy healthy?", "How is each mongot pod doing?")
+    sections = ("Is search up?", "Is traffic spread across the mongot pods?", "Is Envoy healthy?", "How is each mongot pod doing?",
+                "Does every mongot pod hold the same data?")
     print(f"the page names the dashboard: {'MongoDB Search' in text}; sections found: {sum(s in text for s in sections)} of {len(sections)}")
     print(f"'No data': {text.count('No data')}; 'NaN': {text.count('NaN')}; 'Forbidden': {text.count('Forbidden')}; "
           f"warning signs: {page.locator('[data-testid=WarningIcon], [data-testid=AlertIcon], [data-testid=ErrorIcon]').count()}")
