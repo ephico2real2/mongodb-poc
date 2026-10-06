@@ -32,7 +32,7 @@ scripts/perses-dashboard.sh
 Expected:
 
 ```text
-wrote chart/mongodb-search-helm/files/mongodb-search.perses.json (16 panels)
+wrote chart/mongodb-search-helm/files/mongodb-search.perses.json (27 panels)
 ```
 
 It uses `percli` from your `PATH` when its unpacked plugins are at `~/.local/share/perses/plugins`; otherwise it runs `percli` from the official Perses image with podman or docker. Then run the chart tests, which fail if the two files disagree:
@@ -153,16 +153,19 @@ A viewer needs `view` in the namespace to open the dashboard and `cluster-monito
 
 Oct 6, 2026, Perses 0.54.0. Ways 1 and 3 were run, and after Step 2 they gave the same file, byte for byte: 16 panels (5 stat, 11 time series) in 4 sections, with every query and every unit identical to the Grafana file.
 
+Since chart 0.3.0 the dashboard has 27 panels (5 stat, 22 time series) in 5 sections. Way 1 produced that file, and the 16 panels it already had came out identical to before; Way 3 was not run again.
+
 | Section | Panels |
 | --- | --- |
 | Is search up? | mongot pods up; Envoy pods up; mongot pods in Envoy; searches per second; largest share on one pod |
 | Is traffic spread across the mongot pods? | Searches per second, per pod; share of searches, per pod |
 | Is Envoy healthy? | Requests per second to mongot; open connections from mongod; retries per second; responses by class; latency, 95th percentile |
-| How is each mongot pod doing? | Average search latency; search failures per second; replication lag; JVM memory used |
+| How is each mongot pod doing? | Average search latency; search failures per second; replication lag; JVM memory used; CPU used; JVM heap used, percent of limit; time in garbage collection; uptime; search work run outside the parallel pool |
+| Does every mongot pod hold the same data? | Index size; documents indexed; indexes not STEADY; indexes in catalog; data volume used; indexing operations per second |
 
 | Way | Ran here | Result |
 | --- | --- | --- |
-| 1. Container, with podman | Yes; it is what produced the committed file | 16 panels, no placeholders |
+| 1. Container, with podman | Yes; it is what produced the committed file | 27 panels, no placeholders (16 before chart 0.3.0) |
 | 2. `percli` binary | No: no `percli` is installed on this workstation | Same command as Way 1 without the container |
 | 3. Server `/api/migrate` on the lab | Yes | Same 16 panels, queries, units and sections as Way 1 |
 
@@ -206,5 +209,21 @@ Later on Oct 6, 2026, the two checks that had been left open were run on the lab
 Everything added for these checks was removed afterwards: the Grafana, its Role, the three RoleBindings, and `monitoring.grafanaDashboard` on the lab release. The mongot and Envoy pods were not restarted.
 
 The method for the sidecar follows the one recorded by the `openshift-ipsec-nas` project (its evidence `kind/03`); the console there was captured through a console server run on a workstation, and here through the cluster's own console with a viewer's login.
+
+### The mongot process and data panels (chart 0.3.0)
+
+Later on Oct 6, 2026, eleven panels were added from mongot's own metrics; what each reads is in the [chart README](../chart/mongodb-search-helm/README.md#the-mongot-process-and-data-panels). Before any file was changed, the eleven queries were run through the lab's Thanos Querier; after, the whole dashboard was checked the same ways as above.
+
+| Check | How | Result |
+| --- | --- | --- |
+| The 16 panels it already had are untouched | The Grafana source compared before and after; the regenerated Perses file compared panel by panel | 0 lines removed from either file; 16 of 16 Perses panels identical, and their places in the layout |
+| Every query answers | All 27 queries of the lab's `PersesDashboard` through Thanos Querier | 27 of 27 `success`, with series and no warning |
+| What one refresh costs | Each query over 15 minutes at a 30 s step, through Thanos Querier | 0.03 s in total for the 16, 0.02 s for the 11 added |
+| The dashboard inside the OpenShift console | `scripts/capture-console-dashboard.py`, as `developer` with the three reader roles | 5 of 5 sections, 27 panels drawn; no "No data", "NaN", "Forbidden" or warning sign |
+| Through a Grafana sidecar | `test/grafana-sidecar/`, with `monitoring.grafanaDashboard=true` | Listed with 27 panels in 5 rows; 27 of 27 queries answered through its Thanos Querier data source; the page drew all 27 |
+
+Two statements made while planning were corrected by these measurements. `mongot_jvm_memory_max_bytes` summed over every memory area gives 1.84 GB, which includes the non-heap pools and a `-1`; the heap's maximum is 518,979,584 bytes, so the panel divides heap by heap. And `rejectedConcurrentSearchExecutionCount` does not count refused searches: mongot's source (`MeteredCallerRunsPolicy`, in `LuceneIndexFactory.java`) runs the work on the calling thread when the pool is full.
+
+On the lab, three of the new panels stayed at zero throughout (indexes not `STEADY`, indexing operations, work outside the pool), and *data volume used* shows the node's disk, because the lab's volumes come from a hostpath provisioner. The roles, the Grafana and its Role were removed again after the checks.
 
 Not validated: a `GrafanaDashboard` of the grafana-operator pointing at the ConfigMap. The lab's operator watches one namespace, `group-sync-dashboard`, which belongs to another project, and its data source is limited to that namespace's metrics.
