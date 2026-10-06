@@ -133,7 +133,7 @@ PY
 ```bash
 test/chart.sh
 
-helm upgrade mongot chart/mongodb-search-helm -n $NS -f my-values.yaml --timeout 20m   # with monitoring.persesDashboard.enabled: true
+helm upgrade mongot chart/mongodb-search-helm -n $NS -f my-values.yaml --timeout 20m   # the Perses dashboard is on by default
 
 oc get persesdatasource mongot-thanos -n $NS -o jsonpath='{.status.conditions[?(@.type=="Available")].status}{"\n"}'
 oc get persesdashboard mongot-search -n $NS -o jsonpath='{.status.conditions[?(@.type=="Available")].status}{"\n"}'

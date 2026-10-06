@@ -92,10 +92,12 @@ done
 [[ "$(grep -c 'resourceNames' <<<"$p")" == 2 ]] && ok "the preflight reads Secrets and the ConfigMap by name only" || bad "preflight resourceNames"
 [[ "$(grep -c 'helm.sh/hook: pre-install,pre-upgrade' <<<"$p")" == 4 ]] && ok "preflight: four pre-install hooks" || bad "preflight hooks"
 
-# Monitoring: the ServiceMonitors are on by default, the alerts are not; all named after search.name.
+# Monitoring: the ServiceMonitors and the alerts are on by default; all named after search.name.
 o="$(objects)"
 { has "$o" "ServiceMonitor/mongot" && has "$o" "ServiceMonitor/mongot-envoy" && has "$o" "Service/mongot-envoy-stats"; } && ok "ServiceMonitors and the Envoy stats Service by default" || bad "ServiceMonitors missing by default"
-has "$o" "PrometheusRule/mongot-distribution" && bad "no alert rules by default" || ok "no alert rules by default"
+has "$o" "PrometheusRule/mongot-distribution" && ok "the alert rules by default" || bad "alert rules missing by default"
+o="$(objects --set monitoring.alerts.enabled=false)"; has "$o" "PrometheusRule/mongot-distribution" && bad "alerts.enabled=false renders no rules" || ok "alerts.enabled=false renders no rules"
+o="$(objects)"
 o="$(objects --set monitoring.serviceMonitors.enabled=false)"
 { has "$o" "ServiceMonitor/mongot" || has "$o" "ServiceMonitor/mongot-envoy" || has "$o" "Service/mongot-envoy-stats"; } && bad "serviceMonitors.enabled=false renders none" || ok "serviceMonitors.enabled=false renders none"
 o="$(objects --set monitoring.serviceMonitors.enabled=true --set monitoring.alerts.enabled=true --set search.name=srch)"
@@ -106,9 +108,12 @@ grep -q 'job=~"srch-search-0-svc|srch-envoy-stats"' <<<"$m" && ok "the no-traffi
 [[ "$(grep -c -- '- alert:' <<<"$m")" == 4 && "$(grep -c -- '- record:' <<<"$m")" == 3 ]] && ok "four alerts and three recording rules" || bad "alert or rule count"
 grep -q '{{ $value | humanizePercentage }}' <<<"$m" && ok "Prometheus templating survives Helm" || bad "alert templating was eaten by Helm"
 
-# Dashboards: off by default; one Grafana source, a generated Perses copy, both scoped to this namespace and name.
+# Dashboards: Perses on by default, Grafana off; one Grafana source, a generated Perses copy, scoped to this namespace and name.
 o="$(objects)"
-{ has "$o" "PersesDashboard/mongot-search" || has "$o" "PersesDatasource/mongot-thanos" || has "$o" "ConfigMap/mongot-grafana-dashboard"; } && bad "no dashboard objects by default" || ok "no dashboard objects by default"
+{ has "$o" "PersesDashboard/mongot-search" && has "$o" "PersesDatasource/mongot-thanos"; } && ok "the Perses dashboard and its datasource by default" || bad "Perses dashboard missing by default"
+has "$o" "ConfigMap/mongot-grafana-dashboard" && bad "no Grafana dashboard by default" || ok "no Grafana dashboard by default"
+o="$(objects --set monitoring.persesDashboard.enabled=false)"
+{ has "$o" "PersesDashboard/mongot-search" || has "$o" "PersesDatasource/mongot-thanos"; } && bad "persesDashboard.enabled=false renders none" || ok "persesDashboard.enabled=false renders none"
 o="$(objects --set monitoring.persesDashboard.enabled=true --set monitoring.grafanaDashboard=true --set search.name=srch)"
 { has "$o" "PersesDashboard/srch-search" && has "$o" "PersesDatasource/srch-thanos" && has "$o" "ConfigMap/srch-grafana-dashboard"; } && ok "dashboard objects follow search.name" || bad "dashboard object names"
 d="$(render --set monitoring.persesDashboard.enabled=true --set monitoring.grafanaDashboard=true --set search.name=srch -s templates/31-dashboards.yaml)"

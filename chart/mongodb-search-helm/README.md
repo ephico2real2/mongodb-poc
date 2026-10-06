@@ -15,8 +15,8 @@ Steps 1 to 5 of the runbook stay manual: the chart never creates a certificate, 
 | 1 | MongoDBSearch | The resource of runbook Step 6a |
 | 1 | Route | The passthrough Route of runbook Step 6d, with `balance: roundrobin` |
 | 1 | ServiceMonitors | Per-pod scraping of mongot and Envoy; on by default |
-| 1 | Alerts | Optional, off by default |
-| 1 | Dashboard | Optional, off by default: Perses (OpenShift console) and Grafana |
+| 1 | Alerts | Four alerts on traffic distribution and retries; on by default |
+| 1 | Dashboard | "MongoDB Search" for Perses in the OpenShift console, on by default; the Grafana copy is off by default |
 | 2 | csv-reclaim Job | Clears an operator CSV left behind by an earlier uninstall |
 | 3 | approver Job | Approves the InstallPlan for `operator.version`, and no other |
 | 4 | gate Job | Returns only when the operator, mongot, Envoy and the Route are ready |
@@ -73,8 +73,8 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 | `route.targetPort` | `mongot-grpc` | Step 6d |
 | `route.balance` | `roundrobin` | Step 6d; see the [rationale](../../docs/mongot-route-balance-rationale.md) |
 | `monitoring.serviceMonitors.enabled` | `true` | Per-pod scraping of mongot and Envoy; needs user workload monitoring |
-| `monitoring.alerts.enabled` | `false` | Alerts when traffic concentrates on one mongot pod |
-| `monitoring.persesDashboard.enabled`, `.thanosURL` | `false`, Thanos Querier port 9091 | The "MongoDB Search" dashboard in the console; needs the Cluster Observability Operator |
+| `monitoring.alerts.enabled` | `true` | Alerts when traffic concentrates on one mongot pod |
+| `monitoring.persesDashboard.enabled`, `.thanosURL` | `true`, Thanos Querier port 9091 | The "MongoDB Search" dashboard in the console; set it to `false` on a cluster without the Cluster Observability Operator |
 | `monitoring.grafanaDashboard` | `false` | The same dashboard as a ConfigMap for a Grafana dashboard sidecar |
 | `preflight.enabled` | `true` | |
 | `installPlanApprover.waitSeconds`, `csvReclaim.*`, `wait.*`, `jobs.*` | see `values.yaml` | |

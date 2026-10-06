@@ -132,16 +132,17 @@ monitoring:
     labels: {}
   alerts:
     # A PrometheusRule with per-pod share recording rules and four alerts, the first of which fires when one
-    # mongot pod serves over 90% of search traffic. Off by default.
-    enabled: false
+    # mongot pod serves over 90% of search traffic. On by default.
+    enabled: true
     labels: {}
     runbookUrl: https://github.com/ephico2real2/mongodb-poc/blob/main/README.md#the-failure-that-produces-no-error
   # The "MongoDB Search" dashboard in the OpenShift console (Observe -> Dashboards (Perses)): a PersesDashboard
   # and the PersesDatasource it queries, in this namespace. Needs the Cluster Observability Operator (COO 1.5 or
-  # later) on the cluster, and the ServiceMonitors above for data. Off by default: without COO its kinds do not
-  # exist and the install would fail. Viewers need view in this namespace and cluster-monitoring-view.
+  # later) on the cluster, and the ServiceMonitors above for data. On by default: set it to false on a cluster
+  # without COO, where its kinds do not exist and the install would fail. Viewers need view in this namespace
+  # and cluster-monitoring-view.
   persesDashboard:
-    enabled: false
+    enabled: true
     # Thanos Querier's cluster-wide port. The per-namespace port (9092) refuses the Perses UI's POST queries
     # for readers.
     thanosURL: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091

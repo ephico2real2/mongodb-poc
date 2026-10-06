@@ -21,8 +21,3 @@ source:
     name: mongot-search-sync-source-password
 route:
   name: mongot-grpc                    # the lab's Route name; it targets the operator's mongot-search-0-proxy-svc
-monitoring:
-  alerts:
-    enabled: true
-  persesDashboard:
-    enabled: true                      # the lab has the Cluster Observability Operator
