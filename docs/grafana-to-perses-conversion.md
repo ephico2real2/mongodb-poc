@@ -191,4 +191,20 @@ Three more were reported from the console's Perses page later the same day, and 
 
 Both dashboards were drawn again after these changes, this time reading the lab's Thanos Querier, as the console does: all 16 panels drawn, none with a warning sign.
 
-Not validated: the dashboard inside the OpenShift console page itself (the lab's Perses server has no web page of its own, and the console needs a browser login), and loading the ConfigMap through a Grafana dashboard sidecar or the grafana-operator.
+### In the console, and through a Grafana sidecar
+
+Later on Oct 6, 2026, the two checks that had been left open were run on the lab, with searches sent through the search GUI.
+
+| Check | How | Result |
+| --- | --- | --- |
+| The dashboard inside the OpenShift console | [`scripts/capture-console-dashboard.py`](../scripts/capture-console-dashboard.py): a browser logs in to the lab's console as `developer` and opens **Observe → Dashboards (Perses)**, project `mongodb-poc` | 4 of 4 sections, 16 panels drawn; no "No data", no "NaN", no "Forbidden", no warning sign |
+| Who can open it | `oc auth can-i get persesdashboards -n mongodb-poc --as developer`, before and after binding `view`, `persesdashboard-viewer-role` and `persesdatasource-viewer-role` in the namespace | `no`, then `yes`; the data came with `cluster-monitoring-view`, which the lab gives every logged-in user |
+| Responses of 400 or above on that page, after the login | The script's list | Five `403` and one `500`, none of them the dashboard's: silences, `infrastructures/cluster`, `provisionings`, `groups`, Perses global datasources (the dashboard uses its namespace's own), and the console's package check |
+| A Grafana sidecar loads the chart's ConfigMap | The Grafana Helm chart 10.5.15 with `sidecar.dashboards` on the label `grafana_dashboard: "1"`, installed in `mongodb-poc` with [`test/grafana-sidecar/`](../test/grafana-sidecar/); then `helm upgrade` of the search release with `monitoring.grafanaDashboard=true` | Before: Grafana's search for the dashboard returned `[]`. 37 s after the upgrade started: the sidecar logged `Writing /tmp/dashboards/mongodb-search.json`, and Grafana listed *MongoDB Search*, 16 panels in 4 rows, no token left in it |
+| Every panel gets data in that Grafana | Each panel's query sent through `POST /api/ds/query` to its Thanos Querier data source (port 9091, the pod's own token) | 16 of 16 answered `200` with rows and no notice; the page drew all 16 |
+
+Everything added for these checks was removed afterwards: the Grafana, its Role, the three RoleBindings, and `monitoring.grafanaDashboard` on the lab release. The mongot and Envoy pods were not restarted.
+
+The method for the sidecar follows the one recorded by the `openshift-ipsec-nas` project (its evidence `kind/03`); the console there was captured through a console server run on a workstation, and here through the cluster's own console with a viewer's login.
+
+Not validated: a `GrafanaDashboard` of the grafana-operator pointing at the ConfigMap. The lab's operator watches one namespace, `group-sync-dashboard`, which belongs to another project, and its data source is limited to that namespace's metrics.
