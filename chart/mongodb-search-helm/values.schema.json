@@ -1,0 +1,136 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "operator": {
+      "type": "object", "additionalProperties": false,
+      "required": ["install", "version", "channel", "package", "source", "sourceNamespace"],
+      "properties": {
+        "install": {"type": "boolean"},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$",
+                    "description": "The operator version, without the v: 1.13.0"},
+        "channel": {"type": "string", "minLength": 1},
+        "package": {"type": "string", "minLength": 1},
+        "source": {"type": "string", "minLength": 1},
+        "sourceNamespace": {"type": "string", "minLength": 1}
+      }
+    },
+    "operatorGroup": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"create": {"type": "boolean"}}
+    },
+    "installPlanApprover": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"waitSeconds": {"type": "integer", "minimum": 30}}
+    },
+    "csvReclaim": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"enabled": {"type": "boolean"}, "waitSeconds": {"type": "integer", "minimum": 10}}
+    },
+    "preflight": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"enabled": {"type": "boolean"}}
+    },
+    "search": {
+      "type": "object", "additionalProperties": false, "required": ["name", "replicas"],
+      "properties": {
+        "name": {"type": "string", "maxLength": 44, "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+                 "description": "At most 44 characters: the operator appends suffixes such as -search-0-proxy-svc"},
+        "version": {"type": "string", "pattern": "^$|^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$"},
+        "replicas": {"type": "integer", "minimum": 0},
+        "resources": {"type": "object"},
+        "persistence": {
+          "type": "object", "additionalProperties": false, "required": ["storage"],
+          "properties": {"storage": {"type": "string", "minLength": 1}, "storageClass": {"type": "string"}}
+        },
+        "keepOnUninstall": {"type": "boolean"}
+      }
+    },
+    "loadBalancer": {
+      "type": "object", "additionalProperties": false, "required": ["externalHostname", "replicas"],
+      "properties": {
+        "externalHostname": {"type": "string", "minLength": 1,
+                             "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*\\.[a-z]([-a-z0-9]*[a-z0-9])?$",
+                             "description": "A DNS name with at least two labels, never an IP: Envoy selects by SNI"},
+        "replicas": {"type": "integer", "minimum": 1},
+        "retryPolicy": {
+          "type": "object", "additionalProperties": false,
+          "properties": {"numRetries": {"type": "integer", "minimum": 1}, "perTryTimeout": {"type": "string", "minLength": 1}}
+        },
+        "image": {"type": "string"}
+      }
+    },
+    "tls": {
+      "type": "object", "additionalProperties": false, "required": ["certsSecretPrefix", "trustBundleConfigMap"],
+      "properties": {
+        "certsSecretPrefix": {"type": "string", "minLength": 1},
+        "trustBundleConfigMap": {"type": "string", "minLength": 1}
+      }
+    },
+    "source": {
+      "type": "object", "additionalProperties": false, "required": ["hostAndPorts", "username", "passwordSecret"],
+      "properties": {
+        "hostAndPorts": {"type": "array", "minItems": 1, "uniqueItems": true,
+                         "items": {"type": "string", "pattern": "^[^\\s:]+:[0-9]+$"}},
+        "username": {"type": "string", "minLength": 1},
+        "passwordSecret": {
+          "type": "object", "additionalProperties": false, "required": ["name"],
+          "properties": {"name": {"type": "string", "minLength": 1}, "key": {"type": "string"}}
+        }
+      }
+    },
+    "observability": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "prometheus": {
+          "type": "object", "additionalProperties": false,
+          "properties": {"mode": {"type": "string", "enum": ["enabled", "disabled"]},
+                         "port": {"type": "integer", "minimum": 1, "maximum": 65535}}
+        },
+        "metricsForwarder": {
+          "type": "object", "additionalProperties": false,
+          "properties": {"mode": {"type": "string", "enum": ["auto", "enabled", "disabled"]}, "resources": {"type": "object"}}
+        }
+      }
+    },
+    "route": {
+      "type": "object", "additionalProperties": false, "required": ["enabled", "name", "targetPort", "balance"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "name": {"type": "string", "minLength": 1},
+        "serviceName": {"type": "string"},
+        "targetPort": {"type": ["string", "integer"]},
+        "balance": {"type": "string", "enum": ["roundrobin", "leastconn", "source", "random"]},
+        "annotations": {"type": "object"},
+        "labels": {"type": "object"}
+      }
+    },
+    "monitoring": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "serviceMonitors": {
+          "type": "object", "additionalProperties": false,
+          "properties": {"enabled": {"type": "boolean"}, "interval": {"type": "string", "minLength": 1}, "labels": {"type": "object"}}
+        },
+        "alerts": {
+          "type": "object", "additionalProperties": false,
+          "properties": {"enabled": {"type": "boolean"}, "labels": {"type": "object"}, "runbookUrl": {"type": "string"}}
+        }
+      }
+    },
+    "wait": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"waitSeconds": {"type": "integer", "minimum": 60}, "intervalSeconds": {"type": "integer", "minimum": 1}}
+    },
+    "jobs": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "image": {"type": "object", "additionalProperties": false, "required": ["repository", "tag"],
+                  "properties": {"repository": {"type": "string", "minLength": 1}, "tag": {"type": "string", "minLength": 1}}},
+        "resources": {"type": "object"},
+        "ttlSecondsAfterFinished": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

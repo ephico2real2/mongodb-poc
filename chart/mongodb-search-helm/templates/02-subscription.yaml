@@ -1,0 +1,23 @@
+{{- /*
+The MongoDB operator from the catalog, pinned: Manual approval, so no version installs without an approval, and
+startingCSV, so the first InstallPlan is for operator.version. The approver approves that plan and no other.
+With Automatic approval the lab's operator moved from 1.12.0 to 1.13.0 unattended on 2026-09-30.
+*/ -}}
+{{- if .Values.operator.install }}
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: {{ .Values.operator.package }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  channel: {{ .Values.operator.channel | quote }}
+  installPlanApproval: Manual
+  name: {{ .Values.operator.package }}
+  source: {{ .Values.operator.source }}
+  sourceNamespace: {{ .Values.operator.sourceNamespace }}
+  startingCSV: {{ include "mongodb-search-helm.csv" . }}
+{{- end }}

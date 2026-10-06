@@ -1,0 +1,88 @@
+{{- /*
+The MongoDBSearch resource of runbook Step 6a. Its CRD ships in crds/ so `helm install` can create it before OLM
+has installed the operator; Argo CD applies it in a wave after the approver, with the dry run skipped while the
+CRD is still missing.
+
+source.external.tls.ca is always rendered: with security.tls set and no source CA the operator reports Running
+and mounts no certificates on Envoy (TLS.md, "not per-leg").
+*/ -}}
+apiVersion: mongodb.com/v1
+kind: MongoDBSearch
+metadata:
+  name: {{ .Values.search.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    {{- if .Values.search.keepOnUninstall }}
+    helm.sh/resource-policy: keep
+    {{- end }}
+spec:
+  {{- with .Values.search.version }}
+  version: {{ . | quote }}
+  {{- end }}
+  clusters:
+    - loadBalancer:
+        managed:
+          {{- with .Values.loadBalancer.image }}
+          deployment:
+            spec:
+              template:
+                spec:
+                  containers:
+                    - name: envoy
+                      image: {{ . | quote }}
+          {{- end }}
+          externalHostname: {{ .Values.loadBalancer.externalHostname }}
+          replicas: {{ .Values.loadBalancer.replicas }}
+          {{- with .Values.loadBalancer.retryPolicy }}
+          retryPolicy:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      persistence:
+        single:
+          storage: {{ .Values.search.persistence.storage }}
+          {{- with .Values.search.persistence.storageClass }}
+          storageClass: {{ . }}
+          {{- end }}
+      replicas: {{ .Values.search.replicas }}
+      {{- with .Values.search.resources }}
+      resourceRequirements:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- with .Values.observability }}
+  observability:
+    {{- with .metricsForwarder }}
+    metricsForwarder:
+      mode: {{ .mode }}
+      {{- with .resources }}
+      resourceRequirements:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- end }}
+    {{- with .prometheus }}
+    prometheus:
+      mode: {{ .mode }}
+      port: {{ .port }}
+    {{- end }}
+  {{- end }}
+  security:
+    tls:
+      certsSecretPrefix: {{ .Values.tls.certsSecretPrefix }}
+  source:
+    external:
+      hostAndPorts:
+        {{- range .Values.source.hostAndPorts }}
+        - {{ . | quote }}
+        {{- end }}
+      tls:
+        ca:
+          name: {{ .Values.tls.trustBundleConfigMap }}
+    passwordSecretRef:
+      {{- with .Values.source.passwordSecret.key }}
+      key: {{ . }}
+      {{- end }}
+      name: {{ .Values.source.passwordSecret.name }}
+    username: {{ .Values.source.username }}

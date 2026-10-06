@@ -1,0 +1,33 @@
+{{- /*
+The passthrough Route of runbook Step 6d. The router forwards the TLS stream untouched: Envoy matches the SNI
+against externalHostname and presents <prefix>-<name>-search-lb-0-cert itself, so the host is that hostname and
+nothing else. The balance annotation is honoured on passthrough Routes; the default, source, put every
+connection on one Envoy pod in the lab (docs/mongot-route-balance-rationale.md).
+*/ -}}
+{{- if .Values.route.enabled }}
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ .Values.route.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+    {{- with .Values.route.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    haproxy.router.openshift.io/balance: {{ .Values.route.balance }}
+    {{- with .Values.route.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  host: {{ .Values.loadBalancer.externalHostname }}
+  to:
+    kind: Service
+    name: {{ .Values.route.serviceName | default (include "mongodb-search-helm.proxyService" .) }}
+  port:
+    targetPort: {{ .Values.route.targetPort }}
+  tls:
+    termination: passthrough
+{{- end }}

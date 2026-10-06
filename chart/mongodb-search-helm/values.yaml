@@ -1,0 +1,153 @@
+# mongodb-search-helm: MongoDB Search (mongot) behind the operator-managed Envoy, from one values file.
+# It replaces Steps 6a, 6b and 6d of docs/mongot-envoy-mtls-fresh-install-runbook.md and adds the operator install.
+#
+# WHERE THE RELEASE LIVES. Every object goes to the release's namespace, which must already exist and already hold
+# the hand-made objects of runbook Steps 1 to 5 (three TLS secrets, the sync password secret, the trust bundle):
+#   helm install mongot chart/mongodb-search-helm -n <namespace> -f my-values.yaml --timeout 20m
+# The chart never creates those objects and never reads their contents; the preflight checks they exist.
+
+operator:
+  # true: install the MongoDB operator here through OLM. false: an operator already serves this namespace (installed
+  # here by other means, or cluster-wide); the chart then renders no Subscription, OperatorGroup, reclaim or approver.
+  install: true
+  # The operator version to install, and the ONLY version the approver approves. A newer version that OLM stages
+  # waits for a human; to upgrade, change this and upgrade the release. Keep Chart.yaml's appVersion equal to it.
+  version: "1.13.0"
+  channel: stable
+  # The package as the catalog names it: the Subscription's name and spec.name, and the prefix of every CSV name.
+  package: mongodb-kubernetes
+  source: certified-operators
+  sourceNamespace: openshift-marketplace
+
+operatorGroup:
+  # OLM allows ONE OperatorGroup per namespace. true: the chart creates one that targets the release's namespace.
+  # false: the namespace already has one that targets it (the preflight refuses a second). Ignored without
+  # operator.install.
+  create: true
+
+# Approves the InstallPlan of operator.version only, after checking the plan installs exactly
+# <package>.v<version> and nothing else.
+installPlanApprover:
+  waitSeconds: 300
+
+# Clears a CSV that a previous uninstall left behind with no Subscription, the case that blocks a reinstall. It
+# deletes only an unowned, unreferenced, settled CSV of this package, and only after OLM reports ResolutionFailed.
+csvReclaim:
+  enabled: true
+  waitSeconds: 120
+
+# Checks, before anything is created, that the hand-made objects exist with the keys the operator reads:
+# <prefix>-<name>-search-cert, <prefix>-<name>-search-lb-0-cert, <prefix>-<name>-search-lb-0-client-cert
+# (tls.crt, tls.key), the password secret's key, and ca.crt in the trust bundle. It prints types and key names,
+# never contents. A failed check keeps its Job: oc logs -n <namespace> job/<release>-...-preflight
+preflight:
+  enabled: true
+
+# The MongoDBSearch resource (runbook Step 6a).
+search:
+  # metadata.name. The TLS secret names and the operator's object names derive from it:
+  # <name>-search-0 (StatefulSet), <name>-search-lb-0 (Envoy), <name>-search-0-proxy-svc (Service).
+  name: mongot
+  # mongot version. Empty: spec.version is left out and the operator runs its own default (1.70.1 with operator
+  # 1.13.0), so mongot moves only when operator.version does. Set it to keep mongot on one version across operator
+  # upgrades.
+  version: ""
+  replicas: 3
+  resources:
+    requests: {cpu: "1", memory: 3Gi}
+    limits: {cpu: "3", memory: 5Gi}
+  persistence:
+    storage: 10Gi
+    # Empty: the cluster's default storage class.
+    storageClass: thin-csi
+  # true: `helm uninstall` leaves the MongoDBSearch in place (helm.sh/resource-policy: keep). Removing the
+  # resource makes the operator delete the mongot volumes, and the index with them.
+  keepOnUninstall: false
+
+# The operator-managed Envoy in front of mongot.
+loadBalancer:
+  # REQUIRED. The public name mongod connects to. It is also the Route's host and must be a SAN of the
+  # <prefix>-<name>-search-lb-0-cert certificate. A hostname, never an IP: Envoy selects by SNI.
+  externalHostname: ""
+  replicas: 2
+  retryPolicy:
+    numRetries: 2
+    perTryTimeout: 60s
+  # Envoy image override, as a full reference (name:tag or name@digest). Empty: the operator's own Envoy image.
+  image: ""
+
+tls:
+  # The operator finds the three TLS secrets by name: <prefix>-<search.name>-search-cert and the two
+  # <prefix>-<search.name>-search-lb-0-(client-)cert. A wrong prefix is not an error to the operator.
+  certsSecretPrefix: ent
+  # ConfigMap with key ca.crt: what mongot and Envoy trust, and what mongot verifies the source mongod with.
+  trustBundleConfigMap: ent-trust-bundle
+
+# The external replica set mongot syncs from.
+source:
+  # REQUIRED. One "host:port" per member, so mongot keeps syncing when one member is down.
+  hostAndPorts: []
+  username: mongotUser
+  passwordSecret:
+    name: search-sync-source-password
+    # Empty: passwordSecretRef.key is left out and the operator uses its default.
+    key: password
+
+observability:
+  prometheus:
+    mode: enabled
+    port: 9946
+  metricsForwarder:
+    mode: auto
+    resources:
+      requests: {cpu: 100m, memory: 128Mi}
+      limits: {cpu: 250m, memory: 256Mi}
+
+# The passthrough Route to Envoy (runbook Step 6d). Its host is loadBalancer.externalHostname and its termination
+# is passthrough: Envoy presents the certificate, not the router.
+route:
+  enabled: true
+  name: mongot-search
+  # Empty: the Service the operator creates for Envoy, <search.name>-search-0-proxy-svc.
+  serviceName: ""
+  # A port name on that Service, or a number.
+  targetPort: mongot-grpc
+  # How the router places each new connection on an Envoy pod. A passthrough Route defaults to source, which
+  # sent every connection to one Envoy pod in the lab; see docs/mongot-route-balance-rationale.md.
+  balance: roundrobin
+  annotations: {}
+  labels: {}
+
+# Optional, off by default. Needs user workload monitoring on the cluster.
+monitoring:
+  serviceMonitors:
+    # Scrapes each mongot pod (port prometheus) and each Envoy pod (admin port 9901, /stats/prometheus) through
+    # a ClusterIP Service the chart adds for Envoy's admin port.
+    enabled: false
+    interval: 15s
+    labels: {}
+  alerts:
+    # A PrometheusRule with per-pod share recording rules and four alerts, the first of which fires when one
+    # mongot pod serves over 90% of search traffic.
+    enabled: false
+    labels: {}
+    runbookUrl: https://github.com/ephico2real2/mongodb-poc/blob/main/README.md#the-failure-that-produces-no-error
+
+# The post-install gate: returns when the operator's CSV is Succeeded, the MongoDBSearch has observed its current
+# generation and is Running, mongot and Envoy are rolled out to the requested replicas, Envoy mounts the expected
+# certificates, and the Route is admitted; otherwise it fails and says which.
+# Helm waits for hooks only up to its --timeout (default 5m): pass --timeout 20m.
+wait:
+  waitSeconds: 900
+  intervalSeconds: 10
+
+# The image of the Jobs (preflight, reclaim, approver, gate): a shell and oc.
+jobs:
+  image:
+    repository: registry.redhat.io/openshift4/ose-cli
+    tag: latest
+  # A namespace whose ResourceQuota requires requests refuses a pod without them.
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {memory: 256Mi}
+  ttlSecondsAfterFinished: 600

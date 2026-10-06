@@ -1,0 +1,216 @@
+{{- /*
+The gate: `helm install` returns a serving search path or fails naming what is missing. A Job in the main
+manifest is not waited on; a post-install hook is. Argo CD runs it as a Sync hook in the last wave.
+
+It checks what was seen to matter on the lab:
+- the CSV's phase, not the Subscription's state;
+- the resource's observedGeneration, because status.phase still reads Running from the previous generation
+  while an upgrade is being reconciled, and reads Running with replicas 0 too;
+- the workloads themselves, rolled out to the requested replicas;
+- that Envoy really mounts the three certificates: with TLS half-configured the operator reports Running and
+  mounts none (TLS.md);
+- that the Route is admitted (a second Route on one host is refused, oldest wins).
+*/ -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "mongodb-search-helm.fullname" . }}-wait
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+---
+# Read-only, in this namespace only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "mongodb-search-helm.fullname" . }}-wait
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+rules:
+  - apiGroups: ["operators.coreos.com"]
+    resources: ["subscriptions"]
+    verbs: ["get"]
+  - apiGroups: ["operators.coreos.com"]
+    resources: ["clusterserviceversions"]
+    verbs: ["get", "list"]
+  - apiGroups: ["mongodb.com"]
+    resources: ["mongodbsearch"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets", "deployments"]
+    verbs: ["get"]
+  - apiGroups: ["route.openshift.io"]
+    resources: ["routes"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "mongodb-search-helm.fullname" . }}-wait
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "mongodb-search-helm.fullname" . }}-wait
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "mongodb-search-helm.fullname" . }}-wait
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "mongodb-search-helm.fullname" . }}-wait
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ add .Values.wait.waitSeconds 120 }}
+  ttlSecondsAfterFinished: {{ .Values.jobs.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "mongodb-search-helm.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "mongodb-search-helm.fullname" . }}-wait
+      {{- include "mongodb-search-helm.jobPod" . | nindent 6 }}
+      containers:
+        - name: wait
+          {{- include "mongodb-search-helm.jobContainer" . | nindent 10 }}
+          env:
+            - name: NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: OPERATOR_INSTALL
+              value: {{ .Values.operator.install | quote }}
+            - name: SUBSCRIPTION
+              value: {{ .Values.operator.package | quote }}
+            - name: PACKAGE
+              value: {{ .Values.operator.package | quote }}
+            - name: TARGET
+              value: {{ include "mongodb-search-helm.csv" . | quote }}
+            - name: SEARCH
+              value: {{ .Values.search.name | quote }}
+            - name: MONGOT_STS
+              value: {{ include "mongodb-search-helm.mongotStatefulSet" . | quote }}
+            - name: MONGOT_REPLICAS
+              value: {{ .Values.search.replicas | quote }}
+            - name: ENVOY_DEPLOY
+              value: {{ include "mongodb-search-helm.lbDeployment" . | quote }}
+            - name: ENVOY_REPLICAS
+              value: {{ .Values.loadBalancer.replicas | quote }}
+            - name: LB_CERT_SECRET
+              value: {{ include "mongodb-search-helm.lbCertSecret" . | quote }}
+            - name: LB_CLIENT_CERT_SECRET
+              value: {{ include "mongodb-search-helm.lbClientCertSecret" . | quote }}
+            - name: TRUST_CM
+              value: {{ .Values.tls.trustBundleConfigMap | quote }}
+            - name: ROUTE
+              value: {{ ternary .Values.route.name "" .Values.route.enabled | quote }}
+            - name: WAIT_SECONDS
+              value: {{ .Values.wait.waitSeconds | quote }}
+            - name: INTERVAL
+              value: {{ .Values.wait.intervalSeconds | quote }}
+          args:
+            - |
+              set -uo pipefail
+              log()  { printf '[wait %s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
+              fail() { printf '[wait] FAILED: %s\n' "$*" >&2; exit 1; }
+              DEADLINE=$(( $(date +%s) + WAIT_SECONDS ))
+              left() { echo $(( DEADLINE - $(date +%s) )); }
+              # until_ok <what> <inspect command> <test...>: polls the test until it passes or the budget runs out.
+              until_ok() {
+                local what="$1" inspect="$2"; shift 2
+                while ! "$@"; do
+                  [ "$(left)" -le 0 ] && fail "${what}: not within ${WAIT_SECONDS}s. Inspect: ${inspect}"
+                  log "waiting: ${what} ($(left)s left)"
+                  sleep "$INTERVAL"
+                done
+                log "ok: ${what}"
+              }
+              CSVS=clusterserviceversions.operators.coreos.com
+              MDBS=mongodbsearch.mongodb.com
+              field() { oc get "$1" "$2" -n "$NAMESPACE" -o jsonpath="{$3}" 2>/dev/null; }
+
+              # 1. The operator. The installed CSV's phase, not the Subscription's state. Without operator.install
+              #    there is no Subscription of ours: any Succeeded CSV of the package in this namespace counts.
+              INSTALLED=""
+              csv_ok() {
+                if [ "$OPERATOR_INSTALL" = "true" ]; then
+                  INSTALLED="$(field subscriptions.operators.coreos.com "$SUBSCRIPTION" .status.installedCSV)"
+                  [ -n "$INSTALLED" ] && [ "$(field "$CSVS" "$INSTALLED" .status.phase)" = "Succeeded" ]
+                else
+                  local c
+                  for c in $(oc get "$CSVS" -n "$NAMESPACE" -o name 2>/dev/null); do
+                    case "${c##*/}" in "${PACKAGE}.v"*) ;; *) continue ;; esac
+                    [ "$(field "$CSVS" "${c##*/}" .status.phase)" = "Succeeded" ] && { INSTALLED="${c##*/}"; return 0; }
+                  done
+                  return 1
+                fi
+              }
+              until_ok "the operator's CSV Succeeded" "oc get subscription,installplan,csv -n ${NAMESPACE}" csv_ok
+              if [ "$OPERATOR_INSTALL" = "true" ] && [ "$INSTALLED" != "$TARGET" ]; then
+                log "note: ${INSTALLED} is installed, operator.version names ${TARGET} (approved by hand?)"
+              fi
+
+              # 2. The MongoDBSearch: reconciled at its current generation, and Running.
+              INSPECT_MDBS="oc get ${MDBS} ${SEARCH} -n ${NAMESPACE} -o yaml"
+              observed_ok() {
+                local g; g="$(field "$MDBS" "$SEARCH" .metadata.generation)"
+                [ -n "$g" ] && [ "$g" = "$(field "$MDBS" "$SEARCH" .status.observedGeneration)" ]
+              }
+              until_ok "MongoDBSearch ${SEARCH} reconciled at its current generation" "$INSPECT_MDBS" observed_ok
+              phase_ok() { [ "$(field "$MDBS" "$SEARCH" .status.phase)" = "Running" ]; }
+              until_ok "MongoDBSearch ${SEARCH} Running" "${INSPECT_MDBS}  (status.message: $(field "$MDBS" "$SEARCH" .status.message))" phase_ok
+              lb_ok() { [ "$(field "$MDBS" "$SEARCH" .status.loadBalancer.phase)" = "Running" ]; }
+              until_ok "the managed load balancer Running" "$INSPECT_MDBS" lb_ok
+
+              # 3. The workloads, rolled out. readyReplicas is absent, not 0, when nothing is ready.
+              rolled_out() {
+                local kind="$1" name="$2" want="$3" gen
+                gen="$(field "$kind" "$name" .metadata.generation)"
+                [ -n "$gen" ] && [ "$gen" = "$(field "$kind" "$name" .status.observedGeneration)" ] || return 1
+                [ "$(field "$kind" "$name" .spec.replicas)" = "$want" ] || return 1
+                local ready updated
+                ready="$(field "$kind" "$name" .status.readyReplicas)"; updated="$(field "$kind" "$name" .status.updatedReplicas)"
+                [ "${ready:-0}" = "$want" ] && [ "${updated:-0}" = "$want" ]
+              }
+              until_ok "mongot ${MONGOT_STS}: ${MONGOT_REPLICAS} ready" "oc get statefulset ${MONGOT_STS} -n ${NAMESPACE}; oc get pods -n ${NAMESPACE} -l app=${MONGOT_STS}-svc" \
+                rolled_out statefulsets.apps "$MONGOT_STS" "$MONGOT_REPLICAS"
+              until_ok "Envoy ${ENVOY_DEPLOY}: ${ENVOY_REPLICAS} ready" "oc get deployment ${ENVOY_DEPLOY} -n ${NAMESPACE}; oc get pods -n ${NAMESPACE} -l app=${ENVOY_DEPLOY}" \
+                rolled_out deployments.apps "$ENVOY_DEPLOY" "$ENVOY_REPLICAS"
+              [ "$MONGOT_REPLICAS" = "0" ] && log "note: search.replicas is 0, so no mongot pod is serving"
+
+              # 4. Envoy mounts the three certificates, from the names this release expects.
+              vol() { field deployments.apps "$ENVOY_DEPLOY" ".spec.template.spec.volumes[?(@.name==\"$1\")].$2"; }
+              certs_ok() {
+                [ "$(vol envoy-server-cert secret.secretName)" = "$LB_CERT_SECRET" ] \
+                  && [ "$(vol envoy-client-cert secret.secretName)" = "$LB_CLIENT_CERT_SECRET" ] \
+                  && [ "$(vol ca-cert configMap.name)" = "$TRUST_CM" ]
+              }
+              until_ok "Envoy mounts ${LB_CERT_SECRET}, ${LB_CLIENT_CERT_SECRET} and ${TRUST_CM}" \
+                "oc get deployment ${ENVOY_DEPLOY} -n ${NAMESPACE} -o jsonpath='{.spec.template.spec.volumes}'; see TLS.md, the silent failure" certs_ok
+
+              # 5. The Route is admitted by a router.
+              if [ -n "$ROUTE" ]; then
+                route_ok() { field routes.route.openshift.io "$ROUTE" '.status.ingress[*].conditions[?(@.type=="Admitted")].status' | grep -qw True; }
+                until_ok "Route ${ROUTE} admitted" "oc describe route ${ROUTE} -n ${NAMESPACE}" route_ok
+              fi
+
+              log "MongoDB Search is ready: operator ${INSTALLED}, mongot $(field "$MDBS" "$SEARCH" .status.version) x${MONGOT_REPLICAS}, Envoy x${ENVOY_REPLICAS}"
