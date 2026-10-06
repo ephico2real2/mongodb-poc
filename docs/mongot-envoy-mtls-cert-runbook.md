@@ -13,21 +13,25 @@ This runbook turns two company-signed PEM files into the Kubernetes TLS secrets 
 
 Each PEM holds three things, in this order: the password-protected private key, the company CA bundle, then the leaf (service) certificate.
 
-```mermaid
-flowchart LR
-  mongod["mongod<br/>Trusts: company CA<br/>(its CA ConfigMap)"]
-  envoy["Envoy proxy<br/>mongot-search-lb-0<br/>Presents: envoy cert<br/>Trusts: company CA"]
-  mongot["mongot<br/>mongot-search-0<br/>Presents: mongot cert<br/>Trusts: company CA"]
-  ca[("Company CA<br/>ent-trust-bundle + ca.crt in each secret")]
-  mongod -- "search queries" --> envoy
-  envoy -- "mTLS, Envoy client cert" --> mongot
-  mongot -- "sync, mongot cert as client" --> mongod
-  ca -.-> mongod
-  ca -.-> envoy
-  ca -.-> mongot
+<!-- markdownlint-disable MD033 -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/mongot-runbooks/cert-parties.dark.png">
+  <source srcset="diagrams/mongot-runbooks/cert-parties.light.png">
+  <img alt="The three TLS parties of this runbook: mongod sends search queries to Envoy; Envoy connects to mongot with mTLS, presenting its client cert; mongot syncs from mongod, presenting the mongot cert as a client. All three trust the company CA, held in ent-trust-bundle and in ca.crt in each secret." src="diagrams/mongot-runbooks/cert-parties.light.png">
+</picture>
+<!-- markdownlint-enable MD033 -->
+
+*The three parties and the certificate each one presents. All three need the company CA.*
+
+```text
+① mongod --search queries--> Envoy x2 (mongot-search-lb-0), presents the Envoy cert
+② Envoy  --mTLS, Envoy client cert--> mongot x3 (mongot-search-0), presents the mongot cert
+③ mongot --sync, mongot cert as client--> mongod, trusts the company CA in its CA ConfigMap
+
+Company CA: ent-trust-bundle and ca.crt in each secret, trusted by mongod, Envoy and mongot
 ```
 
-Each solid arrow is a TLS connection where the caller checks the other side's cert, so all three parties need the company CA.
+Each numbered arrow is a TLS connection where the caller checks the other side's cert, so all three parties need the company CA.
 
 **Before you start**
 
@@ -386,3 +390,7 @@ Keep the original PEM files and Step 4 backups somewhere access-controlled. Dele
 **Do we need `ca.crt` in the secret?** Yes, in both. Envoy uses `ca.crt` from its secret to verify mongot's server cert; without it the Envoy-to-mongot handshake fails. mongot needs the CA to verify the client certs from Envoy and mongod. Keep the same company CA in `ent-trust-bundle` too (Step 6).
 
 **Why keep the old secret names?** The MongoDBSearch resource and Envoy config already reference them. New names would mean editing those resources too.
+
+## Diagram sources
+
+The figure in the Overview comes from `diagrams/mongot-runbooks/source.html`, rendered to a light and a dark PNG. The page holds two figures, in this order: `fresh-install-path` and `cert-parties`. To change a figure, edit the page, re-render both PNGs, and update its `alt` text and its `text` twin in the same commit.

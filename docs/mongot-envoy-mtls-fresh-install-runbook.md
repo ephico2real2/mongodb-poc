@@ -28,30 +28,32 @@ A typo, a different prefix or a renamed resource means the operator cannot find 
 
 Each PEM holds the password-protected private key, the company CA bundle, then the leaf cert. This runbook assumes the public endpoint PEM uses the same layout.
 
-```mermaid
-%%{init: {"flowchart": {"curve": "step", "nodeSpacing": 40, "rankSpacing": 50}}}%%
-flowchart TB
-  subgraph src["Upstream MongoDB replica set (external), from hostAndPorts, trusts company CA"]
-    direction LR
-    m1["mongod<br/>abc234.uat.company.net:26018"]
-    m2["mongod<br/>other member:26018"]
-    m3["mongod<br/>other member:26018"]
-  end
+<!-- markdownlint-disable MD033 -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/mongot-runbooks/fresh-install-path.dark.png">
+  <source srcset="diagrams/mongot-runbooks/fresh-install-path.light.png">
+  <img alt="What this runbook sets up: mongod servers outside OpenShift open TLS to the Route mongot-search on port 443; the passthrough Route hands each connection to one of two Envoy pods using balance roundrobin; each Envoy pod picks one of three mongot pods for every query over mTLS on port 27028; mongot syncs straight back to mongod, not through the Route or Envoy. A table lists the certificate presented on each hop." src="diagrams/mongot-runbooks/fresh-install-path.light.png">
+</picture>
+<!-- markdownlint-enable MD033 -->
 
-  subgraph ocp["OpenShift namespace dvh-gp6-rnd"]
-    direction TB
-    route["Route: mongot-search<br/>mongot-search-rnd.company.net:443<br/>TLS passthrough"]
-    envoy["Envoy: mongot-search-lb-0, 2 pods<br/>server cert: ent-mongot-search-lb-0-cert<br/>client cert: ent-mongot-search-lb-0-client-cert<br/>trusts: ca.crt in its secret"]
-    mongot["mongot: mongot-search-0, 3 pods<br/>cert: ent-mongot-search-cert<br/>trusts: ent-trust-bundle"]
-    route --> envoy
-    envoy -->|"mTLS on 27028"| mongot
-  end
+*What this runbook sets up. The router places each mongod connection on one Envoy pod; Envoy spreads every query across the three mongot pods; mongot syncs straight back to mongod.*
 
-  src -->|"1. search queries"| route
-  mongot -->|"2. sync"| src
+```text
+OUTSIDE OPENSHIFT
+  mongod servers, source replica set: abc234.uat.company.net:26018, every member in hostAndPorts
+
+NAMESPACE dvh-gp6-rnd
+① mongod --TLS to mongot-search-rnd.company.net:443--> Route mongot-search (passthrough)
+     Envoy presents ent-mongot-search-lb-0-cert; the Route passes the stream through untouched
+② Route  --one Envoy pod per connection, balance roundrobin--> Envoy x2 (mongot-search-lb-0)
+     no cert of its own; it carries the TLS session from ①
+③ Envoy  --mTLS on 27028, one mongot pod per query--> mongot x3 (mongot-search-0)
+     Envoy presents ent-mongot-search-lb-0-client-cert; mongot presents ent-mongot-search-cert
+④ mongot --sync, not through the Route or Envoy--> mongod
+     mongod presents its own cert; mongot checks it with ent-trust-bundle and signs in as mongotUser
 ```
 
-The top box is every upstream mongod listed in `hostAndPorts`; only `abc234.uat.company.net:26018` is set today, and the other members are placeholders for when you add them. Arrow 1 is those mongod servers sending search queries through the Route to Envoy, then on to mongot. Arrow 2 is mongot's sync connection back to mongod. On every hop the caller checks the other side's cert against the company CA, so mongod, Envoy and mongot all have to trust it.
+The mongod box stands for every upstream mongod listed in `hostAndPorts`; only `abc234.uat.company.net:26018` is set today. On every hop the caller checks the other side's cert against the company CA, so mongod, Envoy and mongot all have to trust it.
 
 **Before you start**
 
@@ -589,3 +591,7 @@ awk '/BEGIN CERTIFICATE/{n++;f=1} f{print > ("cert-"n".pem")} /END CERTIFICATE/{
 for c in cert-*.pem; do echo "== $c"; openssl x509 -in $c -noout -subject -text | grep -E '^subject|CA:'; done
 rm cert-*.pem
 ```
+
+## Diagram sources
+
+The figure in the Overview comes from `diagrams/mongot-runbooks/source.html`, rendered to a light and a dark PNG. The page holds two figures, in this order: `fresh-install-path` and `cert-parties`. To change a figure, edit the page, re-render both PNGs, and update its `alt` text and its `text` twin in the same commit.

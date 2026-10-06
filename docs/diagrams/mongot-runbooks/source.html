@@ -1,0 +1,246 @@
+<title>mongot Runbook Figures</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --ground: #f5f6f8; --surface: #ffffff; --ink: #18212c; --muted: #58636f; --rule: #d7dce3;
+  --host: #a55a0b; --host-wash: #fbf1e4; --remote: #0e6f68; --remote-wash: #e3f3f1;
+  --gap: #b3261e; --gap-wash: #fbe9e7; --none: #6b7684; --none-wash: #eef0f3;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+    --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+    --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+  --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+  --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55; margin: 0; }
+.page { max-width: 1060px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 72px; display: grid; gap: 44px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0 0 6px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+.lede { font-size: 17px; max-width: 70ch; }
+code { font-family: var(--font-mono); font-size: .9em; }
+section { display: grid; gap: 14px; }
+figure { margin: 0; display: grid; gap: 10px; }
+.fig-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px; }
+.fig-scroll svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--ink); }
+figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow">mongodb-poc · mongot runbooks · 2026-10-06</div>
+    <h1>The two figures in the mongot and Envoy mTLS runbooks</h1>
+    <p class="lede">Both runbooks set up certificates for MongoDB Search in namespace <code>dvh-gp6-rnd</code>. The first figure is the path a search query takes once the fresh install is done; the second is who presents and trusts which certificate.</p>
+  </header>
+
+  <section>
+    <h2>Fresh install: the path of a search query</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 836" role="img" aria-label="What the fresh install runbook sets up: mongod servers outside OpenShift open TLS to the Route mongot-search on port 443; the passthrough Route hands each connection to one of two Envoy pods using balance roundrobin; each Envoy pod picks one of three mongot pods for every query over mTLS on port 27028; mongot syncs straight back to mongod, not through the Route or Envoy. A table lists the certificate presented on each hop.">
+          <defs>
+            <marker id="fi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--remote)"/></marker>
+          </defs>
+
+          <!-- lanes -->
+          <g font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)" letter-spacing="1">
+            <text x="36" y="30">OUTSIDE OPENSHIFT</text>
+            <text x="36" y="182">NAMESPACE dvh-gp6-rnd</text>
+          </g>
+          <line x1="30" y1="158" x2="950" y2="158" stroke="var(--rule)" stroke-width="1.5" stroke-dasharray="6 5"/>
+
+          <!-- mongod -->
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" text-anchor="middle">
+            <rect x="330" y="40" width="400" height="68" rx="8" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.5"/>
+            <text x="530" y="62" font-weight="600" fill="currentColor">mongod servers · source replica set</text>
+            <text x="530" y="81" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">abc234.uat.company.net:26018</text>
+            <text x="530" y="99" fill="var(--muted)">every member listed in hostAndPorts</text>
+          </g>
+
+          <!-- 1: mongod to Route -->
+          <line x1="530" y1="108" x2="530" y2="190" stroke="var(--remote)" stroke-width="2.5" marker-end="url(#fi)"/>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" text-anchor="end">
+            <text x="516" y="128" font-weight="600" fill="var(--remote)">① search queries</text>
+            <text x="516" y="145" fill="var(--muted)">TLS to port 443</text>
+          </g>
+
+          <!-- Route -->
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" text-anchor="middle">
+            <rect x="380" y="194" width="300" height="78" rx="8" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.5"/>
+            <text x="530" y="218" font-weight="600" fill="currentColor">Route mongot-search</text>
+            <text x="530" y="238" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">mongot-search-rnd.company.net:443</text>
+            <text x="530" y="257" fill="var(--muted)">TLS passthrough · balance roundrobin</text>
+          </g>
+
+          <!-- Envoy -->
+          <rect x="60" y="336" width="760" height="80" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
+            <text x="78" y="362" font-weight="600" fill="currentColor">Envoy</text>
+            <text x="78" y="380" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">mongot-search-lb-0</text>
+            <text x="78" y="398" fill="var(--muted)">Deployment · 2 pods</text>
+          </g>
+
+          <!-- mongot -->
+          <rect x="60" y="488" width="760" height="80" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
+            <text x="78" y="514" font-weight="600" fill="currentColor">mongot</text>
+            <text x="78" y="532" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">mongot-search-0</text>
+            <text x="78" y="550" fill="var(--muted)">StatefulSet · 3 pods</text>
+          </g>
+
+          <!-- 2: Route to the Envoy pods -->
+          <line x1="500" y1="272" x2="442" y2="350" stroke="var(--remote)" stroke-width="2.5" marker-end="url(#fi)"/>
+          <line x1="560" y1="272" x2="618" y2="350" stroke="var(--remote)" stroke-width="2.5" marker-end="url(#fi)"/>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
+            <text x="78" y="300" font-weight="600" fill="var(--remote)">② one Envoy pod per connection</text>
+            <text x="78" y="317" fill="var(--muted)">chosen by the router</text>
+          </g>
+
+          <!-- 3: every Envoy pod reaches every mongot pod -->
+          <g stroke="var(--remote)" stroke-width="1.6">
+            <line x1="428" y1="398" x2="339" y2="502" marker-end="url(#fi)"/>
+            <line x1="440" y1="398" x2="519" y2="502" marker-end="url(#fi)"/>
+            <line x1="452" y1="398" x2="699" y2="502" marker-end="url(#fi)"/>
+            <line x1="608" y1="398" x2="361" y2="502" marker-end="url(#fi)"/>
+            <line x1="620" y1="398" x2="541" y2="502" marker-end="url(#fi)"/>
+            <line x1="632" y1="398" x2="721" y2="502" marker-end="url(#fi)"/>
+          </g>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
+            <text x="78" y="446" font-weight="600" fill="var(--remote)">③ one mongot pod per query</text>
+            <text x="78" y="463" fill="var(--muted)">mTLS on port 27028</text>
+          </g>
+
+          <!-- pods, drawn last so every arrowhead stays visible -->
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" text-anchor="middle">
+            <rect x="370" y="354" width="140" height="44" rx="6" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.2"/>
+            <text x="440" y="381" font-weight="600" fill="currentColor">Envoy pod</text>
+            <rect x="550" y="354" width="140" height="44" rx="6" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.2"/>
+            <text x="620" y="381" font-weight="600" fill="currentColor">Envoy pod</text>
+          </g>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" text-anchor="middle">
+            <rect x="280" y="506" width="140" height="44" rx="6" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.2"/>
+            <text x="350" y="533" font-weight="600" fill="currentColor">mongot pod</text>
+            <rect x="460" y="506" width="140" height="44" rx="6" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.2"/>
+            <text x="530" y="533" font-weight="600" fill="currentColor">mongot pod</text>
+            <rect x="640" y="506" width="140" height="44" rx="6" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.2"/>
+            <text x="710" y="533" font-weight="600" fill="currentColor">mongot pod</text>
+          </g>
+
+          <!-- 4: sync -->
+          <path d="M820,528 L884,528 L884,74 L734,74" fill="none" stroke="var(--remote)" stroke-width="2.5" marker-end="url(#fi)"/>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" text-anchor="end">
+            <text x="872" y="128" font-weight="600" fill="var(--remote)">④ sync</text>
+            <text x="872" y="145" fill="var(--muted)">not through the Route or Envoy</text>
+          </g>
+
+          <!-- per-hop table -->
+          <g font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--muted)" letter-spacing=".8">
+            <text x="36" y="604">HOP</text><text x="220" y="604">WHAT HAPPENS</text><text x="570" y="604">CERTIFICATE PRESENTED</text>
+          </g>
+          <line x1="30" y1="613" x2="950" y2="613" stroke="var(--rule)"/>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
+            <text x="36" y="633" font-weight="600" fill="currentColor">① mongod → Route</text>
+            <text x="220" y="633" fill="currentColor">TLS to the public name on port 443</text>
+            <text x="220" y="650" fill="var(--muted)">the Route passes the stream through untouched</text>
+            <text x="570" y="633" fill="currentColor">Envoy presents</text>
+            <text x="570" y="650" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">ent-mongot-search-lb-0-cert</text>
+            <line x1="30" y1="659" x2="950" y2="659" stroke="var(--rule)"/>
+
+            <text x="36" y="679" font-weight="600" fill="currentColor">② Route → Envoy</text>
+            <text x="220" y="679" fill="currentColor">the router picks an Envoy pod per connection</text>
+            <text x="220" y="696" fill="var(--muted)">annotation balance: roundrobin</text>
+            <text x="570" y="679" fill="currentColor">none of its own</text>
+            <text x="570" y="696" fill="var(--muted)">it carries the TLS session from ①</text>
+            <line x1="30" y1="705" x2="950" y2="705" stroke="var(--rule)"/>
+
+            <text x="36" y="725" font-weight="600" fill="currentColor">③ Envoy → mongot</text>
+            <text x="220" y="725" fill="currentColor">Envoy picks a mongot pod per query</text>
+            <text x="220" y="742" fill="var(--muted)">mTLS on port 27028</text>
+            <text x="570" y="725" fill="currentColor">Envoy <tspan font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">ent-mongot-search-lb-0-client-cert</tspan></text>
+            <text x="570" y="742" fill="currentColor">mongot <tspan font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">ent-mongot-search-cert</tspan></text>
+            <line x1="30" y1="751" x2="950" y2="751" stroke="var(--rule)"/>
+
+            <text x="36" y="771" font-weight="600" fill="currentColor">④ mongot → mongod</text>
+            <text x="220" y="771" fill="currentColor">mongot syncs from the mongod servers</text>
+            <text x="220" y="788" fill="var(--muted)">signs in as mongotUser</text>
+            <text x="570" y="771" fill="currentColor">mongod presents its own cert</text>
+            <text x="570" y="788" fill="var(--muted)">mongot checks it with <tspan font-family="IBM Plex Mono, monospace" font-size="12">ent-trust-bundle</tspan></text>
+            <line x1="30" y1="797" x2="950" y2="797" stroke="var(--rule)"/>
+
+            <text x="36" y="821" fill="var(--muted)">On every hop the caller checks the other side's cert against the company CA.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>What the fresh install runbook sets up. The router places each mongod connection on one Envoy pod; Envoy spreads every query across the three mongot pods; mongot syncs straight back to mongod.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Cert runbook: who presents and trusts what</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 300" role="img" aria-label="The three TLS parties of the cert runbook: mongod sends search queries to Envoy; Envoy connects to mongot with mTLS, presenting its client cert; mongot syncs from mongod, presenting the mongot cert as a client. All three trust the company CA, held in ent-trust-bundle and in ca.crt in each secret.">
+          <defs>
+            <marker id="cp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--remote)"/></marker>
+          </defs>
+
+          <!-- parties -->
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" text-anchor="middle">
+            <rect x="30" y="30" width="220" height="96" rx="8" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.5"/>
+            <text x="140" y="62" font-weight="600" fill="currentColor">mongod</text>
+            <text x="140" y="83" fill="currentColor">trusts the company CA</text>
+            <text x="140" y="103" fill="var(--muted)">in its CA ConfigMap</text>
+
+            <rect x="380" y="30" width="220" height="96" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="490" y="62" font-weight="600" fill="currentColor">Envoy × 2</text>
+            <text x="490" y="83" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">mongot-search-lb-0</text>
+            <text x="490" y="103" fill="var(--muted)">presents the Envoy cert</text>
+
+            <rect x="730" y="30" width="220" height="96" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="840" y="62" font-weight="600" fill="currentColor">mongot × 3</text>
+            <text x="840" y="83" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">mongot-search-0</text>
+            <text x="840" y="103" fill="var(--muted)">presents the mongot cert</text>
+          </g>
+
+          <!-- 1 and 2 -->
+          <line x1="250" y1="78" x2="376" y2="78" stroke="var(--remote)" stroke-width="2.5" marker-end="url(#cp)"/>
+          <line x1="600" y1="78" x2="726" y2="78" stroke="var(--remote)" stroke-width="2.5" marker-end="url(#cp)"/>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" text-anchor="middle">
+            <text x="313" y="68" font-weight="600" fill="var(--remote)">① search queries</text>
+            <text x="663" y="68" font-weight="600" fill="var(--remote)">② mTLS</text>
+            <text x="663" y="98" fill="var(--muted)">Envoy client cert</text>
+          </g>
+
+          <!-- 3: sync -->
+          <path d="M840,126 L840,168 L140,168 L140,130" fill="none" stroke="var(--remote)" stroke-width="2.5" marker-end="url(#cp)"/>
+          <text x="490" y="160" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="var(--remote)"><tspan font-weight="600">③ sync</tspan> · mongot connects to mongod with the mongot cert as its client cert</text>
+
+          <!-- the shared CA -->
+          <rect x="30" y="196" width="920" height="58" rx="8" fill="var(--none-wash)" stroke="var(--none)" stroke-width="1.5"/>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
+            <text x="46" y="220" font-weight="600" fill="currentColor">Company CA</text>
+            <text x="46" y="240" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">ent-trust-bundle · ca.crt in each secret</text>
+            <text x="934" y="230" text-anchor="end" fill="var(--muted)">trusted by mongod, Envoy and mongot</text>
+            <text x="36" y="282" fill="var(--muted)">Each numbered arrow is a TLS connection where the caller checks the other side's cert.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>The three parties of the cert runbook and the certificate each one presents. All three need the company CA, because on every connection the caller checks the other side's cert.</figcaption>
+    </figure>
+  </section>
+</div>
