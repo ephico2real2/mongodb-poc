@@ -9,7 +9,7 @@ apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
   name: {{ .Values.route.name }}
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
   labels:
     {{- include "mongodb-search-helm.labels" . | nindent 4 }}
     {{- with .Values.route.labels }}

@@ -8,7 +8,7 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
   name: {{ .Values.operator.package }}
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
   labels:
     {{- include "mongodb-search-helm.labels" . | nindent 4 }}
   annotations:

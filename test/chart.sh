@@ -50,6 +50,16 @@ else
   printf 'skip  runbook comparison (yq is not installed)\n'
 fi
 
+# The namespace: the value wins, and without it every object follows helm's -n.
+ns_of() { grep -E '^  namespace: ' | sort -u | tr -d ' ' | tr '\n' ' '; }
+[[ "$(helm template mongot "${CHART}" -n elsewhere -f "${REMOTE}" | ns_of)" == "namespace:dvh-gp6-rnd " ]] \
+  && ok "the namespace value places every object, whatever -n says" || bad "namespace value: $(helm template mongot "${CHART}" -n elsewhere -f "${REMOTE}" | ns_of)"
+[[ "$(helm template mongot "${CHART}" -n team-a -f "${REMOTE}" --set namespace= | ns_of)" == "namespace:team-a " ]] \
+  && ok "an empty namespace value falls back to -n" || bad "namespace fallback"
+helm template mongot "${CHART}" -n elsewhere -f "${REMOTE}" | grep -A1 'name: NAMESPACE' | grep -q 'value: "elsewhere"' \
+  && bad "a Job still reads the release namespace" || ok "the Jobs work in the namespace value"
+render --set namespace=Not_A_Namespace >/dev/null 2>&1 && bad "the schema refuses an invalid namespace" || ok "the schema refuses an invalid namespace"
+
 # search.version: left out when empty, present when set.
 ! render -s templates/10-mongodbsearch.yaml | grep -q '^  version:' && ok "spec.version is left out by default" || bad "spec.version rendered by default"
 render -s templates/10-mongodbsearch.yaml --set search.version=1.70.1 | grep -q '^  version: "1.70.1"$' && ok "search.version reaches the resource" || bad "search.version"
@@ -57,7 +67,9 @@ render -s templates/10-mongodbsearch.yaml --set search.version=1.70.1 | grep -q 
 render -s templates/10-mongodbsearch.yaml | grep -q 'name: ent-trust-bundle' && ok "the source CA is always rendered" || bad "source.external.tls.ca missing"
 render -s templates/10-mongodbsearch.yaml --set search.keepOnUninstall=true | grep -q 'helm.sh/resource-policy: keep' && ok "keepOnUninstall keeps the resource" || bad "keepOnUninstall"
 render -s templates/20-route.yaml | grep -q '^  host: mongot-search-rnd.company.net$' && ok "the Route host is externalHostname" || bad "Route host"
-helm template mongot "${CHART}" -n mongodb-poc -f "${LAB}" -s templates/20-route.yaml | grep -A1 'kind: Service' | grep -q 'name: mongot-search-lb$' \
+render -s templates/20-route.yaml | grep -A1 'kind: Service' | grep -q 'name: mongot-search-0-proxy-svc$' \
+  && ok "the Route targets the operator's proxy Service by default" || bad "Route default target"
+render -s templates/20-route.yaml --set route.serviceName=my-svc | grep -A1 'kind: Service' | grep -q 'name: my-svc$' \
   && ok "route.serviceName overrides the target Service" || bad "route.serviceName"
 
 # Toggles.

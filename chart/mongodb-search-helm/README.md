@@ -35,6 +35,7 @@ helm install mongot chart/mongodb-search-helm -n dvh-gp6-rnd \
 
 | Value | Default | Runbook |
 | --- | --- | --- |
+| `namespace` | empty: the namespace given with `-n` | Where every object goes; it must hold the prerequisites |
 | `operator.install` | `true` | `false` when an operator already serves the namespace |
 | `operator.version` | `1.13.0` | The only version the approver approves |
 | `operator.channel`, `.package`, `.source`, `.sourceNamespace` | `stable`, `mongodb-kubernetes`, `certified-operators`, `openshift-marketplace` | |

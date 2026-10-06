@@ -102,10 +102,11 @@ Expected: `tls.crt` and `tls.key` on the three TLS secrets, `password` on the pa
 
 ### Step 6: Write the values file
 
-Two values have no default: the public hostname and the source mongod. Everything else defaults to the runbook's values; the full list is in the [chart README](../chart/mongodb-search-helm/README.md#values).
+Set the namespace, and the two values that have no default: the public hostname and the source mongod. Everything else defaults to the runbook's values; the full list is in the [chart README](../chart/mongodb-search-helm/README.md#values).
 
 ```yaml
 # my-values.yaml
+namespace: dvh-gp6-rnd                              # where everything goes; must hold the five prerequisites
 loadBalancer:
   externalHostname: mongot-search-rnd.company.net   # also the Route's host; must be a SAN of the lb cert
   image: quay.io/ephico2real/envoy:v1.37-latest      # optional Envoy image override
@@ -131,6 +132,8 @@ helm install mongot chart/mongodb-search-helm -n $NS -f my-values.yaml --timeout
 ```
 
 `--timeout 20m` matters: Helm waits for the last check only as long as its timeout, which defaults to 5 minutes.
+
+Every object goes to the `namespace` in the values file. Pass the same namespace with `-n`, so Helm's own record of the release sits beside what it installed.
 
 What happens, in order:
 

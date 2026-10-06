@@ -12,7 +12,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ include "mongodb-search-helm.fullname" . }}-preflight
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
   labels:
     {{- include "mongodb-search-helm.labels" . | nindent 4 }}
   annotations:
@@ -27,7 +27,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: {{ include "mongodb-search-helm.fullname" . }}-preflight
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
   labels:
     {{- include "mongodb-search-helm.labels" . | nindent 4 }}
   annotations:
@@ -71,7 +71,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: {{ include "mongodb-search-helm.fullname" . }}-preflight
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
   labels:
     {{- include "mongodb-search-helm.labels" . | nindent 4 }}
   annotations:
@@ -88,13 +88,13 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: {{ include "mongodb-search-helm.fullname" . }}-preflight
-    namespace: {{ .Release.Namespace }}
+    namespace: {{ include "mongodb-search-helm.namespace" . }}
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ include "mongodb-search-helm.fullname" . }}-preflight
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
   labels:
     {{- include "mongodb-search-helm.labels" . | nindent 4 }}
   annotations:
@@ -120,7 +120,7 @@ spec:
           {{- include "mongodb-search-helm.jobContainer" . | nindent 10 }}
           env:
             - name: NAMESPACE
-              value: {{ .Release.Namespace | quote }}
+              value: {{ include "mongodb-search-helm.namespace" . | quote }}
             - name: TLS_SECRETS
               value: {{ printf "%s %s %s" (include "mongodb-search-helm.mongotCertSecret" .) (include "mongodb-search-helm.lbCertSecret" .) (include "mongodb-search-helm.lbClientCertSecret" .) | quote }}
             - name: PASSWORD_SECRET
