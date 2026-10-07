@@ -13,3 +13,5 @@ __pycache__/
 
 # local only - references personal tooling paths
 DIAGRAMS.md
+# the pinned diagram-kit install (scripts/perses-dashboard.sh, docs/diagrams/README.md)
+.venv/

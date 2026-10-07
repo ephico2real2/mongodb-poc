@@ -17,13 +17,14 @@ Both files contain two tokens, `__NAMESPACE__` and `__SEARCH__`. The chart repla
 
 **Before you start**
 
+- [ ] [diagram-kit](https://github.com/ephico2real2/diagram-kit) 0.2.0 or later, for its `perses-dashboard` command: `python3 -m venv .venv && .venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.0"`
 - [ ] `podman` or `docker`, or `percli` 0.54.0 with its plugins unpacked
 - [ ] `python3`
 - [ ] For Way 3 only: `oc` logged in to a cluster that runs the Cluster Observability Operator
 
 ## The short way
 
-One script converts, checks and writes the Perses file:
+One script converts, checks and writes the Perses file. It calls [diagram-kit](https://github.com/ephico2real2/diagram-kit)'s `perses-dashboard`, the one converter our repositories share (MPL-2.0):
 
 ```bash
 scripts/perses-dashboard.sh
@@ -35,13 +36,13 @@ Expected:
 wrote chart/mongodb-search-helm/files/mongodb-search.perses.json (29 panels)
 ```
 
-It uses `percli` from your `PATH` when its unpacked plugins are at `~/.local/share/perses/plugins`; otherwise it runs `percli` from the official Perses image with podman or docker. Then run the chart tests, which fail if the two files disagree:
+It takes `perses-dashboard` from `PERSES_DASHBOARD`, from your `PATH`, or from `.venv/bin`, and the command runs `percli` from the Perses image named by `PERSES_IMAGE` (default `docker.io/persesdev/perses:v0.54.0`) with podman or docker. Then run the chart tests, which fail if the two files disagree:
 
 ```bash
 test/chart.sh
 ```
 
-The rest of this document is what the script does, as separate commands. Since chart 0.3.2 the script also carries over what `percli` does not (the pie's colours and labels, the table's coloured cells and column order, an open-ended range), so use the script to produce the committed file; [Colours and chart kinds](#colours-and-chart-kinds-charts-031-and-032-issue-35) lists what it adds.
+The rest of this document is what that command does, as separate commands. Since chart 0.3.2 the script also carries over what `percli` does not (the pie's colours and labels, the table's coloured cells and column order, an open-ended range), so use the script to produce the committed file; [Colours and chart kinds](#colours-and-chart-kinds-charts-031-and-032-issue-35) lists what it adds.
 
 ## Way 1: the container (nothing to install)
 
