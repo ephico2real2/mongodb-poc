@@ -11,6 +11,7 @@ jobs:
   # scripts. helm is pinned to the version the tests are written with; python3, yq and shellcheck are on the runner.
   chart:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install helm 4.3.0
