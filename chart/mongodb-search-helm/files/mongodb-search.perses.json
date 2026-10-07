@@ -312,7 +312,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -328,7 +328,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -344,7 +344,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -360,7 +360,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -436,7 +436,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -452,7 +452,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -468,7 +468,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -484,7 +484,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -532,7 +532,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}) or sum by (pod) (up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}) * 0) and on () (sum((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) > 0)",
+                  "query": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}[5m] @ end())) or label_replace(vector(0), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")) and on () (sum(rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m] @ end())) > 0)",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -548,7 +548,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}) or sum by (pod) (up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}) * 0) and on () (sum((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) > 0)",
+                  "query": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}[5m] @ end())) or label_replace(count(up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod!=\"__SEARCH__-search-0-0\"} @ end() or sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod!=\"__SEARCH__-search-0-0\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod!=\"__SEARCH__-search-0-0\"}[5m] @ end()))) * 0, \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")) and on () (sum(rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m] @ end())) > 0)",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -564,7 +564,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}) or sum by (pod) (up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}) * 0) and on () (sum((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) > 0)",
+                  "query": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}[5m] @ end())) or label_replace(count(up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod!~\"__SEARCH__-search-0-[01]\"} @ end() or sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod!~\"__SEARCH__-search-0-[01]\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod!~\"__SEARCH__-search-0-[01]\"}[5m] @ end()))) * 0, \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")) and on () (sum(rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m] @ end())) > 0)",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -580,7 +580,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "label_replace(sum((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}), \"pod\", \"further pods\", \"\", \"\") and on () (sum((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) > 0)",
+                  "query": "label_replace(sum(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod!~\"__SEARCH__-search-0-[0-2]\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod!~\"__SEARCH__-search-0-[0-2]\"}[5m] @ end()))), \"pod\", \"further pods\", \"\", \"\") and on () (sum(rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m] @ end())) > 0)",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -638,7 +638,8 @@
             "yAxis": {
               "format": {
                 "unit": "requests/sec"
-              }
+              },
+              "min": 0
             }
           }
         },
@@ -880,7 +881,8 @@
             "yAxis": {
               "format": {
                 "unit": "requests/sec"
-              }
+              },
+              "min": 0
             }
           }
         },
@@ -999,7 +1001,8 @@
             "yAxis": {
               "format": {
                 "unit": "requests/sec"
-              }
+              },
+              "min": 0
             }
           }
         },
@@ -1188,7 +1191,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "query": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1204,7 +1207,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "query": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1220,7 +1223,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "query": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1236,7 +1239,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+                  "query": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1294,7 +1297,8 @@
             "yAxis": {
               "format": {
                 "unit": "requests/sec"
-              }
+              },
+              "min": 0
             }
           }
         },
@@ -1309,7 +1313,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "query": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1325,7 +1329,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "query": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1341,7 +1345,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "query": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1357,7 +1361,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+                  "query": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1430,7 +1434,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "query": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1446,7 +1450,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "query": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1462,7 +1466,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "query": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1478,7 +1482,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+                  "query": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1551,7 +1555,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1567,7 +1571,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1583,7 +1587,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1599,7 +1603,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1672,7 +1676,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "query": "(max by (pod) (avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1688,7 +1692,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "query": "(max by (pod) (avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1704,7 +1708,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "query": "(max by (pod) (avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1720,7 +1724,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+                  "query": "(max by (pod) (avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1793,7 +1797,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1809,7 +1813,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1825,7 +1829,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1841,7 +1845,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1914,7 +1918,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "query": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1930,7 +1934,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "query": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1946,7 +1950,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "query": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1962,7 +1966,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+                  "query": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2017,7 +2021,8 @@
             "yAxis": {
               "format": {
                 "unit": "seconds"
-              }
+              },
+              "min": 0
             }
           }
         },
@@ -2032,7 +2037,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "query": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2048,7 +2053,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "query": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2064,7 +2069,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "query": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2080,7 +2085,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+                  "query": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2138,7 +2143,8 @@
             "yAxis": {
               "format": {
                 "unit": "ops/sec"
-              }
+              },
+              "min": 0
             }
           }
         },
@@ -2153,7 +2159,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "query": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2169,7 +2175,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "query": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2185,7 +2191,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "query": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2201,7 +2207,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+                  "query": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2484,7 +2490,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "query": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2500,7 +2506,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "query": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2516,7 +2522,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "query": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2532,7 +2538,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+                  "query": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2602,7 +2608,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "query": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2618,7 +2624,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "query": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2634,7 +2640,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "query": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2650,7 +2656,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+                  "query": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2780,7 +2786,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "query": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2796,7 +2802,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "query": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2812,7 +2818,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "query": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2828,7 +2834,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+                  "query": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2900,7 +2906,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "query": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2916,7 +2922,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "query": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2932,7 +2938,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "query": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -2948,7 +2954,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+                  "query": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -3006,7 +3012,8 @@
             "yAxis": {
               "format": {
                 "unit": "ops/sec"
-              }
+              },
+              "min": 0
             }
           }
         },
@@ -3021,7 +3028,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "query": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -3037,7 +3044,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "query": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -3053,7 +3060,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "query": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -3069,7 +3076,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+                  "query": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
                   "seriesNameFormat": "{{pod}}"
                 }
               }

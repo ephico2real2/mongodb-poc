@@ -163,22 +163,35 @@ for x in g["panels"]:
         ok &= x["gridPos"]["w"] >= 12 or x["gridPos"]["h"] >= 11
 sys.exit(0 if ok else 1)
 PY
-# What the colours stand on, in both files. Each query of a per-pod chart selects its own pod, and the fourth every
-# other one, from one expression. A Perses pie colours by position, so each of its queries gives one series, and none
-# while no search ran. The table names the same pods on the same colours in both forms, with text that can be read.
-# A stacked axis starts at 0 and a share ends at 1. A single number has the same thresholds in both. The Perses
-# layout has the Grafana one's places and sizes: the console is where the 11 units were measured.
-python3 - "${CHART}/files/mongodb-search.json" "${CHART}/files/mongodb-search.perses.json" <<'PY' && ok "per-pod queries, the pie, the table, axes, thresholds and layout agree in both forms" || bad "dashboard per-pod queries, pie, table, axes, thresholds or layout"
+# What the colours stand on, in both files. Each query of a per-pod chart selects its own pod by name, and the fourth
+# every other one, from one expression: selected by `up`, a pod being replaced turned purple. The pie is read at the
+# end of the range shown, or it keeps what stopped an hour ago; a Perses pie colours by position, so each of its
+# queries gives one series, a pod keeps its place whenever it or a later one is known, and nothing is drawn unless a
+# search ran. The table names the same pods on the same colours in both forms, with text that can be read. A stacked
+# axis starts at 0 and a share ends at 1. A single number has the same thresholds in both. The Perses layout has the
+# Grafana one's places and sizes: the console is where the 11 units were measured.
+# A per-second rate and uptime start at 0 too; CPU is aggregated by pod like every other chart, so that a restarted
+# pod is one series; the pie says in words that no search ran; the data source variable starts on Grafana's default.
+python3 - "${CHART}/files/mongodb-search.json" "${CHART}/files/mongodb-search.perses.json" <<'PY' && ok "per-pod queries, the pie, the table, axes, thresholds, layout and data source agree in both forms" || bad "dashboard per-pod queries, pie, table, axes, thresholds, layout or data source"
 import json, re, sys
 g, p = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
 BLUE, RED, YELLOW, PURPLE, GREEN, ORANGE = "#4e79a7", "#e15759", "#edc948", "#b07aa1", "#59a14f", "#f28e2b"
-UP = 'up{namespace="__NAMESPACE__",job="__SEARCH__-search-0-svc",pod'
+J, P = 'namespace="__NAMESPACE__",job="__SEARCH__-search-0-svc"', "__SEARCH__-search-0-"
+NAME = lambda i: f'label_replace(vector(1), "pod", "{P}{i}", "", "")'
 START = 'max by (pod) (kube_pod_start_time{namespace="__NAMESPACE__",pod=~"__SEARCH__-search-lb-0-.*"})'
-TAILS = {"mongot": [f' and on (pod) {UP}="__SEARCH__-search-0-{i}"}}' for i in range(3)] + [f' unless on (pod) {UP}=~"__SEARCH__-search-0-[0-2]"}}'],
+TAILS = {"mongot": [f" and on (pod) {NAME(i)}" for i in range(3)] + [f" unless on (pod) ({NAME(0)} or {NAME(1)} or {NAME(2)})"],
          "Envoy": [f" and on (pod) topk(1, {START})", f" and on (pod) (topk(2, {START}) unless topk(1, {START}))",
                    f" and on (pod) (topk(3, {START}) unless topk(2, {START}))", f" unless on (pod) topk(3, {START})"]}
 STATS = {"mongot pods up": [RED, GREEN], "Envoy pods up": [RED, GREEN], "mongot pods in Envoy": [RED, GREEN],
          "Searches per second": [GREEN], "Largest share on one pod": [GREEN, ORANGE, RED]}
+def own(m):                                        # the searches per second of the pods a matcher selects, at the end of the range
+    return (f"sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{{{J}{m}}}[5m] @ end())"
+            f" + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{{{J}{m}}}[5m] @ end()))")
+some = " and on () (sum(" + own("")[len("sum by (pod) ("):] + " > 0)"
+kept = lambda i, m: f'label_replace(count(up{{{J}{m}}} @ end() or {own(m)}) * 0, "pod", "{P}{i}", "", "")'
+M = [f',pod="{P}0"', f',pod="{P}1"', f',pod="{P}2"', f',pod!="{P}0"', f',pod!~"{P}[01]"', f',pod!~"{P}[0-2]"']
+PIE = [f'({own(M[0])} or label_replace(vector(0), "pod", "{P}0", "", "")){some}', f'({own(M[1])} or {kept(1, M[3])}){some}',
+       f'({own(M[2])} or {kept(2, M[4])}){some}', f'label_replace(sum({own(M[5])}), "pod", "further pods", "", ""){some}']
 def luminance(colour):
     r, gr, b = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in (int(colour[i:i + 2], 16) / 255 for i in (1, 3, 5))]
     return 0.2126 * r + 0.7152 * gr + 0.0722 * b
@@ -187,7 +200,7 @@ def contrast(one, other):
     return (light + 0.05) / (dark + 0.05)
 perses = {v["spec"]["display"]["name"]: (k, v["spec"]["plugin"]["spec"]) for k, v in p["panels"].items()}
 place = {i["content"]["$ref"].rsplit("/", 1)[1]: (i["x"], i["width"], i["height"]) for l in p["layouts"] for i in l["spec"]["items"]}
-ok = True
+ok = g["templating"]["list"][0]["current"] == {"selected": True, "text": "default", "value": "default"}
 for x in g["panels"]:
     if x["type"] == "row": continue
     key, chart = perses[x["title"]]
@@ -197,13 +210,13 @@ for x in g["panels"]:
         if x["title"].endswith(f"per {kind} pod") and x["type"] == "timeseries":
             ok &= len(exprs) == 4 and all(e.endswith(t) for e, t in zip(exprs, tails))
             ok &= len({e[:-len(t)] for e, t in zip(exprs, tails)}) == 1          # one expression, four selections of it
+            ok &= " by (pod) " in exprs[0][:-len(tails[0])]                       # a restarted pod is one series, not two
     if x["type"] == "piechart":
-        some = exprs[0][exprs[0].rfind(" and on () (sum("):]                     # nothing while no search ran
-        ok &= len(exprs) == 4 and some.endswith(" > 0)") and all(e.endswith(some) for e in exprs)
-        ok &= all(t + f') or sum by (pod) ({UP}="__SEARCH__-search-0-{i}"}}) * 0)' + some in e for i, (e, t) in enumerate(zip(exprs, TAILS["mongot"][:3])))
-        ok &= exprs[3].startswith("label_replace(sum(") and TAILS["mongot"][3] + '), "pod", "further pods", "", "")' + some in exprs[3]
+        ok &= exprs == PIE
     d = x["fieldConfig"]["defaults"]
-    if d.get("custom", {}).get("stacking"):
+    if x["type"] == "piechart":
+        ok &= bool(d.get("noValue"))                                             # Grafana's "No data" reads as a fault
+    if x["type"] == "timeseries" and (d.get("custom", {}).get("stacking") or d["unit"] in ("reqps", "ops") or x["title"].startswith("Uptime")):
         ok &= d.get("min") == 0 == chart["yAxis"].get("min")
         if d["unit"] == "percentunit": ok &= d.get("max") == 1 == chart["yAxis"].get("max")
     if x["type"] == "stat":

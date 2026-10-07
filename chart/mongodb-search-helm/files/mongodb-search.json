@@ -34,7 +34,11 @@
         "label": "Data source",
         "type": "datasource",
         "query": "prometheus",
-        "current": {},
+        "current": {
+          "selected": true,
+          "text": "default",
+          "value": "default"
+        },
         "hide": 0,
         "includeAll": false,
         "multi": false,
@@ -383,7 +387,7 @@
       },
       "targets": [
         {
-          "expr": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+          "expr": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "datasource": {
@@ -392,7 +396,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+          "expr": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "B",
           "datasource": {
@@ -401,7 +405,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+          "expr": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "C",
           "datasource": {
@@ -410,7 +414,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+          "expr": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
           "legendFormat": "{{pod}}",
           "refId": "D",
           "datasource": {
@@ -558,7 +562,7 @@
       },
       "targets": [
         {
-          "expr": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+          "expr": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "datasource": {
@@ -567,7 +571,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+          "expr": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "B",
           "datasource": {
@@ -576,7 +580,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+          "expr": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "C",
           "datasource": {
@@ -585,7 +589,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+          "expr": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
           "legendFormat": "{{pod}}",
           "refId": "D",
           "datasource": {
@@ -734,7 +738,7 @@
       },
       "targets": [
         {
-          "expr": "(((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}) or sum by (pod) (up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}) * 0) and on () (sum((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) > 0)",
+          "expr": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}[5m] @ end())) or label_replace(vector(0), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")) and on () (sum(rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m] @ end())) > 0)",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "datasource": {
@@ -743,7 +747,7 @@
           }
         },
         {
-          "expr": "(((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}) or sum by (pod) (up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}) * 0) and on () (sum((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) > 0)",
+          "expr": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}[5m] @ end())) or label_replace(count(up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod!=\"__SEARCH__-search-0-0\"} @ end() or sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod!=\"__SEARCH__-search-0-0\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod!=\"__SEARCH__-search-0-0\"}[5m] @ end()))) * 0, \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")) and on () (sum(rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m] @ end())) > 0)",
           "legendFormat": "{{pod}}",
           "refId": "B",
           "datasource": {
@@ -752,7 +756,7 @@
           }
         },
         {
-          "expr": "(((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}) or sum by (pod) (up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}) * 0) and on () (sum((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) > 0)",
+          "expr": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}[5m] @ end())) or label_replace(count(up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod!~\"__SEARCH__-search-0-[01]\"} @ end() or sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod!~\"__SEARCH__-search-0-[01]\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod!~\"__SEARCH__-search-0-[01]\"}[5m] @ end()))) * 0, \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")) and on () (sum(rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m] @ end())) > 0)",
           "legendFormat": "{{pod}}",
           "refId": "C",
           "datasource": {
@@ -761,7 +765,7 @@
           }
         },
         {
-          "expr": "label_replace(sum((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}), \"pod\", \"further pods\", \"\", \"\") and on () (sum((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) > 0)",
+          "expr": "label_replace(sum(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod!~\"__SEARCH__-search-0-[0-2]\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod!~\"__SEARCH__-search-0-[0-2]\"}[5m] @ end()))), \"pod\", \"further pods\", \"\", \"\") and on () (sum(rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m] @ end()) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m] @ end())) > 0)",
           "legendFormat": "{{pod}}",
           "refId": "D",
           "datasource": {
@@ -772,7 +776,8 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps"
+          "unit": "reqps",
+          "noValue": "No search in the last 5 minutes"
         },
         "overrides": [
           {
@@ -928,7 +933,8 @@
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 0
-          }
+          },
+          "min": 0
         },
         "overrides": [
           {
@@ -1268,7 +1274,8 @@
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 0
-          }
+          },
+          "min": 0
         },
         "overrides": [
           {
@@ -1438,7 +1445,8 @@
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 0
-          }
+          },
+          "min": 0
         },
         "overrides": [
           {
@@ -1625,7 +1633,7 @@
       },
       "targets": [
         {
-          "expr": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+          "expr": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "datasource": {
@@ -1634,7 +1642,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+          "expr": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "B",
           "datasource": {
@@ -1643,7 +1651,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+          "expr": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "C",
           "datasource": {
@@ -1652,7 +1660,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+          "expr": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
           "legendFormat": "{{pod}}",
           "refId": "D",
           "datasource": {
@@ -1795,7 +1803,7 @@
       },
       "targets": [
         {
-          "expr": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+          "expr": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "datasource": {
@@ -1804,7 +1812,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+          "expr": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "B",
           "datasource": {
@@ -1813,7 +1821,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+          "expr": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "C",
           "datasource": {
@@ -1822,7 +1830,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+          "expr": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
           "legendFormat": "{{pod}}",
           "refId": "D",
           "datasource": {
@@ -1837,7 +1845,8 @@
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 0
-          }
+          },
+          "min": 0
         },
         "overrides": [
           {
@@ -1965,7 +1974,7 @@
       },
       "targets": [
         {
-          "expr": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+          "expr": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "datasource": {
@@ -1974,7 +1983,7 @@
           }
         },
         {
-          "expr": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+          "expr": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "B",
           "datasource": {
@@ -1983,7 +1992,7 @@
           }
         },
         {
-          "expr": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+          "expr": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "C",
           "datasource": {
@@ -1992,7 +2001,7 @@
           }
         },
         {
-          "expr": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+          "expr": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
           "legendFormat": "{{pod}}",
           "refId": "D",
           "datasource": {
@@ -2135,7 +2144,7 @@
       },
       "targets": [
         {
-          "expr": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+          "expr": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "datasource": {
@@ -2144,7 +2153,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+          "expr": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "B",
           "datasource": {
@@ -2153,7 +2162,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+          "expr": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "C",
           "datasource": {
@@ -2162,7 +2171,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+          "expr": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
           "legendFormat": "{{pod}}",
           "refId": "D",
           "datasource": {
@@ -2305,7 +2314,7 @@
       },
       "targets": [
         {
-          "expr": "(avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+          "expr": "(max by (pod) (avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "datasource": {
@@ -2314,7 +2323,7 @@
           }
         },
         {
-          "expr": "(avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+          "expr": "(max by (pod) (avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "B",
           "datasource": {
@@ -2323,7 +2332,7 @@
           }
         },
         {
-          "expr": "(avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+          "expr": "(max by (pod) (avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "C",
           "datasource": {
@@ -2332,7 +2341,7 @@
           }
         },
         {
-          "expr": "(avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+          "expr": "(max by (pod) (avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
           "legendFormat": "{{pod}}",
           "refId": "D",
           "datasource": {
@@ -2475,7 +2484,7 @@
       },
       "targets": [
         {
-          "expr": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+          "expr": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "datasource": {
@@ -2484,7 +2493,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+          "expr": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "B",
           "datasource": {
@@ -2493,7 +2502,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+          "expr": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "C",
           "datasource": {
@@ -2502,7 +2511,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+          "expr": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
           "legendFormat": "{{pod}}",
           "refId": "D",
           "datasource": {
@@ -2645,7 +2654,7 @@
       },
       "targets": [
         {
-          "expr": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+          "expr": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "datasource": {
@@ -2654,7 +2663,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+          "expr": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "B",
           "datasource": {
@@ -2663,7 +2672,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+          "expr": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "C",
           "datasource": {
@@ -2672,7 +2681,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+          "expr": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
           "legendFormat": "{{pod}}",
           "refId": "D",
           "datasource": {
@@ -2815,7 +2824,7 @@
       },
       "targets": [
         {
-          "expr": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+          "expr": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "datasource": {
@@ -2824,7 +2833,7 @@
           }
         },
         {
-          "expr": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+          "expr": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "B",
           "datasource": {
@@ -2833,7 +2842,7 @@
           }
         },
         {
-          "expr": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+          "expr": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "C",
           "datasource": {
@@ -2842,7 +2851,7 @@
           }
         },
         {
-          "expr": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+          "expr": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
           "legendFormat": "{{pod}}",
           "refId": "D",
           "datasource": {
@@ -2857,7 +2866,8 @@
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 0
-          }
+          },
+          "min": 0
         },
         "overrides": [
           {
@@ -2973,7 +2983,7 @@
       },
       "targets": [
         {
-          "expr": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+          "expr": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "datasource": {
@@ -2982,7 +2992,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+          "expr": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "B",
           "datasource": {
@@ -2991,7 +3001,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+          "expr": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "C",
           "datasource": {
@@ -3000,7 +3010,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+          "expr": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
           "legendFormat": "{{pod}}",
           "refId": "D",
           "datasource": {
@@ -3015,7 +3025,8 @@
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 0
-          }
+          },
+          "min": 0
         },
         "overrides": [
           {
@@ -3391,7 +3402,7 @@
       },
       "targets": [
         {
-          "expr": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+          "expr": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "datasource": {
@@ -3400,7 +3411,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+          "expr": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "B",
           "datasource": {
@@ -3409,7 +3420,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+          "expr": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "C",
           "datasource": {
@@ -3418,7 +3429,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+          "expr": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
           "legendFormat": "{{pod}}",
           "refId": "D",
           "datasource": {
@@ -3549,7 +3560,7 @@
       },
       "targets": [
         {
-          "expr": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+          "expr": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "datasource": {
@@ -3558,7 +3569,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+          "expr": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "B",
           "datasource": {
@@ -3567,7 +3578,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+          "expr": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "C",
           "datasource": {
@@ -3576,7 +3587,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+          "expr": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
           "legendFormat": "{{pod}}",
           "refId": "D",
           "datasource": {
@@ -3779,7 +3790,7 @@
       },
       "targets": [
         {
-          "expr": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+          "expr": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "datasource": {
@@ -3788,7 +3799,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+          "expr": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "B",
           "datasource": {
@@ -3797,7 +3808,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+          "expr": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "C",
           "datasource": {
@@ -3806,7 +3817,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+          "expr": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
           "legendFormat": "{{pod}}",
           "refId": "D",
           "datasource": {
@@ -3938,7 +3949,7 @@
       },
       "targets": [
         {
-          "expr": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+          "expr": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "datasource": {
@@ -3947,7 +3958,7 @@
           }
         },
         {
-          "expr": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+          "expr": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "B",
           "datasource": {
@@ -3956,7 +3967,7 @@
           }
         },
         {
-          "expr": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+          "expr": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "C",
           "datasource": {
@@ -3965,7 +3976,7 @@
           }
         },
         {
-          "expr": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+          "expr": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
           "legendFormat": "{{pod}}",
           "refId": "D",
           "datasource": {
@@ -4098,7 +4109,7 @@
       },
       "targets": [
         {
-          "expr": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+          "expr": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "datasource": {
@@ -4107,7 +4118,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+          "expr": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "B",
           "datasource": {
@@ -4116,7 +4127,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+          "expr": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\")",
           "legendFormat": "{{pod}}",
           "refId": "C",
           "datasource": {
@@ -4125,7 +4136,7 @@
           }
         },
         {
-          "expr": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
+          "expr": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) (label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-0\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-1\", \"\", \"\") or label_replace(vector(1), \"pod\", \"__SEARCH__-search-0-2\", \"\", \"\"))",
           "legendFormat": "{{pod}}",
           "refId": "D",
           "datasource": {
@@ -4140,7 +4151,8 @@
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 0
-          }
+          },
+          "min": 0
         },
         "overrides": [
           {

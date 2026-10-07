@@ -267,6 +267,24 @@ Measured on the lab on Oct 6 and 7, 2026, with searches running through the sear
 | In a Grafana 12.3.1 through the sidecar | 29 panels and 97 queries listed, the two traffic panels stacked, the six colours only; 97 of 97 queries answered through its Thanos Querier data source, the same 26 with no series; the page drew every panel in light and dark, the table's pod cells in blue, red and yellow, and the state legend reading `STEADY` |
 | Ordering the Envoy pods | By Envoy's own uptime the first pod changed between steps (64 and 48 of 121); by `kube_pod_start_time`, the same pod at every step of nine range queries |
 
-`scripts/perses-dashboard.sh` compares every query of every panel with the Grafana source, and `test/chart.sh` checks the colours, shades, line styles, legends and the table's cells in both files.
+Drawn again on Oct 7, 2026 for clusters the lab does not have. The chart's rendering (`helm template`) was loaded into a Grafana 12.3.1 and a Perses 0.54.0 container on a workstation, reading series shaped like the lab's from a local Prometheus 3.15.0, one namespace per case; the lab's own three pods were drawn in the same two through the lab's Thanos Querier. "Before" is the dashboard with each pod selected through its `up` series and the pie read over the whole range.
+
+| Case | Grafana 12.3.1 | Perses 0.54.0 |
+| --- | --- | --- |
+| One, two, three, five and twelve pods, even traffic | Each pod on its colour in every chart; from the fourth pod on, one purple slice *further pods* and purple table cells. The same before | The same. The same before |
+| One pod takes every search | One slice in that pod's colour; the other two at 0 in the legend | The same |
+| A pod that is a target with no rate yet | Its place kept in the pie, at 0. The same before | Its place kept. Before: the third pod's slice `#ff0000` for as long as the first had no sample |
+| No search for 20 minutes, the range reaching back to searches | Nothing drawn in the pie. Before: three slices | An empty circle. Before: three slices |
+| A pod being replaced, its `up` gone | Its own colour throughout. Before: purple in seven charts and named twice in the legend; in the pie its share as *further pods* beside its stale slice | The pie in the pods' three colours. Before: a fourth, purple slice |
+| A pod gone for 20 minutes | The pie: the two others, and its place at 0. Before: its stale slice and a slice *further pods* | The same. Before: the same two stale slices |
+| The lab's three pods, searches running | Three slices in blue, red and yellow | The same |
+| The pie in 750 states of the first three pods (serving, idle, just started, just gone, absent) with and without further pods | None wrong. Before: 366, a share under another name | None wrong. Before: 519, those or a colour off its owner |
+| Uptime of the lab's pods over 9 minutes | An axis from 0 with four different tick labels. Before: `17.4 hours` twice | An axis from 0, the line where it was, near the top. Before: from 14.2 h |
+| The lab's 2xx responses per second at steady traffic | An axis from 0. Before: from 0.725 to 0.85, the shade starting there | From 0, as before |
+| A pod replaced 12 minutes ago, CPU chart | Named once. Before: twice, once for each address | Named once. Before: twice |
+| No search for 20 minutes, the words in the pie | *No search in the last 5 minutes*, in place of Grafana's own *No data*, which a failed query also shows | An empty circle, no words |
+| A Grafana with two Prometheus data sources, the second by name the default | Opens on the default. Before: on the first by name, with "No data" in nine places on the first screen | Not in the Perses form: its queries name the chart's own datasource |
+
+`scripts/perses-dashboard.sh` compares every query of every panel with the Grafana source, and `test/chart.sh` checks the colours, shades, line styles, legends and the table's cells in both files, and that each per-pod query selects its pod by name and the pie is read at the end of the range.
 
 Not validated: a `GrafanaDashboard` of the grafana-operator pointing at the ConfigMap. The lab's operator watches one namespace, `group-sync-dashboard`, which belongs to another project, and its data source is limited to that namespace's metrics.
