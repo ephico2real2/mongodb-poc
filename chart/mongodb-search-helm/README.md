@@ -30,7 +30,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.0/mongodb-search-helm-0.3.0.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.1/mongodb-search-helm-0.3.1.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -92,7 +92,7 @@ The captures below were taken on the lab on 2026-10-06, a few minutes after sear
 On by default (`monitoring.persesDashboard.enabled`). In the console it is under **Observe → Dashboards (Perses)**, in the release's project.
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The OpenShift console, logged in as developer, project mongodb-poc, Dashboards, dashboard MongoDB Search, last 15 minutes, in five sections, with no warning sign on any panel. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods in Envoy, 0.54 searches per second, largest share on one pod 33 percent. Is traffic spread: three per-pod lines that rise together once searches start, each share near a third. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, 95th percentile latency of 3 to 4.5 milliseconds. How is each mongot pod doing: average search latency of 5 to 9 milliseconds, no failures, replication lag readings of 4 and 9 seconds on two pods, JVM memory per pod, CPU of 2 to 6 percent, heap at 15 to 45 percent of its limit, about 0.1 percent of time in garbage collection, uptime near 5.6 hours on every pod, and no search work run outside the parallel pool. Does every mongot pod hold the same data: one flat line for all three pods in each panel, index size 4.6 MiB, 40 thousand documents, 0 indexes not STEADY, 5 indexes in the catalog, the data volume 82.5 percent used, and no indexing operations." src="../../docs/screenshots/dashboard-console.light.png">
+<img alt="The OpenShift console, logged in as developer, project mongodb-poc, Dashboards, dashboard MongoDB Search, last 15 minutes, in five sections, with no warning sign on any panel. Every line is 3 wide with no fill, and each pod has one colour throughout: the first mongot pod blue, the second red, the third yellow. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods in Envoy, 0.44 searches per second, largest share on one pod 34 percent. Is traffic spread: three per-pod lines that rise together once searches start, their shares settling near a third. Is Envoy healthy: the two Envoy pods in blue and red, all requests and the one open connection on the red one, no retries, 2xx responses in blue, 95th percentile latency falling from 3 milliseconds to half a millisecond. How is each mongot pod doing: average search latency of 2 to 5 milliseconds, no failures, one replication lag reading of 1 second on the first pod, JVM memory, CPU of 1 to 4 percent, heap at 15 to 45 percent of its limit, time in garbage collection, uptime the same on every pod, and no search work run outside the parallel pool. Does every mongot pod hold the same data: one line covers the other two in each panel, index size 4.6 MiB, 40 thousand documents, 0 indexes not STEADY, 5 indexes in the catalog, the data volume about 82 percent used, and no indexing operations." src="../../docs/screenshots/dashboard-console.light.png">
 <!-- markdownlint-enable MD033 -->
 
 *The dashboard in the lab's own OpenShift console (4.22.7, Cluster Observability Operator 1.5.3), opened by [`scripts/capture-console-dashboard.py`](../../scripts/capture-console-dashboard.py) as the lab's `developer` user, who held only the roles below.*
@@ -115,7 +115,7 @@ done
 Off by default (`monitoring.grafanaDashboard`). The chart ships it as a ConfigMap labelled `grafana_dashboard: "1"`, for a Grafana dashboard sidecar that watches the release's namespace.
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The MongoDB Search dashboard in a Grafana 12.3.1 running in the lab namespace, data source Thanos Querier, last 15 minutes, in five sections, with no warning sign on any panel. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods in Envoy, 0.54 searches per second, largest share on one pod 34 percent. Is traffic spread: three per-pod lines that rise together once searches start, their shares settling between 32 and 34 percent. Is Envoy healthy: all requests on one Envoy pod, one open connection from mongod on that pod, no retries, only 2xx responses, 95th percentile latency of 3 to 4.5 milliseconds. How is each mongot pod doing: average search latency of 5 to 9 milliseconds, no failures, replication lag readings of 4 and 9 seconds on two pods, JVM memory per pod, CPU of 2 to 6 percent, heap at 15 to 45 percent of its limit, about 0.1 percent of time in garbage collection, uptime near 5.6 hours on every pod, and no search work run outside the parallel pool. Does every mongot pod hold the same data: one flat line for all three pods in each panel, index size 4.6 MiB, 40 thousand documents, 0 indexes not STEADY, 5 indexes in the catalog, the data volume 82.5 percent used, and no indexing operations." src="../../docs/screenshots/dashboard-grafana-sidecar.light.png">
+<img alt="The same dashboard in a Grafana 12.3.1 running in the lab namespace, data source Thanos Querier, last 15 minutes: the same five sections and 27 panels, and the same colours as in the console, the first mongot pod blue, the second red, the third yellow, the two Envoy pods blue and red, lines 3 wide with no fill, and no warning sign on any panel." src="../../docs/screenshots/dashboard-grafana-sidecar.light.png">
 <!-- markdownlint-enable MD033 -->
 
 *The chart's ConfigMap, loaded by the dashboard sidecar of a Grafana installed in the lab namespace for this measurement and removed afterwards (the Grafana Helm chart 10.5.15, Grafana 12.3.1, sidecar 2.5.0; [`test/grafana-sidecar/`](../../test/grafana-sidecar/)). Measured when the dashboard had 16 panels: the Grafana held no such dashboard before `monitoring.grafanaDashboard=true`, and 37 s after that upgrade started the sidecar had written the file and Grafana listed it. Measured again with the 27 panels shown here: listed with 27 panels in 5 rows, and all 27 queries answered through its Thanos Querier data source.*
@@ -123,6 +123,26 @@ Off by default (`monitoring.grafanaDashboard`). The chart ships it as a ConfigMa
 Two things that Grafana needed, which the chart does not provide: a Prometheus data source (the dashboard takes the default one; here Thanos Querier on port 9091 with the Grafana pod's own token), and a Role that lets the sidecar read ConfigMaps. The Grafana Helm chart's own Role also lets it read every Secret in the namespace; `test/grafana-sidecar/` replaces it with one for ConfigMaps only.
 
 How the Perses form is generated from the Grafana one, and how both were validated, is in [`docs/grafana-to-perses-conversion.md`](../../docs/grafana-to-perses-conversion.md).
+
+### Colours
+
+Every line has a fixed colour, the same in both forms and in the light and the dark theme. No two lines of a panel share one, and none is left to a palette.
+
+| Colour | A mongot panel | An Envoy panel | Responses by class |
+| --- | --- | --- | --- |
+| Blue `#2a7de1` | the first pod, `<name>-search-0-0` | the pod started last | 2xx |
+| Red `#e0362c` | the second, `-1` | the one before it | 5xx |
+| Yellow `#d49b00` | the third, `-2` | the third | 4xx |
+| Purple `#b03fc9` | any further pod | any further pod | any other class |
+
+Lines are 3 wide with no area fill. The stat panels keep green for good, orange and red for their thresholds.
+
+What makes this possible, and what it costs:
+
+- **One query per line.** Perses fixes a colour per query, not per series, so each per-pod panel asks four queries: one per pod and one for any further pod. The Grafana form carries the same four, coloured by query. The dashboard asks 90 queries a refresh (27 before); measured on the lab through Thanos Querier, a refresh over 15 minutes took 0.16 s in all.
+- **mongot pods are told apart by name**, which a StatefulSet fixes, so a pod keeps its colour for good.
+- **Envoy pods are told apart by start time** (`kube_pod_start_time`), because their names are generated. A colour stays with a pod while the set of pods stays the same; when one is replaced, the order moves on. On the lab the two pods started in the same second, and the order between them was the same at every step of nine range queries.
+- **Before this**, the Perses form took a colour generated from each series' name: measured, three muted tones for the mongot pods and two purples for the Envoy pods, with a contrast as low as 1.9:1 against the background. Now the closest two colours of a panel are blue and purple (CIE76 ΔE 54), and the lowest contrast is yellow on white, 2.5:1; the other three are above 4:1 on white, and all four above 3.5:1 on the dark background.
 
 ### The mongot process and data panels
 
