@@ -260,9 +260,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -282,7 +304,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))",
+                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -305,9 +375,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -327,7 +419,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))",
+                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / scalar(sum((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -350,9 +490,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -372,7 +534,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sum by (pod) (rate(envoy_cluster_upstream_rq_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_cluster_name=\"mongot_rs_cluster\"}[5m]))",
+                  "query": "(sum by (pod) (rate(envoy_cluster_upstream_rq_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_cluster_name=\"mongot_rs_cluster\"}[5m]))) and on (pod) topk(1, max by (pod) (kube_pod_start_time{namespace=\"__NAMESPACE__\",pod=~\"__SEARCH__-search-lb-0-.*\"}))",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(envoy_cluster_upstream_rq_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_cluster_name=\"mongot_rs_cluster\"}[5m]))) and on (pod) (topk(2, max by (pod) (kube_pod_start_time{namespace=\"__NAMESPACE__\",pod=~\"__SEARCH__-search-lb-0-.*\"})) unless topk(1, max by (pod) (kube_pod_start_time{namespace=\"__NAMESPACE__\",pod=~\"__SEARCH__-search-lb-0-.*\"})))",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(envoy_cluster_upstream_rq_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_cluster_name=\"mongot_rs_cluster\"}[5m]))) and on (pod) (topk(3, max by (pod) (kube_pod_start_time{namespace=\"__NAMESPACE__\",pod=~\"__SEARCH__-search-lb-0-.*\"})) unless topk(2, max by (pod) (kube_pod_start_time{namespace=\"__NAMESPACE__\",pod=~\"__SEARCH__-search-lb-0-.*\"})))",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(envoy_cluster_upstream_rq_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_cluster_name=\"mongot_rs_cluster\"}[5m]))) unless on (pod) topk(3, max by (pod) (kube_pod_start_time{namespace=\"__NAMESPACE__\",pod=~\"__SEARCH__-search-lb-0-.*\"}))",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -395,9 +605,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -417,7 +649,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sum by (pod) (envoy_listener_downstream_cx_active{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_listener_address=\"0.0.0.0_27028\"})",
+                  "query": "(sum by (pod) (envoy_listener_downstream_cx_active{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_listener_address=\"0.0.0.0_27028\"})) and on (pod) topk(1, max by (pod) (kube_pod_start_time{namespace=\"__NAMESPACE__\",pod=~\"__SEARCH__-search-lb-0-.*\"}))",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (envoy_listener_downstream_cx_active{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_listener_address=\"0.0.0.0_27028\"})) and on (pod) (topk(2, max by (pod) (kube_pod_start_time{namespace=\"__NAMESPACE__\",pod=~\"__SEARCH__-search-lb-0-.*\"})) unless topk(1, max by (pod) (kube_pod_start_time{namespace=\"__NAMESPACE__\",pod=~\"__SEARCH__-search-lb-0-.*\"})))",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (envoy_listener_downstream_cx_active{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_listener_address=\"0.0.0.0_27028\"})) and on (pod) (topk(3, max by (pod) (kube_pod_start_time{namespace=\"__NAMESPACE__\",pod=~\"__SEARCH__-search-lb-0-.*\"})) unless topk(2, max by (pod) (kube_pod_start_time{namespace=\"__NAMESPACE__\",pod=~\"__SEARCH__-search-lb-0-.*\"})))",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (envoy_listener_downstream_cx_active{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_listener_address=\"0.0.0.0_27028\"})) unless on (pod) topk(3, max by (pod) (kube_pod_start_time{namespace=\"__NAMESPACE__\",pod=~\"__SEARCH__-search-lb-0-.*\"}))",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -440,9 +720,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -462,7 +764,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sum by (pod) (rate(envoy_cluster_upstream_rq_retry_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_cluster_name=\"mongot_rs_cluster\"}[5m]))",
+                  "query": "(sum by (pod) (rate(envoy_cluster_upstream_rq_retry_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_cluster_name=\"mongot_rs_cluster\"}[5m]))) and on (pod) topk(1, max by (pod) (kube_pod_start_time{namespace=\"__NAMESPACE__\",pod=~\"__SEARCH__-search-lb-0-.*\"}))",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(envoy_cluster_upstream_rq_retry_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_cluster_name=\"mongot_rs_cluster\"}[5m]))) and on (pod) (topk(2, max by (pod) (kube_pod_start_time{namespace=\"__NAMESPACE__\",pod=~\"__SEARCH__-search-lb-0-.*\"})) unless topk(1, max by (pod) (kube_pod_start_time{namespace=\"__NAMESPACE__\",pod=~\"__SEARCH__-search-lb-0-.*\"})))",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(envoy_cluster_upstream_rq_retry_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_cluster_name=\"mongot_rs_cluster\"}[5m]))) and on (pod) (topk(3, max by (pod) (kube_pod_start_time{namespace=\"__NAMESPACE__\",pod=~\"__SEARCH__-search-lb-0-.*\"})) unless topk(2, max by (pod) (kube_pod_start_time{namespace=\"__NAMESPACE__\",pod=~\"__SEARCH__-search-lb-0-.*\"})))",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(envoy_cluster_upstream_rq_retry_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_cluster_name=\"mongot_rs_cluster\"}[5m]))) unless on (pod) topk(3, max by (pod) (kube_pod_start_time{namespace=\"__NAMESPACE__\",pod=~\"__SEARCH__-search-lb-0-.*\"}))",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -485,9 +835,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -507,7 +879,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sum by (envoy_response_code_class) (rate(envoy_cluster_upstream_rq_xx_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_cluster_name=\"mongot_rs_cluster\"}[5m]))",
+                  "query": "sum by (envoy_response_code_class) (rate(envoy_cluster_upstream_rq_xx_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_cluster_name=\"mongot_rs_cluster\",envoy_response_code_class=\"2\"}[5m]))",
+                  "seriesNameFormat": "{{envoy_response_code_class}}xx"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "sum by (envoy_response_code_class) (rate(envoy_cluster_upstream_rq_xx_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_cluster_name=\"mongot_rs_cluster\",envoy_response_code_class=\"4\"}[5m]))",
+                  "seriesNameFormat": "{{envoy_response_code_class}}xx"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "sum by (envoy_response_code_class) (rate(envoy_cluster_upstream_rq_xx_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_cluster_name=\"mongot_rs_cluster\",envoy_response_code_class=\"5\"}[5m]))",
+                  "seriesNameFormat": "{{envoy_response_code_class}}xx"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "sum by (envoy_response_code_class) (rate(envoy_cluster_upstream_rq_xx_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-envoy-stats\",envoy_cluster_name=\"mongot_rs_cluster\",envoy_response_code_class!~\"2|4|5\"}[5m]))",
                   "seriesNameFormat": "{{envoy_response_code_class}}xx"
                 }
               }
@@ -530,9 +950,16 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -575,9 +1002,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -597,7 +1046,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))",
+                  "query": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) / sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -620,9 +1117,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -642,7 +1161,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))",
+                  "query": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(mongot_command_searchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandFailure_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -665,9 +1232,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -687,7 +1276,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
+                  "query": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(max by (pod) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -710,9 +1347,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -732,7 +1391,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
+                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -755,9 +1462,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -777,7 +1506,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])",
+                  "query": "(avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(avg_over_time(mongot_process_cpu_usage{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -800,9 +1577,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -822,7 +1621,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})",
+                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (mongot_jvm_memory_used_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}) / sum by (pod) (mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -845,9 +1692,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -867,7 +1736,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))",
+                  "query": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(mongot_jvm_gc_pause_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -890,9 +1807,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -912,7 +1851,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
+                  "query": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -935,9 +1922,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -957,7 +1966,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))",
+                  "query": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(mongot_rejectedConcurrentSearchExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_rejectedConcurrentVectorRescoringExecutionCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -980,9 +2037,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -1002,7 +2081,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
+                  "query": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1025,9 +2152,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -1047,7 +2196,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
+                  "query": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1070,9 +2267,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -1092,7 +2311,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sum by (pod) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status!=\"STEADY\"})",
+                  "query": "(sum by (pod) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status!=\"STEADY\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status!=\"STEADY\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status!=\"STEADY\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status!=\"STEADY\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1115,9 +2382,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -1137,7 +2426,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
+                  "query": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1160,9 +2497,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -1182,7 +2541,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))",
+                  "query": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
                   "seriesNameFormat": "{{pod}}"
                 }
               }
@@ -1205,9 +2612,31 @@
               "mode": "list",
               "position": "bottom"
             },
+            "querySettings": [
+              {
+                "queryIndex": 0,
+                "colorMode": "fixed",
+                "colorValue": "#2a7de1"
+              },
+              {
+                "queryIndex": 1,
+                "colorMode": "fixed",
+                "colorValue": "#e0362c"
+              },
+              {
+                "queryIndex": 2,
+                "colorMode": "fixed",
+                "colorValue": "#d49b00"
+              },
+              {
+                "queryIndex": 3,
+                "colorMode": "fixed",
+                "colorValue": "#b03fc9"
+              }
+            ],
             "visual": {
-              "areaOpacity": 0.1,
-              "lineWidth": 1
+              "areaOpacity": 0,
+              "lineWidth": 3
             },
             "yAxis": {
               "format": {
@@ -1227,7 +2656,55 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))",
+                  "query": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
+                  "seriesNameFormat": "{{pod}}"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "(sum by (pod) (rate(mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_update_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_index_stats_indexing_delete_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
                   "seriesNameFormat": "{{pod}}"
                 }
               }

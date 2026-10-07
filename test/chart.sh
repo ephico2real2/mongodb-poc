@@ -110,6 +110,26 @@ first = ["mongot pods up", "Envoy pods up", "mongot pods in Envoy", "Searches pe
          "Replication lag, per mongot pod", "JVM memory used, per mongot pod"]
 sys.exit(0 if len(charts) == 27 and len(rows) == 5 and charts[:16] == first and rows[-1] == "Does every mongot pod hold the same data?" else 1)
 PY
+# Colours (issue #35). Perses fixes a colour per query, not per series, so every line has a query of its own with a
+# fixed colour: blue, red, yellow, and purple for a fourth. No line is left to a palette, where two can look alike.
+python3 - "${CHART}/files/mongodb-search.json" "${CHART}/files/mongodb-search.perses.json" <<'PY' && ok "every line has a fixed colour (blue, red, yellow, purple), the same in both forms, 3 wide, with no fill" || bad "dashboard colours"
+import json, sys
+g, p = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
+want = ["#2a7de1", "#e0362c", "#d49b00", "#b03fc9"]
+ok = True
+for x in g["panels"]:
+    if x["type"] != "timeseries": continue
+    refs = [t["refId"] for t in x["targets"]]
+    colours = {o["matcher"]["options"]: o["properties"][0]["value"]["fixedColor"] for o in x["fieldConfig"]["overrides"]}
+    chart = next(v for v in p["panels"].values() if v["spec"]["display"]["name"] == x["title"])["spec"]["plugin"]["spec"]
+    perses = {refs[s["queryIndex"]]: s["colorValue"] for s in chart.get("querySettings", []) if s["colorMode"] == "fixed"}
+    ok &= set(colours) == set(refs) and set(colours.values()) <= set(want) and len(set(colours.values())) == len(colours)   # every query, no colour twice
+    ok &= perses == colours and x["fieldConfig"]["defaults"]["custom"] == {"lineWidth": 3, "fillOpacity": 0}
+    ok &= chart["visual"] == {"areaOpacity": 0, "lineWidth": 3}
+    if x["title"].endswith(("per mongot pod", "per Envoy pod")):
+        ok &= [colours[r] for r in refs] == want and " unless on (pod) " in x["targets"][3]["expr"]   # the fourth query: every further pod
+sys.exit(0 if ok else 1)
+PY
 # The heap panel divides heap by heap: summed over every area, the maximum includes a -1 and the non-heap pools.
 grep -q -F 'mongot_jvm_memory_max_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",area=\"heap\"}' "${CHART}/files/mongodb-search.json" \
   && ok "the heap panel takes the heap's maximum only" || bad "heap maximum is not limited to the heap"
@@ -151,8 +171,8 @@ grep -q '"name": "srch-thanos"' <<<"$d" && grep -q 'secret: srch-thanos-secret' 
 python3 - "${CHART}/files/mongodb-search.json" "${CHART}/files/mongodb-search.perses.json" <<'PY' && ok "the Perses dashboard has the Grafana one's panels and queries" || bad "the Perses dashboard is stale: run scripts/perses-dashboard.sh"
 import json, sys
 g = json.load(open(sys.argv[1])); p = json.load(open(sys.argv[2]))
-want = {x["title"]: x["targets"][0]["expr"] for x in g["panels"] if x["type"] != "row"}
-got = {x["spec"]["display"]["name"]: x["spec"]["queries"][0]["spec"]["plugin"]["spec"]["query"] for x in p["panels"].values()}
+want = {x["title"]: [t["expr"] for t in x["targets"]] for x in g["panels"] if x["type"] != "row"}
+got = {x["spec"]["display"]["name"]: [q["spec"]["plugin"]["spec"]["query"] for q in x["spec"]["queries"]] for x in p["panels"].values()}
 sys.exit(0 if want == got and not any(x["spec"]["plugin"]["kind"] == "Markdown" for x in p["panels"].values()) else 1)
 PY
 

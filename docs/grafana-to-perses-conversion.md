@@ -226,4 +226,21 @@ Two statements made while planning were corrected by these measurements. `mongot
 
 On the lab, three of the new panels stayed at zero throughout (indexes not `STEADY`, indexing operations, work outside the pool), and *data volume used* shows the node's disk, because the lab's volumes come from a hostpath provisioner. The roles, the Grafana and its Role were removed again after the checks.
 
+### Colours (chart 0.3.1, issue #35)
+
+On Oct 6, 2026 the lines of a panel were reported as too alike in the console. Measured in Perses 0.54.0 before the change: the three mongot pods drew as `#cb93b4`, `#4e6386` and `#d6bb86`, the two Envoy pods as two purples, with the closest pair at CIE76 ΔE 26 and a contrast as low as 1.9:1 on the background. The dashboard set no palette, so Perses made a colour from each series' name.
+
+Perses 0.54 offers two palettes, neither with three well-separated first colours (its categorical one starts sky blue, green, blue), and a fixed colour per query. So every line now has a query of its own and a fixed colour: blue, red, yellow, and purple for a fourth. What each colour means is in the [chart README](../chart/mongodb-search-helm/README.md#colours).
+
+| Check | Result |
+| --- | --- |
+| Every query through Thanos Querier | 90 of 90 `success`, no warning; 64 series, as before |
+| Each pod on its own query | mongot pods 0, 1, 2 on the first three, nothing on the fourth; the two Envoy pods on the first two |
+| One refresh, 15 minutes at a 30 s step | 0.16 s in all for the 90 queries |
+| In the OpenShift console, light and dark | 5 of 5 sections, 27 panels drawn; no "No data", "NaN", "Forbidden" or warning sign |
+| In a Grafana through the sidecar | 27 panels, 90 queries, line width 3, the same four colours; the page drew them |
+| Ordering the Envoy pods | By Envoy's own uptime the first pod changed between steps (64 and 48 of 121); by `kube_pod_start_time`, the same pod at every step of nine range queries |
+
+`scripts/perses-dashboard.sh` carries each colour set by query in the Grafana source into the Perses form, and compares every query of every panel.
+
 Not validated: a `GrafanaDashboard` of the grafana-operator pointing at the ConfigMap. The lab's operator watches one namespace, `group-sync-dashboard`, which belongs to another project, and its data source is limited to that namespace's metrics.

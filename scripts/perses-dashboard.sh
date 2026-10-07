@@ -51,8 +51,8 @@ def fail(msg): sys.exit("perses-dashboard: " + msg)
 bad = [k for k, p in panels.items() if p["spec"]["plugin"]["kind"] == "Markdown"]
 if bad: fail(f"panels {bad} are placeholders: percli needs its plugins unpacked")
 
-want = {p["title"]: p["targets"][0]["expr"] for p in grafana["panels"] if p["type"] != "row"}
-got = {p["spec"]["display"]["name"]: p["spec"]["queries"][0]["spec"]["plugin"]["spec"]["query"] for p in panels.values()}
+want = {p["title"]: [t["expr"] for t in p["targets"]] for p in grafana["panels"] if p["type"] != "row"}
+got = {p["spec"]["display"]["name"]: [q["spec"]["plugin"]["spec"]["query"] for q in p["spec"]["queries"]] for p in panels.values()}
 if got != want: fail(f"the converted panels or queries differ from the Grafana ones: {sorted(set(want) ^ set(got)) or [t for t in want if want[t] != got[t]]}")
 rows = [p["title"] for p in grafana["panels"] if p["type"] == "row"]
 if [l["spec"].get("display", {}).get("title") for l in spec["layouts"]] != rows: fail("the sections differ from the Grafana rows")
@@ -62,6 +62,25 @@ if [l["spec"].get("display", {}).get("title") for l in spec["layouts"]] != rows:
 for p in panels.values():
     for q in p["spec"]["queries"]:
         q["spec"]["plugin"]["spec"]["datasource"] = {"kind": "PrometheusDatasource", "name": "__SEARCH__-thanos"}
+# Series colours. Perses fixes a colour per query, not per series, which is why the Grafana source has one query
+# per mongot pod: each colour set there by query (an override on the refId) is carried over here, so the first pod
+# is blue, the second red and the third yellow in every panel, in both forms. A panel with no colour of its own
+# (the Envoy pods, whose names are generated) takes the categorical palette, given in order. The default palette
+# makes a colour from the name of each series: muted, close to each other, and new for every new pod (issue #35).
+by_title = {p["title"]: p for p in grafana["panels"]}
+for p in panels.values():
+    chart = p["spec"]["plugin"]
+    if chart["kind"] != "TimeSeriesChart":
+        continue
+    source = by_title[p["spec"]["display"]["name"]]
+    refs = [t["refId"] for t in source["targets"]]
+    colours = {o["matcher"]["options"]: prop["value"]["fixedColor"]
+               for o in source["fieldConfig"]["overrides"] if o["matcher"]["id"] == "byFrameRefID"
+               for prop in o["properties"] if prop["id"] == "color"}
+    if colours:
+        chart["spec"]["querySettings"] = [{"queryIndex": refs.index(r), "colorMode": "fixed", "colorValue": c} for r, c in colours.items()]
+    else:
+        chart["spec"].setdefault("visual", {})["palette"] = {"mode": "categorical"}
 # The Grafana datasource input is not used once the datasource is named.
 spec["variables"] = [v for v in spec.get("variables", []) if v["spec"]["name"] != "DS_PROMETHEUS"]
 json.dump(spec, sys.stdout, indent=2); print()
