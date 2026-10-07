@@ -9,7 +9,7 @@ the $search stage over gRPC. The per-pod attribution is done by reading each mon
 Prometheus counter immediately before and after the query, so the pod whose counter
 moved is the pod that served it.
 """
-import html, json, os, re, subprocess, urllib.request
+import html, json, os, re, subprocess, threading, time, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
@@ -30,6 +30,15 @@ METRICS_PORT = int(os.environ.get("METRICS_PORT", "9946"))
 TEXT_INDEX   = os.environ.get("TEXT_INDEX", "default")
 VEC_INDEX    = os.environ.get("VECTOR_INDEX", "vector_index")
 VEC_PATH     = os.environ.get("VECTOR_PATH", "plot_embedding")
+
+# One search at a time. Each search starts its own mongosh, 70 to 185 MB while it runs: several at once passed the
+# pod's 512Mi limit and the kernel killed the whole container, a 502 for every search in flight. One at a time also
+# keeps the answer true: the pod is named by the counters read before and after the query, and two overlapping
+# searches would each count the other's.
+SEARCH_SLOT = threading.Lock()
+# How long a search waits for its turn. Under the Route's 30 s timeout, so a search that cannot start is told so
+# by this page instead of being cut off by the router.
+SLOT_WAIT_S = 20
 
 TEXT_METRIC = "mongot_command_searchCommandTotalLatency_seconds_count"
 VEC_METRIC  = "mongot_command_vectorSearchCommandTotalLatency_seconds_count"
@@ -182,19 +191,31 @@ class H(BaseHTTPRequestHandler):
         qs = parse_qs(u.query)
         q = (qs.get("q", [""])[0]).strip()
         mode = qs.get("mode", ["text"])[0]
-        rows = err = delta = None; totals = {}; ms = 0
-        if q:
-            metric = VEC_METRIC if mode == "vector" else TEXT_METRIC
-            before = counters(metric)
-            import time; t0 = time.time()
-            rows, err = run_query(q, mode)
-            ms = int((time.time() - t0) * 1000)
-            after = counters(metric)
-            delta = {p: (None if after.get(p) is None or before.get(p) is None
-                         else after[p] - before[p]) for p in PODS}
-            totals = after
+        rows = err = delta = None; totals = {}; ms = 0; status = 200
+        if q and not SEARCH_SLOT.acquire(timeout=SLOT_WAIT_S):
+            status = 503
+            err = (f"Busy: this page runs one search at a time, and the searches ahead of this one "
+                   f"had not finished after {SLOT_WAIT_S} s. Search again.")
+        elif q:
+            try:
+                metric = VEC_METRIC if mode == "vector" else TEXT_METRIC
+                before = counters(metric)
+                t0 = time.time()
+                rows, err = run_query(q, mode)
+                ms = int((time.time() - t0) * 1000)
+                after = counters(metric)
+                delta = {p: (None if after.get(p) is None or before.get(p) is None
+                             else after[p] - before[p]) for p in PODS}
+                totals = after
+            except Exception as e:
+                # A search that fails here (mongosh past its 45 s, output that is not JSON) is answered by this page.
+                # Left uncaught it closes the connection without a response, and the router shows its own 502.
+                status = 500; rows = delta = None; totals = {}
+                err = f"The search failed: {type(e).__name__}: {e}"[:400]
+            finally:
+                SEARCH_SLOT.release()
         body = page(q, mode, rows, err, delta, totals, ms).encode()
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers(); self.wfile.write(body)

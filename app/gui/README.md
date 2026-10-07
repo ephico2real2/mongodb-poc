@@ -224,6 +224,19 @@ operator gives them.
 `astronaut`, `noir`, `detective`) to fixed 5-dimension vectors that match this repo's demo
 corpus; any other word falls back to a flat vector. Text mode works on any collection.
 
+## One search at a time
+
+The page runs one search at a time; others wait their turn, up to 20 s, and after that get a
+"Busy" page with status 503 instead of a search. Two reasons:
+
+- **Memory.** Every search starts its own `mongosh`, 70 to 185 MB while it runs, in a pod limited
+  to 512Mi. Measured on the lab on 2026-10-06, before this: one search alone answered `200` in
+  0.9 s; six at once all got `502`, and the node's kernel log shows the container's memory limit
+  reached and every process in it killed, the server included (`Memory cgroup out of memory`,
+  exit code 137, a restart).
+- **A true answer.** The pod that served a search is the one whose counter moved between a read
+  before the query and a read after it. Two overlapping searches would each count the other's.
+
 ## Verify and remove
 
 ```bash
