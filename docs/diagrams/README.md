@@ -13,7 +13,7 @@ its page change together.
 ```bash
 # once: the kit, pinned, and its Chromium
 python3 -m venv .venv
-.venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.0"
+.venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.1"
 .venv/bin/playwright install chromium
 
 # from the repository root: a page, its folder, and its figure names in order
