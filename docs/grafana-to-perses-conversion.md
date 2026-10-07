@@ -211,6 +211,16 @@ Later on Oct 6, 2026, the two checks that had been left open were run on the lab
 
 Everything added for these checks was removed afterwards: the Grafana, its Role, the three RoleBindings, and `monitoring.grafanaDashboard` on the lab release. The mongot and Envoy pods were not restarted.
 
+**On the lab since Oct 7, 2026, and kept.** The three RoleBindings were created again for the checks of charts 0.3.1 and 0.3.2 and stay in `mongodb-poc`, so that the dashboard can be opened and tested as a viewer at any time:
+
+| RoleBinding | ClusterRole | Subject |
+| --- | --- | --- |
+| `console-validate-view` | `view` | User `developer` |
+| `console-validate-persesdashboard-viewer-role` | `persesdashboard-viewer-role` | User `developer` |
+| `console-validate-persesdatasource-viewer-role` | `persesdatasource-viewer-role` | User `developer` |
+
+They are lab objects, made with `oc create rolebinding`; the chart does not create them and a `helm upgrade` or `helm uninstall` leaves them alone. Without them `developer` cannot open the dashboard in the console, and [`scripts/capture-console-dashboard.py`](../scripts/capture-console-dashboard.py) fails at the project. To remove them: `oc delete rolebinding console-validate-view console-validate-persesdashboard-viewer-role console-validate-persesdatasource-viewer-role -n mongodb-poc`.
+
 The method for the sidecar follows the one recorded by the `openshift-ipsec-nas` project (its evidence `kind/03`); the console there was captured through a console server run on a workstation, and here through the cluster's own console with a viewer's login.
 
 ### The mongot process and data panels (chart 0.3.0)
