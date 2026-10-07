@@ -94,11 +94,11 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "#e15759",
                 "value": null
               },
               {
-                "color": "green",
+                "color": "#59a14f",
                 "value": 1
               }
             ]
@@ -152,11 +152,11 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "#e15759",
                 "value": null
               },
               {
-                "color": "green",
+                "color": "#59a14f",
                 "value": 1
               }
             ]
@@ -210,11 +210,11 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
+                "color": "#e15759",
                 "value": null
               },
               {
-                "color": "green",
+                "color": "#59a14f",
                 "value": 1
               }
             ]
@@ -238,7 +238,7 @@
     {
       "type": "stat",
       "title": "Searches per second",
-      "description": "Text and vector searches, all mongot pods, 5 minute rate.",
+      "description": "Text and vector searches per second, all mongot pods, 5 minute rate.",
       "id": 5,
       "datasource": {
         "type": "prometheus",
@@ -263,12 +263,12 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps",
+          "unit": "none",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "#59a14f",
                 "value": null
               }
             ]
@@ -323,15 +323,15 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "#59a14f",
                 "value": null
               },
               {
-                "color": "orange",
+                "color": "#f28e2b",
                 "value": 0.6
               },
               {
-                "color": "red",
+                "color": "#e15759",
                 "value": 0.9
               }
             ]
@@ -369,15 +369,15 @@
     {
       "type": "timeseries",
       "title": "Searches per second, per mongot pod",
-      "description": "Envoy picks a mongot pod per request, so the lines should sit together.",
+      "description": "Stacked: one band per mongot pod, and the top edge is all searches. Envoy picks a mongot pod per request, so the bands should be of equal height. 5 minute rate.",
       "id": 8,
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 11,
+        "w": 8,
         "x": 0,
         "y": 6
       },
@@ -423,9 +423,14 @@
         "defaults": {
           "unit": "reqps",
           "custom": {
-            "lineWidth": 3,
-            "fillOpacity": 0
-          }
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "min": 0
         },
         "overrides": [
           {
@@ -438,8 +443,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 30
               }
             ]
           },
@@ -453,7 +462,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 30
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
                 }
               }
             ]
@@ -468,7 +491,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#edc948"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 30
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dot",
+                  "dash": [
+                    2,
+                    6
+                  ]
                 }
               }
             ]
@@ -483,8 +520,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 30
               }
             ]
           }
@@ -503,16 +544,16 @@
     {
       "type": "timeseries",
       "title": "Share of searches, per mongot pod",
-      "description": "Each pod's part of all searches.",
+      "description": "Stacked: each pod's part of all searches over the last 5 minutes, adding up to 100%. Three pods sharing evenly are three bands of a third each.",
       "id": 9,
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
+        "h": 11,
+        "w": 8,
+        "x": 8,
         "y": 6
       },
       "targets": [
@@ -557,9 +598,15 @@
         "defaults": {
           "unit": "percentunit",
           "custom": {
-            "lineWidth": 3,
-            "fillOpacity": 0
-          }
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "max": 1
         },
         "overrides": [
           {
@@ -572,8 +619,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 30
               }
             ]
           },
@@ -587,7 +638,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 30
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
                 }
               }
             ]
@@ -602,7 +667,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#edc948"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 30
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dot",
+                  "dash": [
+                    2,
+                    6
+                  ]
                 }
               }
             ]
@@ -617,8 +696,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 30
               }
             ]
           }
@@ -635,6 +718,145 @@
       }
     },
     {
+      "type": "piechart",
+      "title": "Share of searches now, by mongot pod",
+      "description": "Each pod's part of the searches of the last 5 minutes. Three equal slices is even balancing; one slice taking the pie is the failure that produces no error. Empty when no search ran.",
+      "id": 33,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 8,
+        "x": 16,
+        "y": 6
+      },
+      "targets": [
+        {
+          "expr": "(((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}) or sum by (pod) (up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}) * 0) and on () (sum((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) > 0)",
+          "legendFormat": "{{pod}}",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        },
+        {
+          "expr": "(((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}) or sum by (pod) (up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}) * 0) and on () (sum((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) > 0)",
+          "legendFormat": "{{pod}}",
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        },
+        {
+          "expr": "(((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}) or sum by (pod) (up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}) * 0) and on () (sum((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) > 0)",
+          "legendFormat": "{{pod}}",
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        },
+        {
+          "expr": "label_replace(sum((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])))) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}), \"pod\", \"further pods\", \"\", \"\") and on () (sum((sum by (pod) ((rate(mongot_command_searchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]) + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))))) > 0)",
+          "legendFormat": "{{pod}}",
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "A"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#4e79a7"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#e15759"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "C"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#edc948"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "D"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#b07aa1"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "pieType": "pie",
+        "displayLabels": [],
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
       "type": "row",
       "title": "Is Envoy healthy?",
       "collapsed": false,
@@ -643,14 +865,14 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 14
+        "y": 17
       },
       "panels": []
     },
     {
       "type": "timeseries",
       "title": "Requests per second to mongot, per Envoy pod",
-      "description": "One Envoy pod at zero is normal with one mongod connection: the Route places connections, not requests.",
+      "description": "5 minute rate. One Envoy pod at zero is normal with one mongod connection: the Route places connections, not requests.",
       "id": 11,
       "datasource": {
         "type": "prometheus",
@@ -660,7 +882,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 15
+        "y": 18
       },
       "targets": [
         {
@@ -704,7 +926,7 @@
         "defaults": {
           "unit": "reqps",
           "custom": {
-            "lineWidth": 3,
+            "lineWidth": 1,
             "fillOpacity": 0
           }
         },
@@ -719,8 +941,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           },
@@ -734,7 +960,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
                 }
               }
             ]
@@ -749,7 +989,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#edc948"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dot",
+                  "dash": [
+                    2,
+                    6
+                  ]
                 }
               }
             ]
@@ -764,8 +1018,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           }
@@ -794,7 +1052,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 15
+        "y": 18
       },
       "targets": [
         {
@@ -838,7 +1096,7 @@
         "defaults": {
           "unit": "none",
           "custom": {
-            "lineWidth": 3,
+            "lineWidth": 1,
             "fillOpacity": 0
           }
         },
@@ -853,8 +1111,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           },
@@ -868,7 +1130,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
                 }
               }
             ]
@@ -883,7 +1159,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#edc948"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dot",
+                  "dash": [
+                    2,
+                    6
+                  ]
                 }
               }
             ]
@@ -898,8 +1188,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           }
@@ -918,7 +1212,7 @@
     {
       "type": "timeseries",
       "title": "Retries per second, per Envoy pod",
-      "description": "Envoy retries onto another mongot pod when one sheds load or resets a stream. Sustained retries mean mongot is undersized.",
+      "description": "Envoy retries onto another mongot pod when one sheds load or resets a stream. Sustained retries mean mongot is undersized. 5 minute rate.",
       "id": 13,
       "datasource": {
         "type": "prometheus",
@@ -928,7 +1222,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 23
+        "y": 26
       },
       "targets": [
         {
@@ -972,7 +1266,7 @@
         "defaults": {
           "unit": "reqps",
           "custom": {
-            "lineWidth": 3,
+            "lineWidth": 1,
             "fillOpacity": 0
           }
         },
@@ -987,8 +1281,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           },
@@ -1002,7 +1300,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
                 }
               }
             ]
@@ -1017,7 +1329,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#edc948"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dot",
+                  "dash": [
+                    2,
+                    6
+                  ]
                 }
               }
             ]
@@ -1032,8 +1358,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           }
@@ -1052,7 +1382,7 @@
     {
       "type": "timeseries",
       "title": "Responses per second from mongot, by class",
-      "description": "2xx is success. gRPC errors still answer 200; see the search failures panel.",
+      "description": "2xx is success. gRPC errors still answer 200; see the search failures panel. 5 minute rate.",
       "id": 14,
       "datasource": {
         "type": "prometheus",
@@ -1062,7 +1392,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 23
+        "y": 26
       },
       "targets": [
         {
@@ -1106,7 +1436,7 @@
         "defaults": {
           "unit": "reqps",
           "custom": {
-            "lineWidth": 3,
+            "lineWidth": 1,
             "fillOpacity": 0
           }
         },
@@ -1121,8 +1451,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#59a14f"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           },
@@ -1136,8 +1470,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#f28e2b"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           },
@@ -1151,8 +1489,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           },
@@ -1166,8 +1508,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           }
@@ -1186,7 +1532,7 @@
     {
       "type": "timeseries",
       "title": "Envoy to mongot latency, 95th percentile",
-      "description": "Time Envoy waited for mongot, across both Envoy pods.",
+      "description": "Time Envoy waited for mongot, across both Envoy pods, over the last 5 minutes.",
       "id": 15,
       "datasource": {
         "type": "prometheus",
@@ -1196,7 +1542,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 31
+        "y": 34
       },
       "targets": [
         {
@@ -1213,7 +1559,7 @@
         "defaults": {
           "unit": "ms",
           "custom": {
-            "lineWidth": 3,
+            "lineWidth": 1,
             "fillOpacity": 0
           }
         },
@@ -1228,8 +1574,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 15
               }
             ]
           }
@@ -1254,14 +1604,14 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 39
+        "y": 42
       },
       "panels": []
     },
     {
       "type": "timeseries",
       "title": "Average search latency, per mongot pod",
-      "description": "Text searches only. No line while a pod serves none.",
+      "description": "Text searches only, averaged over 5 minutes. An average hides the slowest searches: mongot exposes no latency buckets, only its own quantiles per pod (0.5 to 0.99), which this panel does not draw. No line while a pod serves none.",
       "id": 17,
       "datasource": {
         "type": "prometheus",
@@ -1271,7 +1621,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 40
+        "y": 43
       },
       "targets": [
         {
@@ -1315,7 +1665,7 @@
         "defaults": {
           "unit": "s",
           "custom": {
-            "lineWidth": 3,
+            "lineWidth": 1,
             "fillOpacity": 0
           }
         },
@@ -1330,8 +1680,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           },
@@ -1345,7 +1699,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
                 }
               }
             ]
@@ -1360,7 +1728,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#edc948"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dot",
+                  "dash": [
+                    2,
+                    6
+                  ]
                 }
               }
             ]
@@ -1375,8 +1757,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           }
@@ -1395,7 +1781,7 @@
     {
       "type": "timeseries",
       "title": "Search failures per second, per mongot pod",
-      "description": "Text and vector searches that mongot failed.",
+      "description": "Text and vector searches that mongot failed, 5 minute rate.",
       "id": 18,
       "datasource": {
         "type": "prometheus",
@@ -1405,7 +1791,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 40
+        "y": 43
       },
       "targets": [
         {
@@ -1449,7 +1835,7 @@
         "defaults": {
           "unit": "reqps",
           "custom": {
-            "lineWidth": 3,
+            "lineWidth": 1,
             "fillOpacity": 0
           }
         },
@@ -1464,8 +1850,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           },
@@ -1479,7 +1869,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
                 }
               }
             ]
@@ -1494,7 +1898,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#edc948"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dot",
+                  "dash": [
+                    2,
+                    6
+                  ]
                 }
               }
             ]
@@ -1509,8 +1927,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           }
@@ -1539,7 +1961,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 48
+        "y": 51
       },
       "targets": [
         {
@@ -1583,7 +2005,7 @@
         "defaults": {
           "unit": "ms",
           "custom": {
-            "lineWidth": 3,
+            "lineWidth": 1,
             "fillOpacity": 0
           }
         },
@@ -1598,8 +2020,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           },
@@ -1613,7 +2039,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
                 }
               }
             ]
@@ -1628,7 +2068,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#edc948"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dot",
+                  "dash": [
+                    2,
+                    6
+                  ]
                 }
               }
             ]
@@ -1643,8 +2097,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           }
@@ -1673,7 +2131,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 48
+        "y": 51
       },
       "targets": [
         {
@@ -1717,7 +2175,7 @@
         "defaults": {
           "unit": "bytes",
           "custom": {
-            "lineWidth": 3,
+            "lineWidth": 1,
             "fillOpacity": 0
           }
         },
@@ -1732,8 +2190,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           },
@@ -1747,7 +2209,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
                 }
               }
             ]
@@ -1762,7 +2238,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#edc948"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dot",
+                  "dash": [
+                    2,
+                    6
+                  ]
                 }
               }
             ]
@@ -1777,8 +2267,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           }
@@ -1807,7 +2301,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 56
+        "y": 59
       },
       "targets": [
         {
@@ -1851,7 +2345,7 @@
         "defaults": {
           "unit": "percentunit",
           "custom": {
-            "lineWidth": 3,
+            "lineWidth": 1,
             "fillOpacity": 0
           }
         },
@@ -1866,8 +2360,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           },
@@ -1881,7 +2379,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
                 }
               }
             ]
@@ -1896,7 +2408,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#edc948"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dot",
+                  "dash": [
+                    2,
+                    6
+                  ]
                 }
               }
             ]
@@ -1911,8 +2437,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           }
@@ -1941,7 +2471,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 56
+        "y": 59
       },
       "targets": [
         {
@@ -1985,7 +2515,7 @@
         "defaults": {
           "unit": "percentunit",
           "custom": {
-            "lineWidth": 3,
+            "lineWidth": 1,
             "fillOpacity": 0
           }
         },
@@ -2000,8 +2530,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           },
@@ -2015,7 +2549,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
                 }
               }
             ]
@@ -2030,7 +2578,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#edc948"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dot",
+                  "dash": [
+                    2,
+                    6
+                  ]
                 }
               }
             ]
@@ -2045,8 +2607,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           }
@@ -2075,7 +2641,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 64
+        "y": 67
       },
       "targets": [
         {
@@ -2119,7 +2685,7 @@
         "defaults": {
           "unit": "percentunit",
           "custom": {
-            "lineWidth": 3,
+            "lineWidth": 1,
             "fillOpacity": 0
           }
         },
@@ -2134,8 +2700,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           },
@@ -2149,7 +2719,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
                 }
               }
             ]
@@ -2164,7 +2748,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#edc948"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dot",
+                  "dash": [
+                    2,
+                    6
+                  ]
                 }
               }
             ]
@@ -2179,8 +2777,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           }
@@ -2209,7 +2811,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 64
+        "y": 67
       },
       "targets": [
         {
@@ -2253,7 +2855,7 @@
         "defaults": {
           "unit": "s",
           "custom": {
-            "lineWidth": 3,
+            "lineWidth": 1,
             "fillOpacity": 0
           }
         },
@@ -2268,8 +2870,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 15
               }
             ]
           },
@@ -2283,7 +2889,17 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
                 }
               }
             ]
@@ -2298,7 +2914,17 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#edc948"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dot",
+                  "dash": [
+                    2,
+                    6
+                  ]
                 }
               }
             ]
@@ -2313,7 +2939,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
               }
             ]
@@ -2333,7 +2959,7 @@
     {
       "type": "timeseries",
       "title": "Search work run outside the parallel pool, per mongot pod",
-      "description": "Tasks per second that found mongot's concurrent search or vector rescoring pool full and ran on the calling thread instead. The search is still answered; above zero, the pool is saturated.",
+      "description": "Tasks per second (5 minute rate) that found mongot's concurrent search or vector rescoring pool full and ran on the calling thread instead. The search is still answered; above zero, the pool is saturated.",
       "id": 25,
       "datasource": {
         "type": "prometheus",
@@ -2343,7 +2969,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 72
+        "y": 75
       },
       "targets": [
         {
@@ -2387,7 +3013,7 @@
         "defaults": {
           "unit": "ops",
           "custom": {
-            "lineWidth": 3,
+            "lineWidth": 1,
             "fillOpacity": 0
           }
         },
@@ -2402,8 +3028,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           },
@@ -2417,7 +3047,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
                 }
               }
             ]
@@ -2432,7 +3076,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#edc948"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dot",
+                  "dash": [
+                    2,
+                    6
+                  ]
                 }
               }
             ]
@@ -2447,8 +3105,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           }
@@ -2473,9 +3135,244 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 80
+        "y": 83
       },
       "panels": []
+    },
+    {
+      "type": "table",
+      "title": "Each mongot pod, now",
+      "description": "One row per mongot pod, its name on its colour in the charts. Every pod holds every index, so the first four columns should read the same on every row.",
+      "id": 34,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 84
+      },
+      "targets": [
+        {
+          "expr": "sum by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "expr": "sum by (pod) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
+          "legendFormat": "",
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "expr": "sum by (pod) (mongot_configState_indexesInCatalog{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
+          "legendFormat": "",
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "expr": "sum by (pod) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status!=\"STEADY\"})",
+          "legendFormat": "",
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "expr": "1 - (sum by (pod) (mongot_system_disk_space_data_path_free_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / sum by (pod) (mongot_system_disk_space_data_path_total_bytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))",
+          "legendFormat": "",
+          "refId": "E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "expr": "max by (pod) (mongot_process_uptime_seconds{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
+          "legendFormat": "",
+          "refId": "F",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mongot pod"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "__SEARCH__-search-0-0": {
+                        "color": "#4e79a7",
+                        "index": 0
+                      },
+                      "__SEARCH__-search-0-1": {
+                        "color": "#e15759",
+                        "index": 1
+                      },
+                      "__SEARCH__-search-0-2": {
+                        "color": "#edc948",
+                        "index": 2
+                      }
+                    }
+                  },
+                  {
+                    "type": "regex",
+                    "options": {
+                      "pattern": "^__SEARCH__-search-0-([3-9]|[1-9][0-9]+)$",
+                      "result": {
+                        "color": "#b07aa1",
+                        "index": 3
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Index size"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Documents"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Indexes"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Not STEADY"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Volume used"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Uptime"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "pod": "mongot pod",
+              "Value #A": "Index size",
+              "Value #B": "Documents",
+              "Value #C": "Indexes",
+              "Value #D": "Not STEADY",
+              "Value #E": "Volume used",
+              "Value #F": "Uptime"
+            }
+          }
+        }
+      ]
     },
     {
       "type": "timeseries",
@@ -2490,7 +3387,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 81
+        "y": 89
       },
       "targets": [
         {
@@ -2534,7 +3431,7 @@
         "defaults": {
           "unit": "bytes",
           "custom": {
-            "lineWidth": 3,
+            "lineWidth": 1,
             "fillOpacity": 0
           }
         },
@@ -2549,8 +3446,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 15
               }
             ]
           },
@@ -2564,7 +3465,17 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
                 }
               }
             ]
@@ -2579,7 +3490,17 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#edc948"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dot",
+                  "dash": [
+                    2,
+                    6
+                  ]
                 }
               }
             ]
@@ -2594,7 +3515,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
               }
             ]
@@ -2624,7 +3545,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 81
+        "y": 89
       },
       "targets": [
         {
@@ -2668,7 +3589,7 @@
         "defaults": {
           "unit": "none",
           "custom": {
-            "lineWidth": 3,
+            "lineWidth": 1,
             "fillOpacity": 0
           }
         },
@@ -2683,8 +3604,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 15
               }
             ]
           },
@@ -2698,7 +3623,17 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
                 }
               }
             ]
@@ -2713,7 +3648,17 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#edc948"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dot",
+                  "dash": [
+                    2,
+                    6
+                  ]
                 }
               }
             ]
@@ -2728,7 +3673,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
               }
             ]
@@ -2746,7 +3691,7 @@
       }
     },
     {
-      "type": "timeseries",
+      "type": "status-history",
       "title": "Indexes not STEADY, per mongot pod",
       "description": "Indexes whose state is anything but STEADY: INITIAL_SYNC, STALE, FAILED, RECOVERING and the rest. Should be 0; above it, that pod's copy of an index is not ready.",
       "id": 29,
@@ -2758,40 +3703,13 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 89
+        "y": 97
       },
       "targets": [
         {
-          "expr": "(sum by (pod) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status!=\"STEADY\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-0\"}",
+          "expr": "sum by (pod) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status!=\"STEADY\"})",
           "legendFormat": "{{pod}}",
           "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          }
-        },
-        {
-          "expr": "(sum by (pod) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status!=\"STEADY\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-1\"}",
-          "legendFormat": "{{pod}}",
-          "refId": "B",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          }
-        },
-        {
-          "expr": "(sum by (pod) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status!=\"STEADY\"})) and on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=\"__SEARCH__-search-0-2\"}",
-          "legendFormat": "{{pod}}",
-          "refId": "C",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          }
-        },
-        {
-          "expr": "(sum by (pod) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status!=\"STEADY\"})) unless on (pod) up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",pod=~\"__SEARCH__-search-0-[0-2]\"}",
-          "legendFormat": "{{pod}}",
-          "refId": "D",
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
@@ -2800,82 +3718,47 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "none",
-          "custom": {
-            "lineWidth": 3,
-            "fillOpacity": 0
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "STEADY",
+                  "color": "#59a14f",
+                  "index": 0
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 1,
+                "to": null,
+                "result": {
+                  "text": "not STEADY",
+                  "color": "#e15759",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#59a14f"
           }
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byFrameRefID",
-              "options": "A"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#2a7de1"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byFrameRefID",
-              "options": "B"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#e0362c"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byFrameRefID",
-              "options": "C"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#d49b00"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byFrameRefID",
-              "options": "D"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#b03fc9"
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "options": {
+        "showValue": "never",
+        "rowHeight": 0.8,
+        "colWidth": 0.95,
         "legend": {
           "displayMode": "list",
           "placement": "bottom"
         },
         "tooltip": {
-          "mode": "multi"
+          "mode": "single"
         }
       }
     },
@@ -2892,7 +3775,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 89
+        "y": 97
       },
       "targets": [
         {
@@ -2936,9 +3819,10 @@
         "defaults": {
           "unit": "none",
           "custom": {
-            "lineWidth": 3,
+            "lineWidth": 1,
             "fillOpacity": 0
-          }
+          },
+          "min": 0
         },
         "overrides": [
           {
@@ -2951,8 +3835,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 15
               }
             ]
           },
@@ -2966,7 +3854,17 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
                 }
               }
             ]
@@ -2981,7 +3879,17 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#edc948"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dot",
+                  "dash": [
+                    2,
+                    6
+                  ]
                 }
               }
             ]
@@ -2996,7 +3904,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
               }
             ]
@@ -3026,7 +3934,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 97
+        "y": 105
       },
       "targets": [
         {
@@ -3070,9 +3978,11 @@
         "defaults": {
           "unit": "percentunit",
           "custom": {
-            "lineWidth": 3,
+            "lineWidth": 1,
             "fillOpacity": 0
-          }
+          },
+          "min": 0,
+          "max": 1
         },
         "overrides": [
           {
@@ -3085,8 +3995,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 15
               }
             ]
           },
@@ -3100,7 +4014,17 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
                 }
               }
             ]
@@ -3115,7 +4039,17 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#edc948"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dot",
+                  "dash": [
+                    2,
+                    6
+                  ]
                 }
               }
             ]
@@ -3130,7 +4064,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
               }
             ]
@@ -3160,7 +4094,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 97
+        "y": 105
       },
       "targets": [
         {
@@ -3204,7 +4138,7 @@
         "defaults": {
           "unit": "ops",
           "custom": {
-            "lineWidth": 3,
+            "lineWidth": 1,
             "fillOpacity": 0
           }
         },
@@ -3219,8 +4153,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#2a7de1"
+                  "fixedColor": "#4e79a7"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           },
@@ -3234,7 +4172,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#e0362c"
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
                 }
               }
             ]
@@ -3249,7 +4201,21 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#d49b00"
+                  "fixedColor": "#edc948"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dot",
+                  "dash": [
+                    2,
+                    6
+                  ]
                 }
               }
             ]
@@ -3264,8 +4230,12 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#b03fc9"
+                  "fixedColor": "#b07aa1"
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
               }
             ]
           }
