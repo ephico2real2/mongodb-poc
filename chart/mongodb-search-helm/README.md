@@ -30,7 +30,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.1/mongodb-search-helm-0.3.1.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.2/mongodb-search-helm-0.3.2.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -83,19 +83,33 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 
 ## Dashboards
 
-The chart ships one dashboard, **MongoDB Search**, in two forms from one source. Its five sections each answer a question: is search up, is traffic spread across the mongot pods, is Envoy healthy, how is each mongot pod doing, and does every mongot pod hold the same data. It has 27 panels; the last eleven, about mongot's process and its data, are [described below](#the-mongot-process-and-data-panels).
+The chart ships one dashboard, **MongoDB Search**, in two forms from one source. Its five sections each answer a question: is search up, is traffic spread across the mongot pods, is Envoy healthy, how is each mongot pod doing, and does every mongot pod hold the same data. It has 29 panels: 5 single numbers, 21 line charts, a pie, a table and a status history. Those about mongot's process and its data are [described below](#the-mongot-process-and-data-panels).
 
-The captures below were taken on the lab on 2026-10-06, a few minutes after searches started through the lab's search GUI. Click an image to open it full size. The dark captures, and earlier ones from a Perses and a Grafana run on a workstation, are beside them in [`docs/screenshots/`](../../docs/screenshots/).
+The captures below were taken on the lab around midnight between 2026-10-06 and 2026-10-07, with searches running through the lab's search GUI. Click an image to open it full size. The dark captures, and earlier ones from a Perses and a Grafana run on a workstation, are beside them in [`docs/screenshots/`](../../docs/screenshots/).
 
 ### Perses, in the OpenShift console
 
 On by default (`monitoring.persesDashboard.enabled`). In the console it is under **Observe → Dashboards (Perses)**, in the release's project.
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The OpenShift console, logged in as developer, project mongodb-poc, Dashboards, dashboard MongoDB Search, last 15 minutes, in five sections, with no warning sign on any panel. Every line is 3 wide with no fill, and each pod has one colour throughout: the first mongot pod blue, the second red, the third yellow. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods in Envoy, 0.44 searches per second, largest share on one pod 34 percent. Is traffic spread: three per-pod lines that rise together once searches start, their shares settling near a third. Is Envoy healthy: the two Envoy pods in blue and red, all requests and the one open connection on the red one, no retries, 2xx responses in blue, 95th percentile latency falling from 3 milliseconds to half a millisecond. How is each mongot pod doing: average search latency of 2 to 5 milliseconds, no failures, one replication lag reading of 1 second on the first pod, JVM memory, CPU of 1 to 4 percent, heap at 15 to 45 percent of its limit, time in garbage collection, uptime the same on every pod, and no search work run outside the parallel pool. Does every mongot pod hold the same data: one line covers the other two in each panel, index size 4.6 MiB, 40 thousand documents, 0 indexes not STEADY, 5 indexes in the catalog, the data volume about 82 percent used, and no indexing operations." src="../../docs/screenshots/dashboard-console.light.png">
+<img alt="The top of the dashboard in the OpenShift console, light theme. Is search up: 3 mongot pods up, 2 Envoy pods up, 3 mongot pods in Envoy, 0.98 searches per second, largest share on one pod 33 percent, all in green. Is traffic spread across the mongot pods: searches per second stacked in three bands of equal height, blue for the first pod, red for the second and yellow for the third, their top edge between 0.3 and 1.5 per second; the share of searches stacked to 100 percent, a third each; a pie of three equal slices in the same colours; each legend below its chart with all three pod names." src="../../docs/screenshots/dashboard-console-traffic.light.png">
 <!-- markdownlint-enable MD033 -->
 
-*The dashboard in the lab's own OpenShift console (4.22.7, Cluster Observability Operator 1.5.3), opened by [`scripts/capture-console-dashboard.py`](../../scripts/capture-console-dashboard.py) as the lab's `developer` user, who held only the roles below.*
+*Is search up, and is traffic spread: with even traffic each mongot pod is a band of equal height and a third of the pie.*
+
+<!-- markdownlint-disable MD033 -->
+<img alt="The section How is each mongot pod doing, light theme, nine panels with one line per mongot pod: blue solid for the first, red dashed for the second, yellow dotted for the third, each with a light shade of its own colour under it. Average search latency of 1.2 to 1.5 milliseconds, no search failures, no replication lag, JVM memory between 240 and 380 MiB, CPU of 1 to 4 percent, heap at 15 to 42 percent of its limit, time in garbage collection up to 0.04 percent, uptime the same on every pod with one blue shade, and no search work run outside the parallel pool." src="../../docs/screenshots/dashboard-console-pods.light.png">
+<!-- markdownlint-enable MD033 -->
+
+*How is each mongot pod doing: where one pod reads higher than the others, the shade above them is in its colour.*
+
+<!-- markdownlint-disable MD033 -->
+<img alt="The section Does every mongot pod hold the same data, light theme. A table with one row per mongot pod, each pod name on its colour, and equal rows: index size 4.59 MiB, 40.1 thousand documents, 5 indexes, 0 not STEADY, volume 82.8 to 82.9 percent used, uptime 10.7 hours. Below it, index size and documents indexed as one line covering the other two, a status history green for STEADY on all three pods, 5 indexes in the catalog on an axis of whole numbers, the data volume at 83 percent of a 0 to 100 scale, and no indexing operations." src="../../docs/screenshots/dashboard-console-data.light.png">
+<!-- markdownlint-enable MD033 -->
+
+*Does every mongot pod hold the same data: equal rows in the table, one line in each chart.*
+
+The dashboard in the lab's own OpenShift console (4.22.7, Cluster Observability Operator 1.5.3), opened by [`scripts/capture-console-dashboard.py`](../../scripts/capture-console-dashboard.py) as the lab's `developer` user, who held only the roles below. The three pictures are cut from one capture of the whole page, [`dashboard-console.light.png`](../../docs/screenshots/dashboard-console.light.png), which also holds the *Is Envoy healthy?* section; a `.dark.png` is beside each.
 
 **Who can see it.** Measured with that user: before the roles below, the API refused it the dashboard (`oc auth can-i get persesdashboards`: `no`); with them, every panel drew. The three namespace roles were given together; whether fewer would do was not measured.
 
@@ -115,38 +129,59 @@ done
 Off by default (`monitoring.grafanaDashboard`). The chart ships it as a ConfigMap labelled `grafana_dashboard: "1"`, for a Grafana dashboard sidecar that watches the release's namespace.
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The same dashboard in a Grafana 12.3.1 running in the lab namespace, data source Thanos Querier, last 15 minutes: the same five sections and 27 panels, and the same colours as in the console, the first mongot pod blue, the second red, the third yellow, the two Envoy pods blue and red, lines 3 wide with no fill, and no warning sign on any panel." src="../../docs/screenshots/dashboard-grafana-sidecar.light.png">
+<img alt="The same dashboard in a Grafana 12.3.1 running in the lab namespace, data source Thanos Querier, last 15 minutes: the same five sections and 29 panels, and the same colours as in the console. Searches per second 0.93 and largest share on one pod 34 percent; searches per second and the share of searches stacked in blue, red and yellow bands from zero, the share adding up to 100 percent; a pie of three near-equal slices; the two Envoy pods in blue and red; each mongot line 1 wide, the second dashed and the third dotted, with a light shade of its own colour underneath; a table with each pod name on its colour and equal rows; a status history green on all three pods with the legend STEADY; 5 indexes in the catalog on an axis from 0 to 5; the data volume at 83 percent of a 0 to 100 scale; and no warning sign or empty panel." src="../../docs/screenshots/dashboard-grafana-sidecar.light.png">
 <!-- markdownlint-enable MD033 -->
 
-*The chart's ConfigMap, loaded by the dashboard sidecar of a Grafana installed in the lab namespace for this measurement and removed afterwards (the Grafana Helm chart 10.5.15, Grafana 12.3.1, sidecar 2.5.0; [`test/grafana-sidecar/`](../../test/grafana-sidecar/)). Measured when the dashboard had 16 panels: the Grafana held no such dashboard before `monitoring.grafanaDashboard=true`, and 37 s after that upgrade started the sidecar had written the file and Grafana listed it. Measured again with the 27 panels shown here: listed with 27 panels in 5 rows, and all 27 queries answered through its Thanos Querier data source.*
+*The chart's ConfigMap, loaded by the dashboard sidecar of a Grafana installed in the lab namespace for this measurement and removed afterwards (the Grafana Helm chart 10.5.15, Grafana 12.3.1, sidecar 2.5.0; [`test/grafana-sidecar/`](../../test/grafana-sidecar/)). Measured when the dashboard had 16 panels: the Grafana held no such dashboard before `monitoring.grafanaDashboard=true`, and 37 s after that upgrade started the sidecar had written the file and Grafana listed it. Measured again with the 27 panels of chart 0.3.0: listed with 27 panels in 5 rows, and all 27 queries answered through its Thanos Querier data source. Measured again on 2026-10-07 with the 29 panels shown here: listed with 29 panels and 97 queries, all 97 answered through its Thanos Querier data source (26 with no series, each expected: no fourth pod, no third Envoy pod, no 4xx, 5xx or other response class), and the page drew every panel in both themes.*
 
 Two things that Grafana needed, which the chart does not provide: a Prometheus data source (the dashboard takes the default one; here Thanos Querier on port 9091 with the Grafana pod's own token), and a Role that lets the sidecar read ConfigMaps. The Grafana Helm chart's own Role also lets it read every Secret in the namespace; `test/grafana-sidecar/` replaces it with one for ConfigMaps only.
 
 How the Perses form is generated from the Grafana one, and how both were validated, is in [`docs/grafana-to-perses-conversion.md`](../../docs/grafana-to-perses-conversion.md).
 
-### Colours
+### Colours and shades
 
-Every line has a fixed colour, the same in both forms and in the light and the dark theme. No two lines of a panel share one, and none is left to a palette.
+Every line, band, slice, table cell and state has a fixed colour, the same in both forms and in the light and the dark theme. None is left to a palette. The colours are six of the Tableau 10 palette, which was designed to be told apart without being loud ([How we designed the new color palettes in Tableau 10](https://www.tableau.com/blog/colors-upgrade-tableau-10-56782)).
 
 | Colour | A mongot panel | An Envoy panel | Responses by class |
 | --- | --- | --- | --- |
-| Blue `#2a7de1` | the first pod, `<name>-search-0-0` | the pod started last | 2xx |
-| Red `#e0362c` | the second, `-1` | the one before it | 5xx |
-| Yellow `#d49b00` | the third, `-2` | the third | 4xx |
-| Purple `#b03fc9` | any further pod | any further pod | any other class |
+| Blue `#4e79a7` | the first pod, `<name>-search-0-0` | the pod started last | |
+| Red `#e15759` | the second, `-1`; dashed | the one before it; dashed | 5xx |
+| Yellow `#edc948` | the third, `-2`; dotted | the third; dotted | |
+| Purple `#b07aa1` | any further pod; in the pie, all of them as one slice, *further pods* | any further pod | any other class |
+| Green `#59a14f` | | | 2xx |
+| Orange `#f28e2b` | | | 4xx |
 
-Lines are 3 wide with no area fill. The stat panels keep green for good, orange and red for their thresholds.
+The single numbers use the same green for good, and orange and red for their thresholds. *Indexes not STEADY* is green for `STEADY` and red for anything else. In the table, each pod's name sits on its colour.
 
-What makes this possible, and what it costs:
+How the lines are drawn:
 
-- **One query per line.** Perses fixes a colour per query, not per series, so each per-pod panel asks four queries: one per pod and one for any further pod. The Grafana form carries the same four, coloured by query. The dashboard asks 90 queries a refresh (27 before); measured on the lab through Thanos Querier, a refresh over 15 minutes took 0.16 s in all.
+- **Lines are 1 wide.** The second pod's line is dashed and the third's dotted, so that when the three lie on each other all three still show.
+- **Each line has a shade of its own colour under it**, the line's colour at 10% opacity. Where one pod reads higher than the others, its shade shows above theirs; where they overlap, the shades blend.
+- **The two traffic panels are stacked**, at 30% opacity. *Searches per second, per mongot pod* has one band per pod and its top edge is all searches; *Share of searches, per mongot pod* adds up to 100%. With even traffic the three lines would lie on each other, and three shades on each other turn brown; stacked, even traffic is three bands of equal height, each in its pod's colour. The axis of these two panels therefore reads the running total, not one pod's value; the pointer shows each pod's own.
+- **Five panels keep one shade**, the first pod's blue at 15%: uptime, index size, documents indexed, indexes in catalog and data volume used. Every pod reads the same there by design, so three shades would again be one brown block.
+- **Legends are below the chart.** The three traffic panels are a third of the page wide, where three pod names take two legend lines; Perses draws the second line only in a panel at least 11 units high (measured in the console: at 8, 9 and 10 it was cut), so that row is 11 high and the others 8.
+
+What makes the fixed colours possible, and what they cost:
+
+- **One query per line.** Perses fixes a colour per query, not per series, so each per-pod panel asks four queries: one per pod and one for any further pod. The Grafana form carries the same four, coloured by query. The dashboard asks 97 queries a refresh (27 in chart 0.3.0, 90 in 0.3.1); measured on the lab through Thanos Querier, a refresh over 15 minutes took 0.45 s in all, with no warning on any query.
+- **The pie takes its colours by position.** A Perses pie has a list of colours, not one per query (the same code in PieChart 0.13.1, the lab's, and 0.14.0; drawn in 0.14.0): a query with two series, or a query with none before one that has, moved the colours off their pods and painted the overflow `#ff0000`. So each of the pie's four queries gives one series: a pod's own, or 0 while the pod is a target with no rate yet; every further pod summed as *further pods*; and nothing while no search ran, when a pie of three zeros would be drawn as three equal slices.
 - **mongot pods are told apart by name**, which a StatefulSet fixes, so a pod keeps its colour for good.
 - **Envoy pods are told apart by start time** (`kube_pod_start_time`), because their names are generated. A colour stays with a pod while the set of pods stays the same; when one is replaced, the order moves on. On the lab the two pods started in the same second, and the order between them was the same at every step of nine range queries.
-- **Before this**, the Perses form took a colour generated from each series' name: measured, three muted tones for the mongot pods and two purples for the Envoy pods, with a contrast as low as 1.9:1 against the background. Now the closest two colours of a panel are blue and purple (CIE76 ΔE 54), and the lowest contrast is yellow on white, 2.5:1; the other three are above 4:1 on white, and all four above 3.5:1 on the dark background.
+- **Yellow is faint on white.** Measured contrast against the console's two backgrounds:
+
+  | Colour | On white (light theme) | On `#292929` (dark theme) |
+  | --- | --- | --- |
+  | Blue | 4.5:1 | 3.2:1 |
+  | Red | 3.7:1 | 4.0:1 |
+  | Yellow | 1.6:1 | 9.0:1 |
+  | Purple | 3.4:1 | 4.3:1 |
+
+  The closest two pod colours are blue and purple (CIE76 ΔE 34); among the first three, red and yellow (ΔE 72). In the light theme the third pod's dotted yellow line is the hardest to see; its band, slice and table cell are not affected. In the console the names in the table are in black, which is at least 4.6:1 on each of the four colours; Grafana 12.3.1 chooses the text itself, near-white on blue and red (4.3:1 and 3.5:1) and near-black on yellow.
+- **Before chart 0.3.1**, the Perses form took a colour generated from each series' name: measured, three muted tones for the mongot pods and two purples for the Envoy pods, with a contrast as low as 1.9:1 against the background.
 
 ### The mongot process and data panels
 
-Eleven panels read mongot's own metrics, one line per mongot pod. Readings are the lab's, on 2026-10-06, pod 0 / 1 / 2.
+Eleven panels read mongot's own metrics, one line per mongot pod; *Indexes not STEADY* is a status history instead, one row per pod. Above the data panels a table, *Each mongot pod, now*, puts the latest index size, documents, indexes, indexes not STEADY, volume used and uptime of every pod side by side, so that equal data reads as equal rows. Readings are the lab's, on 2026-10-06, pod 0 / 1 / 2.
 
 | Panel | What it reads | Lab reading |
 | --- | --- | --- |
@@ -180,7 +215,7 @@ The chart's Envoy ServiceMonitor therefore renames the two at the scrape, to `en
 - with Envoy scraped by anything else (for example the hand-applied [`manifests/90-servicemonitors.yaml`](../../manifests/90-servicemonitors.yaml)), the retries and responses panels are empty and that alert never fires;
 - on an upgrade from a release without the rename, those two panels start again from the upgrade: the earlier samples stay under the old names.
 
-Measured on the lab on 2026-10-06, through Thanos Querier: before, each of the two queries came back with one warning; after, every query of the dashboard came back with none (16 queries then; 27 since chart 0.3.0).
+Measured on the lab on 2026-10-06, through Thanos Querier: before, each of the two queries came back with one warning; after, every query of the dashboard came back with none (16 queries then, 27 in chart 0.3.0, 90 in 0.3.1, 97 since 0.3.2).
 
 ## Maintaining the chart
 

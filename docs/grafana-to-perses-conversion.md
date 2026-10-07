@@ -11,7 +11,7 @@ The chart ships one dashboard, **MongoDB Search**, in two forms:
 | `chart/mongodb-search-helm/files/mongodb-search.json` | Grafana | Yes. It is the only source |
 | `chart/mongodb-search-helm/files/mongodb-search.perses.json` | Perses, in the OpenShift console | No. It is generated from the Grafana file |
 
-This document records the commands that turn the first file into the second. Use Perses **0.54.0**: it is the Perses version inside the Cluster Observability Operator 1.5.3 that runs on the lab.
+This document records the commands that turn the first file into the second. Use Perses **0.54.0**: it is the Perses version inside the Cluster Observability Operator 1.5.3 that runs on the lab. The lab's server carries older panel plugins than the `perses:v0.54.0` image that `percli` runs from: read from its `/api/v1/plugins` on 2026-10-07, PieChart 0.13.1 against 0.14.0, Table 0.11.2 against 0.13.0, StatChart and StatusHistoryChart 0.12.1 against 0.13.0, TimeSeriesChart 0.13.0-beta.0 against 0.13.0. Every field the script writes was accepted and drawn by the lab's versions; check that again when either side moves.
 
 Both files contain two tokens, `__NAMESPACE__` and `__SEARCH__`. The chart replaces them with its namespace and `search.name` when it renders, so every query reads that one search setup.
 
@@ -32,7 +32,7 @@ scripts/perses-dashboard.sh
 Expected:
 
 ```text
-wrote chart/mongodb-search-helm/files/mongodb-search.perses.json (27 panels)
+wrote chart/mongodb-search-helm/files/mongodb-search.perses.json (29 panels)
 ```
 
 It uses `percli` from your `PATH` when its unpacked plugins are at `~/.local/share/perses/plugins`; otherwise it runs `percli` from the official Perses image with podman or docker. Then run the chart tests, which fail if the two files disagree:
@@ -41,7 +41,7 @@ It uses `percli` from your `PATH` when its unpacked plugins are at `~/.local/sha
 test/chart.sh
 ```
 
-The rest of this document is what the script does, as separate commands.
+The rest of this document is what the script does, as separate commands. Since chart 0.3.2 the script also carries over what `percli` does not (the pie's colours and labels, the table's coloured cells and column order, an open-ended range), so use the script to produce the committed file; [Colours and chart kinds](#colours-and-chart-kinds-charts-031-and-032-issue-35) lists what it adds.
 
 ## Way 1: the container (nothing to install)
 
@@ -109,7 +109,7 @@ grep -c 'Migration from Grafana not supported' /tmp/perses-work/raw.perses.json 
 
 ### Step 2: Name the datasource and keep only the dashboard's spec
 
-The converter leaves each query without a usable datasource name: `percli` leaves it empty and the server writes `${DS_PROMETHEUS}`. The chart creates a datasource named `<search.name>-thanos` beside the dashboard, so every query must name it. This also checks that every panel and query matches the Grafana file.
+The converter leaves each query without a usable datasource name: `percli` leaves it empty and the server writes `${DS_PROMETHEUS}`. The chart creates a datasource named `<search.name>-thanos` beside the dashboard, so every query must name it. This also checks that every query of every panel matches the Grafana file. It leaves out what `scripts/perses-dashboard.sh` adds for the pie, the table and the status history; the committed file comes from the script.
 
 ```bash
 python3 - chart/mongodb-search-helm/files/mongodb-search.json /tmp/perses-work/raw.perses.json \
@@ -117,8 +117,8 @@ python3 - chart/mongodb-search-helm/files/mongodb-search.json /tmp/perses-work/r
 import json, sys
 grafana = json.load(open(sys.argv[1]))
 spec = json.load(open(sys.argv[2]))["spec"]
-want = {p["title"]: p["targets"][0]["expr"] for p in grafana["panels"] if p["type"] != "row"}
-got = {p["spec"]["display"]["name"]: p["spec"]["queries"][0]["spec"]["plugin"]["spec"]["query"] for p in spec["panels"].values()}
+want = {p["title"]: [t["expr"] for t in p["targets"]] for p in grafana["panels"] if p["type"] != "row"}
+got = {p["spec"]["display"]["name"]: [q["spec"]["plugin"]["spec"]["query"] for q in p["spec"]["queries"]] for p in spec["panels"].values()}
 assert got == want, "the converted panels or queries differ from the Grafana ones"
 for p in spec["panels"].values():
     for q in p["spec"]["queries"]:
@@ -155,17 +155,19 @@ Oct 6, 2026, Perses 0.54.0. Ways 1 and 3 were run, and after Step 2 they gave th
 
 Since chart 0.3.0 the dashboard has 27 panels (5 stat, 22 time series) in 5 sections. Way 1 produced that file, and the 16 panels it already had came out identical to before; Way 3 was not run again.
 
+Chart 0.3.1 kept those 27 panels and gave every line a query of its own: 90 queries. It was merged and never published. Since chart 0.3.2 it has 29 panels (5 stat, 21 time series, a pie, a table and a status history) and 97 queries, produced by the script through Way 1.
+
 | Section | Panels |
 | --- | --- |
 | Is search up? | mongot pods up; Envoy pods up; mongot pods in Envoy; searches per second; largest share on one pod |
-| Is traffic spread across the mongot pods? | Searches per second, per pod; share of searches, per pod |
+| Is traffic spread across the mongot pods? | Searches per second, per pod; share of searches, per pod; share of searches now, by pod (a pie) |
 | Is Envoy healthy? | Requests per second to mongot; open connections from mongod; retries per second; responses by class; latency, 95th percentile |
 | How is each mongot pod doing? | Average search latency; search failures per second; replication lag; JVM memory used; CPU used; JVM heap used, percent of limit; time in garbage collection; uptime; search work run outside the parallel pool |
-| Does every mongot pod hold the same data? | Index size; documents indexed; indexes not STEADY; indexes in catalog; data volume used; indexing operations per second |
+| Does every mongot pod hold the same data? | Each mongot pod, now (a table); index size; documents indexed; indexes not STEADY (a status history); indexes in catalog; data volume used; indexing operations per second |
 
 | Way | Ran here | Result |
 | --- | --- | --- |
-| 1. Container, with podman | Yes; it is what produced the committed file | 27 panels, no placeholders (16 before chart 0.3.0) |
+| 1. Container, with podman | Yes; it is what produced the committed file | 29 panels, no placeholders (16 before chart 0.3.0, 27 in it) |
 | 2. `percli` binary | No: no `percli` is installed on this workstation | Same command as Way 1 without the container |
 | 3. Server `/api/migrate` on the lab | Yes | Same 16 panels, queries, units and sections as Way 1 |
 
@@ -226,21 +228,45 @@ Two statements made while planning were corrected by these measurements. `mongot
 
 On the lab, three of the new panels stayed at zero throughout (indexes not `STEADY`, indexing operations, work outside the pool), and *data volume used* shows the node's disk, because the lab's volumes come from a hostpath provisioner. The roles, the Grafana and its Role were removed again after the checks.
 
-### Colours (chart 0.3.1, issue #35)
+### Colours and chart kinds (charts 0.3.1 and 0.3.2, issue #35)
 
 On Oct 6, 2026 the lines of a panel were reported as too alike in the console. Measured in Perses 0.54.0 before the change: the three mongot pods drew as `#cb93b4`, `#4e6386` and `#d6bb86`, the two Envoy pods as two purples, with the closest pair at CIE76 ΔE 26 and a contrast as low as 1.9:1 on the background. The dashboard set no palette, so Perses made a colour from each series' name.
 
-Perses 0.54 offers two palettes, neither with three well-separated first colours (its categorical one starts sky blue, green, blue), and a fixed colour per query. So every line now has a query of its own and a fixed colour: blue, red, yellow, and purple for a fourth. What each colour means is in the [chart README](../chart/mongodb-search-helm/README.md#colours).
+Perses 0.54 offers two palettes, neither with three well-separated first colours (its categorical one starts sky blue, green, blue), and a fixed colour per query. So every line now has a query of its own and a fixed colour from the Tableau 10 palette: blue, red, yellow, and purple for a fourth. What each colour means, how the shades are drawn and why two panels are stacked is in the [chart README](../chart/mongodb-search-helm/README.md#colours-and-shades).
+
+**What converts.** Tried in Perses 0.54.0 with one panel of each Grafana kind:
+
+| Grafana panel | Perses 0.54.0 |
+| --- | --- |
+| `timeseries`, `stat`, `gauge`, `piechart`, `table`, `status-history` | The same kind |
+| `bargauge` | A bar chart |
+| `barchart`, `histogram`, `heatmap`, `state-timeline` | A placeholder that says the migration is not supported |
+
+**What the script adds after `percli`**, each from the Grafana source, so that the Grafana file stays the only one edited:
+
+| In the Grafana source | In the Perses file | Why `percli` is not enough |
+| --- | --- | --- |
+| The pie's colours per query | `colorPalette`, in the order of the queries | A Perses pie takes a list by position, not a colour per query: the source keeps each pie query to one series |
+| The pie's `displayLabels: []` | `showLabels: false` | `percli` writes `showLabels: true` for any `displayLabels`, an empty list included |
+| A value mapping with a colour on the table's pod column | `cellSettings` with `backgroundColor`, plus `textColor` black or white, whichever contrasts more (WCAG) | Perses keeps the theme's text colour, white on yellow in the dark theme; and `percli` drops a mapping by pattern, used for any pod after the third |
+| The table's columns | The pod column first | `percli` puts a renamed column after the others; it hides the time column itself, from the `organize` transformation |
+| A range mapping open at one end | The absent bound left out | It comes over as `null`, which Perses refuses |
+
+`percli` itself carries over, measured by running it alone on the source: each query's colour, fill opacity and line style, set by an override on the query's `refId` (they become `querySettings`: `colorMode: fixed`, `colorValue`, `areaOpacity`, `lineStyle`); stacking (`stacking.mode: normal` becomes `stack: all`); and an axis minimum or maximum.
+
+Measured on the lab on Oct 6 and 7, 2026, with searches running through the search GUI:
 
 | Check | Result |
 | --- | --- |
-| Every query through Thanos Querier | 90 of 90 `success`, no warning; 64 series, as before |
+| Every query through Thanos Querier | 97 of 97 `success`, no warning or notice; 85 series |
 | Each pod on its own query | mongot pods 0, 1, 2 on the first three, nothing on the fourth; the two Envoy pods on the first two |
-| One refresh, 15 minutes at a 30 s step | 0.16 s in all for the 90 queries |
-| In the OpenShift console, light and dark | 5 of 5 sections, 27 panels drawn; no "No data", "NaN", "Forbidden" or warning sign |
-| In a Grafana through the sidecar | 27 panels, 90 queries, line width 3, the same four colours; the page drew them |
+| Queries with no series | 26: the fourth query of each of the 20 per-pod charts (no fourth pod), the third Envoy pod in three panels, and three response classes Envoy had not counted: 4xx, 5xx and any other |
+| One refresh, 15 minutes at a 30 s step | 0.45 s in all for the 97 queries |
+| In the OpenShift console, light and dark | 5 of 5 sections, 29 panels drawn; no "No data", "NaN", "Forbidden" or warning sign |
+| The legend of a panel a third of the page wide | Three pod names take two lines; in the console the second line was cut at a panel height of 8, 9 and 10 units and drawn at 11. The legend's `size` made no difference |
+| In a Grafana 12.3.1 through the sidecar | 29 panels and 97 queries listed, the two traffic panels stacked, the six colours only; 97 of 97 queries answered through its Thanos Querier data source, the same 26 with no series; the page drew every panel in light and dark, the table's pod cells in blue, red and yellow, and the state legend reading `STEADY` |
 | Ordering the Envoy pods | By Envoy's own uptime the first pod changed between steps (64 and 48 of 121); by `kube_pod_start_time`, the same pod at every step of nine range queries |
 
-`scripts/perses-dashboard.sh` carries each colour set by query in the Grafana source into the Perses form, and compares every query of every panel.
+`scripts/perses-dashboard.sh` compares every query of every panel with the Grafana source, and `test/chart.sh` checks the colours, shades, line styles, legends and the table's cells in both files.
 
 Not validated: a `GrafanaDashboard` of the grafana-operator pointing at the ConfigMap. The lab's operator watches one namespace, `group-sync-dashboard`, which belongs to another project, and its data source is limited to that namespace's metrics.

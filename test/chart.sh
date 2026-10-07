@@ -96,9 +96,8 @@ done
 o="$(objects)"
 { has "$o" "ServiceMonitor/mongot" && has "$o" "ServiceMonitor/mongot-envoy" && has "$o" "Service/mongot-envoy-stats"; } && ok "ServiceMonitors and the Envoy stats Service by default" || bad "ServiceMonitors missing by default"
 has "$o" "PrometheusRule/mongot-distribution" && ok "the alert rules by default" || bad "alert rules missing by default"
-# The dashboard: 27 panels in 5 sections. The 16 it had before the mongot data and process panels keep their
-# titles: panels are added to this dashboard, not replaced.
-python3 - "${CHART}/files/mongodb-search.json" <<'PY' && ok "the dashboard has 27 panels in 5 sections, the first 16 among them" || bad "dashboard panels or sections"
+# The dashboard: 29 panels in 5 sections. The 16 it started with are all still there: panels are added, not replaced.
+python3 - "${CHART}/files/mongodb-search.json" <<'PY' && ok "the dashboard has 29 panels in 5 sections, the first 16 among them" || bad "dashboard panels or sections"
 import json, sys
 g = json.load(open(sys.argv[1]))
 charts = [p["title"] for p in g["panels"] if p["type"] != "row"]; rows = [p["title"] for p in g["panels"] if p["type"] == "row"]
@@ -108,26 +107,120 @@ first = ["mongot pods up", "Envoy pods up", "mongot pods in Envoy", "Searches pe
          "Retries per second, per Envoy pod", "Responses per second from mongot, by class", "Envoy to mongot latency, 95th percentile",
          "Average search latency, per mongot pod", "Search failures per second, per mongot pod",
          "Replication lag, per mongot pod", "JVM memory used, per mongot pod"]
-sys.exit(0 if len(charts) == 27 and len(rows) == 5 and charts[:16] == first and rows[-1] == "Does every mongot pod hold the same data?" else 1)
+sys.exit(0 if len(charts) == 29 and len(set(charts)) == 29 and len(rows) == 5 and set(first) <= set(charts) and rows[-1] == "Does every mongot pod hold the same data?" else 1)
 PY
-# Colours (issue #35). Perses fixes a colour per query, not per series, so every line has a query of its own with a
-# fixed colour: blue, red, yellow, and purple for a fourth. No line is left to a palette, where two can look alike.
-python3 - "${CHART}/files/mongodb-search.json" "${CHART}/files/mongodb-search.perses.json" <<'PY' && ok "every line has a fixed colour (blue, red, yellow, purple), the same in both forms, 3 wide, with no fill" || bad "dashboard colours"
+# Colours (issue #35): one palette, Tableau 10. A pod has one colour in every panel: the first blue, the second red,
+# the third yellow, any further purple. Perses fixes a colour per query, so every line has a query of its own. A
+# shade under every line, in its colour; one shade only where the pods read the same by design, since three shades
+# on each other turn brown. The second pod dashed and the third dotted.
+python3 - "${CHART}/files/mongodb-search.json" "${CHART}/files/mongodb-search.perses.json" <<'PY' && ok "every line, slice and state has a fixed colour from one palette, the same in both forms" || bad "dashboard colours"
 import json, sys
 g, p = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
-want = ["#2a7de1", "#e0362c", "#d49b00", "#b03fc9"]
+BLUE, RED, YELLOW, PURPLE, GREEN, ORANGE = "#4e79a7", "#e15759", "#edc948", "#b07aa1", "#59a14f", "#f28e2b"
+pods = [BLUE, RED, YELLOW, PURPLE]
+SAME = {"Uptime, per mongot pod", "Data volume used, per mongot pod", "Indexes in catalog, per mongot pod",
+        "Index size, per mongot pod", "Documents indexed, per mongot pod"}
+perses = {v["spec"]["display"]["name"]: v["spec"]["plugin"] for v in p["panels"].values()}
 ok = True
 for x in g["panels"]:
-    if x["type"] != "timeseries": continue
+    if x["type"] == "row": continue
+    chart = perses[x["title"]]["spec"]
+    by = {o["matcher"]["options"]: {q["id"]: q["value"] for q in o["properties"]} for o in x["fieldConfig"]["overrides"] if o["matcher"]["id"] == "byFrameRefID"}
     refs = [t["refId"] for t in x["targets"]]
-    colours = {o["matcher"]["options"]: o["properties"][0]["value"]["fixedColor"] for o in x["fieldConfig"]["overrides"]}
-    chart = next(v for v in p["panels"].values() if v["spec"]["display"]["name"] == x["title"])["spec"]["plugin"]["spec"]
-    perses = {refs[s["queryIndex"]]: s["colorValue"] for s in chart.get("querySettings", []) if s["colorMode"] == "fixed"}
-    ok &= set(colours) == set(refs) and set(colours.values()) <= set(want) and len(set(colours.values())) == len(colours)   # every query, no colour twice
-    ok &= perses == colours and x["fieldConfig"]["defaults"]["custom"] == {"lineWidth": 3, "fillOpacity": 0}
-    ok &= chart["visual"] == {"areaOpacity": 0, "lineWidth": 3}
-    if x["title"].endswith(("per mongot pod", "per Envoy pod")):
-        ok &= [colours[r] for r in refs] == want and " unless on (pod) " in x["targets"][3]["expr"]   # the fourth query: every further pod
+    per_pod = x["title"].endswith(("per mongot pod", "per Envoy pod", "by mongot pod"))
+    if x["type"] == "timeseries":
+        colours = [by[r]["color"]["fixedColor"] for r in refs]
+        ok &= len(set(colours)) == len(colours) and set(colours) <= {BLUE, RED, YELLOW, PURPLE, GREEN, ORANGE}      # every line, no colour twice
+        # The two traffic panels are stacked: a band per pod, so three even pods are three colours and not one mix.
+        stacked = x["title"] in ("Searches per second, per mongot pod", "Share of searches, per mongot pod")
+        ok &= x["fieldConfig"]["defaults"]["custom"] == dict({"lineWidth": 1, "fillOpacity": 0}, **({"stacking": {"mode": "normal", "group": "A"}} if stacked else {}))
+        ok &= chart["visual"] == dict({"areaOpacity": 0, "lineWidth": 1}, **({"stack": "all"} if stacked else {}))
+        shades = {r: by[r]["custom.fillOpacity"] for r in refs if "custom.fillOpacity" in by[r]}
+        ok &= shades == ({"A": 15} if x["title"] in SAME or len(refs) == 1 else dict.fromkeys(refs, 30 if stacked else 10))
+        want = [dict({"queryIndex": i, "colorMode": "fixed", "colorValue": by[r]["color"]["fixedColor"]},
+                     **({"areaOpacity": by[r]["custom.fillOpacity"] / 100} if "custom.fillOpacity" in by[r] else {}),
+                     **({"lineStyle": {"dash": "dashed", "dot": "dotted"}[by[r]["custom.lineStyle"]["fill"]]} if "custom.lineStyle" in by[r] else {})) for i, r in enumerate(refs)]
+        ok &= chart["querySettings"] == want
+        if per_pod:
+            ok &= colours == pods and " unless on (pod) " in x["targets"][3]["expr"]
+            ok &= [by[r].get("custom.lineStyle", {}).get("fill") for r in refs] == [None, "dash", "dot", None]
+    elif x["type"] == "piechart":
+        ok &= [by[r]["color"]["fixedColor"] for r in refs] == pods == chart["colorPalette"]
+    elif x["type"] == "status-history":
+        ok &= [m["spec"]["result"]["color"] for m in chart["mappings"]] == [GREEN, RED] and all(v is not None for m in chart["mappings"] for v in m["spec"].values())
+    elif x["type"] == "table":
+        cols = chart["columnSettings"]
+        ok &= cols[0] == {"name": "timestamp", "hide": True} and cols[1]["name"] == "pod" and [c["header"] for c in cols[2:]] == ["Index size", "Documents", "Indexes", "Not STEADY", "Volume used", "Uptime"]
+        # the name of each pod on its colour, with text that can be read on it
+        ok &= [c["backgroundColor"] for c in cols[1]["cellSettings"]] == pods and all(c["textColor"] in ("#000000", "#ffffff") for c in cols[1]["cellSettings"])
+        ok &= [c["condition"]["kind"] for c in cols[1]["cellSettings"]] == ["Value", "Value", "Value", "Regex"]
+    elif x["type"] == "stat":
+        ok &= {s["color"] for s in x["fieldConfig"]["defaults"]["thresholds"]["steps"]} <= {GREEN, ORANGE, RED}
+    # A legend is below its chart, never beside it. A panel narrower than half the page needs two legend lines for
+    # three pods, and Perses draws the second only from 11 units of height (measured in the console).
+    if "legend" in x.get("options", {}):
+        ok &= x["options"]["legend"]["placement"] == "bottom" and chart["legend"]["position"] == "bottom"
+        ok &= x["gridPos"]["w"] >= 12 or x["gridPos"]["h"] >= 11
+sys.exit(0 if ok else 1)
+PY
+# What the colours stand on, in both files. Each query of a per-pod chart selects its own pod, and the fourth every
+# other one, from one expression. A Perses pie colours by position, so each of its queries gives one series, and none
+# while no search ran. The table names the same pods on the same colours in both forms, with text that can be read.
+# A stacked axis starts at 0 and a share ends at 1. A single number has the same thresholds in both. The Perses
+# layout has the Grafana one's places and sizes: the console is where the 11 units were measured.
+python3 - "${CHART}/files/mongodb-search.json" "${CHART}/files/mongodb-search.perses.json" <<'PY' && ok "per-pod queries, the pie, the table, axes, thresholds and layout agree in both forms" || bad "dashboard per-pod queries, pie, table, axes, thresholds or layout"
+import json, re, sys
+g, p = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
+BLUE, RED, YELLOW, PURPLE, GREEN, ORANGE = "#4e79a7", "#e15759", "#edc948", "#b07aa1", "#59a14f", "#f28e2b"
+UP = 'up{namespace="__NAMESPACE__",job="__SEARCH__-search-0-svc",pod'
+START = 'max by (pod) (kube_pod_start_time{namespace="__NAMESPACE__",pod=~"__SEARCH__-search-lb-0-.*"})'
+TAILS = {"mongot": [f' and on (pod) {UP}="__SEARCH__-search-0-{i}"}}' for i in range(3)] + [f' unless on (pod) {UP}=~"__SEARCH__-search-0-[0-2]"}}'],
+         "Envoy": [f" and on (pod) topk(1, {START})", f" and on (pod) (topk(2, {START}) unless topk(1, {START}))",
+                   f" and on (pod) (topk(3, {START}) unless topk(2, {START}))", f" unless on (pod) topk(3, {START})"]}
+STATS = {"mongot pods up": [RED, GREEN], "Envoy pods up": [RED, GREEN], "mongot pods in Envoy": [RED, GREEN],
+         "Searches per second": [GREEN], "Largest share on one pod": [GREEN, ORANGE, RED]}
+def luminance(colour):
+    r, gr, b = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in (int(colour[i:i + 2], 16) / 255 for i in (1, 3, 5))]
+    return 0.2126 * r + 0.7152 * gr + 0.0722 * b
+def contrast(one, other):
+    light, dark = sorted((luminance(one), luminance(other)), reverse=True)
+    return (light + 0.05) / (dark + 0.05)
+perses = {v["spec"]["display"]["name"]: (k, v["spec"]["plugin"]["spec"]) for k, v in p["panels"].items()}
+place = {i["content"]["$ref"].rsplit("/", 1)[1]: (i["x"], i["width"], i["height"]) for l in p["layouts"] for i in l["spec"]["items"]}
+ok = True
+for x in g["panels"]:
+    if x["type"] == "row": continue
+    key, chart = perses[x["title"]]
+    ok &= place[key] == (x["gridPos"]["x"], x["gridPos"]["w"], x["gridPos"]["h"])
+    exprs = [t["expr"] for t in x["targets"]]
+    for kind, tails in TAILS.items():
+        if x["title"].endswith(f"per {kind} pod") and x["type"] == "timeseries":
+            ok &= len(exprs) == 4 and all(e.endswith(t) for e, t in zip(exprs, tails))
+            ok &= len({e[:-len(t)] for e, t in zip(exprs, tails)}) == 1          # one expression, four selections of it
+    if x["type"] == "piechart":
+        some = exprs[0][exprs[0].rfind(" and on () (sum("):]                     # nothing while no search ran
+        ok &= len(exprs) == 4 and some.endswith(" > 0)") and all(e.endswith(some) for e in exprs)
+        ok &= all(t + f') or sum by (pod) ({UP}="__SEARCH__-search-0-{i}"}}) * 0)' + some in e for i, (e, t) in enumerate(zip(exprs, TAILS["mongot"][:3])))
+        ok &= exprs[3].startswith("label_replace(sum(") and TAILS["mongot"][3] + '), "pod", "further pods", "", "")' + some in exprs[3]
+    d = x["fieldConfig"]["defaults"]
+    if d.get("custom", {}).get("stacking"):
+        ok &= d.get("min") == 0 == chart["yAxis"].get("min")
+        if d["unit"] == "percentunit": ok &= d.get("max") == 1 == chart["yAxis"].get("max")
+    if x["type"] == "stat":
+        steps = d["thresholds"]["steps"]
+        ok &= [s["color"] for s in steps] == STATS[x["title"]]
+        ok &= chart["thresholds"]["steps"] == [{"color": s["color"], "value": s["value"] or 0} for s in steps]
+    if x["type"] == "table":
+        maps = [m for o in x["fieldConfig"]["overrides"] for q in o["properties"] if q["id"] == "mappings" for m in q["value"]]
+        want = [(k, v["color"]) for m in maps if m["type"] == "value" for k, v in m["options"].items()]
+        want += [(m["options"]["pattern"], m["options"]["result"]["color"]) for m in maps if m["type"] == "regex"]
+        ok &= want[:3] == list(zip([f"__SEARCH__-search-0-{i}" for i in range(3)], [BLUE, RED, YELLOW])) and [c for _, c in want[3:]] == [PURPLE]
+        further = re.compile(want[3][0].replace("__SEARCH__", "a-b")) if len(want) == 4 else re.compile("$^")
+        ok &= [n for n in (0, 1, 2, 3, 9, 10, 25, 100) if further.search(f"a-b-search-0-{n}")] == [3, 9, 10, 25, 100]
+        ok &= not further.search("a-b-search-0-3-0") and not further.search("xa-b-search-0-3")
+        cells = chart["columnSettings"][1]["cellSettings"]
+        ok &= [(c["condition"]["spec"].get("value", c["condition"]["spec"].get("expr")), c["backgroundColor"]) for c in cells] == want
+        ok &= all(c["textColor"] == max("#000000", "#ffffff", key=lambda text: contrast(text, c["backgroundColor"])) for c in cells)
 sys.exit(0 if ok else 1)
 PY
 # The heap panel divides heap by heap: summed over every area, the maximum includes a -1 and the non-heap pools.
