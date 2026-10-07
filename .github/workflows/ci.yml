@@ -1,0 +1,36 @@
+# The repository's checks that need no cluster. test/run.sh needs the lab and stays a person's to run.
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  # test/chart.sh: helm lint, the renders, the schema's refusals, the dashboards' structure, shellcheck on the Job
+  # scripts. helm is pinned to the version the tests are written with; python3, yq and shellcheck are on the runner.
+  chart:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install helm 4.3.0
+        run: |
+          set -euo pipefail
+          curl -fsSLO https://get.helm.sh/helm-v4.3.0-linux-amd64.tar.gz
+          echo "86584a54def73570558f66f5111cc53dfed56689637ae32c1201205d494f54fb  helm-v4.3.0-linux-amd64.tar.gz" | sha256sum -c -
+          tar -xzf helm-v4.3.0-linux-amd64.tar.gz
+          sudo install linux-amd64/helm /usr/local/bin/helm
+          rm -rf linux-amd64 helm-v4.3.0-linux-amd64.tar.gz
+          helm version --short
+      - name: Chart tests
+        run: test/chart.sh
+      - name: The tests left the tree as it was
+        run: git status --porcelain && git diff --exit-code
+  # Every diagram page through diagram-kit's checks (a font that did not load, a label past its box, text under
+  # 4.5:1 in either theme, a dashed arrow with no label, sideways scroll at 375 px). No PNG is written: the committed
+  # ones are rendered and looked at by a person. The kit's tag is given twice; keep the two the same.
+  diagrams:
+    uses: ephico2real2/diagram-kit/.github/workflows/check-diagrams.yml@v0.2.3
+    with:
+      kit: v0.2.3
