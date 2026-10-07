@@ -17,7 +17,7 @@ Both files contain two tokens, `__NAMESPACE__` and `__SEARCH__`. The chart repla
 
 **Before you start**
 
-- [ ] [diagram-kit](https://github.com/ephico2real2/diagram-kit) 0.2.0 or later, for its `perses-dashboard` command: `python3 -m venv .venv && .venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.2"`
+- [ ] [diagram-kit](https://github.com/ephico2real2/diagram-kit) 0.2.0 or later, for its `perses-dashboard` command: `python3 -m venv .venv && .venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.3"`
 - [ ] `podman` or `docker`, or `percli` 0.54.0 with its plugins unpacked
 - [ ] `python3`
 - [ ] For Way 3 only: `oc` logged in to a cluster that runs the Cluster Observability Operator
