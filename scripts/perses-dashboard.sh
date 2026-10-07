@@ -10,7 +10,7 @@
 # The conversion is diagram-kit's perses-dashboard (https://github.com/ephico2real2/diagram-kit, MPL-2.0; v0.2.0 or
 # later): it runs percli migrate from the Perses image with podman or docker, refuses a panel that became a
 # placeholder or a query that differs from the Grafana one, and adds what percli leaves out. Install it once:
-#   python3 -m venv .venv && .venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.1"
+#   python3 -m venv .venv && .venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.2"
 # It is taken from PERSES_DASHBOARD, from the PATH, or from .venv/bin. The image must be Perses 0.54.0, the version
 # in COO 1.5.2's and 1.5.3's go.mod:
 #   PERSES_DASHBOARD=perses-dashboard  PERSES_IMAGE=docker.io/persesdev/perses:v0.54.0
