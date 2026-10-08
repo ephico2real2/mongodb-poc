@@ -1,12 +1,12 @@
 # MongoDB Search: Prerequisites and Setup
 
-Oct 6, 2026
+Oct 6, 2026; Part 1 by script since Oct 8, 2026
 
 ## Overview
 
 Two parts, in this order:
 
-1. **Prerequisites, by hand.** Five objects that hold certificates, a password and the CA. You create them with `oc`.
+1. **Prerequisites.** Five objects that hold certificates, a password and the CA. A script makes them from the company's PEM files: [`scripts/generate-mongodbsearch-prerequisites.sh`](../scripts/generate-mongodbsearch-prerequisites.sh).
 2. **The chart.** `helm install` of [`chart/mongodb-search-helm`](../chart/mongodb-search-helm/) installs the operator, the `MongoDBSearch` resource and the Route, using those five objects as they are.
 
 The chart never creates, changes or deletes the five objects. Before it installs anything, it checks that they exist and stops if one is missing.
@@ -14,9 +14,9 @@ The chart never creates, changes or deletes the five objects. Before it installs
 | Object | Kind | Keys | Used by |
 | --- | --- | --- | --- |
 | `ent-trust-bundle` | ConfigMap | `ca.crt` | mongot and Envoy, to check the certs they receive |
-| `ent-mongot-search-cert` | Secret | `tls.crt`, `tls.key` | mongot |
-| `ent-mongot-search-lb-0-client-cert` | Secret | `tls.crt`, `tls.key` | Envoy, as the client to mongot |
-| `ent-mongot-search-lb-0-cert` | Secret | `tls.crt`, `tls.key` | Envoy, serving the public hostname |
+| `ent-mongot-search-cert` | Secret | `tls.crt`, `tls.key`, `ca.crt` | mongot |
+| `ent-mongot-search-lb-0-client-cert` | Secret | `tls.crt`, `tls.key`, `ca.crt` | Envoy, as the client to mongot |
+| `ent-mongot-search-lb-0-cert` | Secret | `tls.crt`, `tls.key`, `ca.crt` | Envoy, serving the public hostname |
 | `search-sync-source-password` | Secret | `password` | mongot, to sign in to the source mongod |
 
 The three TLS secret names are fixed by the operator: `<prefix>-<name>-search-cert`, `<prefix>-<name>-search-lb-0-client-cert` and `<prefix>-<name>-search-lb-0-cert`, where the prefix is `tls.certsSecretPrefix` (`ent`) and the name is `search.name` (`mongot`).
@@ -28,82 +28,106 @@ The three TLS secret names are fixed by the operator: `<prefix>-<name>-search-ce
 - [ ] `helm` 3.17 or later (tested with 4.3.0)
 - [ ] The `certified-operators` catalog is enabled on the cluster
 - [ ] The Cluster Observability Operator is installed, for the dashboard in the console; if it is not, set `monitoring.persesDashboard.enabled: false` in the values file
-- [ ] The certificate files are split and verified as in Steps 1 to 3 of the [fresh install runbook](mongot-envoy-mtls-fresh-install-runbook.md): for each of `mongot`, `envoy-client` and `lb` you have `<name>.crt` (leaf, then chain), `<name>.key` (no password) and `<name>-ca.crt`
+- [ ] The three PEM files from the company signer and the passphrase of each. Each holds the encrypted key, the CA bundle and the leaf certificate
+- [ ] The mongot PEM was issued for this namespace: its name is `mongot-search-0-svc.<namespace>.svc.cluster.local`, so a certificate made for `dvh-gp6-rnd` cannot serve another namespace
+- [ ] `openssl` (OpenSSL 3, or the LibreSSL that macOS ships) and `bash` 3.2 or later
 
 ## Part 1: Create the prerequisites
 
-### Step 1: Set variables
+The script turns each PEM into one object. It removes the key's password, finds the leaf by its key, puts the chain in order, and checks the certificate before anything is written: the chain, the dates, what the certificate may be used for, and the names it carries. A PEM given to the wrong step, or one issued for another namespace, is refused.
 
-Run every later step in the same terminal session.
+Every step has two forms. `--dry-run` writes the YAML file and contacts no cluster. `--apply` writes it and creates the object.
+
+### Step 1: Name the namespace and make its folder
+
+The namespace is never assumed. Name it once for the session, or pass `--target-namespace <namespace>` on each command; with neither, every command refuses.
 
 ```bash
-NS=dvh-gp6-rnd
-TRUST_CM=ent-trust-bundle
-MONGOT_SECRET=ent-mongot-search-cert
-ENVOY_CLIENT_SECRET=ent-mongot-search-lb-0-client-cert
-LB_SECRET=ent-mongot-search-lb-0-cert
-SYNC_PW_SECRET=search-sync-source-password
+export TargetNamespace=dvh-gp6-rnd
+NS=$TargetNamespace                       # Part 2 uses $NS
+
+mkdir -m 700 $TargetNamespace             # the script never creates it
+scripts/generate-mongodbsearch-prerequisites.sh --check \
+  --mongot <mongot PEM> --envoy <Envoy client PEM> --route <public hostname PEM>
 ```
+
+The files the script writes go into that folder, in the directory you run it from. `--check` asks for no passphrase. It reports the folder, the tools, the cluster you are logged in to, which of the five objects are there, and for each PEM its subject, names, expiry and whether it fits its step. It ends with `0 problem(s)` when you can go on.
+
+The script refuses to write a file that git would track: this repository ignores `*.secret.yaml`, `*.configmap.yaml`, `*.pem`, `*.key` and `*.pass`.
 
 ### Step 2: Create the trust bundle
 
-`trust-bundle.pem` holds the company CA. If the public hostname cert has a different CA, put both in the file (runbook Step 4).
+From the CA certificates in the mongot PEM. No passphrase is asked: a CA certificate is not encrypted.
 
 ```bash
-oc create configmap $TRUST_CM --from-file=ca.crt=trust-bundle.pem -n $NS
+scripts/generate-mongodbsearch-prerequisites.sh --trustca <mongot PEM> --dry-run
+scripts/generate-mongodbsearch-prerequisites.sh --trustca <mongot PEM> --apply
 ```
+
+If the public hostname certificate, or the source mongod, has another CA, add its PEM with a second `--trustca`. `--check-source <host:port>` also proves that the source mongod presents a certificate the bundle trusts (runbook Step 4).
 
 ### Step 3: Create the three TLS secrets
 
+Each command asks for the passphrase of the key in its PEM.
+
 ```bash
 # mongot: server and client auth
-oc create secret generic $MONGOT_SECRET --type=kubernetes.io/tls \
-  --from-file=tls.crt=mongot.crt \
-  --from-file=tls.key=mongot.key \
-  --from-file=ca.crt=mongot-ca.crt -n $NS
+scripts/generate-mongodbsearch-prerequisites.sh --mongot <mongot PEM> --dry-run
+scripts/generate-mongodbsearch-prerequisites.sh --mongot <mongot PEM> --apply
 
-# Envoy: client cert it presents to mongot
-oc create secret generic $ENVOY_CLIENT_SECRET --type=kubernetes.io/tls \
-  --from-file=tls.crt=envoy-client.crt \
-  --from-file=tls.key=envoy-client.key \
-  --from-file=ca.crt=envoy-client-ca.crt -n $NS
+# Envoy: the client cert it presents to mongot
+scripts/generate-mongodbsearch-prerequisites.sh --envoy <Envoy client PEM> --dry-run
+scripts/generate-mongodbsearch-prerequisites.sh --envoy <Envoy client PEM> --apply
 
-# Envoy: server cert for the public hostname
-oc create secret generic $LB_SECRET --type=kubernetes.io/tls \
-  --from-file=tls.crt=lb.crt \
-  --from-file=tls.key=lb.key \
-  --from-file=ca.crt=lb-ca.crt -n $NS
+# Envoy: the server cert for the public hostname. It is mounted in the Envoy pods; the Route is passthrough and
+# holds no certificate, and the chart creates it.
+scripts/generate-mongodbsearch-prerequisites.sh --route <public hostname PEM> --dry-run
+scripts/generate-mongodbsearch-prerequisites.sh --route <public hostname PEM> --apply
 ```
+
+`--route` prints the hostname for the values file (`loadBalancer.externalHostname`). When the certificate names several, say which with `--hostname <fqdn>`.
+
+What `--apply` does, each time:
+
+- It reads the PEM again and asks for the passphrase again, so what goes to the cluster is what the PEM holds.
+- It prints the cluster, the user and the namespace, and asks you to type the namespace. `--yes` skips that.
+- It uses `oc create`, never `oc apply`: `apply` copies the whole secret, key included, into an annotation on the object.
+- It refuses to touch an object that is already there. `--replace` replaces it; nothing restarts by itself.
 
 ### Step 4: Create the sync password secret
 
-This prompts for the password without showing it and keeps it out of shell history.
+It asks for the password twice, without showing it. The secret holds the key `password` only; the user name goes in the values file as `source.username`.
 
 ```bash
-printf 'mongotUser password: '; stty -echo; read SYNC_PW; stty echo; echo
-printf '%s' "$SYNC_PW" | oc create secret generic $SYNC_PW_SECRET \
-  --from-file=password=/dev/stdin -n $NS
-unset SYNC_PW
+scripts/generate-mongodbsearch-prerequisites.sh --dbcred --username mongotUser --dry-run
+scripts/generate-mongodbsearch-prerequisites.sh --dbcred --username mongotUser --apply
 ```
 
-### Step 5: Check all five
-
-This prints the key names of each object, never the contents. It is the same check the chart makes before it installs.
+### Step 5: Check all five, then remove the key files
 
 ```bash
-for s in $MONGOT_SECRET $LB_SECRET $ENVOY_CLIENT_SECRET $SYNC_PW_SECRET; do
-  echo "$s: $(oc get secret $s -n $NS -o go-template='{{range $k, $v := .data}}{{$k}} {{end}}')"
-done
-echo "$TRUST_CM: $(oc get configmap $TRUST_CM -n $NS -o go-template='{{range $k, $v := .data}}{{$k}} {{end}}')"
+scripts/generate-mongodbsearch-prerequisites.sh --check
 ```
 
-Expected: `tls.crt` and `tls.key` on the three TLS secrets, `password` on the password secret, `ca.crt` on the ConfigMap. Then delete the decrypted key files (runbook Step 7d).
+Expected under `cluster`: `tls.crt`, `tls.key` and `ca.crt` on the three TLS secrets, `password` on the password secret, `ca.crt` on the ConfigMap. The chart makes the same check before it installs. `--check` also prints the lines for the values file of Step 6.
+
+The `*.secret.yaml` files hold keys with no password. Once the objects are in the cluster, remove them:
+
+```bash
+scripts/generate-mongodbsearch-prerequisites.sh --clean
+```
+
+It removes a file only when its secret is in the cluster. The files are unlinked, not overwritten: on current macOS `rm -P` does nothing, and no tool can overwrite a file in place on a solid-state or copy-on-write disk. Keep the folder on an encrypted disk.
+
+For automation, the passphrase and the password may come from a file only you can read: `--passin-file <file>` and `--password-file <file>`. Never put either on a command line.
+
+To make the five objects with `oc` alone, see [Part 1 by hand](#part-1-by-hand).
 
 ## Part 2: Install the chart
 
 ### Step 6: Write the values file
 
-Set the namespace, and the two values that have no default: the public hostname and the source mongod. Everything else defaults to the runbook's values; the full list is in the [chart README](../chart/mongodb-search-helm/README.md#values).
+`--check` prints the namespace, the hostname and the user name as the script found them. Set the namespace, and the two values that have no default: the public hostname and the source mongod. Everything else defaults to the runbook's values; the full list is in the [chart README](../chart/mongodb-search-helm/README.md#values).
 
 ```yaml
 # my-values.yaml
@@ -214,10 +238,40 @@ oc delete subscription/mongodb-kubernetes csv/mongodb-kubernetes.v1.13.0 -n $NS
 oc delete operatorgroup/<operatorgroup name> -n $NS    # or keep it and set operatorGroup.create=false
 ```
 
+## Part 1 by hand
+
+What the script does, as `oc` commands. First split and verify the PEMs as in Steps 1 to 3 of the [fresh install runbook](mongot-envoy-mtls-fresh-install-runbook.md): for each of `mongot`, `envoy-client` and `lb` you then have `<name>.crt` (leaf, then chain), `<name>.key` (no password) and `<name>-ca.crt`, and `trust-bundle.pem` from its Step 4.
+
+```bash
+NS=$TargetNamespace
+
+oc create configmap ent-trust-bundle --from-file=ca.crt=trust-bundle.pem -n $NS
+
+oc create secret generic ent-mongot-search-cert --type=kubernetes.io/tls \
+  --from-file=tls.crt=mongot.crt --from-file=tls.key=mongot.key --from-file=ca.crt=mongot-ca.crt -n $NS
+oc create secret generic ent-mongot-search-lb-0-client-cert --type=kubernetes.io/tls \
+  --from-file=tls.crt=envoy-client.crt --from-file=tls.key=envoy-client.key --from-file=ca.crt=envoy-client-ca.crt -n $NS
+oc create secret generic ent-mongot-search-lb-0-cert --type=kubernetes.io/tls \
+  --from-file=tls.crt=lb.crt --from-file=tls.key=lb.key --from-file=ca.crt=lb-ca.crt -n $NS
+
+# The password: not shown, and kept out of shell history. "IFS= read -r" keeps a backslash and the spaces at
+# either end, which are part of a password; printf '%s' adds no newline.
+printf 'mongotUser password: '; stty -echo; IFS= read -r SYNC_PW; stty echo; echo
+printf '%s' "$SYNC_PW" | oc create secret generic search-sync-source-password --from-file=password=/dev/stdin -n $NS
+unset SYNC_PW
+```
+
+Then delete the decrypted key files (runbook Step 7d).
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
+| The script says `no namespace` | `TargetNamespace` is not exported and `--target-namespace` was not given | Step 1; there is no default |
+| The script says `is not the mongot certificate for <namespace>` | The PEM was issued for another namespace, or it is another step's PEM | Give each step its own PEM; ask the signer for one issued for this namespace |
+| The script says `wrong passphrase` | The passphrase typed is not the key's | Run the step again |
+| The script says `this openssl ... cannot read the key` | The key's encryption is one this openssl build does not have | Set `OPENSSL` to another build, for example `OPENSSL=/opt/homebrew/bin/openssl` |
+| The script says `git would track` | The folder is inside a repository that does not ignore it | Add the line it prints to `.gitignore` |
 | Install stops at once; `preflight` log says `MISSING: secret …` | A prerequisite is absent, misnamed or lacks a key | Part 1; compare the names with the Overview table |
 | `preflight` log says `OperatorGroup … already exists` | The namespace already has an OperatorGroup | Set `operatorGroup.create=false` |
 | `exists and cannot be imported into the current release` | The object was applied by hand | Delete it first (see above) |
@@ -259,9 +313,30 @@ Monitoring (the ServiceMonitors and the alerts are on by default; both need user
 - The rule group `mongot.distribution` is loaded and healthy: three recording rules and four alerts, none firing.
 - The recorded share of search traffic is 0.33 for each mongot pod.
 
+### Part 1, by the script
+
+Oct 8, 2026, namespace `dvh-vectordb-qa` created for this on the same lab, OpenSSL 3.6.4 and bash 5.3.20. The PEMs were made for the test: a throwaway root and issuing CA, three leaf certificates for that namespace, each key encrypted (PKCS#8, AES-256) with a passphrase, in the company's layout.
+
+| Run | Result |
+| --- | --- |
+| Any command with no namespace named | Refused: `no namespace: export TargetNamespace=<namespace>, or pass --target-namespace <namespace>` |
+| `--check` before the folder exists | `1 problem(s)`: it says `mkdir -m 700 dvh-vectordb-qa`, and creates nothing |
+| `--check` with the three PEMs | Each `fits` its step; `0 problem(s)`; no passphrase asked |
+| The five steps with `--dry-run`, the passphrase and the password typed at the prompts | Five files, mode 600, in a folder of mode 700; nothing typed was shown; no object in the cluster |
+| The five steps with `--apply`, the namespace typed back for two of them | Five objects created with `oc create` |
+| A second `--apply` of one secret | Refused: already there; with `--replace`, replaced |
+| The objects in the cluster | The three secrets hold `ca.crt tls.crt tls.key`, type `kubernetes.io/tls`; each leaf is the PEM's; each key starts `-----BEGIN PRIVATE KEY-----` and is its leaf's; each leaf verifies against the secret's `ca.crt` and against the ConfigMap; the password is the 18 bytes given |
+| The key in an annotation | None: the objects carry only the script's own notes (when it was made, the leaf's subject, expiry and fingerprint). A probe secret made with `oc apply` did carry its value in `last-applied-configuration` |
+| The chart's own preflight script, run against the namespace | `all hand-made objects are present` |
+| `helm install --dry-run=server` with `namespace: dvh-vectordb-qa` | Accepted; no release was created |
+| `--clean` | Removed the four secret files; kept the ConfigMap file |
+
+mongot was not installed there: the lab node was at 90% memory.
+
+The script's own tests ([`test/prerequisites.sh`](../test/prerequisites.sh), 76 checks, no cluster) pass with OpenSSL 3.6.4 and with LibreSSL 3.3.6, under bash 5.3.20 and under bash 3.2.57, in all four pairings.
+
 Not tested:
 
-- **Part 1 on this date.** The commands are the runbook's Steps 4 and 5. They were not rerun, because recreating the lab's secrets would mean writing its private keys to disk; the existing objects were used.
 - A cluster where the operator is installed by someone else (`operator.install=false`).
 - Argo CD.
 - Anything in `dvh-gp6-rnd`.
