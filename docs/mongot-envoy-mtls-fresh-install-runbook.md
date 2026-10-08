@@ -6,6 +6,10 @@ Oct 5, 2026
 
 This runbook sets up mTLS for MongoDB Search in `dvh-gp6-rnd` from scratch, using company-signed certs. Use it when none of the secrets or the trust bundle exist yet. To swap certs on a running setup, use mongot & Envoy mTLS Cert Runbook instead.
 
+**Steps 1 to 5 are also a script.** [`scripts/generate-mongodbsearch-prerequisites.sh`](../scripts/generate-mongodbsearch-prerequisites.sh) does them for any namespace, with the same checks and no decrypted key left as a loose file: see [Prerequisites and Setup](prerequisite-and-setup-doc.md), Part 1. The steps below are the same thing by hand, and say what each check is for.
+
+**A certificate is issued for one namespace.** The mongot certificate's name is `mongot-search-0-svc.<namespace>.svc.cluster.local`. Every command below names `dvh-gp6-rnd`; for another namespace the PEMs must have been issued for it, and `NS` set to it.
+
 You create one ConfigMap, three TLS secrets and one password secret, all before mongot and Envoy are deployed:
 
 | Object | Type | Source PEM | Used by |
@@ -112,7 +116,7 @@ Paste this helper once (bash or zsh). It sorts each PEM's cert blocks into the l
 
 ```bash
 split_pem() {   # usage: split_pem <pem file> <short name>
-  awk -v p="$2" '/BEGIN CERTIFICATE/{n++;f=1} f{print > (p"-part-"n".pem")} /END CERTIFICATE/{f=0}' "$1"
+  awk -v p="$2" '/^-----BEGIN CERTIFICATE-----/{n++;f=1} f{print > (p"-part-"n".pem")} /^-----END CERTIFICATE-----/{f=0}' "$1"
   : > "$2-leaf.crt"; : > "$2-ca.crt"
   i=1
   while [ -f "$2-part-$i.pem" ]; do
@@ -186,8 +190,8 @@ for n in mongot envoy-client lb; do
   openssl x509 -in $n-leaf.crt -noout -text | grep -A1 -E 'Subject Alternative Name|Extended Key Usage'
 done
 
-# 3. The public cert covers the public FQDN (prints DNS:<fqdn>)
-openssl x509 -in lb-leaf.crt -noout -text | grep -o "DNS:$PUBLIC_FQDN"
+# 3. The public cert covers the public FQDN (prints DNS:<fqdn>; the whole name must match, not its beginning)
+openssl x509 -in lb-leaf.crt -noout -text | grep -A1 'Subject Alternative Name' | tr ',' '\n' | sed 's/^ *//' | grep -xF "DNS:$PUBLIC_FQDN"
 
 # 4. Each key matches its cert (prints OK three times)
 for n in mongot envoy-client lb; do
@@ -298,7 +302,7 @@ mongot signs in to the source mongod as `mongotUser`, using the password in `sea
 This prompts for the password without echoing it and keeps it out of shell history and the process list:
 
 ```bash
-printf 'mongotUser password: '; stty -echo; read SYNC_PW; stty echo; echo
+printf 'mongotUser password: '; stty -echo; IFS= read -r SYNC_PW; stty echo; echo
 printf '%s' "$SYNC_PW" | oc create secret generic $SYNC_PW_SECRET \
   --from-file=password=/dev/stdin -n $NS
 unset SYNC_PW
@@ -307,7 +311,7 @@ unset SYNC_PW
 oc get secret $SYNC_PW_SECRET -n $NS -o jsonpath='{.data.password}' | base64 -d | wc -c
 ```
 
-`printf '%s'` matters: `echo` or a here-string would add a trailing newline, which becomes part of the password and makes sign-in fail.
+`printf '%s'` matters: `echo` or a here-string would add a trailing newline, which becomes part of the password and makes sign-in fail. `IFS= read -r` matters too: a plain `read` drops the spaces at either end of what is typed and takes a backslash as an escape, and both can be part of a password.
 
 ## Step 6: Deploy mongot and Envoy, and set trust on mongod
 
@@ -542,9 +546,10 @@ Each mongod keeps one long-lived connection, and a connection stays on the Envoy
 **7d. Delete the decrypted keys**
 
 ```bash
-rm -P mongot.key envoy-client.key lb.key; rm -f *.pass        # macOS
-# shred -u mongot.key envoy-client.key lb.key *.pass          # Linux
+rm -f mongot.key envoy-client.key lb.key *.pass
 ```
+
+This unlinks the files; nothing overwrites them. On current macOS `rm -P` does nothing (its manual page says "This flag has no effect"), and on a solid-state or copy-on-write disk `shred` cannot overwrite a file in place either. Do this work in a directory on an encrypted disk.
 
 Keep the original PEM files somewhere access-controlled.
 
@@ -558,7 +563,8 @@ Keep the original PEM files somewhere access-controlled.
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| `bad decrypt` or `unable to load key` in Step 2 | Wrong passphrase | Rerun 2b with the correct passphrase |
+| `bad decrypt` in Step 2 | Wrong passphrase | Rerun 2b with the correct passphrase |
+| `unsupported`, or `unable to load key` with no `bad decrypt`, in Step 2 | The key's encryption is one this openssl build does not have (an old PBE cipher on OpenSSL 3, scrypt on LibreSSL) | Use the other build, for example `/opt/homebrew/bin/openssl` in place of the system's |
 | Leaf count is 0 or 2 in Step 3 | Leaf marked as CA, or the PEM layout differs | Run `openssl x509 -noout -subject -text` on each cert block and sort them by hand |
 | No `DNS:<fqdn>` in Step 3 check 3 | Public cert issued for a different name | Confirm the FQDN; reissue if wrong |
 | `unable to get local issuer certificate` | CA bundle missing an intermediate or the root | Get the full chain from the company signer |

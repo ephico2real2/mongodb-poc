@@ -348,8 +348,9 @@ No handshake or verify errors means mTLS is working. Confirm end to end by runni
 **7c. Delete the decrypted keys**
 
 ```bash
-rm -P mongot.key envoy.key; rm -f *.pass        # macOS
-# shred -u mongot.key envoy.key *.pass          # Linux
+rm -f mongot.key envoy.key *.pass
+# This unlinks the files; nothing overwrites them. On current macOS "rm -P" does nothing (its manual page says so),
+# and on a solid-state or copy-on-write disk shred cannot overwrite in place either: work on an encrypted disk.
 ```
 
 Keep the original PEM files and Step 4 backups somewhere access-controlled. Delete the backups once the change has been stable for an agreed period.
