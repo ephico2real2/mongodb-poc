@@ -49,6 +49,40 @@ jobs:
           "${BASH_UNDER_TEST}" test/prerequisites.sh
       - name: The tests left the tree as it was
         run: git status --porcelain && git diff --exit-code
+  # Publishes the chart when its version is new: the package of this commit, as the release
+  # mongodb-search-helm-<version>. A version that is already released is left alone. Only on main, and only after
+  # the other jobs passed. To release: change `version` in chart/mongodb-search-helm/Chart.yaml and merge.
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [chart, prerequisites, diagrams]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write             # to create the release; every other job reads only
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install helm 4.3.0
+        run: |
+          set -euo pipefail
+          curl -fsSLO https://get.helm.sh/helm-v4.3.0-linux-amd64.tar.gz
+          echo "86584a54def73570558f66f5111cc53dfed56689637ae32c1201205d494f54fb  helm-v4.3.0-linux-amd64.tar.gz" | sha256sum -c -
+          tar -xzf helm-v4.3.0-linux-amd64.tar.gz
+          sudo install linux-amd64/helm /usr/local/bin/helm
+          rm -rf linux-amd64 helm-v4.3.0-linux-amd64.tar.gz
+      - name: Publish the chart when its version is new
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version: *//p' chart/mongodb-search-helm/Chart.yaml)"
+          tag="mongodb-search-helm-${version}"
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            echo "${tag} is already released: nothing to do"
+            exit 0
+          fi
+          helm package chart/mongodb-search-helm
+          gh release create "${tag}" "mongodb-search-helm-${version}.tgz" --target "${GITHUB_SHA}" \
+            --title "mongodb-search-helm ${version}" --generate-notes
   # Every diagram page through diagram-kit's checks (a font that did not load, a label past its box, text under
   # 4.5:1 in either theme, a dashed arrow with no label, sideways scroll at 375 px). No PNG is written: the committed
   # ones are rendered and looked at by a person. The kit's tag is given twice; keep the two the same.

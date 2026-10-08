@@ -227,6 +227,8 @@ helm upgrade mongot chart/mongodb-search-helm -n $NS -f my-values.yaml --timeout
 
 **Upgrade the operator.** The Subscription is on Manual approval, so the operator never upgrades by itself. Set `operator.version` and run the same `helm upgrade`; the approver approves that version only. mongot follows the operator: with `search.version` empty it runs the operator's default mongot version, so it moves only when the operator does.
 
+**Release a new chart version.** Change `version` in `chart/mongodb-search-helm/Chart.yaml`, and the version in the install commands of this document and of the chart's README, in one pull request. When it is merged and the checks on `main` have passed, the `release` job of [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) packages the chart and publishes it as the release `mongodb-search-helm-<version>`, with notes made from the pull requests since the last one. A version that is already released is left alone, so a merge that does not change the version publishes nothing.
+
 **Uninstall.**
 
 ```bash
