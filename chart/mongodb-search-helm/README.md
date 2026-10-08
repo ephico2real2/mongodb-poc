@@ -55,14 +55,18 @@ bash $P --clean                                       # removes the key files on
 | Run with `bash` | helm stores a chart's files without the executable bit |
 | Run outside the chart | helm packages every file under this directory and keeps it in each release; the script refuses to write here, and `.helmignore` keeps keys and certificates out as a second guard |
 
-From the package alone: `helm pull <the package's URL> --untar`, then
-`bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help`.
+From the package alone, with no clone:
+
+```bash
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.3/mongodb-search-helm-0.3.3.tgz --untar
+bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
+```
 
 In short, once the prerequisites exist in the namespace, install the published package (no clone needed):
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.2/mongodb-search-helm-0.3.2.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.3/mongodb-search-helm-0.3.3.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
