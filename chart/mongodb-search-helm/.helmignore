@@ -1,0 +1,11 @@
+# What must never be packaged with the chart, even if it is left in its directory: keys, certificates, passphrase
+# files, and what generate-mongodbsearch-prerequisites.sh writes. (The script refuses to write inside a chart; this
+# is the second guard.)
+*.secret.yaml
+*.configmap.yaml
+*.pem
+*.key
+*.crt
+*.csr
+*.pass
+.DS_Store

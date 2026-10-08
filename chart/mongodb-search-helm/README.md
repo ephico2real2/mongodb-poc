@@ -23,8 +23,40 @@ Steps 1 to 5 of the runbook stay manual: the chart never creates a certificate, 
 
 ## Install
 
-The step-by-step procedure, from creating the five prerequisite objects by hand to installing, upgrading and
+The step-by-step procedure, from creating the five prerequisite objects to installing, upgrading and
 removing the chart, is in [`docs/prerequisite-and-setup-doc.md`](../../docs/prerequisite-and-setup-doc.md).
+
+### The prerequisites script
+
+`generate-mongodbsearch-prerequisites.sh`, in this directory and so in the package (0.3.3 and later), makes the five
+objects from the company's password-protected PEM files: the key's password removed, the certificate checked for
+this namespace and this use, one YAML file per object.
+
+```bash
+export TargetNamespace=dvh-gp6-rnd        # there is no default: without it, or --target-namespace, it refuses
+mkdir -m 700 $TargetNamespace             # the script never creates the folder; the files go there
+P=chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh      # from the repository's root
+
+bash $P --check --mongot <mongot PEM> --envoy <Envoy client PEM> --route <public hostname PEM>
+bash $P --trustca <mongot PEM>          --dry-run     # then the same with --apply
+bash $P --mongot  <mongot PEM>          --dry-run
+bash $P --envoy   <Envoy client PEM>    --dry-run
+bash $P --route   <public hostname PEM> --dry-run
+bash $P --dbcred  --username mongotUser --dry-run
+bash $P --check                                       # the five objects, and the lines for the values file
+bash $P --clean                                       # removes the key files once the objects are in the cluster
+```
+
+| | |
+| --- | --- |
+| `--dry-run` | Writes the file; contacts no cluster |
+| `--apply` | Writes the file, names the cluster and asks for the namespace to be typed (`--yes` skips that), then `oc create`. An object already there needs `--replace` |
+| Prompts | The key's passphrase for `--mongot`, `--envoy` and `--route`; the password, twice, for `--dbcred`. For automation: `--passin-file`, `--password-file` |
+| Run with `bash` | helm stores a chart's files without the executable bit |
+| Run outside the chart | helm packages every file under this directory and keeps it in each release; the script refuses to write here, and `.helmignore` keeps keys and certificates out as a second guard |
+
+From the package alone: `helm pull <the package's URL> --untar`, then
+`bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help`.
 
 In short, once the prerequisites exist in the namespace, install the published package (no clone needed):
 

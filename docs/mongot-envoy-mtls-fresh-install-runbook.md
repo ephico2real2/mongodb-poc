@@ -6,7 +6,7 @@ Oct 5, 2026
 
 This runbook sets up mTLS for MongoDB Search in `dvh-gp6-rnd` from scratch, using company-signed certs. Use it when none of the secrets or the trust bundle exist yet. To swap certs on a running setup, use mongot & Envoy mTLS Cert Runbook instead.
 
-**Steps 1 to 5 are also a script.** [`scripts/generate-mongodbsearch-prerequisites.sh`](../scripts/generate-mongodbsearch-prerequisites.sh) does them for any namespace, with the same checks and no decrypted key left as a loose file: see [Prerequisites and Setup](prerequisite-and-setup-doc.md), Part 1. The steps below are the same thing by hand, and say what each check is for.
+**Steps 1 to 5 are also a script.** [`generate-mongodbsearch-prerequisites.sh`](../chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh), a file of the chart, does them for any namespace, with the same checks and no decrypted key left as a loose file: see [Prerequisites and Setup](prerequisite-and-setup-doc.md), Part 1. The steps below are the same thing by hand, and say what each check is for.
 
 **A certificate is issued for one namespace.** The mongot certificate's name is `mongot-search-0-svc.<namespace>.svc.cluster.local`. Every command below names `dvh-gp6-rnd`; for another namespace the PEMs must have been issued for it, and `NS` set to it.
 

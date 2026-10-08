@@ -21,6 +21,21 @@ has()  { grep -qx "$2" <<<"$1"; }
 refused() { render "$@" >/dev/null 2>&1 && bad "the schema refuses $1" || ok "the schema refuses $1"; }
 
 helm lint "${CHART}" -f "${REMOTE}" >/dev/null 2>&1 && ok "helm lint (runbook values)" || bad "helm lint (runbook values)"
+
+# The package: the prerequisites script travels with the chart, and nothing that looks like a key does, even when
+# it was left in the chart's directory. (A copy is packaged: the chart's own directory is not written to.)
+pkg="$(mktemp -d)"
+cp -R "${CHART}" "${pkg}/chart"
+mkdir "${pkg}/chart/some-namespace"
+for f in some-namespace/ent-mongot-search-cert.secret.yaml some-namespace/ent-trust-bundle.configmap.yaml left.pem left.key left.crt key.pass; do echo x > "${pkg}/chart/${f}"; done
+helm package "${pkg}/chart" -d "${pkg}" >/dev/null 2>&1
+packed="$(tar -tzf "${pkg}"/mongodb-search-helm-*.tgz 2>/dev/null)"
+grep -qx 'mongodb-search-helm/generate-mongodbsearch-prerequisites.sh' <<<"${packed}" \
+  && ok "the package holds generate-mongodbsearch-prerequisites.sh" || bad "the package lacks the prerequisites script"
+grep -qE '\.secret\.yaml$|\.configmap\.yaml$|\.pem$|\.key$|\.pass$|left\.crt$' <<<"${packed}" \
+  && bad "the package holds a key, a certificate or a passphrase file: $(grep -E 'secret|configmap|left|pass' <<<"${packed}" | tr '\n' ' ')" \
+  || ok ".helmignore keeps keys, certificates and passphrase files out of the package"
+rm -rf "${pkg}"
 helm lint "${CHART}" -f "${LAB}" >/dev/null 2>&1 && ok "helm lint (lab values)" || bad "helm lint (lab values)"
 
 out="$(render)"; [[ $? -eq 0 ]] && ok "renders with the runbook values" || bad "renders with the runbook values: ${out:0:300}"

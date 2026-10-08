@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Tests for scripts/generate-mongodbsearch-prerequisites.sh, no cluster needed:  test/prerequisites.sh
+# Tests for chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh, no cluster needed:  test/prerequisites.sh
 # It makes a throwaway CA (a root and an intermediate) and password-protected PEMs in the company's layout
 # (encrypted key, CA bundle, leaf), all in a temporary directory, and a stand-in `oc` for --apply.
 # OPENSSL names the openssl to use (OpenSSL 3 or LibreSSL) and BASH_UNDER_TEST the bash that runs the script.
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
-SCRIPT="${PWD}/scripts/generate-mongodbsearch-prerequisites.sh"
+SCRIPT="${PWD}/chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh"
 export OPENSSL="${OPENSSL:-openssl}"
 SH="${BASH_UNDER_TEST:-bash}"
 NS=vectordb-test
@@ -175,6 +175,12 @@ rm "${here}/${NS}"; mkdir -m 755 "${here}/${NS}"
 refused "the folder is open to others" "chmod 700 ${NS}" -- --mongot "${pki}/mongot.pem" --dry-run "${P[@]}"
 chmod 700 "${here}/${NS}"
 ( unset TargetNamespace; cd "${here}" && run --target-namespace "${NS}" --check ) && ok "--target-namespace alone names the namespace" || bad "--target-namespace alone: $(said | head -3)"
+
+# helm packages every file under a chart's directory: nothing may be written inside one.
+mkdir -p "${work}/achart/sub/${NS}"; chmod 700 "${work}/achart/sub/${NS}"; : > "${work}/achart/Chart.yaml"
+( cd "${work}/achart/sub" && "${SH}" "${SCRIPT}" --mongot "${pki}/mongot.pem" --dry-run "${P[@]}" ) >"${work}/out" 2>"${work}/err" </dev/null
+[[ $? -ne 0 && -z "$(ls -A "${work}/achart/sub/${NS}")" ]] && grep -q "inside the Helm chart" "${work}/err" \
+  && ok "refused: a folder inside a Helm chart, where its files would be packaged" || bad "a folder inside a chart: $(said | head -2 | tr '\n' ' ')"
 
 # ------------------------------------------------------------------------------------------------ refusals
 refused "neither --dry-run nor --apply" "needs --dry-run or --apply" -- --mongot "${pki}/mongot.pem" "${P[@]}"
@@ -370,24 +376,42 @@ f="${here}/${NS}/ent-mongot-search-cert.secret.yaml"
 typed "pass phrase" "the key passphrase" -- --mongot "${pki}/mongot.pem" --dry-run \
   && [[ "$(field "${f}" tls.key | "${OPENSSL}" pkey -pubout 2>/dev/null)" == "$("${OPENSSL}" pkey -in "${pki}/mongot.key" -pubout 2>/dev/null)" ]] \
   && ! grep -qF "the key passphrase" "${work}/screen" \
-  && ok "the passphrase is asked for at the terminal, is not shown, and opens the key" || bad "the passphrase prompt: $(tr '\n' '|' < "${work}/screen" | cut -c1-300)"
+  && ok "the passphrase is asked for at the terminal, is not shown, and opens the key" || bad "the passphrase prompt: $(tr '\r\n' ' |' < "${work}/screen" | cut -c1-400)"
+# An openssl that is slow to hide the typing: it asks, waits a second, and only then stops the terminal's echo.
+# LibreSSL on a macOS runner did that in a moment's time, and the passphrase typed in that moment was on the screen.
+cat > "${work}/bin/slow-openssl" <<'EOF'
+#!/bin/bash
+if [[ "$1" == pkey && " $* " != *" -passin "* && " $* " != *" -pubout "* ]]; then
+  printf 'Enter pass phrase for %s:' "$3" > /dev/tty; sleep 1
+  was="$(stty -g < /dev/tty)"; stty -echo < /dev/tty; IFS= read -r typed < /dev/tty; stty "${was}" < /dev/tty; echo > /dev/tty
+  printf '%s\n' "${typed}" > "${SLOW_DIR}/typed"
+  exec "${REAL_OPENSSL}" "$@" -passin "file:${SLOW_DIR}/typed"
+fi
+exec "${REAL_OPENSSL}" "$@"
+EOF
+chmod +x "${work}/bin/slow-openssl"
 rm -f "${f}"
+( export REAL_OPENSSL="${OPENSSL}" SLOW_DIR="${work}" OPENSSL="${work}/bin/slow-openssl"
+  typed "pass phrase" "the key passphrase" -- --mongot "${pki}/mongot.pem" --dry-run ) \
+  && [[ -f "${f}" ]] && ! grep -qF "the key passphrase" "${work}/screen" \
+  && ok "a passphrase typed before openssl has hidden the typing is not shown either" || bad "typed ahead of openssl: $(tr '\r\n' ' |' < "${work}/screen" | cut -c1-400)"
+rm -f "${f}" "${work}/typed"
 typed "pass phrase" "not the passphrase" -- --mongot "${pki}/mongot.pem" --dry-run
 [[ $? -ne 0 && ! -f "${f}" ]] && grep -q "wrong passphrase" "${work}/screen" \
-  && ok "a wrong passphrase typed at the terminal is refused, and nothing is written" || bad "a wrong passphrase typed: $(tr '\n' '|' < "${work}/screen" | cut -c1-300)"
+  && ok "a wrong passphrase typed at the terminal is refused, and nothing is written" || bad "a wrong passphrase typed: $(tr '\r\n' ' |' < "${work}/screen" | cut -c1-400)"
 f="${here}/${NS}/search-sync-source-password.secret.yaml"
 typed "on the source mongod" 's3cr\et pass' "again" 's3cr\et pass' -- --dbcred --username syncUser --dry-run \
   && [[ "$(field "${f}" password)" == 's3cr\et pass' ]] && grep -q "password of syncUser on the source mongod" "${work}/screen" \
   && ! grep -qF 's3cr' "${work}/screen" \
-  && ok "the database password is asked for twice, is not shown, and is kept as typed" || bad "the password prompt: $(tr '\n' '|' < "${work}/screen" | cut -c1-300)"
+  && ok "the database password is asked for twice, is not shown, and is kept as typed" || bad "the password prompt: $(tr '\r\n' ' |' < "${work}/screen" | cut -c1-400)"
 rm -f "${f}"
 typed "on the source mongod" "one" "again" "another" -- --dbcred --dry-run
-[[ $? -ne 0 && ! -f "${f}" ]] && grep -q "did not match" "${work}/screen" && ok "two different passwords are refused" || bad "two different passwords: $(tr '\n' '|' < "${work}/screen" | cut -c1-300)"
+[[ $? -ne 0 && ! -f "${f}" ]] && grep -q "did not match" "${work}/screen" && ok "two different passwords are refused" || bad "two different passwords: $(tr '\r\n' ' |' < "${work}/screen" | cut -c1-400)"
 typed "pass phrase" "the key passphrase" "type the namespace" "some-other-namespace" -- --mongot "${pki}/mongot.pem" --apply
 [[ $? -ne 0 ]] && grep -q "nothing was sent" "${work}/screen" && ! grep -qE '^(create|replace)' "${OC_LOG}" \
-  && ok "--apply asks for the namespace to be typed, and sends nothing when it is another" || bad "the confirmation, wrong: $(tr '\n' '|' < "${work}/screen" | cut -c1-300)"
+  && ok "--apply asks for the namespace to be typed, and sends nothing when it is another" || bad "the confirmation, wrong: $(tr '\r\n' ' |' < "${work}/screen" | cut -c1-400)"
 typed "pass phrase" "the key passphrase" "type the namespace" "${NS}" -- --mongot "${pki}/mongot.pem" --apply \
-  && grep -q "^create -f " "${OC_LOG}" && ok "--apply goes on when the namespace is typed" || bad "the confirmation, right: $(tr '\n' '|' < "${work}/screen" | cut -c1-300)"
+  && grep -q "^create -f " "${OC_LOG}" && ok "--apply goes on when the namespace is typed" || bad "the confirmation, right: $(tr '\r\n' ' |' < "${work}/screen" | cut -c1-400)"
 
 # ------------------------------------------------------------------------------------------------ a public repository
 git -C "${here}" init -q . 2>/dev/null
