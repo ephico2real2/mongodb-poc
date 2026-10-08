@@ -23,6 +23,8 @@
 # Each company PEM holds an encrypted private key, the CA bundle and the leaf certificate. Works with OpenSSL 3 and
 # with the LibreSSL macOS ships (OPENSSL names another binary), under bash 3.2 and later.
 set +x                    # a caller's "bash -x" would print the key: tracing is off whatever was inherited
+set +a                    # and "allexport" would put it in the environment of every command run below
+unset KEY pw again        # so would a variable of the caller's that has one of these names and is exported
 set -euo pipefail
 ulimit -c 0 2>/dev/null || true
 umask 077
@@ -46,7 +48,7 @@ usage() { sed -n '2,/^set +x/p' "$0" | sed -e '$d' -e 's/^# \{0,1\}//'; }
 
 # ---------------------------------------------------------------------------------------------------- arguments
 ACTION="" MODE="" NS_FLAG="" PEM="" HOSTNAME_WANTED="" USERNAME=mongotUser PASSIN_FILE="" PASSWORD_FILE=""
-SOURCE_HOST="" REPLACE=no YES=no CHECK_MONGOT="" CHECK_ENVOY="" CHECK_ROUTE=""
+SOURCE_HOST="" REPLACE=no YES=no CHECK=no CHECK_MONGOT="" CHECK_ENVOY="" CHECK_ROUTE=""
 TRUST_PEMS=()
 action() { [[ -z "${ACTION}" || "${ACTION}" == "$1" ]] || die "one action a run: --${ACTION} and --$1 were both given"; ACTION="$1"; }
 value()  { [[ $# -ge 2 && -n "$2" ]] || die "$1 needs a value"; }
@@ -62,7 +64,7 @@ while [[ $# -gt 0 ]]; do
     --clean)   action clean ;;
     --dry-run|--apply) [[ -z "${MODE}" || "${MODE}" == "${1#--}" ]] || die "--dry-run and --apply were both given"; MODE="${1#--}" ;;
     --target-namespace) value "$@"; NS_FLAG="$2"; shift ;;
-    --target-namespace=*) NS_FLAG="${1#*=}" ;;
+    --target-namespace=*) value --target-namespace "${1#*=}"; NS_FLAG="${1#*=}" ;;
     --hostname)      value "$@"; HOSTNAME_WANTED="$2"; shift ;;
     --username)      value "$@"; USERNAME="$2"; shift ;;
     --passin-file)   value "$@"; PASSIN_FILE="$2"; shift ;;
@@ -84,6 +86,8 @@ if [[ "${CHECK:-no}" == yes ]]; then
   ACTION=check
 fi
 [[ -n "${ACTION}" ]] || { usage >&2; exit 2; }
+# Both go into an annotation of the file, on one line: a newline in either would give YAML that oc reads otherwise.
+[[ "${USERNAME}${HOSTNAME_WANTED}" != *[[:cntrl:]]* ]] || die "--username and --hostname take no control character (a newline is one)"
 
 # ---------------------------------------------------------------------------------------------------- namespace
 # Hard rule: the namespace is named by the caller, here or in TargetNamespace. Nothing is assumed, and the project
@@ -126,13 +130,18 @@ tracked_problem() {  # $1 = file name in the folder
 }
 need_folder() { local p; p="$(folder_problem)"; [[ -z "${p}" ]] || die "${p}"; }
 
-WORK="" TTY_STATE=""
+WORK="" TTY_STATE="" PARTIAL=""
 cleanup() {
+  trap '' HUP INT QUIT TERM         # the tidying is not stopped half way (bash hangs up its own group a second time)
   [[ -z "${TTY_STATE}" ]] || stty "${TTY_STATE}" < /dev/tty 2>/dev/null || true       # stopped while asking a secret
   [[ -z "${WORK}" ]] || rm -rf "${WORK}"
-  rm -f "${DIR}"/.*.partial 2>/dev/null || true
+  [[ -z "${PARTIAL}" ]] || rm -f "${PARTIAL}"                 # this run's own, in a folder that passed need_folder
 }
 trap cleanup EXIT
+# Without these two the EXIT trap is not run: bash 5 skips it when a hangup arrives inside $(...), as when the
+# terminal is closed at the passphrase prompt, and bash 3.2 dies of SIGQUIT (Ctrl-\) where bash 5 ignores it.
+trap 'exit 129' HUP
+trap 'exit 131' QUIT
 workdir() { WORK="$(mktemp -d "${TMPDIR:-/tmp}/mdbs-prereq.XXXXXX")"; }
 
 # ---------------------------------------------------------------------------------------------------- certificates
@@ -171,7 +180,16 @@ print_of()   { "${OPENSSL}" x509 -in "$1" -noout -fingerprint -sha256 | sed 's/^
 # whole text: an issuer's alternative names and name constraints print "DNS:" too.
 extension() { "${OPENSSL}" x509 -in "$1" -noout -text | awk -v h="$2" 'index($0, h) {getline; sub(/^ +/, ""); print; exit}'; }
 is_ca()     { [[ "$(extension "$1" 'X509v3 Basic Constraints')" == CA:TRUE* || "$(subject_of "$1")" == "$(issuer_of "$1")" ]]; }
-dns_names() { extension "$1" 'X509v3 Subject Alternative Name' | tr ',' '\n' | sed -n 's/^ *DNS://p' | tr '[:upper:]' '[:lower:]'; }
+# The text reads "URI:http://x/a, DNS:y" the same whether y is a name of the certificate or the tail of its URI. The
+# DER does not: the names read from the text count only when the extension holds as many dNSName entries ([2]).
+dns_names() {
+  local found at
+  found="$(extension "$1" 'X509v3 Subject Alternative Name' | tr ',' '\n' | sed -n 's/^ *DNS://p' | tr '[:upper:]' '[:lower:]')"
+  [[ -n "${found}" ]] || return 0
+  at="$("${OPENSSL}" asn1parse -in "$1" | awk '/:X509v3 Subject Alternative Name$/ {f = 1; next} f == 1 && /OCTET STRING/ {print $1 + 0; f = 2}')"
+  [[ "$("${OPENSSL}" asn1parse -in "$1" -strparse "${at:-0}" 2>/dev/null | grep -c 'd=1 .*cont \[ 2 \]')" == "$(grep -c . <<<"${found}")" ]] || return 0
+  say "${found}"
+}
 # "SSL client : Yes" in both builds. A certificate with no extended key usage may be used for both, and says so here.
 may()       { "${OPENSSL}" x509 -in "$1" -noout -purpose | grep -q "^SSL $2 : Yes"; }
 # Does the certificate carry this name? A wildcard covers one label, as TLS has it.
@@ -184,37 +202,53 @@ names() {     # $1 = certificate, $2 = name
   return 1
 }
 
-# The leaf, the chain in issuer order, and the checks that need no key. Sets LEAF, and writes ${WORK}/ca.crt and
-# ${WORK}/tls.crt (leaf, then chain).
+# From a certificate upward: each certificate's issuer is the next one's subject. A name does not say which of two
+# CAs signed (a renewed CA keeps its name, a cross-signed one has two issuers), so a path counts only when the leaf
+# verifies against it and nothing else. Sets PATH_UP to the first such path and returns 0, or returns 1.
+climb() {  # $1 = the certificate to go on from, then the path so far
+  local at="$1" issuer f on; shift
+  issuer="$(issuer_of "${at}")"
+  if [[ $# -gt 0 && "$(subject_of "${at}")" == "${issuer}" ]]; then          # a root: the path ends here
+    cat "$@" > "${WORK}/path.crt"
+    "${OPENSSL}" verify -CAfile "${WORK}/path.crt" "${LEAF}" >/dev/null 2>&1 || return 1
+    PATH_UP=("$@"); return 0
+  fi
+  for f in "${REST[@]}"; do
+    for on in "$@"; do [[ "${on}" != "${f}" ]] || continue 2; done
+    [[ "$(subject_of "${f}")" == "${issuer}" ]] || continue
+    if climb "${f}" "$@" "${f}"; then return 0; fi
+  done
+  return 1
+}
+# The leaf, the chain in issuer order, and the checks that need no key. Sets LEAF, and writes ${WORK}/ca.crt,
+# ${WORK}/tls.crt (leaf, then chain) and ${WORK}/path.crt (what the leaf is verified against).
 sort_chain() {  # $1 = the leaf's file
   LEAF="$1"
-  local f rest=() chain=() at issuer
+  local f print seen chain=()
+  REST=() PATH_UP=()
+  seen=" $(print_of "${LEAF}") "
   for f in "${CERT_FILES[@]}"; do
     [[ "${f}" == "${LEAF}" ]] && continue
+    print="$(print_of "${f}")"
+    case "${seen}" in *" ${print} "*) continue ;; esac                       # the same certificate again: once
+    seen="${seen}${print} "
     is_ca "${f}" || die "$(subject_of "${f}") is neither the certificate of this key nor a CA: one leaf to a PEM"
-    rest+=("${f}")
+    REST+=("${f}")
   done
-  [[ ${#rest[@]} -gt 0 ]] || die "the PEM holds no CA certificate: the leaf's chain is needed"
-  # From the leaf upward: each certificate's issuer is the next one's subject.
-  at="${LEAF}"
-  while :; do
-    issuer="$(issuer_of "${at}")"; at=""
-    for f in "${rest[@]}"; do
-      case " ${chain[*]+"${chain[*]}"} " in *" ${f} "*) continue ;; esac
-      if [[ "$(subject_of "${f}")" == "${issuer}" ]]; then at="${f}"; chain+=("${f}"); break; fi
-    done
-    [[ -n "${at}" ]] || break
-    [[ "$(subject_of "${at}")" == "$(issuer_of "${at}")" ]] && break          # a root: the chain ends here
-  done
-  for f in "${rest[@]}"; do                                                  # a CA outside the chain is kept, last
+  [[ ${#REST[@]} -gt 0 ]] || die "the PEM holds no CA certificate: the leaf's chain is needed"
+  climb "${LEAF}" || true
+  chain=(${PATH_UP[@]+"${PATH_UP[@]}"})
+  for f in "${REST[@]}"; do                                                  # a CA outside the chain is kept, last
     case " ${chain[*]+"${chain[*]}"} " in *" ${f} "*) ;; *) chain+=("${f}") ;; esac
   done
   cat "${chain[@]}" > "${WORK}/ca.crt"
   cat "${LEAF}" "${WORK}/ca.crt" > "${WORK}/tls.crt"
+  # No path: every CA is offered, and verify_chain says what openssl makes of it.
+  [[ ${#PATH_UP[@]} -gt 0 ]] || cp "${WORK}/ca.crt" "${WORK}/path.crt"
 }
 verify_chain() {
   local said
-  if ! said="$("${OPENSSL}" verify -CAfile "${WORK}/ca.crt" "${LEAF}" 2>&1)"; then
+  if ! said="$("${OPENSSL}" verify -CAfile "${WORK}/path.crt" "${LEAF}" 2>&1)"; then
     die "the leaf does not verify against the CA certificates in its PEM: $(grep -iE 'error|unable' <<<"${said}" | head -1 | sed 's/^ *//'). Issuer wanted: $(issuer_of "${LEAF}")"
   fi
 }
@@ -233,12 +267,14 @@ fits_role() {  # $1 = role, $2 = leaf; prints the problem, or nothing
       # It needs no name (TLS.md, 6.1). One it does carry must not say it belongs somewhere else.
       other="$(dns_names "${leaf}" | grep -E '\.svc(\.cluster\.local)?$' | grep -vF "${SERVICE_SUFFIX}" | grep -vxE "[^.]+\.${NS}\.svc" | head -1 || true)"
       [[ -z "${other}" ]] || { say "it names ${other}, a service of another namespace"; return; }
-      if names "${leaf}" "${SEARCH}-search-0-svc${SERVICE_SUFFIX}" && ! names "${leaf}" "${SEARCH}-search-0-proxy-svc${SERVICE_SUFFIX}"; then
-        say "it names mongot's own service and not Envoy's: this is the mongot PEM"
+      # mongot's own certificate names mongot's service by its full name, and may name Envoy's as well (TLS.md, 6.1).
+      if [[ -n "$(dns_names "${leaf}" | grep -xF "${SEARCH}-search-0-svc${SERVICE_SUFFIX}" || true)" ]] \
+         || { names "${leaf}" "${SEARCH}-search-0-svc${SERVICE_SUFFIX}" && ! names "${leaf}" "${SEARCH}-search-0-proxy-svc${SERVICE_SUFFIX}"; }; then
+        say "it names mongot's own service: this is the mongot PEM"
       fi ;;
     route)
       may "${leaf}" server || { say "the public certificate must allow server authentication"; return; }
-      public_name "${leaf}" >/dev/null || say "$(public_name "${leaf}" 2>&1 >/dev/null)" ;;
+      public_name "${leaf}" >/dev/null 2>&1 || say "$(public_name "${leaf}" 2>&1 >/dev/null)" ;;
   esac
 }
 # The hostname the public certificate serves: --hostname when given, else its one name that is a real hostname.
@@ -268,8 +304,9 @@ open_key() {  # $1 = the PEM as the caller named it
     [[ -n "${PASSIN_FILE}" ]] || say "the key in $1 is encrypted: its passphrase is asked for now" >&2
     if [[ -n "${PASSIN_FILE}" ]]; then
       [[ -f "${PASSIN_FILE}" ]] || die "no passphrase file ${PASSIN_FILE}"
-      LC_ALL=C tr -d '\r' < "${PASSIN_FILE}" > "${WORK}/passin"                # a CR at its end would be "bad decrypt"
-      passin=(-passin "file:${WORK}/passin")
+      [[ -r "${PASSIN_FILE}" ]] || die "the passphrase file ${PASSIN_FILE} cannot be read"
+      [[ -s "${PASSIN_FILE}" ]] || die "the passphrase file ${PASSIN_FILE} is empty"
+      passin=(-passin stdin)        # through a pipe, below: no copy of the passphrase on disk, no terminal looked for
     elif ! { : < /dev/tty; } 2>/dev/null; then
       die "the key is encrypted and there is no terminal to ask its passphrase on: use --passin-file <file>"
     fi
@@ -279,15 +316,17 @@ open_key() {  # $1 = the PEM as the caller named it
   # is told here, before openssl starts, and told back after.
   local opened=yes
   if [[ "${KEY_ENCRYPTED}" == yes && -z "${PASSIN_FILE}" ]]; then TTY_STATE="$(stty -g < /dev/tty)"; stty -echo < /dev/tty; fi
-  KEY="$("${OPENSSL}" pkey -in "${IN}" ${passin[@]+"${passin[@]}"} 2>"${WORK}/key.err")" || opened=no
+  if [[ ${#passin[@]} -gt 0 ]]; then                    # tr: a CR at the end of the line would be "bad decrypt"
+    KEY="$(LC_ALL=C tr -d '\r' < "${PASSIN_FILE}" | "${OPENSSL}" pkey -in "${IN}" "${passin[@]}" 2>"${WORK}/key.err")" || opened=no
+  else
+    KEY="$("${OPENSSL}" pkey -in "${IN}" 2>"${WORK}/key.err")" || opened=no
+  fi
   if [[ -n "${TTY_STATE}" ]]; then stty "${TTY_STATE}" < /dev/tty; TTY_STATE=""; fi
   if [[ "${opened}" == no ]]; then
-    rm -f "${WORK}/passin"
     if grep -qiE 'bad decrypt|bad password|maybe wrong password|mac verify' "${WORK}/key.err"; then die "wrong passphrase for the key in $1"; fi
     said="$(grep -iE 'error|unsupported|unable' "${WORK}/key.err" | head -1 || true)"
     die "this openssl ($("${OPENSSL}" version)) cannot read the key in $1: ${said:-no reason given}. Another build may: set OPENSSL"
   fi
-  rm -f "${WORK}/passin"
   [[ "${KEY}" == "-----BEGIN PRIVATE KEY-----"* ]] || die "the key did not come out as an unencrypted PKCS#8 key"
 }
 key_public() { printf '%s\n' "${KEY}" | "${OPENSSL}" pkey -pubout 2>/dev/null; }
@@ -306,14 +345,22 @@ head_of() {  # $1 = kind, $2 = name, then annotation pairs
 }
 # Written beside its place under a private umask and moved there: the file is never half there and never readable
 # by another user, not even for a moment.
+# The temporary name ends like the file's own, so a rule that ignores "*.secret.yaml" ignores it too.
+partial_of() { say "${DIR}/.partial.$1"; }
 put() {  # $1 = file name; the content on stdin
-  local problem; problem="$(tracked_problem "$1")"; [[ -z "${problem}" ]] || die "${problem}"
-  cat > "${DIR}/.$1.partial"
-  mv -f "${DIR}/.$1.partial" "${DIR}/$1"
+  local problem at="${DIR}/$1" part; part="$(partial_of "$1")"
+  problem="$(tracked_problem "$1")"; [[ -n "${problem}" ]] || problem="$(tracked_problem ".partial.$1")"
+  [[ -z "${problem}" ]] || die "${problem}"
+  # A directory, or a link to one, at the file's name would have mv put the key inside it; a link at the temporary
+  # name would have the key written wherever it points.
+  [[ ! -d "${at}" ]] || die "${NS}/$1 is a directory, or a link to one: remove it"
+  rm -f "${part}"
+  ( set -o noclobber; cat > "${part}" )
+  mv -f "${part}" "${at}"
 }
 note_in() { sed -n "s|^    ${NOTE}/$2: \"\\(.*\\)\"\$|\\1|p" "$1" | head -1; }      # an annotation of a file made here
 field_in() {  # $1 = file, $2 = a key of data: the value, decoded
-  sed -n "s/^  $(sed 's/\./\\./g' <<<"$2"): //p" "$1" | head -1 | "${OPENSSL}" base64 -d -A
+  sed -n "s/^  $(sed 's/\./\\./g' <<<"$2"): //p" "$1" | head -1 | tr -d '"' | "${OPENSSL}" base64 -d -A
 }
 
 # ---------------------------------------------------------------------------------------------------- the cluster
@@ -332,7 +379,7 @@ to_cluster() {  # $1 = kind (secret|configmap), $2 = name, $3 = file
   fi
   # create and replace, never apply: apply copies the whole object, the key with it, into an annotation.
   if oc get "$1" "$2" -n "${NS}" >/dev/null 2>&1; then
-    [[ "${REPLACE}" == yes ]] || die "$1 $2 is already in ${NS}; --replace replaces it (and restarts nothing by itself)"
+    [[ "${REPLACE}" == yes ]] || die "$1 $2 is already in ${NS}; --replace replaces it (this script restarts no pod)"
     oc replace -f "$3" -n "${NS}"
   else
     oc create -f "$3" -n "${NS}"
@@ -344,7 +391,7 @@ to_cluster() {  # $1 = kind (secret|configmap), $2 = name, $3 = file
 tls_secret() {  # $1 = role, $2 = secret name
   local role="$1" name="$2" file="$2.secret.yaml" f pub leaf="" problem other host=""
   [[ -n "${MODE}" ]] || die "--${role} needs --dry-run or --apply"
-  need_folder; workdir
+  need_folder; workdir; PARTIAL="$(partial_of "${file}")"
   read_pem "${PEM}"
   [[ ${#CERT_FILES[@]} -gt 0 ]] || die "${PEM} holds no certificate"
   open_key "${PEM}"
@@ -370,9 +417,10 @@ tls_secret() {  # $1 = role, $2 = secret name
   { head_of Secret "${name}" leaf-subject "$(subject_of "${LEAF}")" leaf-not-after "$(expiry_of "${LEAF}")" \
       leaf-sha256 "$(print_of "${LEAF}")" ${host:+public-hostname "${host}"}
     say "type: kubernetes.io/tls"; say "data:"
-    say "  tls.crt: $(b64 < "${WORK}/tls.crt")"
-    say "  tls.key: $(printf '%s\n' "${KEY}" | b64)"
-    say "  ca.crt: $(b64 < "${WORK}/ca.crt")"
+    # Quoted: base64 can spell a number ("4420") or "Null", which YAML would not read as text.
+    say "  tls.crt: \"$(b64 < "${WORK}/tls.crt")\""
+    say "  tls.key: \"$(printf '%s\n' "${KEY}" | b64)\""
+    say "  ca.crt: \"$(b64 < "${WORK}/ca.crt")\""
   } | put "${file}"
   # Read back from the file: the key in it has no password and is the leaf's.
   if [[ "$(field_in "${DIR}/${file}" tls.key | "${OPENSSL}" pkey -pubout 2>/dev/null)" != "${pub}" ]]; then
@@ -394,7 +442,7 @@ tls_secret() {  # $1 = role, $2 = secret name
 trust_bundle() {
   local file="${TRUST_CM}.configmap.yaml" pem f print seen="" count=0 other said
   [[ -n "${MODE}" ]] || die "--trustca needs --dry-run or --apply"
-  need_folder; workdir; : > "${WORK}/bundle.crt"
+  need_folder; workdir; PARTIAL="$(partial_of "${file}")"; : > "${WORK}/bundle.crt"
   for pem in "${TRUST_PEMS[@]}"; do
     read_pem "${pem}"                                        # the key in it, if any, is not opened
     for f in ${CERT_FILES[@]+"${CERT_FILES[@]}"}; do
@@ -430,9 +478,12 @@ trust_bundle() {
 db_password() {
   local file="${PASSWORD_SECRET}.secret.yaml" pw again
   [[ -n "${MODE}" ]] || die "--dbcred needs --dry-run or --apply"
-  need_folder
+  need_folder; PARTIAL="$(partial_of "${file}")"
   if [[ -n "${PASSWORD_FILE}" ]]; then
     [[ -f "${PASSWORD_FILE}" ]] || die "no password file ${PASSWORD_FILE}"
+    # The shell drops a NUL byte without a word: a file saved as UTF-16 would give another password.
+    [[ "$(LC_ALL=C tr -d '\0' < "${PASSWORD_FILE}" | wc -c)" -eq "$(wc -c < "${PASSWORD_FILE}")" ]] \
+      || die "${PASSWORD_FILE} holds a NUL byte (is it UTF-16?): save the password as plain text"
     pw="$(LC_ALL=C tr -d '\r' < "${PASSWORD_FILE}")"            # the file's content, without the newline that ends it
   else
     { : < /dev/tty; } 2>/dev/null || die "no terminal to ask the password on: use --password-file <file>"
@@ -448,7 +499,7 @@ db_password() {
   [[ -n "${pw}" ]] || die "an empty password; nothing was written"
   # printf '%s': no newline is added, which would become part of the password and fail the sign-in.
   { head_of Secret "${PASSWORD_SECRET}" username "${USERNAME}"
-    say "type: Opaque"; say "data:"; say "  password: $(printf '%s' "${pw}" | b64)"
+    say "type: Opaque"; say "data:"; say "  password: \"$(printf '%s' "${pw}" | b64)\""
   } | put "${file}"
   say "${PASSWORD_SECRET} (Secret, key password) for ${NS}: $(printf '%s' "${pw}" | wc -c | tr -d ' ') bytes, for ${USERNAME}"
   pw="" again=""
@@ -529,16 +580,19 @@ check() {
 }
 
 clean() {
-  local f name kept=0
+  local f name kept=0 found=no
   need_folder
   logged_in || die "--clean removes a file only when its object is in the cluster: log in with oc"
+  rm -f "${DIR}"/.partial.*.yaml 2>/dev/null || true          # what a run that was killed left half written
   for f in "${DIR}"/*.secret.yaml; do
-    [[ -f "${f}" ]] || { say "no secret file in ${NS}/"; return 0; }
+    [[ -f "${f}" ]] || continue
+    found=yes
     name="$(basename "${f}" .secret.yaml)"
     if oc get secret "${name}" -n "${NS}" >/dev/null 2>&1; then
       rm -f "${f}"; say "removed ${NS}/$(basename "${f}") (the secret ${name} is in ${NS})"
     else kept=$((kept + 1)); say "kept ${NS}/$(basename "${f}"): there is no secret ${name} in ${NS} yet"; fi
   done
+  [[ "${found}" == yes ]] || { say "no secret file in ${NS}/"; return 0; }
   # rm -P does nothing on current macOS (its manual says so) and shred cannot reach a copy-on-write file system.
   say "The files are unlinked, not overwritten: on this kind of disk nothing can overwrite them in place."
   [[ ${kept} -eq 0 ]]
