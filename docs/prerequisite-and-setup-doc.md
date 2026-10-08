@@ -6,7 +6,7 @@ Oct 6, 2026; Part 1 by script since Oct 8, 2026
 
 Two parts, in this order:
 
-1. **Prerequisites.** Five objects that hold certificates, a password and the CA. A script makes them from the company's PEM files: [`scripts/generate-mongodbsearch-prerequisites.sh`](../scripts/generate-mongodbsearch-prerequisites.sh).
+1. **Prerequisites.** Five objects that hold certificates, a password and the CA. A script makes them from the company's PEM files: [`generate-mongodbsearch-prerequisites.sh`](../chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh), which is packaged with the chart.
 2. **The chart.** `helm install` of [`chart/mongodb-search-helm`](../chart/mongodb-search-helm/) installs the operator, the `MongoDBSearch` resource and the Route, using those five objects as they are.
 
 The chart never creates, changes or deletes the five objects. Before it installs anything, it checks that they exist and stops if one is missing.
@@ -46,10 +46,17 @@ The namespace is never assumed. Name it once for the session, or pass `--target-
 export TargetNamespace=dvh-gp6-rnd
 NS=$TargetNamespace                       # Part 2 uses $NS
 
+# The script is a file of the chart. From a checkout of this repository, at its root:
+PREREQ=chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
+# From the published chart, with no clone (chart 0.3.3 and later):
+#   helm pull <the package's URL> --untar && PREREQ=mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
+
 mkdir -m 700 $TargetNamespace             # the script never creates it
-scripts/generate-mongodbsearch-prerequisites.sh --check \
+bash $PREREQ --check \
   --mongot <mongot PEM> --envoy <Envoy client PEM> --route <public hostname PEM>
 ```
+
+Run it with `bash`: helm stores a chart's files without the executable bit. Run it from a directory outside the chart: helm packages every file under a chart's directory and keeps it in each release, so the script refuses to write there.
 
 The files the script writes go into that folder, in the directory you run it from. `--check` asks for no passphrase. It reports the folder, the tools, the cluster you are logged in to, which of the five objects are there, and for each PEM its subject, names, expiry and whether it fits its step. It ends with `0 problem(s)` when you can go on.
 
@@ -60,8 +67,8 @@ The script refuses to write a file that git would track: this repository ignores
 From the CA certificates in the mongot PEM. No passphrase is asked: a CA certificate is not encrypted.
 
 ```bash
-scripts/generate-mongodbsearch-prerequisites.sh --trustca <mongot PEM> --dry-run
-scripts/generate-mongodbsearch-prerequisites.sh --trustca <mongot PEM> --apply
+bash $PREREQ --trustca <mongot PEM> --dry-run
+bash $PREREQ --trustca <mongot PEM> --apply
 ```
 
 If the public hostname certificate, or the source mongod, has another CA, add its PEM with a second `--trustca`. `--check-source <host:port>` also proves that the source mongod presents a certificate the bundle trusts (runbook Step 4).
@@ -72,17 +79,17 @@ Each command asks for the passphrase of the key in its PEM.
 
 ```bash
 # mongot: server and client auth
-scripts/generate-mongodbsearch-prerequisites.sh --mongot <mongot PEM> --dry-run
-scripts/generate-mongodbsearch-prerequisites.sh --mongot <mongot PEM> --apply
+bash $PREREQ --mongot <mongot PEM> --dry-run
+bash $PREREQ --mongot <mongot PEM> --apply
 
 # Envoy: the client cert it presents to mongot
-scripts/generate-mongodbsearch-prerequisites.sh --envoy <Envoy client PEM> --dry-run
-scripts/generate-mongodbsearch-prerequisites.sh --envoy <Envoy client PEM> --apply
+bash $PREREQ --envoy <Envoy client PEM> --dry-run
+bash $PREREQ --envoy <Envoy client PEM> --apply
 
 # Envoy: the server cert for the public hostname. It is mounted in the Envoy pods; the Route is passthrough and
 # holds no certificate, and the chart creates it.
-scripts/generate-mongodbsearch-prerequisites.sh --route <public hostname PEM> --dry-run
-scripts/generate-mongodbsearch-prerequisites.sh --route <public hostname PEM> --apply
+bash $PREREQ --route <public hostname PEM> --dry-run
+bash $PREREQ --route <public hostname PEM> --apply
 ```
 
 `--route` prints the hostname for the values file (`loadBalancer.externalHostname`). When the certificate names several, say which with `--hostname <fqdn>`.
@@ -99,14 +106,14 @@ What `--apply` does, each time:
 It asks for the password twice, without showing it. The secret holds the key `password` only; the user name goes in the values file as `source.username`.
 
 ```bash
-scripts/generate-mongodbsearch-prerequisites.sh --dbcred --username mongotUser --dry-run
-scripts/generate-mongodbsearch-prerequisites.sh --dbcred --username mongotUser --apply
+bash $PREREQ --dbcred --username mongotUser --dry-run
+bash $PREREQ --dbcred --username mongotUser --apply
 ```
 
 ### Step 5: Check all five, then remove the key files
 
 ```bash
-scripts/generate-mongodbsearch-prerequisites.sh --check
+bash $PREREQ --check
 ```
 
 Expected under `cluster`: `tls.crt`, `tls.key` and `ca.crt` on the three TLS secrets, `password` on the password secret, `ca.crt` on the ConfigMap. The chart makes the same check before it installs. `--check` also prints the lines for the values file of Step 6.
@@ -114,7 +121,7 @@ Expected under `cluster`: `tls.crt`, `tls.key` and `ca.crt` on the three TLS sec
 The `*.secret.yaml` files hold keys with no password. Once the objects are in the cluster, remove them:
 
 ```bash
-scripts/generate-mongodbsearch-prerequisites.sh --clean
+bash $PREREQ --clean
 ```
 
 It removes a file only when its secret is in the cluster. The files are unlinked, not overwritten: on current macOS `rm -P` does nothing, and no tool can overwrite a file in place on a solid-state or copy-on-write disk. Keep the folder on an encrypted disk.
@@ -272,6 +279,7 @@ Then delete the decrypted key files (runbook Step 7d).
 | The script says `wrong passphrase` | The passphrase typed is not the key's | Run the step again |
 | The script says `this openssl ... cannot read the key` | The key's encryption is one this openssl build does not have | Set `OPENSSL` to another build, for example `OPENSSL=/opt/homebrew/bin/openssl` |
 | The script says `git would track` | The folder is inside a repository that does not ignore it | Add the line it prints to `.gitignore` |
+| The script says `inside the Helm chart` | It was run from the chart's directory, or below it | Run it from another directory, for example the repository's root |
 | Install stops at once; `preflight` log says `MISSING: secret …` | A prerequisite is absent, misnamed or lacks a key | Part 1; compare the names with the Overview table |
 | `preflight` log says `OperatorGroup … already exists` | The namespace already has an OperatorGroup | Set `operatorGroup.create=false` |
 | `exists and cannot be imported into the current release` | The object was applied by hand | Delete it first (see above) |
@@ -333,7 +341,7 @@ Oct 8, 2026, namespace `dvh-vectordb-qa` created for this on the same lab, OpenS
 
 mongot was not installed there: the lab node was at 90% memory.
 
-The script's own tests ([`test/prerequisites.sh`](../test/prerequisites.sh), 76 checks, no cluster) pass with OpenSSL 3.6.4 and with LibreSSL 3.3.6, under bash 5.3.20 and under bash 3.2.57, in all four pairings.
+The script's own tests ([`test/prerequisites.sh`](../test/prerequisites.sh), 77 checks, no cluster) pass with OpenSSL 3.6.4 and with LibreSSL 3.3.6, under bash 5.3.20 and under bash 3.2.57, in all four pairings.
 
 Not tested:
 

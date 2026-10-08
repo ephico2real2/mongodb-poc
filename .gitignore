@@ -15,7 +15,7 @@ __pycache__/
 DIAGRAMS.md
 # the pinned diagram-kit install (scripts/perses-dashboard.sh, docs/diagrams/README.md)
 .venv/
-# What scripts/generate-mongodbsearch-prerequisites.sh writes (keys without a password) and passphrase files.
+# What chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh writes (keys without a password) and passphrase files.
 *.secret.yaml
 *.configmap.yaml
 *.pass

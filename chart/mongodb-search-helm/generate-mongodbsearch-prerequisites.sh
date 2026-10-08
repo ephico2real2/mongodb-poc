@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
-# Turns the company's password-protected PEM files into the five objects chart/mongodb-search-helm needs before it
-# installs (docs/prerequisite-and-setup-doc.md, Part 1), as YAML files in ./<namespace>/ and, with --apply, in the
-# cluster. It automates Steps 1 to 5 of docs/mongot-envoy-mtls-fresh-install-runbook.md.
+# Turns the company's password-protected PEM files into the five objects this chart needs before it installs (the
+# chart's README, "The prerequisites script"), as YAML files in ./<namespace>/ and, with --apply, in the cluster.
+# It is packaged with the chart. helm stores a chart's files without the executable bit: run it with bash, from a
+# directory OUTSIDE the chart (helm packages every file of a chart's directory).
 #
 #   export TargetNamespace=dvh-vectordb-qa        # or --target-namespace <ns> on each command; there is no default
 #   mkdir -m 700 dvh-vectordb-qa                  # this script never creates the folder
+#   P=<the chart>/generate-mongodbsearch-prerequisites.sh
 #
-#   generate-mongodbsearch-prerequisites.sh --check [--mongot <pem>] [--envoy <pem>] [--route <pem>]
-#   generate-mongodbsearch-prerequisites.sh --trustca <pem> [--trustca <pem>...] [--check-source <host:port>]  --dry-run | --apply
-#   generate-mongodbsearch-prerequisites.sh --mongot  <pem>                       --dry-run | --apply
-#   generate-mongodbsearch-prerequisites.sh --envoy   <pem>                       --dry-run | --apply
-#   generate-mongodbsearch-prerequisites.sh --route   <pem> [--hostname <fqdn>]   --dry-run | --apply
-#   generate-mongodbsearch-prerequisites.sh --dbcred  [--username mongotUser]     --dry-run | --apply
-#   generate-mongodbsearch-prerequisites.sh --clean
+#   bash $P --check [--mongot <pem>] [--envoy <pem>] [--route <pem>]
+#   bash $P --trustca <pem> [--trustca <pem>...] [--check-source <host:port>]  --dry-run | --apply
+#   bash $P --mongot  <pem>                       --dry-run | --apply
+#   bash $P --envoy   <pem>                       --dry-run | --apply
+#   bash $P --route   <pem> [--hostname <fqdn>]   --dry-run | --apply
+#   bash $P --dbcred  [--username mongotUser]     --dry-run | --apply
+#   bash $P --clean
 #
 # --dry-run writes the file and contacts no cluster. --apply writes it and creates the object with `oc create`;
 # --replace lets it replace one that exists, --yes skips typing the namespace back. For automation, the key's
@@ -27,7 +29,7 @@ umask 077
 
 OPENSSL="${OPENSSL:-openssl}"
 # tls.certsSecretPrefix and search.name of the chart. The operator builds the three TLS secret names from them and
-# finds the secrets by name only (chart/mongodb-search-helm/templates/_helpers.tpl).
+# finds the secrets by name only (templates/_helpers.tpl).
 PREFIX=ent
 SEARCH=mongot
 MONGOT_SECRET="${PREFIX}-${SEARCH}-search-cert"
@@ -40,7 +42,7 @@ ME="$(basename "$0")"
 
 die()  { printf '%s: %s\n' "${ME}" "$*" >&2; exit 1; }
 say()  { printf '%s\n' "$*"; }
-usage() { sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,/^set +x/p' "$0" | sed -e '$d' -e 's/^# \{0,1\}//'; }
 
 # ---------------------------------------------------------------------------------------------------- arguments
 ACTION="" MODE="" NS_FLAG="" PEM="" HOSTNAME_WANTED="" USERNAME=mongotUser PASSIN_FILE="" PASSWORD_FILE=""
@@ -94,9 +96,22 @@ NAME_RE='^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
 [[ "${NS}" =~ ${NAME_RE} && ${#NS} -le 63 ]] || die "'${NS}' is not a namespace name (lower-case letters, digits and '-')"
 DIR="${PWD}/${NS}"
 
+# helm packages every file under a chart's directory, and keeps the chart in each release it installs: a key
+# written inside a chart would travel with it.
+chart_above() {      # prints the chart this directory is in, if it is in one
+  local d="${PWD}"
+  while [[ -n "${d}" && "${d}" != "/" ]]; do
+    if [[ -f "${d}/Chart.yaml" ]]; then say "${d}"; return 0; fi
+    d="$(dirname "${d}")"
+  done
+  return 1
+}
 folder_problem() {   # prints what is wrong with the folder, or nothing
+  local chart
   # shellcheck disable=SC2012  # ls prints the mode the same way on BSD and GNU; stat does not
-  if [[ -L "${DIR}" ]]; then say "${DIR} is a link; it must be a real directory"
+  if chart="$(chart_above)"; then
+    say "this directory is inside the Helm chart ${chart}: what is written here would be packaged with the chart. Run the script from a directory outside it"
+  elif [[ -L "${DIR}" ]]; then say "${DIR} is a link; it must be a real directory"
   elif [[ ! -d "${DIR}" ]]; then say "no folder ${NS}/ here (${PWD}). Create it yourself: mkdir -m 700 ${NS}"
   elif [[ "$(ls -ld "${DIR}" | cut -c5-10)" != "------" ]]; then say "${NS}/ can be read by others. Close it: chmod 700 ${NS}"
   fi
@@ -276,7 +291,7 @@ b64()        { "${OPENSSL}" base64 -A; }
 quoted() { printf '"%s"' "$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"; }
 head_of() {  # $1 = kind, $2 = name, then annotation pairs
   local kind="$1" name="$2"; shift 2
-  say "# Made by scripts/${ME} for the namespace ${NS}. Do not edit: run it again."
+  say "# Made by ${ME} (chart mongodb-search-helm) for the namespace ${NS}. Do not edit: run it again."
   say "apiVersion: v1"; say "kind: ${kind}"; say "metadata:"; say "  name: ${name}"; say "  namespace: ${NS}"
   say "  labels:"; say "    app.kubernetes.io/managed-by: generate-mongodbsearch-prerequisites"
   say "  annotations:"; say "    ${NOTE}/generated-at: $(quoted "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"

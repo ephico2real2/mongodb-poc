@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Tests for scripts/generate-mongodbsearch-prerequisites.sh, no cluster needed:  test/prerequisites.sh
+# Tests for chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh, no cluster needed:  test/prerequisites.sh
 # It makes a throwaway CA (a root and an intermediate) and password-protected PEMs in the company's layout
 # (encrypted key, CA bundle, leaf), all in a temporary directory, and a stand-in `oc` for --apply.
 # OPENSSL names the openssl to use (OpenSSL 3 or LibreSSL) and BASH_UNDER_TEST the bash that runs the script.
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
-SCRIPT="${PWD}/scripts/generate-mongodbsearch-prerequisites.sh"
+SCRIPT="${PWD}/chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh"
 export OPENSSL="${OPENSSL:-openssl}"
 SH="${BASH_UNDER_TEST:-bash}"
 NS=vectordb-test
@@ -175,6 +175,12 @@ rm "${here}/${NS}"; mkdir -m 755 "${here}/${NS}"
 refused "the folder is open to others" "chmod 700 ${NS}" -- --mongot "${pki}/mongot.pem" --dry-run "${P[@]}"
 chmod 700 "${here}/${NS}"
 ( unset TargetNamespace; cd "${here}" && run --target-namespace "${NS}" --check ) && ok "--target-namespace alone names the namespace" || bad "--target-namespace alone: $(said | head -3)"
+
+# helm packages every file under a chart's directory: nothing may be written inside one.
+mkdir -p "${work}/achart/sub/${NS}"; chmod 700 "${work}/achart/sub/${NS}"; : > "${work}/achart/Chart.yaml"
+( cd "${work}/achart/sub" && "${SH}" "${SCRIPT}" --mongot "${pki}/mongot.pem" --dry-run "${P[@]}" ) >"${work}/out" 2>"${work}/err" </dev/null
+[[ $? -ne 0 && -z "$(ls -A "${work}/achart/sub/${NS}")" ]] && grep -q "inside the Helm chart" "${work}/err" \
+  && ok "refused: a folder inside a Helm chart, where its files would be packaged" || bad "a folder inside a chart: $(said | head -2 | tr '\n' ' ')"
 
 # ------------------------------------------------------------------------------------------------ refusals
 refused "neither --dry-run nor --apply" "needs --dry-run or --apply" -- --mongot "${pki}/mongot.pem" "${P[@]}"
