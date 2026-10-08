@@ -341,7 +341,7 @@ Oct 8, 2026, namespace `dvh-vectordb-qa` created for this on the same lab, OpenS
 
 mongot was not installed there: the lab node was at 90% memory.
 
-The script's own tests ([`test/prerequisites.sh`](../test/prerequisites.sh), 77 checks, no cluster) pass with OpenSSL 3.6.4 and with LibreSSL 3.3.6, under bash 5.3.20 and under bash 3.2.57, in all four pairings.
+The script's own tests ([`test/prerequisites.sh`](../test/prerequisites.sh), 78 checks, no cluster) pass with OpenSSL 3.6.4 and with LibreSSL 3.3.6, under bash 5.3.20 and under bash 3.2.57, in all four pairings.
 
 Not tested:
 

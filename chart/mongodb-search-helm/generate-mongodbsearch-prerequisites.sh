@@ -128,7 +128,7 @@ need_folder() { local p; p="$(folder_problem)"; [[ -z "${p}" ]] || die "${p}"; }
 
 WORK="" TTY_STATE=""
 cleanup() {
-  [[ -z "${TTY_STATE}" ]] || stty "${TTY_STATE}" < /dev/tty 2>/dev/null || true       # stopped while asking a password
+  [[ -z "${TTY_STATE}" ]] || stty "${TTY_STATE}" < /dev/tty 2>/dev/null || true       # stopped while asking a secret
   [[ -z "${WORK}" ]] || rm -rf "${WORK}"
   rm -f "${DIR}"/.*.partial 2>/dev/null || true
 }
@@ -274,7 +274,14 @@ open_key() {  # $1 = the PEM as the caller named it
       die "the key is encrypted and there is no terminal to ask its passphrase on: use --passin-file <file>"
     fi
   fi
-  if ! KEY="$("${OPENSSL}" pkey -in "${IN}" ${passin[@]+"${passin[@]}"} 2>"${WORK}/key.err")"; then
+  # openssl asks for the passphrase itself. It prints its question a moment before it stops the terminal showing
+  # what is typed (LibreSSL on a macOS runner showed a passphrase typed in that moment, 2026-10-08), so the terminal
+  # is told here, before openssl starts, and told back after.
+  local opened=yes
+  if [[ "${KEY_ENCRYPTED}" == yes && -z "${PASSIN_FILE}" ]]; then TTY_STATE="$(stty -g < /dev/tty)"; stty -echo < /dev/tty; fi
+  KEY="$("${OPENSSL}" pkey -in "${IN}" ${passin[@]+"${passin[@]}"} 2>"${WORK}/key.err")" || opened=no
+  if [[ -n "${TTY_STATE}" ]]; then stty "${TTY_STATE}" < /dev/tty; TTY_STATE=""; fi
+  if [[ "${opened}" == no ]]; then
     rm -f "${WORK}/passin"
     if grep -qiE 'bad decrypt|bad password|maybe wrong password|mac verify' "${WORK}/key.err"; then die "wrong passphrase for the key in $1"; fi
     said="$(grep -iE 'error|unsupported|unable' "${WORK}/key.err" | head -1 || true)"
