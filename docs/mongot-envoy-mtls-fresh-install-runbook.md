@@ -6,7 +6,7 @@ Oct 5, 2026
 
 This runbook sets up mTLS for MongoDB Search in `dvh-gp6-rnd` from scratch, using company-signed certs. Use it when none of the secrets or the trust bundle exist yet. To swap certs on a running setup, use mongot & Envoy mTLS Cert Runbook instead.
 
-**Steps 1 to 5 are also a script.** [`generate-mongodbsearch-prerequisites.sh`](../chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh), a file of the chart, does them for any namespace, with the same checks and no decrypted key left as a loose file: see [Prerequisites and Setup](prerequisite-and-setup-doc.md), Part 1. The steps below are the same thing by hand, and say what each check is for.
+**Steps 1 to 5 are also a script.** [`generate-mongodbsearch-prerequisites.sh`](../chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh), a file of the chart, does them for any namespace, with the same checks. The decrypted key is never a file of its own there: it is only in the `*.secret.yaml` the script writes, which `--clean` removes. See [Prerequisites and Setup](prerequisite-and-setup-doc.md), Part 1. The steps below are the same thing by hand, and say what each check is for.
 
 **A certificate is issued for one namespace.** The mongot certificate's name is `mongot-search-0-svc.<namespace>.svc.cluster.local`. Every command below names `dvh-gp6-rnd`; for another namespace the PEMs must have been issued for it, and `NS` set to it.
 
@@ -190,8 +190,9 @@ for n in mongot envoy-client lb; do
   openssl x509 -in $n-leaf.crt -noout -text | grep -A1 -E 'Subject Alternative Name|Extended Key Usage'
 done
 
-# 3. The public cert covers the public FQDN (prints DNS:<fqdn>; the whole name must match, not its beginning)
-openssl x509 -in lb-leaf.crt -noout -text | grep -A1 'Subject Alternative Name' | tr ',' '\n' | sed 's/^ *//' | grep -xF "DNS:$PUBLIC_FQDN"
+# 3. The public cert covers the public FQDN (prints DNS:<fqdn>; the whole name must match, not its beginning;
+#    capitals do not count, as in DNS)
+openssl x509 -in lb-leaf.crt -noout -text | grep -A1 'Subject Alternative Name' | tr ',' '\n' | sed 's/^ *//' | grep -ixF "DNS:$PUBLIC_FQDN"
 
 # 4. Each key matches its cert (prints OK three times)
 for n in mongot envoy-client lb; do

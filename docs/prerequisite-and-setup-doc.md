@@ -49,7 +49,7 @@ NS=$TargetNamespace                       # Part 2 uses $NS
 # The script is a file of the chart. From a checkout of this repository, at its root:
 PREREQ=chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
 # From the published chart, with no clone (chart 0.3.3 and later):
-#   helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.3/mongodb-search-helm-0.3.3.tgz --untar
+#   helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.4/mongodb-search-helm-0.3.4.tgz --untar
 #   PREREQ=mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
 
 mkdir -m 700 $TargetNamespace             # the script never creates it
@@ -100,7 +100,7 @@ What `--apply` does, each time:
 - It reads the PEM again and asks for the passphrase again, so what goes to the cluster is what the PEM holds.
 - It prints the cluster, the user and the namespace, and asks you to type the namespace. `--yes` skips that.
 - It uses `oc create`, never `oc apply`: `apply` copies the whole secret, key included, into an annotation on the object.
-- It refuses to touch an object that is already there. `--replace` replaces it; nothing restarts by itself.
+- It refuses to touch an object that is already there. `--replace` replaces it, and the script restarts nothing. What then restarts is in [TLS.md](../TLS.md), section 8: the operator restarts mongot by itself when mongot's certificate has changed, and Envoy keeps serving the old certificate until it is restarted by hand.
 
 ### Step 4: Create the sync password secret
 
@@ -117,7 +117,7 @@ bash $PREREQ --dbcred --username mongotUser --apply
 bash $PREREQ --check
 ```
 
-Expected under `cluster`: `tls.crt`, `tls.key` and `ca.crt` on the three TLS secrets, `password` on the password secret, `ca.crt` on the ConfigMap. The chart makes the same check before it installs. `--check` also prints the lines for the values file of Step 6.
+Expected under `cluster`: `tls.crt`, `tls.key` and `ca.crt` on the three TLS secrets, `password` on the password secret, `ca.crt` on the ConfigMap. The chart checks the same five objects before it installs; of a TLS secret it asks for `tls.crt` and `tls.key` only. `--check` also prints the lines for the values file of Step 6.
 
 The `*.secret.yaml` files hold keys with no password. Once the objects are in the cluster, remove them:
 
@@ -164,7 +164,7 @@ From the published package, with no clone of the repository:
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.3/mongodb-search-helm-0.3.3.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.4/mongodb-search-helm-0.3.4.tgz \
   -n $NS -f my-values.yaml --timeout 20m
 ```
 
@@ -344,7 +344,7 @@ Oct 8, 2026, namespace `dvh-vectordb-qa` created for this on the same lab, OpenS
 
 mongot was not installed there: the lab node was at 90% memory.
 
-The script's own tests ([`test/prerequisites.sh`](../test/prerequisites.sh), 78 checks, no cluster) pass with OpenSSL 3.6.4 and with LibreSSL 3.3.6, under bash 5.3.20 and under bash 3.2.57, in all four pairings.
+The script's own tests ([`test/prerequisites.sh`](../test/prerequisites.sh), 105 checks, no cluster) pass with OpenSSL 3.6.4 and with LibreSSL 3.3.6, under bash 5.3.20 and under bash 3.2.57, in all four pairings.
 
 Not tested:
 
