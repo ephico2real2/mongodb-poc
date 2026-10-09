@@ -454,7 +454,7 @@ The words are from MongoDB's [Recommended Alerts for mongot](https://www.mongodb
 | `warning` | 80% | 15 m | MongoDB: "Having less than 20% free on the `mongot` dataPath volume can cause availability issues." It is the last level before mongot acts by itself |
 | `critical` | 90% | 5 m | mongot stops following the source above it |
 
-MongoDB's own recommended alert is one level later at each step, at 85, 90 and 95%, the three points where mongot acts. These are earlier on purpose: at 190 GB a pod, a sync from scratch takes hours (see *Replication lag*), so the time to act is before mongot does. The hold times are this chart's choice, shorter as the level rises; no published rule for mongot gives one.
+MongoDB's own recommended alert is one level later at each step, at 85, 90 and 95%, the three points where mongot acts. These are earlier on purpose: at about 180 to 190 GB of indexes a pod, as the owner reports for a QA cluster, a sync from scratch takes 4 to 5 hours (see *Replication lag*), so the time to act is before mongot does. The hold times are this chart's choice, shorter as the level rises; no published rule for mongot gives one.
 
 - **A pod is in one level at a time.** A level runs from its number up to the next one's, so a pod at 92% is `critical` and not also `warning` and `info`: the console lists one alert for it, not three.
 - **Rising into the next level leaves no minute without an alert.** The lower level stays on while the higher one holds, and stops when that one fires. Without that, a notice that the warning is *resolved* would go out at the moment the disk passes 90%. Falling back, the higher alert stops at once and the lower one holds its own time again.
@@ -462,7 +462,7 @@ MongoDB's own recommended alert is one level later at each step, at 85, 90 and 9
 - **Room for a rebuild.** MongoDB: "Plan for roughly 125% of the expected steady-state footprint during a rebuild." mongot keeps the old index beside the new one until the new one can answer, and builds nothing above 85%. So a volume that is more than about 68% used (0.85 / 1.25) cannot take a rebuild of everything on it; that figure is derived here, not MongoDB's. In bytes: 190 GB of indexes are 70% of a 271 GB volume, 75% of 253 GB and 80% of 238 GB.
 - **On a shared disk the number is the disk's.** With a hostpath provisioner the data path is on the node's disk: the lab's three pods all read the same 61.6% of a 149 GiB disk on 2026-10-09, of which mongot's indexes are 16 MiB, and would raise three alerts that say the same thing. The alert's text says so. With a volume of its own per pod, the number is that volume's.
 
-**Changing the levels.** They are values of the chart, whole numbers, and must rise. With the release's own values file, as for every upgrade of this chart (`--reuse-values` does not bring a newer chart's new defaults, these three among them):
+**Changing the levels.** They are values of the chart, whole numbers, and must rise. With the release's own values file, as for every upgrade of this chart: `--reuse-values` keeps the old chart's defaults, so from a release of 0.3.10 or earlier these three are absent and the upgrade is refused when the chart renders, `monitoring.alerts.dataPathUsed is missing: ...`.
 
 ```bash
 # the first level at 75 instead of 70

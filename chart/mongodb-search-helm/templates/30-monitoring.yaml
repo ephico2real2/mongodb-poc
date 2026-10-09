@@ -252,6 +252,11 @@ A pod is in one level at a time: a level runs from its threshold to the next one
 rising order; a level that is not above the one before it is refused here, since JSON Schema cannot compare two fields.
 */}}
 {{- $dp := .Values.monitoring.alerts.dataPathUsed }}
+{{- /* Absent altogether: a release upgraded with --reuse-values keeps the old chart's values, and a chart before
+       0.3.11 had no dataPathUsed. Said by name rather than as "index of untyped nil". */}}
+{{- if kindIs "invalid" $dp }}
+{{- fail "monitoring.alerts.dataPathUsed is missing: the release's values predate chart 0.3.11 (helm upgrade --reuse-values keeps the old chart's defaults). Upgrade with the chart's values file, or set monitoring.alerts.dataPathUsed.info, .warning and .critical" }}
+{{- end }}
 {{- /* How long each level holds before it fires: this chart's choice. The quantity moves slowly, and the hold
        shrinks as the level rises. mongot itself reads the disk every 5 seconds. */}}
 {{- $hold := dict "info" "30m" "warning" "15m" "critical" "5m" }}

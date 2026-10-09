@@ -387,6 +387,9 @@ refused "a volume level above 100" --set monitoring.alerts.dataPathUsed.critical
 refused "a volume level that is not a whole number" --set monitoring.alerts.dataPathUsed.info=72.5
 refused "a volume level of 0, which would always fire" --set monitoring.alerts.dataPathUsed.info=0
 refused "an unknown volume level" --set monitoring.alerts.dataPathUsed.page=95
+# The whole map absent (a release's values from before 0.3.11 kept by --reuse-values): refused by name.
+grep -q 'monitoring.alerts.dataPathUsed is missing' <<<"$(render --set monitoring.alerts.dataPathUsed=null)" \
+  && ok "values without dataPathUsed at all (--reuse-values from 0.3.10) are refused by name" || bad "values without dataPathUsed: $(render --set monitoring.alerts.dataPathUsed=null 2>&1 | grep -m1 -i error)"
 # The five index alerts name the index by the label mongot's metrics carry. What they do is tested with promtool,
 # by test/alerts.sh.
 [[ "$(grep -c 'indexId_logString }}' <<<"$m")" == 5 ]] && grep -q 'name: mongot.indexes' <<<"$m" && ok "the five index alerts name their index" || bad "index alerts"
