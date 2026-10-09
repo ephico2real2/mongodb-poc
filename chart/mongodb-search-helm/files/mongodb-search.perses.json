@@ -3177,8 +3177,533 @@
       "kind": "Panel",
       "spec": {
         "display": {
+          "name": "Indexes with no host listed",
+          "description": "Indexes for which the source deployment lists no mongot host, from the index info exporter. Should be 0. Above 0 while searches work, the mongot pods have lost their heartbeat rows and $listSearchIndexes reports every index PENDING: restart the mongot pods one at a time. 0 also when the exporter is off."
+        },
+        "plugin": {
+          "kind": "StatChart",
+          "spec": {
+            "calculation": "last-number",
+            "colorMode": "value",
+            "format": {
+              "unit": "decimal"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "#59a14f",
+                  "value": 0
+                },
+                {
+                  "color": "#e15759",
+                  "value": 1
+                }
+              ]
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "count(max by (indexId_logString) (mongodb_search_index_listed_hosts{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"}) == 0) or vector(0)"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "5_11": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "name": "Each index",
+          "description": "One row per index. With the index info exporter on (monitoring.indexInfo) an index is named as the source deployment names it, database.collection / index; without it, by the id mongot's metrics carry. The id is the one in mongot's metrics and logs. Stored source is what the index's definition stores, known only with the exporter. Vector memory is what a vector index wants resident, 0 for a search index."
+        },
+        "plugin": {
+          "kind": "Table",
+          "spec": {
+            "columnSettings": [
+              {
+                "hide": true,
+                "name": "timestamp"
+              },
+              {
+                "header": "Index",
+                "name": "index",
+                "width": 290
+              },
+              {
+                "header": "Index id",
+                "name": "indexId_logString",
+                "width": 215
+              },
+              {
+                "cellSettings": [
+                  {
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "0"
+                      }
+                    },
+                    "text": "search"
+                  },
+                  {
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "1"
+                      }
+                    },
+                    "text": "vector"
+                  }
+                ],
+                "format": {
+                  "unit": "decimal"
+                },
+                "header": "Type",
+                "name": "value #1",
+                "width": 70
+              },
+              {
+                "cellSettings": [
+                  {
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "0"
+                      }
+                    },
+                    "text": "none"
+                  },
+                  {
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "1"
+                      }
+                    },
+                    "text": "some fields"
+                  },
+                  {
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "2"
+                      }
+                    },
+                    "text": "all but some"
+                  },
+                  {
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "3"
+                      }
+                    },
+                    "text": "all fields"
+                  }
+                ],
+                "format": {
+                  "unit": "decimal"
+                },
+                "header": "Stored source",
+                "name": "value #2",
+                "width": 125
+              },
+              {
+                "format": {
+                  "unit": "bytes"
+                },
+                "header": "Vector memory",
+                "name": "value #3",
+                "width": 135
+              }
+            ],
+            "density": "compact",
+            "transforms": [
+              {
+                "kind": "MergeSeries",
+                "spec": {}
+              }
+            ]
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (index, indexId_logString) (label_join(label_join((max by (indexId_logString) (0 * mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",indexType=\"search\"} or 0 * mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",indexType!=\"search\"} + 1)) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(max by (indexId_logString) (0 * mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",indexType=\"search\"} or 0 * mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",indexType!=\"search\"} + 1), \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (index, indexId_logString) (label_join(label_join((max by (indexId_logString) (0 * mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"none\"} or 0 * mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"include\"} + 1 or 0 * mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"exclude\"} + 2 or 0 * mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"all\"} + 3)) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(max by (indexId_logString) (0 * mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"none\"} or 0 * mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"include\"} + 1 or 0 * mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"exclude\"} + 2 or 0 * mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"all\"} + 3), \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (index, indexId_logString) (label_join(label_join((max by (indexId_logString) (mongot_index_stats_requiredMemoryBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(max by (indexId_logString) (mongot_index_stats_requiredMemoryBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}), \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "5_12": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "name": "Each index, now",
+          "description": "One row per index. With the index info exporter on (monitoring.indexInfo) an index is named as the source deployment names it, database.collection / index; without it, by the id mongot's metrics carry. Size and documents are the largest reading over the pods. The size is everything in the index's directory, stored source and vectors included. Lucene docs are the documents as the index holds them: the collection's documents, and one more for every embedded document of an embeddedDocuments field; bytes per doc is the size over that count. Growth is the size now less the size 24 hours ago, or the whole size of an index younger than that."
+        },
+        "plugin": {
+          "kind": "Table",
+          "spec": {
+            "columnSettings": [
+              {
+                "hide": true,
+                "name": "timestamp"
+              },
+              {
+                "header": "Index",
+                "name": "index",
+                "width": 290
+              },
+              {
+                "format": {
+                  "unit": "decimal"
+                },
+                "header": "Pods STEADY",
+                "name": "value #1",
+                "width": 125
+              },
+              {
+                "format": {
+                  "unit": "decimal"
+                },
+                "header": "Lucene docs",
+                "name": "value #2",
+                "width": 115
+              },
+              {
+                "format": {
+                  "unit": "bytes"
+                },
+                "header": "Size",
+                "name": "value #3",
+                "width": 80
+              },
+              {
+                "format": {
+                  "unit": "bytes"
+                },
+                "header": "Bytes per doc",
+                "name": "value #4",
+                "width": 125
+              },
+              {
+                "format": {
+                  "unit": "bytes"
+                },
+                "header": "Growth, 24 h",
+                "name": "value #5",
+                "width": 125
+              }
+            ],
+            "density": "compact",
+            "transforms": [
+              {
+                "kind": "MergeSeries",
+                "spec": {}
+              }
+            ]
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (index) (label_join(label_join((sum by (indexId_logString) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status=\"STEADY\"})) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(sum by (indexId_logString) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status=\"STEADY\"}), \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (index) (label_join(label_join((max by (indexId_logString) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(max by (indexId_logString) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}), \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (index) (label_join(label_join((max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}), \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (index) (label_join(label_join((max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / (max by (indexId_logString) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) > 0)) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / (max by (indexId_logString) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) > 0), \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (index) (label_join(label_join((max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) - (max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"} offset 24h) or max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) * 0)) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) - (max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"} offset 24h) or max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) * 0), \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "5_13": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "name": "Each index, in the last hour",
+          "description": "One row per index. With the index info exporter on (monitoring.indexInfo) an index is named as the source deployment names it, database.collection / index; without it, by the id mongot's metrics carry. Counted over the last hour, all pods. A search is one query the index ran, a search or a vector search; a query mongot refused as invalid is not counted. The batch time is the average time to produce one batch of results, for search indexes that were searched; empty otherwise. Sync errors are the exceptions mongot met while it built or followed the index. The lag is the largest over the pods, now, in whole seconds, and is empty while the index is built."
+        },
+        "plugin": {
+          "kind": "Table",
+          "spec": {
+            "columnSettings": [
+              {
+                "hide": true,
+                "name": "timestamp"
+              },
+              {
+                "header": "Index",
+                "name": "index",
+                "width": 290
+              },
+              {
+                "format": {
+                  "unit": "decimal"
+                },
+                "header": "Searches",
+                "name": "value #1",
+                "width": 95
+              },
+              {
+                "format": {
+                  "unit": "decimal"
+                },
+                "header": "Failed searches",
+                "name": "value #2",
+                "width": 130
+              },
+              {
+                "format": {
+                  "unit": "seconds"
+                },
+                "header": "Batch time",
+                "name": "value #3",
+                "width": 110
+              },
+              {
+                "format": {
+                  "unit": "decimal"
+                },
+                "header": "Sync errors",
+                "name": "value #4",
+                "width": 105
+              },
+              {
+                "format": {
+                  "unit": "milliseconds"
+                },
+                "header": "Lag, now",
+                "name": "value #5",
+                "width": 90
+              }
+            ],
+            "density": "compact",
+            "transforms": [
+              {
+                "kind": "MergeSeries",
+                "spec": {}
+              }
+            ]
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (index) (label_join(label_join((sum by (indexId_logString) (increase(mongot_index_stats_query_totalQueries_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h]))) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(sum by (indexId_logString) (increase(mongot_index_stats_query_totalQueries_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h])), \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (index) (label_join(label_join((sum by (indexId_logString) (increase(mongot_index_stats_query_failedQueries_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h]))) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(sum by (indexId_logString) (increase(mongot_index_stats_query_failedQueries_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h])), \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (index) (label_join(label_join((sum by (indexId_logString) (increase(mongot_index_stats_query_searchResultBatchLatencies_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h])) / sum by (indexId_logString) (increase(mongot_index_stats_query_searchResultBatchLatencies_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h]) > 0)) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(sum by (indexId_logString) (increase(mongot_index_stats_query_searchResultBatchLatencies_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h])) / sum by (indexId_logString) (increase(mongot_index_stats_query_searchResultBatchLatencies_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h]) > 0), \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (index) (label_join(label_join((sum by (indexId_logString) (increase(mongot_index_stats_indexing_steadyStateExceptions_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h]) + increase(mongot_index_stats_indexing_initialSyncExceptions_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h]))) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(sum by (indexId_logString) (increase(mongot_index_stats_indexing_steadyStateExceptions_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h]) + increase(mongot_index_stats_indexing_initialSyncExceptions_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h])), \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (index) (label_join(label_join((max by (indexId_logString) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(max by (indexId_logString) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}), \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "5_14": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
           "name": "Size of each index",
-          "description": "Every index mongot holds, by id, biggest first. The largest reading over the pods."
+          "description": "Every index mongot holds, biggest first: by its name with the index info exporter on, by its id otherwise. The largest reading over the pods."
         },
         "plugin": {
           "kind": "BarChart",
@@ -3200,8 +3725,8 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sort_desc(max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))",
-                  "seriesNameFormat": "{{indexId_logString}}"
+                  "query": "sort_desc(max by (index) (label_join(label_join((max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"} @ end())) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"} @ end()), \"index\", \"$1\", \"indexId_logString\", \"(.*)\")))",
+                  "seriesNameFormat": "{{index}}"
                 }
               }
             }
@@ -3209,12 +3734,12 @@
         ]
       }
     },
-    "5_11": {
+    "5_15": {
       "kind": "Panel",
       "spec": {
         "display": {
           "name": "Indexes not STEADY, per index",
-          "description": "For each index, by id: whether any pod holds it in a state other than STEADY (INITIAL_SYNC, STALE, FAILED, RECOVERING and the rest). An index that is STALE or RECOVERING still answers searches; one that is INITIAL_SYNC, NOT_STARTED or FAILED does not. The panel of the section above says which pod; this one says which index."
+          "description": "For each index, by its name with the index info exporter on and by its id otherwise: whether any pod holds it in a state other than STEADY (INITIAL_SYNC, STALE, FAILED, RECOVERING and the rest). An index that is STALE or RECOVERING still answers searches; one that is INITIAL_SYNC, NOT_STARTED or FAILED does not. The panel of the section above says which pod; this one says which index."
         },
         "plugin": {
           "kind": "StatusHistoryChart",
@@ -3259,8 +3784,8 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sum by (indexId_logString) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status!=\"STEADY\"})",
-                  "seriesNameFormat": "{{indexId_logString}}"
+                  "query": "max by (index) (label_join(label_join((sum by (indexId_logString) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status!=\"STEADY\"})) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(sum by (indexId_logString) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status!=\"STEADY\"}), \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
+                  "seriesNameFormat": "{{index}}"
                 }
               }
             }
@@ -3540,98 +4065,25 @@
       "kind": "Panel",
       "spec": {
         "display": {
-          "name": "Each index, now",
-          "description": "One row per index, by its id: mongot's metrics carry no index name, database or collection. `$listSearchIndexes` on the source mongod gives the name of an id. Size, documents and memory are the largest reading over the pods. The size is everything in the index's directory, stored source and vectors included. Lucene docs are the documents as the index holds them: the collection's documents, and one more for every embedded document of an embeddedDocuments field; bytes per doc is the size over that count. Vector memory is what a vector index wants resident, 0 for a search index."
+          "name": "Indexes with a name",
+          "description": "Indexes the source deployment names, from the index info exporter (monitoring.indexInfo). It should equal Indexes. 0 when the exporter is off: the panels below then name an index by its id."
         },
         "plugin": {
-          "kind": "Table",
+          "kind": "StatChart",
           "spec": {
-            "columnSettings": [
-              {
-                "hide": true,
-                "name": "timestamp"
-              },
-              {
-                "header": "Index id",
-                "name": "indexId_logString",
-                "width": 215
-              },
-              {
-                "cellSettings": [
-                  {
-                    "condition": {
-                      "kind": "Value",
-                      "spec": {
-                        "value": "0"
-                      }
-                    },
-                    "text": "search"
-                  },
-                  {
-                    "condition": {
-                      "kind": "Value",
-                      "spec": {
-                        "value": "1"
-                      }
-                    },
-                    "text": "vector"
-                  }
-                ],
-                "format": {
-                  "unit": "decimal"
-                },
-                "header": "Type",
-                "name": "value #1",
-                "width": 70
-              },
-              {
-                "format": {
-                  "unit": "decimal"
-                },
-                "header": "Pods STEADY",
-                "name": "value #2",
-                "width": 125
-              },
-              {
-                "format": {
-                  "unit": "decimal"
-                },
-                "header": "Lucene docs",
-                "name": "value #3",
-                "width": 115
-              },
-              {
-                "format": {
-                  "unit": "bytes"
-                },
-                "header": "Size",
-                "name": "value #4",
-                "width": 80
-              },
-              {
-                "format": {
-                  "unit": "bytes"
-                },
-                "header": "Bytes per doc",
-                "name": "value #5",
-                "width": 125
-              },
-              {
-                "format": {
-                  "unit": "bytes"
-                },
-                "header": "Vector memory",
-                "name": "value #6",
-                "width": 135
-              }
-            ],
-            "density": "compact",
-            "transforms": [
-              {
-                "kind": "MergeSeries",
-                "spec": {}
-              }
-            ]
+            "calculation": "last-number",
+            "colorMode": "value",
+            "format": {
+              "unit": "decimal"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "#59a14f",
+                  "value": 0
+                }
+              ]
+            }
           }
         },
         "queries": [
@@ -3645,88 +4097,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "max by (indexId_logString) (0 * mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",indexType=\"search\"} or 0 * mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",indexType!=\"search\"} + 1)",
-                  "seriesNameFormat": ""
-                }
-              }
-            }
-          },
-          {
-            "kind": "TimeSeriesQuery",
-            "spec": {
-              "plugin": {
-                "kind": "PrometheusTimeSeriesQuery",
-                "spec": {
-                  "datasource": {
-                    "kind": "PrometheusDatasource",
-                    "name": "__SEARCH__-thanos"
-                  },
-                  "query": "sum by (indexId_logString) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status=\"STEADY\"})",
-                  "seriesNameFormat": ""
-                }
-              }
-            }
-          },
-          {
-            "kind": "TimeSeriesQuery",
-            "spec": {
-              "plugin": {
-                "kind": "PrometheusTimeSeriesQuery",
-                "spec": {
-                  "datasource": {
-                    "kind": "PrometheusDatasource",
-                    "name": "__SEARCH__-thanos"
-                  },
-                  "query": "max by (indexId_logString) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
-                  "seriesNameFormat": ""
-                }
-              }
-            }
-          },
-          {
-            "kind": "TimeSeriesQuery",
-            "spec": {
-              "plugin": {
-                "kind": "PrometheusTimeSeriesQuery",
-                "spec": {
-                  "datasource": {
-                    "kind": "PrometheusDatasource",
-                    "name": "__SEARCH__-thanos"
-                  },
-                  "query": "max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
-                  "seriesNameFormat": ""
-                }
-              }
-            }
-          },
-          {
-            "kind": "TimeSeriesQuery",
-            "spec": {
-              "plugin": {
-                "kind": "PrometheusTimeSeriesQuery",
-                "spec": {
-                  "datasource": {
-                    "kind": "PrometheusDatasource",
-                    "name": "__SEARCH__-thanos"
-                  },
-                  "query": "max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / (max by (indexId_logString) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) > 0)",
-                  "seriesNameFormat": ""
-                }
-              }
-            }
-          },
-          {
-            "kind": "TimeSeriesQuery",
-            "spec": {
-              "plugin": {
-                "kind": "PrometheusTimeSeriesQuery",
-                "spec": {
-                  "datasource": {
-                    "kind": "PrometheusDatasource",
-                    "name": "__SEARCH__-thanos"
-                  },
-                  "query": "max by (indexId_logString) (mongot_index_stats_requiredMemoryBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
-                  "seriesNameFormat": ""
+                  "query": "count(max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end())) or vector(0)"
                 }
               }
             }
@@ -3738,78 +4109,25 @@
       "kind": "Panel",
       "spec": {
         "display": {
-          "name": "Each index, in the last hour",
-          "description": "One row per index, by its id: mongot's metrics carry no index name, database or collection. `$listSearchIndexes` on the source mongod gives the name of an id. Counted over the last hour, all pods. A search is one query the index ran, a search or a vector search; a query mongot refused as invalid is not counted. The batch time is the average time to produce one batch of results, for search indexes that were searched; empty otherwise. Sync errors are the exceptions mongot met while it built or followed the index. Two columns have a window of their own: the lag is the largest over the pods, now, in whole seconds, and is empty while the index is built; growth is the size now less the size 24 hours ago, or the whole size of an index younger than that."
+          "name": "Indexes with stored source",
+          "description": "Indexes whose definition stores fields (storedSource), from the index info exporter. 0 also when the exporter is off."
         },
         "plugin": {
-          "kind": "Table",
+          "kind": "StatChart",
           "spec": {
-            "columnSettings": [
-              {
-                "hide": true,
-                "name": "timestamp"
-              },
-              {
-                "header": "Index id",
-                "name": "indexId_logString",
-                "width": 215
-              },
-              {
-                "format": {
-                  "unit": "decimal"
-                },
-                "header": "Searches",
-                "name": "value #1",
-                "width": 95
-              },
-              {
-                "format": {
-                  "unit": "decimal"
-                },
-                "header": "Failed searches",
-                "name": "value #2",
-                "width": 130
-              },
-              {
-                "format": {
-                  "unit": "seconds"
-                },
-                "header": "Batch time",
-                "name": "value #3",
-                "width": 110
-              },
-              {
-                "format": {
-                  "unit": "decimal"
-                },
-                "header": "Sync errors",
-                "name": "value #4",
-                "width": 105
-              },
-              {
-                "format": {
-                  "unit": "milliseconds"
-                },
-                "header": "Lag, now",
-                "name": "value #5",
-                "width": 90
-              },
-              {
-                "format": {
-                  "unit": "bytes"
-                },
-                "header": "Growth, 24 h",
-                "name": "value #6",
-                "width": 125
-              }
-            ],
-            "density": "compact",
-            "transforms": [
-              {
-                "kind": "MergeSeries",
-                "spec": {}
-              }
-            ]
+            "calculation": "last-number",
+            "colorMode": "value",
+            "format": {
+              "unit": "decimal"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "#59a14f",
+                  "value": 0
+                }
+              ]
+            }
           }
         },
         "queries": [
@@ -3823,88 +4141,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sum by (indexId_logString) (increase(mongot_index_stats_query_totalQueries_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h]))",
-                  "seriesNameFormat": ""
-                }
-              }
-            }
-          },
-          {
-            "kind": "TimeSeriesQuery",
-            "spec": {
-              "plugin": {
-                "kind": "PrometheusTimeSeriesQuery",
-                "spec": {
-                  "datasource": {
-                    "kind": "PrometheusDatasource",
-                    "name": "__SEARCH__-thanos"
-                  },
-                  "query": "sum by (indexId_logString) (increase(mongot_index_stats_query_failedQueries_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h]))",
-                  "seriesNameFormat": ""
-                }
-              }
-            }
-          },
-          {
-            "kind": "TimeSeriesQuery",
-            "spec": {
-              "plugin": {
-                "kind": "PrometheusTimeSeriesQuery",
-                "spec": {
-                  "datasource": {
-                    "kind": "PrometheusDatasource",
-                    "name": "__SEARCH__-thanos"
-                  },
-                  "query": "sum by (indexId_logString) (increase(mongot_index_stats_query_searchResultBatchLatencies_seconds_sum{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h])) / sum by (indexId_logString) (increase(mongot_index_stats_query_searchResultBatchLatencies_seconds_count{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h]) > 0)",
-                  "seriesNameFormat": ""
-                }
-              }
-            }
-          },
-          {
-            "kind": "TimeSeriesQuery",
-            "spec": {
-              "plugin": {
-                "kind": "PrometheusTimeSeriesQuery",
-                "spec": {
-                  "datasource": {
-                    "kind": "PrometheusDatasource",
-                    "name": "__SEARCH__-thanos"
-                  },
-                  "query": "sum by (indexId_logString) (increase(mongot_index_stats_indexing_steadyStateExceptions_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h]) + increase(mongot_index_stats_indexing_initialSyncExceptions_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h]))",
-                  "seriesNameFormat": ""
-                }
-              }
-            }
-          },
-          {
-            "kind": "TimeSeriesQuery",
-            "spec": {
-              "plugin": {
-                "kind": "PrometheusTimeSeriesQuery",
-                "spec": {
-                  "datasource": {
-                    "kind": "PrometheusDatasource",
-                    "name": "__SEARCH__-thanos"
-                  },
-                  "query": "max by (indexId_logString) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
-                  "seriesNameFormat": ""
-                }
-              }
-            }
-          },
-          {
-            "kind": "TimeSeriesQuery",
-            "spec": {
-              "plugin": {
-                "kind": "PrometheusTimeSeriesQuery",
-                "spec": {
-                  "datasource": {
-                    "kind": "PrometheusDatasource",
-                    "name": "__SEARCH__-thanos"
-                  },
-                  "query": "max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) - (max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"} offset 24h) or max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) * 0)",
-                  "seriesNameFormat": ""
+                  "query": "count(max by (indexId_logString) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source!=\"none\"})) or vector(0)"
                 }
               }
             }
@@ -4096,6 +4333,198 @@
       "kind": "Panel",
       "spec": {
         "display": {
+          "name": "What stored source adds",
+          "description": "The indexes that store fields, known only with the index info exporter on (monitoring.indexInfo). \"Without it\" is the smallest index of the same collection and type that stores nothing; \"It adds\" is the difference. It is a comparison, not a measurement: no metric says what stored source takes, and whatever else differs between the two definitions is in the difference too. The two cells are empty where the collection has no such index."
+        },
+        "plugin": {
+          "kind": "Table",
+          "spec": {
+            "columnSettings": [
+              {
+                "hide": true,
+                "name": "timestamp"
+              },
+              {
+                "header": "Index",
+                "name": "index",
+                "width": 290
+              },
+              {
+                "cellSettings": [
+                  {
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "0"
+                      }
+                    },
+                    "text": "none"
+                  },
+                  {
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "1"
+                      }
+                    },
+                    "text": "some fields"
+                  },
+                  {
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "2"
+                      }
+                    },
+                    "text": "all but some"
+                  },
+                  {
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "3"
+                      }
+                    },
+                    "text": "all fields"
+                  }
+                ],
+                "format": {
+                  "unit": "decimal"
+                },
+                "header": "Stored source",
+                "name": "value #1",
+                "width": 125
+              },
+              {
+                "format": {
+                  "unit": "bytes"
+                },
+                "header": "Size",
+                "name": "value #2",
+                "width": 80
+              },
+              {
+                "format": {
+                  "unit": "bytes"
+                },
+                "header": "Without it",
+                "name": "value #3",
+                "width": 110
+              },
+              {
+                "format": {
+                  "unit": "bytes"
+                },
+                "header": "It adds",
+                "name": "value #4",
+                "width": 100
+              },
+              {
+                "format": {
+                  "unit": "bytes"
+                },
+                "header": "Added per doc",
+                "name": "value #5",
+                "width": 130
+              }
+            ],
+            "density": "compact",
+            "transforms": [
+              {
+                "kind": "MergeSeries",
+                "spec": {}
+              }
+            ]
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (index) (label_join(label_join((max by (indexId_logString) (0 * mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"include\"} + 1 or 0 * mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"exclude\"} + 2 or 0 * mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"all\"} + 3)) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(max by (indexId_logString) (0 * mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"include\"} + 1 or 0 * mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"exclude\"} + 2 or 0 * mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"all\"} + 3), \"index\", \"$1\", \"indexId_logString\", \"(.*)\")) or on () label_replace(vector(0), \"index\", \"no index is known to store fields\", \"\", \"\")",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (index) (label_join(label_join((max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) and on (indexId_logString) max by (indexId_logString) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source!=\"none\"} @ end())) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) and on (indexId_logString) max by (indexId_logString) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source!=\"none\"} @ end()), \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (index) (label_join(label_join((max by (indexId_logString) (0 * (((max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) * on (indexId_logString) group_left (indexType) (0 * max by (indexId_logString, indexType) (mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) + 1) * on (indexId_logString) group_left (database, collection) max by (indexId_logString, database, collection) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end())) and on (indexId_logString) max by (indexId_logString) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source!=\"none\"} @ end())) + on (database, collection, indexType) group_left () min by (database, collection, indexType) (((max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) * on (indexId_logString) group_left (indexType) (0 * max by (indexId_logString, indexType) (mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) + 1) * on (indexId_logString) group_left (database, collection) max by (indexId_logString, database, collection) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end())) and on (indexId_logString) max by (indexId_logString) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"none\"} @ end())))) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(max by (indexId_logString) (0 * (((max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) * on (indexId_logString) group_left (indexType) (0 * max by (indexId_logString, indexType) (mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) + 1) * on (indexId_logString) group_left (database, collection) max by (indexId_logString, database, collection) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end())) and on (indexId_logString) max by (indexId_logString) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source!=\"none\"} @ end())) + on (database, collection, indexType) group_left () min by (database, collection, indexType) (((max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) * on (indexId_logString) group_left (indexType) (0 * max by (indexId_logString, indexType) (mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) + 1) * on (indexId_logString) group_left (database, collection) max by (indexId_logString, database, collection) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end())) and on (indexId_logString) max by (indexId_logString) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"none\"} @ end()))), \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (index) (label_join(label_join((max by (indexId_logString) ((((max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) * on (indexId_logString) group_left (indexType) (0 * max by (indexId_logString, indexType) (mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) + 1) * on (indexId_logString) group_left (database, collection) max by (indexId_logString, database, collection) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end())) and on (indexId_logString) max by (indexId_logString) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source!=\"none\"} @ end())) - on (database, collection, indexType) group_left () min by (database, collection, indexType) (((max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) * on (indexId_logString) group_left (indexType) (0 * max by (indexId_logString, indexType) (mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) + 1) * on (indexId_logString) group_left (database, collection) max by (indexId_logString, database, collection) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end())) and on (indexId_logString) max by (indexId_logString) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"none\"} @ end())))) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(max by (indexId_logString) ((((max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) * on (indexId_logString) group_left (indexType) (0 * max by (indexId_logString, indexType) (mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) + 1) * on (indexId_logString) group_left (database, collection) max by (indexId_logString, database, collection) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end())) and on (indexId_logString) max by (indexId_logString) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source!=\"none\"} @ end())) - on (database, collection, indexType) group_left () min by (database, collection, indexType) (((max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) * on (indexId_logString) group_left (indexType) (0 * max by (indexId_logString, indexType) (mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) + 1) * on (indexId_logString) group_left (database, collection) max by (indexId_logString, database, collection) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end())) and on (indexId_logString) max by (indexId_logString) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"none\"} @ end()))), \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (index) (label_join(label_join(((max by (indexId_logString) ((((max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) * on (indexId_logString) group_left (indexType) (0 * max by (indexId_logString, indexType) (mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) + 1) * on (indexId_logString) group_left (database, collection) max by (indexId_logString, database, collection) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end())) and on (indexId_logString) max by (indexId_logString) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source!=\"none\"} @ end())) - on (database, collection, indexType) group_left () min by (database, collection, indexType) (((max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) * on (indexId_logString) group_left (indexType) (0 * max by (indexId_logString, indexType) (mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) + 1) * on (indexId_logString) group_left (database, collection) max by (indexId_logString, database, collection) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end())) and on (indexId_logString) max by (indexId_logString) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"none\"} @ end())))) / (max by (indexId_logString) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) > 0)) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace((max by (indexId_logString) ((((max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) * on (indexId_logString) group_left (indexType) (0 * max by (indexId_logString, indexType) (mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) + 1) * on (indexId_logString) group_left (database, collection) max by (indexId_logString, database, collection) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end())) and on (indexId_logString) max by (indexId_logString) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source!=\"none\"} @ end())) - on (database, collection, indexType) group_left () min by (database, collection, indexType) (((max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) * on (indexId_logString) group_left (indexType) (0 * max by (indexId_logString, indexType) (mongot_index_stats_indexing_insert_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) + 1) * on (indexId_logString) group_left (database, collection) max by (indexId_logString, database, collection) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end())) and on (indexId_logString) max by (indexId_logString) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\",stored_source=\"none\"} @ end())))) / (max by (indexId_logString) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) > 0), \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "6_5": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
           "name": "Searches that ask for stored source, per second",
           "description": "Queries sent with returnStoredSource, all mongot pods, 5 minute rate: $search and $vectorSearch apart. 0 when none is sent."
         },
@@ -4172,7 +4601,7 @@
         ]
       }
     },
-    "6_5": {
+    "6_6": {
       "kind": "Panel",
       "spec": {
         "display": {
@@ -4200,7 +4629,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "sort_desc(sum by (name) (increase(mongot_index_stats_query_feature_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h])) > 0)",
+                  "query": "sort_desc(sum by (name) (increase(mongot_index_stats_query_feature_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h] @ end())) > 0)",
                   "seriesNameFormat": "{{name}}"
                 }
               }
@@ -4622,37 +5051,73 @@
           {
             "x": 0,
             "y": 122,
-            "width": 24,
-            "height": 10,
+            "width": 8,
+            "height": 4,
             "content": {
               "$ref": "#/spec/panels/5_8"
             }
           },
           {
-            "x": 0,
-            "y": 132,
-            "width": 24,
-            "height": 10,
+            "x": 8,
+            "y": 122,
+            "width": 8,
+            "height": 4,
             "content": {
               "$ref": "#/spec/panels/5_9"
             }
           },
           {
-            "x": 0,
-            "y": 142,
-            "width": 24,
-            "height": 9,
+            "x": 16,
+            "y": 122,
+            "width": 8,
+            "height": 4,
             "content": {
               "$ref": "#/spec/panels/5_10"
             }
           },
           {
             "x": 0,
-            "y": 151,
+            "y": 126,
+            "width": 24,
+            "height": 10,
+            "content": {
+              "$ref": "#/spec/panels/5_11"
+            }
+          },
+          {
+            "x": 0,
+            "y": 136,
+            "width": 24,
+            "height": 10,
+            "content": {
+              "$ref": "#/spec/panels/5_12"
+            }
+          },
+          {
+            "x": 0,
+            "y": 146,
+            "width": 24,
+            "height": 10,
+            "content": {
+              "$ref": "#/spec/panels/5_13"
+            }
+          },
+          {
+            "x": 0,
+            "y": 156,
+            "width": 24,
+            "height": 10,
+            "content": {
+              "$ref": "#/spec/panels/5_14"
+            }
+          },
+          {
+            "x": 0,
+            "y": 166,
             "width": 24,
             "height": 9,
             "content": {
-              "$ref": "#/spec/panels/5_11"
+              "$ref": "#/spec/panels/5_15"
             }
           }
         ]
@@ -4670,7 +5135,7 @@
         "items": [
           {
             "x": 0,
-            "y": 161,
+            "y": 176,
             "width": 6,
             "height": 4,
             "content": {
@@ -4679,7 +5144,7 @@
           },
           {
             "x": 6,
-            "y": 161,
+            "y": 176,
             "width": 6,
             "height": 4,
             "content": {
@@ -4688,7 +5153,7 @@
           },
           {
             "x": 12,
-            "y": 161,
+            "y": 176,
             "width": 6,
             "height": 4,
             "content": {
@@ -4697,7 +5162,7 @@
           },
           {
             "x": 18,
-            "y": 161,
+            "y": 176,
             "width": 6,
             "height": 4,
             "content": {
@@ -4706,20 +5171,29 @@
           },
           {
             "x": 0,
-            "y": 165,
-            "width": 12,
-            "height": 8,
+            "y": 180,
+            "width": 24,
+            "height": 9,
             "content": {
               "$ref": "#/spec/panels/6_4"
             }
           },
           {
-            "x": 12,
-            "y": 165,
+            "x": 0,
+            "y": 189,
             "width": 12,
             "height": 8,
             "content": {
               "$ref": "#/spec/panels/6_5"
+            }
+          },
+          {
+            "x": 12,
+            "y": 189,
+            "width": 12,
+            "height": 8,
+            "content": {
+              "$ref": "#/spec/panels/6_6"
             }
           }
         ]
