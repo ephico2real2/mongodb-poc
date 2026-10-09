@@ -90,9 +90,10 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 | `operatorGroup.create` | `true` | `false` when the namespace already has an OperatorGroup |
 | `search.name` | `mongot` | Step 6a, `metadata.name` |
 | `search.version` | empty | mongot follows the operator's default; set it to pin mongot |
-| `search.replicas` | `3` | Step 6a |
+| `search.replicas` | `3` | Step 6a. Lowering it deletes the volumes of the pods that go: [volumes.md](volumes.md) |
+| `search.allowVolumeLoss` | `false` | `true` for the one upgrade that lowers `search.replicas` on purpose; otherwise the preflight refuses it |
 | `search.resources` | 1 CPU / 3Gi to 3 CPU / 5Gi | Step 6a |
-| `search.persistence.storage`, `.storageClass` | `10Gi`, `thin-csi` | Step 6a |
+| `search.persistence.storage`, `.storageClass` | `10Gi`, `thin-csi` | Step 6a. Raising the size later takes the [expansion runbook](volume-expansion-runbook.md) |
 | `search.keepOnUninstall` | `false` | Keeps the resource, and so the index, on `helm uninstall` |
 | `loadBalancer.externalHostname` | required | Step 6a; also the Route's host |
 | `loadBalancer.replicas` | `2` | Step 6a |
@@ -427,6 +428,22 @@ About the five index alerts:
   - *A build or a rebuild is not a difference.* Every pod builds at its own pace, and a rebuild keeps the old generation beside the new one; a generation is compared with itself, and only when it is `STEADY` everywhere. From mongot's source and a promtool test, not seen on the lab.
 - **One failed search does not fire `MongotIndexSearchesFailing`.** Its 5 minute rate is above 0 for under 5 minutes. Two failures less than 5 minutes apart do, 5 minutes after the first. The alert prints the rate with three decimals: one failure in 5 minutes is 0.003 a second.
 - **Tested with promtool, and one of them on the lab.** [`test/alerts.sh`](../../test/alerts.sh) renders the rules and runs [`test/alerts.test.yaml`](../../test/alerts.test.yaml): each alert fires for its index and only for it, after its time and not before; an index being built is not "not following"; an index that is written to, one being built on three pods at their own pace, a rebuild beside its old generation, and one whose size alone differs do not "differ by pod"; one that stays a document short on a pod does, 20 minutes after its last write. On the lab, 2026-10-09: the rule as first written fired on an index that was only being written to; with this one loaded, the same writes for 14 minutes (1,668 documents, the pods 17 to 24 apart at every reading) left it inactive at each of the 30 readings taken of it. None of the five has been seen to fire for its real cause there.
+
+## Volumes and scaling
+
+Three documents beside this one, and a script, for running mongot once it is installed:
+
+| Document | For |
+| --- | --- |
+| [volumes.md](volumes.md) | Which actions keep a mongot pod's volume and which delete it. The operator deletes the volume of every pod that is scaled away, and a pod without its volume builds every index again: 4 to 5 hours for about 180 GB, as the owner reports for a QA cluster. What the chart refuses, and what protects a volume |
+| [scaling.md](scaling.md) | How mongot is given more CPU, memory or pods through the values; that nothing scales it by itself; and why its StatefulSet is never scaled by hand |
+| [volume-expansion-runbook.md](volume-expansion-runbook.md) | Growing the volumes: the size in the values, the sync, and then the steps by hand, in order, with what to check and what to do when one stops |
+| [`expand-mongot-volumes.sh`](expand-mongot-volumes.sh) | The script of that runbook: grows the volume claims one pod at a time, then lets the operator take the new size. `--check` and `--dry-run` change nothing |
+
+What the chart itself does about it:
+
+- **An upgrade to fewer mongot pods is refused** by the preflight, before anything is changed, unless `search.allowVolumeLoss: true` is set for that upgrade.
+- **A changed `search.persistence.storage` stops the upgrade's gate at once**, with the reason and the name of the runbook, instead of a timeout: the operator cannot grow a running StatefulSet's volumes, and the pods run on as they were.
 
 ## Maintaining the chart
 

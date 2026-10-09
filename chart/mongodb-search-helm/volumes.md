@@ -40,7 +40,7 @@ persistentVolumeClaimRetentionPolicy:
   whenScaled: Delete
 ```
 
-It does so on purpose, since operator 1.9.0. Its source, `controllers/searchcontroller/search_construction.go` at
+It does so on purpose; since operator 1.9.0, by MongoDB's account in its pull request 1621. Its source, `controllers/searchcontroller/search_construction.go` at
 tag 1.13.0: "The index is rebuildable, so freeing the storage immediately is safe — a later scale-up reindexes from
 mongod." The pull request that added it calls it a product decision: "immediate PVC reclaim on scale-down. This
 deviates from the Kubernetes default (`Retain`)"
@@ -93,9 +93,26 @@ So this chart has no value that keeps a volume through a scale-down: there is no
 4. **Change the resource through the values only.** A field of the MongoDBSearch that was patched by hand stays
    owned by that patch: on the lab, Helm 4 then refused the next upgrade that changed it ("conflict with
    \"kubectl-patch\"") until it was run with `--force-conflicts`.
-5. **A storage class that retains its volumes** (`reclaimPolicy: Retain`) keeps the volume and the index files when
-   the claim is deleted: the volume is then `Released`, not gone. Binding a released volume to a returning pod is a
-   procedure by hand that this repository has not run yet.
+5. **Volumes that are retained.** What happens to the disk when its claim is deleted is the volume's reclaim
+   policy, and that is the one protection nothing undoes. Kubernetes: with `Retain`, "When the PersistentVolumeClaim
+   is deleted, the PersistentVolume still exists and the volume is considered \"released\""; with `Delete`, "deletion
+   removes both the PersistentVolume object from Kubernetes, as well as the associated storage asset in the external
+   infrastructure"
+   ([Persistent Volumes, Reclaiming](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#reclaiming)).
+   OpenShift's `thin-csi` class for vSphere ships with `reclaimPolicy: Delete`: there the disk and its index go with
+   the claim. The policy of a volume that exists can be changed, by a cluster administrator, once for each mongot
+   volume
+   ([Change the Reclaim Policy of a PersistentVolume](https://kubernetes.io/docs/tasks/administer-cluster/change-pv-reclaim-policy/)):
+
+   ```bash
+   bash expand-mongot-volumes.sh --check --statefulset <search name>-search-0     # prints each volume and its policy
+   oc patch persistentvolume <the volume's name> -p '{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}'
+   ```
+
+   A volume added later (a new pod) starts with the class's policy again. A retained volume is not removed when it
+   is no longer wanted: that is then done by hand. On the lab, whose class is `Retain`, every claim deleted in the
+   tests above left its volume `Released`, with its files. Binding a released volume to a returning pod, so that it
+   goes on without a rebuild, is a procedure by hand that this repository has not run yet.
 
 ## Growing a volume
 
