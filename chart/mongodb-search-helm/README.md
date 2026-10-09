@@ -314,6 +314,63 @@ Three things were wrong in the Grafana form of chart 0.3.7 and are corrected: it
 
 The two bar charts are one colour: they rank or count, and a colour per bar would change with every new index. In the Grafana form it is the dashboard's blue, as a pale fill with its edge in the full colour. The console draws its bar chart in a brighter blue of its own and takes no colour from the dashboard, and it lists bars by their value whatever the query's order. The two sections add 29 queries to a refresh, 126 in all.
 
+### Index names, as metrics
+
+Optional, off by default (`monitoring.indexInfo.enabled`). mongot's metrics name an index by its id only. With this on, a small Deployment, `<search.name>-index-info`, publishes the name of every search index, so a query can show `sample_mflix.movies / default` where mongot says `6ab4bc25d292ce5f25d1b708`.
+
+**How it works.** When Prometheus scrapes it, it asks the source deployment for its databases, their collections, and `$listSearchIndexes` of each collection, and keeps the answer for `cacheSeconds`. It reads no document. It runs on the stock MongoDB Community Server image, which has `python3` and `mongosh`; nothing is built for it. It reaches the source with the hosts and the CA the `MongoDBSearch` uses (`source.hostAndPorts`, `tls.trustBundleConfigMap`), and with a database user of its own.
+
+**What it needs: one more prerequisite, made by hand.** A user on the source deployment that may list and nothing else, and its password in a Secret. Not the sync user: that one may read every collection and write mongot's catalog.
+
+```javascript
+// in mongosh, on the source deployment, as a user administrator
+db.getSiblingDB("admin").createRole({role: "searchIndexLister", roles: [], privileges: [
+  {resource: {cluster: true}, actions: ["listDatabases"]},
+  {resource: {db: "", collection: ""}, actions: ["listCollections", "listSearchIndexes"]}]})
+db.getSiblingDB("admin").createUser({user: "search-index-info", pwd: passwordPrompt(), roles: ["searchIndexLister"]})
+```
+
+```bash
+# the same password, typed and not shown, into the Secret; printf adds no newline
+printf 'search-index-info password: '; stty -echo; IFS= read -r PW; stty echo; echo
+printf '%s' "$PW" | oc create secret generic search-index-info-password -n $NS --from-file=password=/dev/stdin
+unset PW
+```
+
+Then set `monitoring.indexInfo.enabled: true`, and `monitoring.indexInfo.uriOptions` when the connection needs more (for example `replicaSet=rs0`). The preflight checks the Secret when the exporter is on.
+
+**What it publishes.**
+
+| Metric | Labels | Value |
+| --- | --- | --- |
+| `mongodb_search_index_info` | `indexId_logString`, `database`, `collection`, `index_name`, `stored_source` (`none`, `include`, `exclude` or `all`) | 1 |
+| `mongodb_search_index_stored_source_paths` | `indexId_logString` | The field paths the stored source includes or excludes; 0 for `none` and `all` |
+| `mongodb_search_index_listed_hosts` | `indexId_logString` | The mongot hosts the source lists for the index |
+| `mongodb_search_index_info_collections` | | The collections that were asked |
+| `mongodb_search_index_info_collect_timestamp_seconds`, `..._collect_duration_seconds` | | When the source was last asked, and how long it took |
+
+The id is under the label mongot uses, `indexId_logString`, so the two join without relabelling:
+
+```promql
+max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace="<ns>"})
+  * on (indexId_logString) group_left (database, collection, index_name, stored_source)
+  max by (indexId_logString, database, collection, index_name, stored_source) (mongodb_search_index_info{namespace="<ns>"})
+```
+
+**Measured on the lab**, 2026-10-09: the user above listed all 8 indexes of 3 collections in 0.49 s, and `find` and `insert` were refused to it (`Unauthorized`). The first `up` of 1 came under 2 minutes after the upgrade; the exporter serves 27 series; the query above returned the 8 sizes with their names, among them `sample_mflix` / `movies` / `ss_all` with `stored_source="all"`. The pod used 9 Mi of memory between scrapes.
+
+What to know:
+
+- **When the source cannot be asked, the scrape fails.** The exporter answers 503 and serves no names, so `up` goes to 0: a page of old names answered 200 would look healthy. Its log says why, in mongosh's words. Tested with a stand-in `mongosh` (`test/chart.sh`), not on the lab.
+- **It does not publish the status of an index.** The source's `status` and `queryable` can be wrong (see `$listSearchIndexes` can say `PENDING`, above); mongot's own `indexStatusCode` is the one to read. `mongodb_search_index_listed_hosts` is the detector for that condition: it is 0 while searches work.
+- **The names are readable by whoever can read the namespace's metrics.** It publishes index, collection and database names, and nothing of their content. Its Service is ClusterIP only.
+- **One question per collection.** The cost grows with the number of collections, not of indexes. Measured with 3; not measured on a deployment with thousands, where `cacheSeconds` and `interval` should be raised.
+- **`interval` is at least `25s`.** The exporter gives the source 20 seconds and its scrape times out at 25. Prometheus refuses a scrape timeout longer than the interval, and the Prometheus operator then leaves the ServiceMonitor out without telling Helm, so the chart refuses a shorter interval when it renders.
+- **mongosh's telemetry is off.** mongosh has it on by default (`enableTelemetry` was `true` in the pod's own mongosh configuration on the lab). The pod mounts a global configuration file, `/etc/mongosh.conf`, with `forceDisableTelemetry: true`, the one place mongosh reads that setting from.
+- **Any name is served as it is.** A quote, a backslash, a newline, a letter outside ASCII, or one of the characters Python takes for a line break and JSON does not (U+2028, U+2029, U+0085): tested with a stand-in `mongosh`.
+- **Views and time series collections are not asked**, nor the databases `admin`, `local`, `config` and mongot's own `__mdb_internal_search`.
+- **The dashboard does not use it yet**: its panels still name an index by id.
+
 ### Envoy counters without `_total`
 
 Envoy exports `envoy_cluster_upstream_rq_retry` and `envoy_cluster_upstream_rq_xx` as counters (Prometheus records their type as `counter`), but without the `_total` that Prometheus expects at the end of a counter's name. `rate()` on such a name is answered with the notice *metric might not be a counter, name does not end in _total/_sum/_count/_bucket*. Thanos Querier returns that notice as a warning, and Perses and Grafana put a warning sign on the panel.

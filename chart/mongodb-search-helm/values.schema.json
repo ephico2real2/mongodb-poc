@@ -123,7 +123,25 @@
           "type": "object", "additionalProperties": false,
           "properties": {"enabled": {"type": "boolean"}, "thanosURL": {"type": "string", "pattern": "^https?://"}}
         },
-        "grafanaDashboard": {"type": "boolean"}
+        "grafanaDashboard": {"type": "boolean"},
+        "indexInfo": {
+          "type": "object", "additionalProperties": false,
+          "required": ["enabled", "image", "username", "passwordSecret", "cacheSeconds", "interval"],
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "image": {"type": "string", "minLength": 1},
+            "username": {"type": "string", "minLength": 1},
+            "passwordSecret": {
+              "type": "object", "additionalProperties": false, "required": ["name", "key"],
+              "properties": {"name": {"type": "string", "minLength": 1}, "key": {"type": "string", "minLength": 1}}
+            },
+            "uriOptions": {"type": "string", "pattern": "^[^\\s?#]*$",
+                           "description": "Appended to the connection string after an &: no ?, # or space"},
+            "cacheSeconds": {"type": "integer", "minimum": 0},
+            "interval": {"type": "string", "pattern": "^[0-9]+[smh]$"},
+            "resources": {"type": "object"}
+          }
+        }
       }
     },
     "wait": {
