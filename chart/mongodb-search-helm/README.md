@@ -15,7 +15,7 @@ Steps 1 to 5 of the runbook stay manual: the chart never creates a certificate, 
 | 1 | MongoDBSearch | The resource of runbook Step 6a |
 | 1 | Route | The passthrough Route of runbook Step 6d, with `balance: roundrobin` |
 | 1 | ServiceMonitors | Per-pod scraping of mongot and Envoy; on by default |
-| 1 | Alerts | Nine alerts: four on traffic distribution and retries, five on the indexes; on by default |
+| 1 | Alerts | Twelve alerts: four on traffic distribution and retries, five on the indexes, and the volume under the indexes at three levels; on by default |
 | 1 | Dashboard | "MongoDB Search" for Perses in the OpenShift console, on by default; the Grafana copy is off by default |
 | 2 | csv-reclaim Job | Clears an operator CSV left behind by an earlier uninstall |
 | 3 | approver Job | Approves the InstallPlan for `operator.version`, and no other |
@@ -58,7 +58,7 @@ bash $P --clean                                       # removes the key files on
 From the package alone, with no clone:
 
 ```bash
-helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.10/mongodb-search-helm-0.3.10.tgz --untar
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.12/mongodb-search-helm-0.3.12.tgz --untar
 bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
 ```
 
@@ -66,7 +66,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.10/mongodb-search-helm-0.3.10.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.12/mongodb-search-helm-0.3.12.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -110,7 +110,8 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 | `route.targetPort` | `mongot-grpc` | Step 6d |
 | `route.balance` | `roundrobin` | Step 6d; see the [rationale](../../docs/mongot-route-balance-rationale.md) |
 | `monitoring.serviceMonitors.enabled` | `true` | Per-pod scraping of mongot and Envoy; needs user workload monitoring |
-| `monitoring.alerts.enabled` | `true` | The nine [alerts](#alerts): traffic that concentrates on one mongot pod, and an index in trouble |
+| `monitoring.alerts.enabled` | `true` | The twelve [alerts](#alerts): traffic that concentrates on one mongot pod, an index in trouble, and the volume under the indexes filling up |
+| `monitoring.alerts.dataPathUsed.info`, `.warning`, `.critical` | `70`, `80`, `90` | The three levels of [the volume alert](#the-volume-alert), in per cent used of the file system under mongot's data path. `null` leaves a level out |
 | `monitoring.persesDashboard.enabled`, `.thanosURL` | `true`, Thanos Querier port 9091 | The "MongoDB Search" dashboard in the console; set it to `false` on a cluster without the Cluster Observability Operator |
 | `monitoring.grafanaDashboard` | `false` | The same dashboard as a ConfigMap for a Grafana dashboard sidecar |
 | `preflight.enabled` | `true` | |
@@ -308,7 +309,7 @@ What to know when reading them:
 - **Counts over an hour are estimates.** Prometheus extends an increase to the edges of its window: 60 queries read as 61. The console also shortens a count of a thousand or more (`1.1K`); Grafana writes it out.
 - **Vector memory** is `mongot_index_stats_requiredMemoryBytes`: what a vector index wants resident, the vectors plus 128 bytes of graph for each. On the lab 20,024 vectors of 5 dimensions read 2,963,552 bytes, which is 20,024 x (5 x 4 + 128). It is 0 for a search index.
 - **The batch time is an average, and not the time of a whole search.** `mongot_index_stats_query_searchResultBatchLatencies_seconds` times the making of one batch of results, for search indexes only, and is an average here: mongot gives a sum and a count, and no buckets. The lab read 0.7 to 1.0 ms, when the whole search command averaged 1.4 ms, and about an hour later, with the test searches running, 1.3 to 1.6 ms.
-- **`$listSearchIndexes` can say `PENDING` while the index is served.** On the lab it reports every index `PENDING` and not queryable, while mongot reports `STEADY` and searches return results. mongod builds that answer from the hosts whose heartbeat row in `__mdb_internal_search.serverState` is under 2 hours old. The lab was suspended for over 2 hours twice; a pod's hourly cleanup then removed the others' rows, and mongot 1.70.1 only updates its row, never re-creates it: each pod logs `Failed to update server state entry` every 30 seconds, and the collection holds 0 rows (read 2026-10-09). The index names and definitions in that answer are right; its status is not to be trusted there. mongot's own `indexStatusCode`, which these panels read, is. Restarting the three mongot pods one at a time put it right on 2026-10-09: a pod writes its row when it starts. Afterwards the collection held 3 rows, every index was `READY` and queryable on 3 hosts, and the warning had stopped.
+- **`$listSearchIndexes` can say `PENDING` while the index is served.** On the lab it reports every index `PENDING` and not queryable, while mongot reports `STEADY` and searches return results. mongod builds that answer from the hosts whose heartbeat row in `__mdb_internal_search.serverState` is under 2 hours old. The lab was suspended for over 2 hours twice; a pod's hourly cleanup then removed the others' rows, and mongot 1.70.1 only updates its row, never re-creates it: each pod logs `Failed to update server state entry` every 30 seconds, and the collection holds 0 rows (read 2026-10-09). The index names and definitions in that answer are right; its status is not to be trusted there. mongot's own `indexStatusCode`, which these panels read, is. Restarting the three mongot pods one at a time put it right on 2026-10-09: a pod writes its row when it starts. Afterwards the collection held 3 rows, every index was `READY` and queryable on 3 hosts, and the warning had stopped. A suspended lab is not needed for it: on 2026-10-09 the row of one running pod was removed by hand, which is what another pod's cleanup does after 2 hours without a heartbeat. For the 12 minutes it was watched the pod did not write it again, logged the warning every 30 seconds (25 times, the first 17 seconds after the removal), and the source listed the index on 2 hosts of 3, still `READY`; searches were answered throughout. Restarted, the pod was Ready 24 seconds after it started and listed again at the next reading, on its volume and with nothing to sync. So one pod that cannot reach the source for over 2 hours while the others can is left out of the listing until it is restarted.
 - **Not seen on the lab:** an index being built while the dashboard was open, an index out of `STEADY`, a failed search, a sync error. Those panels and columns read 0 throughout.
 
 **Where these 23 panels were looked at**, on 2026-10-09 with chart 0.3.9:
@@ -402,7 +403,7 @@ Measured on the lab on 2026-10-06, through Thanos Querier: before, each of the t
 
 ## Alerts
 
-On by default (`monitoring.alerts.enabled`): one PrometheusRule, `<search.name>-distribution`, with two groups. They need the ServiceMonitors, and user workload monitoring on the cluster.
+On by default (`monitoring.alerts.enabled`): one PrometheusRule, `<search.name>-distribution`, with three groups: traffic, indexes, and the volume. They need the ServiceMonitors, and user workload monitoring on the cluster.
 
 | Alert | Fires when | For | Severity |
 | --- | --- | --- | --- |
@@ -415,6 +416,9 @@ On by default (`monitoring.alerts.enabled`): one PrometheusRule, `<search.name>-
 | `MongotIndexBuildRetrying` | The build of an index has failed and started again, on a pod | 15 m | warning |
 | `MongotIndexesDifferByPod` | An index is missing on a pod; or it is `STEADY` on every pod, has not been written to for 10 minutes, and its document count differs between pods | 10 m | warning |
 | `MongotIndexSearchesFailing` | mongot keeps failing searches on an index: failures less than 5 minutes apart | 5 m | warning |
+| `MongotDataPathFillingUp` | The file system under mongot's data path is 70% used or more, on a pod | 30 m | info |
+| `MongotDataPathFillingUp` | The same, 80% used or more | 15 m | warning |
+| `MongotDataPathFillingUp` | The same, 90% used or more | 5 m | critical |
 
 About the five index alerts:
 
@@ -429,6 +433,123 @@ About the five index alerts:
 - **One failed search does not fire `MongotIndexSearchesFailing`.** Its 5 minute rate is above 0 for under 5 minutes. Two failures less than 5 minutes apart do, 5 minutes after the first. The alert prints the rate with three decimals: one failure in 5 minutes is 0.003 a second.
 - **Tested with promtool, and one of them on the lab.** [`test/alerts.sh`](../../test/alerts.sh) renders the rules and runs [`test/alerts.test.yaml`](../../test/alerts.test.yaml): each alert fires for its index and only for it, after its time and not before; an index being built is not "not following"; an index that is written to, one being built on three pods at their own pace, a rebuild beside its old generation, and one whose size alone differs do not "differ by pod"; one that stays a document short on a pod does, 20 minutes after its last write. On the lab, 2026-10-09: the rule as first written fired on an index that was only being written to; with this one loaded, the same writes for 14 minutes (1,668 documents, the pods 17 to 24 apart at every reading) left it inactive at each of the 30 readings taken of it. None of the five has been seen to fire for its real cause there.
 
+### The volume alert
+
+`MongotDataPathFillingUp` reads the used share of the file system under mongot's data path, per pod: `1 - mongot_system_disk_space_data_path_free_bytes / mongot_system_disk_space_data_path_total_bytes`. It is the number mongot itself acts on. In its source at v1.70.1 a disk monitor computes `(total - usable) / total` of that file system every 5 seconds, and the same panel of the dashboard draws it (*Data volume used, per mongot pod*).
+
+**What mongot does by itself as the disk fills**, whoever is watching:
+
+| Used | What mongot does | In MongoDB's words |
+| --- | --- | --- |
+| Above 85% | Stops building indexes: a new or rebuilt index waits. Resumes below 80% | "`mongot` disables initial sync. New index builds remain in PENDING. Existing indexes keep operating." |
+| Above 90% | Stops following the source, for every index. Resumes below 85% | "`mongot` disables steady-state replication. Existing indexes stop receiving change events from `mongod`. Search results grow increasingly stale." |
+| 95% | Exits, and exits again on a restart until space is freed | "`mongot` crashes. Recovery requires freeing disk before `mongot` can restart cleanly." |
+
+The words are from MongoDB's [Recommended Alerts for mongot](https://www.mongodb.com/docs/search/self-managed/current/monitoring/recommended-alerts/), *Disk Fill and mongot Self-Protection Cascade*; the numbers and the two "resumes" are mongot's defaults in `DiskMonitorConfig.java` (0.85 and 0.80, 0.90 and 0.85, 0.95). They can be changed in mongot's own configuration (`advancedConfigs.diskMonitor`); this chart does not set them, and the alert's text assumes the defaults.
+
+**The three levels, and where each number comes from.** The owner set them on 2026-10-09: a first level from 70 to 75%, 80%, and critical at 90%.
+
+| Level | Used | Holds | Why this number |
+| --- | --- | --- | --- |
+| `info` | 70% | 30 m | MongoDB: "If this metric drops below 30% free, consider having a planning conversation to increase storage." It is also about where a rebuild stops fitting, below |
+| `warning` | 80% | 15 m | MongoDB: "Having less than 20% free on the `mongot` dataPath volume can cause availability issues." It is the last level before mongot acts by itself |
+| `critical` | 90% | 5 m | mongot stops following the source above it |
+
+MongoDB's own recommended alert is one level later at each step, at 85, 90 and 95%, the three points where mongot acts. These are earlier on purpose: at about 180 to 190 GB of indexes a pod, as the owner reports for a QA cluster, a sync from scratch takes 4 to 5 hours (see *Replication lag*), so the time to act is before mongot does. The hold times are this chart's choice, shorter as the level rises; no published rule for mongot gives one.
+
+- **A pod is in one level at a time.** A level runs from its number up to the next one's, so a pod at 92% is `critical` and not also `warning` and `info`: the console lists one alert for it, not three.
+- **Rising into the next level leaves no minute without an alert.** The lower level stays on while the higher one holds, and stops when that one fires. Without that, a notice that the warning is *resolved* would go out at the moment the disk passes 90%. Falling back, the higher alert stops at once and the lower one holds its own time again.
+- **A restarted pod is the same alert**: the alert names the namespace and the pod only.
+- **Room for a rebuild.** MongoDB: "Plan for roughly 125% of the expected steady-state footprint during a rebuild." mongot keeps the old index beside the new one until the new one can answer, and builds nothing above 85%. So a volume that is more than about 68% used (0.85 / 1.25) cannot take a rebuild of everything on it; that figure is derived here, not MongoDB's. In bytes: 190 GB of indexes are 70% of a 271 GB volume, 75% of 253 GB and 80% of 238 GB.
+- **On a shared disk the number is the disk's.** With a hostpath provisioner the data path is on the node's disk: the lab's three pods all read the same 61.6% of a 149 GiB disk on 2026-10-09, of which mongot's indexes are 16 MiB, and would raise three alerts that say the same thing. The alert's text says so. With a volume of its own per pod, the number is that volume's.
+
+**Changing the levels.** They are values of the chart, whole numbers, and must rise. With the release's own values file, as for every upgrade of this chart: `--reuse-values` keeps the old chart's defaults, so from a release of 0.3.10 or earlier these three are absent and the upgrade is refused when the chart renders, `monitoring.alerts.dataPathUsed is missing: ...`.
+
+```bash
+# the first level at 75 instead of 70
+helm upgrade mongot <chart> -n $NS -f my-values.yaml --timeout 20m --set monitoring.alerts.dataPathUsed.info=75
+
+# MongoDB's own three points
+helm upgrade mongot <chart> -n $NS -f my-values.yaml --timeout 20m \
+  --set monitoring.alerts.dataPathUsed.info=85 --set monitoring.alerts.dataPathUsed.warning=90 --set monitoring.alerts.dataPathUsed.critical=95
+
+# no info level: only warning and critical
+helm upgrade mongot <chart> -n $NS -f my-values.yaml --timeout 20m --set monitoring.alerts.dataPathUsed.info=null
+```
+
+Or in a values file:
+
+```yaml
+monitoring:
+  alerts:
+    dataPathUsed:
+      info: 75
+      warning: 80
+      critical: 90
+```
+
+A level set to `null` is left out, and the level below it then runs up to the next one that is left; all three `null` leaves the alert out and the other nine in. Levels that do not rise are refused when the chart renders, by name: `monitoring.alerts.dataPathUsed.critical is 90: it must be above warning (95)`. The hold times are not values.
+
+**Where it shows in OpenShift.** In the console under **Observe**, **Alerting**. That page opens on the platform's own alerts that are firing: set the *Source* filter to **User** to see this one, as for every alert of this chart. It needs user workload monitoring on the cluster. A user who is not a cluster administrator also needs the role `monitoring-rules-view` in the namespace (`oc adm policy add-role-to-user monitoring-rules-view <user> -n $NS`): without it the console answers "You don't have access to this section", as it did to the lab's viewer.
+
+**Seen on the lab**, 2026-10-09, with the levels lowered to 50, 55 and 60 so that the lab's 61.3% would count. The critical level went pending for the three pods at 13:21:56Z and was firing 5 minutes later; the two lower levels stayed inactive, as they should for a pod above the top level. The Alertmanager of user workload monitoring held three active alerts, one a pod: "The file system under mongot's data path on mongot-search-0-1 is 61.34% used". The rule and its three alerts were listed by Thanos Querier's rules API, which is what the console's Alerting page reads. Not seen there: the page itself, since the lab's viewer lacks the role above; and the alert rising from one level into the next on a real disk, which is tested with promtool only.
+
+**Not in it: a "full in N days" rule.** The mixins that ship with Kubernetes also alert on a volume predicted to fill. It was looked at and left out: an index store grows in steps (a merge, a rebuild that keeps two copies for a time, then drops one), on the lab the slope of 6 hours was that of the node's other writers, and a restarted pod left a second series whose prediction alone would have fired.
+## Replication lag
+
+Each mongot pod follows the source deployment by itself, so a search can be answered from an index that is a little behind the collection, and one pod can be further behind than another. This is what MongoDB says about it, where this chart shows it, and what was decided about alerting on it.
+
+**What MongoDB says** (its pages for self-managed Search, read on 2026-10-09):
+
+| Question | MongoDB's words | Page |
+| --- | --- | --- |
+| What is it | "`mongot` is a downstream consumer of `mongod` change streams." Lag is the "Time since the last applied change event from mongod", exposed as `mongot_index_stats_indexing_replicationLagMs`; the Metrics Reference: "Replication lag per index, in milliseconds" | [Monitor mongot Deployment](https://www.mongodb.com/docs/search/self-managed/current/deployment/monitoring/), [Metrics Reference for mongot](https://www.mongodb.com/docs/search/self-managed/current/monitoring/metrics-reference/) |
+| What is normal | "A small steady-state lag, from sub-second to seconds, is normal." A healthy deployment's lag "is consistently sub-second" | Monitor mongot Deployment |
+| What a growing lag means | "[A] growing lag indicates `mongot` cannot keep up. Sustained lag eventually falls off the oplog and forces a re-sync", which "requires a full rebuild of the index" | Monitor mongot Deployment |
+| What causes it | A very large number of indexes; broad use of `dynamic: true`; repeated out-of-memory events; or "[t]he bottleneck is on the source database" | [Troubleshoot Self-Managed mongot Deployments](https://www.mongodb.com/docs/search/self-managed/current/troubleshooting/), *Large Replication Lag* |
+| What to do | "Scale `mongot` CPU and memory first"; reduce the number of indexes; prefer `dynamic: false`; index fewer fields; scale `mongod` if it is the bottleneck | The same section |
+| When a pod keeps rebuilding | "The `mongod` oplog rolled over before `mongot` could catch up": increase the oplog size, "or close the gap with more `mongot` capacity or fewer concurrent indexes" | The same page, *mongot Keeps Re-Syncing* |
+| While it is not there | The gauge does "not populate while an index is in initial sync", and with no index at all the series "is absent rather than zero" | Metrics Reference; Monitor mongot Deployment |
+| When to alert | "Steady-state lag is below one second. One minute of lag is acceptable for catch-up scenarios. A steadily growing lag is the alarm condition." It gives `max(mongot_index_stats_indexing_replicationLagMs) > 60000`, or for the trend `deriv(max(mongot_index_stats_indexing_replicationLagMs)[15m:1m]) > 500`, in the tier that pages. For a fleet: above 30 minutes "and rising" is an early warning, above 2 hours an escalation. "These thresholds are runbook starting points." | [Recommended Alerts for mongot](https://www.mongodb.com/docs/search/self-managed/current/monitoring/recommended-alerts/) |
+| What to check when it fires | "Check `mongod` write rate for a sudden spike. Check `mongot` CPU and disk I/O for saturation." | The same page |
+
+So lag is reduced by giving mongot and mongod room, and by indexing less. **Nothing forces a pod to catch up.** A pod applies the change stream as fast as it can; the only re-sync is the one mongot starts by itself when it has fallen off the oplog, and that is a rebuild. mongot's source at v1.70.1 was searched for a way to ask for a catch-up or a re-sync from outside, and none was found; that was a search, not a reading of all of it.
+
+> **A sync from scratch is expensive.** A pod that has fallen off the oplog, or has lost its volume, builds every index again from the collection. Until it has, MongoDB says, "Search returns stale results during the re-sync window"; a pod with nothing on its volume has nothing to answer from. How long depends on the data, the indexes and the storage. Reported by the owner for a QA cluster on 2026-10-08, not measured on this repository's lab: each mongot pod holds about 180 to 190 GB of indexes, and each took 4 to 5 hours to sync fully, on VMware with the `thin-csi` storage class, which the owner reports as a large improvement in overall performance. Expect the time to vary from one sync to the next. So:
+>
+> - Restart or replace mongot pods **one at a time**, and wait for the pod to be `STEADY` on every index and caught up (*Replication lag, per mongot pod*) before the next. Searches go to the other pods meanwhile.
+> - Keep each pod's volume. A pod that restarts on its volume resumes from where it was, provided the source's oplog still reaches back that far: on the lab, whose indexes are 16 MiB, a restarted pod was Ready 24 seconds after it started and listed again with every index half a minute later (2026-10-09). That says nothing about 180 GB. A pod without its volume starts from nothing.
+> - Size the source's oplog for the longest time a pod may be away plus the time a sync takes: MongoDB names the oplog that "rolled over before `mongot` could catch up" as the first cause of a pod that keeps re-syncing.
+> - Keep room on the volume for a rebuild. MongoDB: "Plan for roughly 125% of the expected steady-state footprint during a rebuild."
+
+### Recommendations: keeping lag small
+
+MongoDB's remedies, in its order, with where each is said and how it is done with this chart. Nothing here makes a pod catch up at once; each makes it fall behind less.
+
+| Recommendation | MongoDB's words | Its page | With this chart |
+| --- | --- | --- | --- |
+| 1. Give mongot CPU and memory first | "Scale `mongot` CPU and memory first if the nodes run out of memory or are memory-constrained." And: "Monitor the `mongot` process's CPU utilization and disk I/O queue length. If these metrics are consistently high and replication lag is growing, you need to scale up your hardware." | [Troubleshoot](https://www.mongodb.com/docs/search/self-managed/current/troubleshooting/), *Large Replication Lag*; [Resource Allocation Considerations](https://www.mongodb.com/docs/search/self-managed/current/resource-planning-sizing/resource-allocation/) | `search.resources`, then `helm upgrade` (see *Scaling mongot*, below). Watch *CPU used* and *JVM heap used, percent of limit* per pod |
+| 2. Fewer indexes | "Reduce the total number of indexes. At very high index counts, adding more search nodes can worsen the load pattern unless you first bring the change-stream load under control." And: "Avoid defining multiple, separate search indexes on a single collection. Each index adds overhead." | Troubleshoot, the same section; Resource Allocation Considerations | The tables *Each index* show every index, its size and its searches in the last hour: an index nobody searches is the first to go |
+| 3. No dynamic mapping where it is not needed | "Turn off dynamic schema mapping where it isn't required. Prefer `dynamic: false` and explicitly map only the subfields needed for queries." | Troubleshoot, the same section | In each index's definition, on the source deployment |
+| 4. Fewer indexed fields | "Reduce the number of indexed fields, especially high-cardinality fields such as timestamps or user IDs, and remove deep facet mappings that aren't used for faceting." | The same section | The same |
+| 5. Scale the source if it is the bottleneck | "If `mongod` secondaries are the bottleneck, scale the core database to improve change-stream throughput." | The same section | Outside this chart |
+| 6. A larger oplog, if pods keep rebuilding | "If the oplog is too small for the `mongot` apply rate, increase the `mongod` oplog size, or close the gap with more `mongot` capacity or fewer concurrent indexes." | Troubleshoot, *mongot Keeps Re-Syncing* | Outside this chart |
+
+**More mongot pods are not a remedy for lag.** They add capacity for searches, and they add work for the source: "Horizontal scaling adds additional load to a replica set because each `mongot` needs to replicate index data from a source collection. Each search or vector search index creates a new change stream per `mongot`" ([Hardware Considerations](https://www.mongodb.com/docs/search/self-managed/current/resource-planning-sizing/hardware/)). More CPU and memory for each pod is what MongoDB names first. The same page gives the signals for it: "Consistently seeing CPU usage above 80% suggests a need to scale up (add CPU cores), while consistently below 20% may indicate an opportunity to scale down", and for the heap, "allocate 50% of the total available system memory, without exceeding a maximum of approximately 30GB". The operator does the second by itself: without `-Xms` or `-Xmx` in `jvmFlags` it sets both "to half of `spec.clusters[].resourceRequirements.requests.memory`" ([MongoDBSearch settings](https://www.mongodb.com/docs/kubernetes/current/reference/k8s-operator-search-specification/)), so raising the memory request raises the heap.
+
+**Where this chart shows it:**
+
+| Where | What it shows |
+| --- | --- |
+| *Replication lag, per mongot pod* (section *How is each mongot pod doing?*) | The largest lag of any index on each pod, over time: a pod that falls behind is a line that leaves the others |
+| *Lag, now* in the table *Each index, in the last hour* | The largest lag of each index over the pods, now, in whole seconds |
+| *Documents indexed, per mongot pod* and the table *Each mongot pod, now* | The documents each pod holds. Read while an index is written to, the pods differ by what arrived between their readings, which is not lag |
+| The alert `MongotIndexNotFollowing` | An index that has stopped following on a pod: `STALE`, or recovering from an error that is not transient. That is after the lag, not during it |
+| The alert `MongotIndexBuildRetrying` | A build, or the rebuild after a re-sync, that keeps failing |
+
+**This chart has no alert on the lag itself**, by the owner's decision of 2026-10-09: the panels show it, and `MongotIndexNotFollowing` fires once a pod has stopped following. `MongotIndexesDifferByPod` does not cover it either: it never compares an index that is written to at least once every 10 minutes. MongoDB does publish an alert for it, in the table above; whoever wants it can add that expression to a PrometheusRule of their own in the namespace. Before taking its 60 seconds as it is, note what the lab's idle gauge reads, below.
+
+**Measured on the lab**, 2026-10-09: while two inserts a second were written to one index for 14 minutes, twice, its lag read 0 on two pods at each of 61 readings and 0 or 1 second on the third (1 second at 5 of 61 readings in the first run and 14 of 61 in the second). The document counts of the three pods read 17 to 24 apart during the same minutes: Prometheus reads the first pod 9 seconds after the other two. With nothing written, the gauge read 6 to 10 seconds for minutes at a time on one pod or another (Prometheus's 15-second samples of the same hours hold 10 s for up to 5 minutes running, once 11 s and once 17 s); why was not looked into.
 ## Volumes and scaling
 
 Three documents beside this one, and a script, for running mongot once it is installed:
