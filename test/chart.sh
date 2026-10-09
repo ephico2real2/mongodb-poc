@@ -111,10 +111,10 @@ done
 o="$(objects)"
 { has "$o" "ServiceMonitor/mongot" && has "$o" "ServiceMonitor/mongot-envoy" && has "$o" "Service/mongot-envoy-stats"; } && ok "ServiceMonitors and the Envoy stats Service by default" || bad "ServiceMonitors missing by default"
 has "$o" "PrometheusRule/mongot-distribution" && ok "the alert rules by default" || bad "alert rules missing by default"
-# The dashboard: 45 panels in 7 sections. The 16 it started with are all still there: panels are added, not replaced.
+# The dashboard: 47 panels in 7 sections. The 16 it started with are all still there: panels are added, not replaced.
 # The sixth section is about the indexes themselves, by index id (mongot's metrics carry no index name), and the
 # seventh about the searches that ask for stored source.
-python3 - "${CHART}/files/mongodb-search.json" <<'PY' && ok "the dashboard has 45 panels in 7 sections, the first 16 among them" || bad "dashboard panels or sections"
+python3 - "${CHART}/files/mongodb-search.json" <<'PY' && ok "the dashboard has 47 panels in 7 sections, the first 16 among them" || bad "dashboard panels or sections"
 import json, sys
 g = json.load(open(sys.argv[1]))
 charts = [p["title"] for p in g["panels"] if p["type"] != "row"]; rows = [p["title"] for p in g["panels"] if p["type"] == "row"]
@@ -124,7 +124,7 @@ first = ["mongot pods up", "Envoy pods up", "mongot pods in Envoy", "Searches pe
          "Retries per second, per Envoy pod", "Responses per second from mongot, by class", "Envoy to mongot latency, 95th percentile",
          "Average search latency, per mongot pod", "Search failures per second, per mongot pod",
          "Replication lag, per mongot pod", "JVM memory used, per mongot pod"]
-sys.exit(0 if len(charts) == 45 and len(set(charts)) == 45 and len(rows) == 7 and set(first) <= set(charts)
+sys.exit(0 if len(charts) == 47 and len(set(charts)) == 47 and len(rows) == 7 and set(first) <= set(charts)
          and rows[-3:] == ["Does every mongot pod hold the same data?", "What does each index hold?", "Is stored source used?"] else 1)
 PY
 # Colours (issue #35): one palette, Tableau 10. A pod has one colour in every panel: the first blue, the second red,
@@ -166,13 +166,13 @@ for x in g["panels"]:
         ok &= [by[r]["color"]["fixedColor"] for r in refs] == pods == chart["colorPalette"]
     elif x["type"] == "status-history":
         ok &= [m["spec"]["result"]["color"] for m in chart["mappings"]] == [GREEN, RED] and all(v is not None for m in chart["mappings"] for v in m["spec"].values())
-    elif x["title"] in ("Each index, now", "Each index, in use"):
+    elif x["title"] in ("Each index, now", "Each index, in the last hour"):
         # One row per index id. Every query carries that one label, or Perses splits an index into several rows.
         cols = chart["columnSettings"]
         ok &= cols[0] == {"name": "timestamp", "hide": True} and (cols[1]["name"], cols[1]["header"]) == ("indexId_logString", "Index id")
         ok &= [c["header"] for c in cols[2:]] == {
-            "Each index, now": ["Type", "Pods STEADY", "Lucene docs", "Size", "Bytes per Lucene doc", "Growth, 24 hours"],
-            "Each index, in use": ["Searches, last hour", "Failed searches, last hour", "Sync errors, last hour", "Replication lag"]}[x["title"]]
+            "Each index, now": ["Type", "Pods STEADY", "Lucene docs", "Size", "Bytes per doc", "Vector memory", "Growth, 24 h"],
+            "Each index, in the last hour": ["Searches", "Failed searches", "Average batch time", "Sync errors", "Lag, now"]}[x["title"]]
         # The whole id, 24 characters, drew 165 pixels wide in the console. On a page 1,280 wide the console drew 876
         # pixels of table: wider than that, the last header was cut.
         ok &= cols[1]["width"] >= 190 and sum(c["width"] for c in cols[1:]) <= 870
@@ -233,7 +233,8 @@ TAILS = {"mongot": [f" and on (pod) {NAME(i)}" for i in range(3)] + [f" unless o
 STATS = {"mongot pods up": [RED, GREEN], "Envoy pods up": [RED, GREEN], "mongot pods in Envoy": [RED, GREEN],
          "Searches per second": [GREEN], "Largest share on one pod": [GREEN, ORANGE, RED],
          "Indexes": [GREEN], "Indexes being built": [GREEN], "Indexes that differ by pod": [GREEN, RED],
-         "Size of all indexes, on one pod": [GREEN], "Stored source searches, 1 hour": [GREEN],
+         "Size of all indexes, on one pod": [GREEN], "Search indexes": [GREEN], "Vector indexes": [GREEN],
+         "Memory for vector indexes": [GREEN], "Index builds waiting": [GREEN], "Stored source searches, 1 hour": [GREEN],
          "Stored source share, searches": [GREEN], "Stored source vector, 1 hour": [GREEN],
          "Stored source share, vector": [GREEN]}
 def own(m):                                        # the searches per second of the pods a matcher selects, at the end of the range

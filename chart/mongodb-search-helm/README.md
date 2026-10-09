@@ -58,7 +58,7 @@ bash $P --clean                                       # removes the key files on
 From the package alone, with no clone:
 
 ```bash
-helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.6/mongodb-search-helm-0.3.6.tgz --untar
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.7/mongodb-search-helm-0.3.7.tgz --untar
 bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
 ```
 
@@ -66,7 +66,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.6/mongodb-search-helm-0.3.6.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.7/mongodb-search-helm-0.3.7.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -119,7 +119,7 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 
 ## Dashboards
 
-The chart ships one dashboard, **MongoDB Search**, in two forms from one source. Its seven sections each answer a question: is search up, is traffic spread across the mongot pods, is Envoy healthy, how is each mongot pod doing, does every mongot pod hold the same data, what does each index hold, and is stored source used. It has 45 panels: 13 single numbers, 22 line charts, a pie, 3 tables, 2 status histories and 4 bar charts. Those about mongot's process and its data are [described below](#the-mongot-process-and-data-panels), and those about the indexes [after them](#the-index-panels).
+The chart ships one dashboard, **MongoDB Search**, in two forms from one source. Its seven sections each answer a question: is search up, is traffic spread across the mongot pods, is Envoy healthy, how is each mongot pod doing, does every mongot pod hold the same data, what does each index hold, and is stored source used. It has 47 panels: 17 single numbers, 22 line charts, a pie, 3 tables, 2 status histories and 2 bar charts. Those about mongot's process and its data are [described below](#the-mongot-process-and-data-panels), and those about the indexes [after them](#the-index-panels).
 
 The captures below were taken on the lab on 2026-10-07, after 16 minutes of searches through the lab's search GUI. Click an image to open it full size. The dark captures, and earlier ones from a Perses and a Grafana run on a workstation, are beside them in [`docs/screenshots/`](../../docs/screenshots/).
 
@@ -245,7 +245,7 @@ What to know when reading them:
 
 ### The index panels
 
-The sixth section, *What does each index hold?*, is about the indexes themselves: 10 panels that read mongot's per-index metrics, `mongot_index_stats_*`, by the label `indexId_logString`. The seventh, *Is stored source used?*, has 6 panels on the searches that ask for stored source. Readings are the lab's on 2026-10-08, with eight indexes, three of them made for this measurement, while test searches ran.
+The sixth section, *What does each index hold?*, is about the indexes themselves: 12 panels that read mongot's per-index metrics, `mongot_index_stats_*`, by the label `indexId_logString`. The seventh, *Is stored source used?*, has 6 panels on the searches that ask for stored source. Readings are the lab's on 2026-10-08, with eight indexes, three of them made for this measurement, while test searches ran.
 
 | Panel | What it reads | Lab reading |
 | --- | --- | --- |
@@ -257,11 +257,12 @@ The sixth section, *What does each index hold?*, is about the indexes themselves
 | Stored source share, searches | The rate of that counter over the rate of `mongot_search_metrics_searchCommandTotalCount_total`, 5 minutes | 34% |
 | Stored source vector, 1 hour | The increase of `mongot_search_metrics_vectorStoredSourceQueries_total` | 654 |
 | Stored source share, vector | The rate of that counter over the rate of `mongot_search_metrics_vectorSearchCommandTotalCount_total`, 5 minutes | 51% |
-| Each index, now | A table, one row per index id: type, pods where it is `STEADY`, Lucene documents, size, bytes per Lucene document, growth in 24 hours | 5 search and 3 vector indexes, each `STEADY` on 3 pods, 5 to 20,024 documents, 5,339 to 5,900,486 bytes |
-| Each index, in use | A table, one row per index id: searches, failed searches and sync errors in the last hour, replication lag | 623 to 685 searches on the five indexes that were queried, 0 on the other three; 0 failed, 0 sync errors, 0 ms |
+| Search indexes; Vector indexes | Index ids by the `indexType` label of their insert counter | 5 and 3 |
+| Memory for vector indexes | `mongot_index_stats_requiredMemoryBytes`, the largest reading of each index, added up | 5,930,144 bytes |
+| Index builds waiting | `mongot_initialsync_queue_queuedSyncs`, on the pod that has the most | 0 |
+| Each index, now | A table, one row per index id: type, pods where it is `STEADY`, Lucene documents, size, bytes per Lucene document, vector memory, growth in 24 hours | 5 search and 3 vector indexes, each `STEADY` on 3 pods, 5 to 20,024 documents, 5,339 to 5,900,486 bytes; 2,963,552 bytes of vector memory on two of them |
+| Each index, in the last hour | A table, one row per index id: searches, failed searches, average batch time, sync errors, and the replication lag now | Searches on the five indexes that were queried, 0 failed, batches in 0.7 to 1.0 ms on the three search indexes that were searched, 0 sync errors, 0 ms |
 | Size of each index | The same size, biggest first | 5,900,486 bytes down to 5,339 |
-| Indexes by size | How many indexes fall in each of six size classes, from under 10 KB to 100 MB and over | 2, 1, 0, 5, 0, 0 |
-| Indexes by type | How many are search indexes and how many vector indexes | 5 and 3 |
 | Indexes not STEADY, per index | `mongot_index_stats_indexStatusCode` for every state but `STEADY`, summed over the pods | `STEADY` on all 8 |
 | Searches that ask for stored source, per second | The two stored source counters as 5 minute rates | 0.37 to 0.49 a second each during the test searches |
 | Query features used, last hour | The increase of `mongot_index_stats_query_feature_total`, by feature | `valueBoost`, `text`, `approximate`, `returnStoredSource`, and one each of `exists`, `phrase` and `compound` |
@@ -276,16 +277,17 @@ What to know when reading them:
 - **Documents are Lucene documents.** The metric is the index writer's document count. An index with an `embeddedDocuments` field holds one Lucene document more for every embedded document, so the count can be above the collection's; for such an index mongot also emits `mongot_index_stats_numEmbeddedRootDocs`. The lab has no such index, and its counts equal the collections'. The older panel *Documents indexed, per mongot pod* reads the same metric.
 - **The lag is in whole seconds**, although the metric is in milliseconds, and is empty while an index is built.
 - **Not `STEADY` is not always not served.** mongot answers searches from an index that is `STEADY`, `STALE` or `RECOVERING`; not from one that is `INITIAL_SYNC`, `NOT_STARTED` or `FAILED`.
-- **The size classes are this dashboard's own**, powers of ten. mongot's own classes are coarser and are for other things: `small`, `medium`, `large` and `xlarge` at 1, 10 and 100 GiB for the latency of vector searches, and three classes at 100 MiB and 1 GiB for the speed of an initial sync. Every index of the lab is `small`. Grafana lists the classes from the smallest; the console's bar chart lists bars by their value, so there the fullest class is first.
+- **There is no histogram of index sizes.** One was drawn in chart 0.3.6, with size classes of this dashboard's own, and removed in 0.3.7: the console's bar chart lists bars by their value, so the classes came out in the order of their counts, not of their sizes. mongot's own size classes are coarse and for other things (`small`, `medium`, `large`, `xlarge` at 1, 10 and 100 GiB, for the latency of vector searches); every index of the lab is `small`. *Size of each index* and the two counts by type say the same more plainly. Grafana lists the classes from the smallest; the console's bar chart lists bars by their value, so there the fullest class is first.
 - **Growth counts a new index from 0.** An index that did not exist 24 hours ago has its whole size as its growth.
 - **Counts over an hour are estimates.** Prometheus extends an increase to the edges of its window: 60 queries read as 61.
-- **Left out, for now:** `mongot_index_stats_requiredMemoryBytes`, the memory a vector index wants resident: the vectors plus 128 bytes of graph for each (on the lab 20,024 vectors of 5 dimensions read 2,963,552 bytes, which is 20,024 x (5 x 4 + 128)); it is 0 for a search index. And `mongot_index_stats_query_searchResultBatchLatencies_seconds`, the time to produce one batch of results, for search indexes only.
-- **`$listSearchIndexes` can say `PENDING` while the index is served.** On the lab it reports every index `PENDING` and not queryable, while mongot reports `STEADY` and searches return results. mongod builds that answer from the hosts whose heartbeat row in `__mdb_internal_search.serverState` is under 2 hours old. The lab was suspended for over 2 hours twice; a pod's hourly cleanup then removed the others' rows, and mongot 1.70.1 only updates its row, never re-creates it: each pod logs `Failed to update server state entry` every 30 seconds, and the collection holds 0 rows (read 2026-10-09). The index names and definitions in that answer are right; its status is not to be trusted there. mongot's own `indexStatusCode`, which these panels read, is.
+- **Vector memory** is `mongot_index_stats_requiredMemoryBytes`: what a vector index wants resident, the vectors plus 128 bytes of graph for each. On the lab 20,024 vectors of 5 dimensions read 2,963,552 bytes, which is 20,024 x (5 x 4 + 128). It is 0 for a search index.
+- **The batch time is not the time of a whole search.** `mongot_index_stats_query_searchResultBatchLatencies_seconds` times the making of one batch of results, for search indexes only, and is an average here: mongot gives a sum and a count. The lab's 0.7 to 1.0 ms sits under the 1.4 ms average of the whole search command.
+- **`$listSearchIndexes` can say `PENDING` while the index is served.** On the lab it reports every index `PENDING` and not queryable, while mongot reports `STEADY` and searches return results. mongod builds that answer from the hosts whose heartbeat row in `__mdb_internal_search.serverState` is under 2 hours old. The lab was suspended for over 2 hours twice; a pod's hourly cleanup then removed the others' rows, and mongot 1.70.1 only updates its row, never re-creates it: each pod logs `Failed to update server state entry` every 30 seconds, and the collection holds 0 rows (read 2026-10-09). The index names and definitions in that answer are right; its status is not to be trusted there. mongot's own `indexStatusCode`, which these panels read, is. Restarting the three mongot pods one at a time put it right on 2026-10-09: a pod writes its row when it starts. Afterwards the collection held 3 rows, every index was `READY` and queryable on 3 hosts, and the warning had stopped.
 - **Not seen on the lab:** an index being built while the dashboard was open, an index out of `STEADY`, a failed search, a sync error. Those panels and columns read 0 throughout.
 
-**Where these 16 panels were looked at:** in the lab's console, dark theme, on pages 1,600 and 1,280 pixels wide, on 2026-10-08: no panel said "No data", and every id was whole. They were not drawn in a Grafana; the pictures above were taken before these sections existed and do not show them.
+**Where these 18 panels were looked at:** in the lab's console, dark theme, on pages 1,600 and 1,280 pixels wide, on 2026-10-08: no panel said "No data", and every id was whole. They were not drawn in a Grafana; the pictures above were taken before these sections existed and do not show them.
 
-The four bar charts are one colour: they rank or count, and a colour per bar would change with every new index. In the Grafana form it is the dashboard's blue. The console draws its bar chart in a brighter blue of its own and takes no colour from the dashboard, and it lists bars by their value whatever the query's order. The section adds 31 queries to a refresh, 128 in all; through Thanos Querier over 15 minutes the 31 took 0.07 s, with no warning on any.
+The two bar charts are one colour: they rank or count, and a colour per bar would change with every new index. In the Grafana form it is the dashboard's blue. The console draws its bar chart in a brighter blue of its own and takes no colour from the dashboard, and it lists bars by their value whatever the query's order. The two sections add 29 queries to a refresh, 126 in all.
 
 ### Envoy counters without `_total`
 
