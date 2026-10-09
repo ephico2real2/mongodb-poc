@@ -131,7 +131,7 @@ monitoring:
     interval: 15s
     labels: {}
   alerts:
-    # A PrometheusRule with per-pod share recording rules and four alerts, the first of which fires when one
+    # A PrometheusRule with per-pod share recording rules and nine alerts, the first of which fires when one
     # mongot pod serves over 90% of search traffic. On by default.
     enabled: true
     labels: {}

@@ -250,6 +250,10 @@ for x in g["panels"]:
         # its state: the initial sync gauges count syncs on a pod, not indexes.
         if x["title"] == "Indexes that differ by pod":
             ok &= "up{" not in e and "max by (indexId_logString, pod)" in e and "count(count by (pod) (" in e
+            # Documents are compared, a generation with itself, and sizes are not: each pod writes its own index files,
+            # and the same documents took another number of bytes on one lab pod.
+            ok &= "max by (indexId_logString, generationId_logString) (mongot_index_stats_numLuceneDocs{" in e
+            ok &= "!= min by (indexId_logString) (mongot_index_stats_indexSizeBytes" not in e and e.count("indexSizeBytes") == 2
         if x["title"] == "Indexes being built":
             ok &= "status=~\"INITIAL_SYNC|NOT_STARTED\"" in e and "initialsync" not in e
     # A legend is below its chart, never beside it. A panel narrower than half the page needs two legend lines for
@@ -361,7 +365,10 @@ o="$(objects --set monitoring.serviceMonitors.enabled=true --set monitoring.aler
   && ok "monitoring objects follow search.name" || bad "monitoring object names: ${o//$'\n'/ }"
 m="$(render --set monitoring.alerts.enabled=true --set search.name=srch -s templates/30-monitoring.yaml)"
 grep -q 'job=~"srch-search-0-svc|srch-envoy-stats"' <<<"$m" && ok "the no-traffic alert's job pattern follows search.name" || bad "alert job pattern"
-[[ "$(grep -c -- '- alert:' <<<"$m")" == 4 && "$(grep -c -- '- record:' <<<"$m")" == 3 ]] && ok "four alerts and three recording rules" || bad "alert or rule count"
+[[ "$(grep -c -- '- alert:' <<<"$m")" == 9 && "$(grep -c -- '- record:' <<<"$m")" == 3 ]] && ok "nine alerts and three recording rules" || bad "alert or rule count changed"
+# The five index alerts name the index by the label mongot's metrics carry. What they do is tested with promtool,
+# by test/alerts.sh.
+[[ "$(grep -c 'indexId_logString }}' <<<"$m")" == 5 ]] && grep -q 'name: mongot.indexes' <<<"$m" && ok "the five index alerts name their index" || bad "index alerts"
 grep -q '{{ $value | humanizePercentage }}' <<<"$m" && ok "Prometheus templating survives Helm" || bad "alert templating was eaten by Helm"
 
 # Dashboards: Perses on by default, Grafana off; one Grafana source, a generated Perses copy, scoped to this namespace and name.

@@ -2221,7 +2221,7 @@
       "spec": {
         "display": {
           "name": "Each mongot pod, now",
-          "description": "One row per mongot pod, its name on its colour in the charts. Every pod holds every index, so the first four columns should read the same on every row."
+          "description": "One row per mongot pod, its name on its colour in the charts. Every pod holds every index, so Documents, Indexes and Not STEADY should read the same on every row once nothing is being written. Index size should be close and need not be equal: each pod writes its own index files."
         },
         "plugin": {
           "kind": "Table",
@@ -3549,7 +3549,7 @@
       "spec": {
         "display": {
           "name": "Each index, in the last hour",
-          "description": "One row per index. With the index info exporter on (monitoring.indexInfo) an index is named as the source deployment names it, database.collection / index; without it, by the id mongot's metrics carry. Counted over the last hour, all pods. A search is one query the index ran, a search or a vector search; a query mongot refused as invalid is not counted. The batch time is the average time to produce one batch of results (mongot gives a sum and a count, and no buckets for a percentile), for search indexes that were searched; empty otherwise. Sync errors are the exceptions mongot met while it built or followed the index. The lag is the largest over the pods, now, in whole seconds, and is empty while the index is built."
+          "description": "One row per index. With the index info exporter on (monitoring.indexInfo) an index is named as the source deployment names it, database.collection / index; without it, by the id mongot's metrics carry. Counted over the last hour, all pods. A search is one query that reached the index, a search or a vector search: one mongot could not parse is not counted; one the index refused is, as a search and as a failed search. The batch time is the average time to produce one batch of results (mongot gives a sum and a count, and no buckets for a percentile), for search indexes that were searched; empty otherwise. Sync errors are the exceptions mongot met while it built or followed the index. The lag is the largest over the pods, now, in whole seconds, and is empty while the index is built."
         },
         "plugin": {
           "kind": "Table",
@@ -3798,7 +3798,7 @@
       "spec": {
         "display": {
           "name": "Indexes that differ by pod",
-          "description": "Indexes that some pod does not hold, or whose size or document count is not the same on every pod, among the pods that report any index. Should be 0. It is above 0 for up to 3 minutes after an index is built: mongot reads the size of an index from disk every 3 minutes, and a new index reads 0 until then."
+          "description": "Indexes that some pod does not hold, or whose document count is not the same on every pod, among the pods that report any index. Should be 0 when nothing is written: each pod is read at its own instant, so it is above 0 while an index is built or written to. Sizes are not compared: each pod writes its own index files, and the same documents take a slightly different number of bytes on each."
         },
         "plugin": {
           "kind": "StatChart",
@@ -3833,7 +3833,7 @@
                     "kind": "PrometheusDatasource",
                     "name": "__SEARCH__-thanos"
                   },
-                  "query": "count((count by (indexId_logString) (max by (indexId_logString, pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) != scalar(count(count by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})))) or (max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) != min by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) or (max by (indexId_logString) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) != min by (indexId_logString) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) or vector(0)"
+                  "query": "count((count by (indexId_logString) (max by (indexId_logString, pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) != scalar(count(count by (pod) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})))) or max by (indexId_logString) (max by (indexId_logString, generationId_logString) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) != min by (indexId_logString, generationId_logString) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) or vector(0)"
                 }
               }
             }

@@ -15,7 +15,7 @@ Steps 1 to 5 of the runbook stay manual: the chart never creates a certificate, 
 | 1 | MongoDBSearch | The resource of runbook Step 6a |
 | 1 | Route | The passthrough Route of runbook Step 6d, with `balance: roundrobin` |
 | 1 | ServiceMonitors | Per-pod scraping of mongot and Envoy; on by default |
-| 1 | Alerts | Four alerts on traffic distribution and retries; on by default |
+| 1 | Alerts | Nine alerts: four on traffic distribution and retries, five on the indexes; on by default |
 | 1 | Dashboard | "MongoDB Search" for Perses in the OpenShift console, on by default; the Grafana copy is off by default |
 | 2 | csv-reclaim Job | Clears an operator CSV left behind by an earlier uninstall |
 | 3 | approver Job | Approves the InstallPlan for `operator.version`, and no other |
@@ -58,7 +58,7 @@ bash $P --clean                                       # removes the key files on
 From the package alone, with no clone:
 
 ```bash
-helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.9/mongodb-search-helm-0.3.9.tgz --untar
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.10/mongodb-search-helm-0.3.10.tgz --untar
 bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
 ```
 
@@ -66,7 +66,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.9/mongodb-search-helm-0.3.9.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.10/mongodb-search-helm-0.3.10.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -109,7 +109,7 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 | `route.targetPort` | `mongot-grpc` | Step 6d |
 | `route.balance` | `roundrobin` | Step 6d; see the [rationale](../../docs/mongot-route-balance-rationale.md) |
 | `monitoring.serviceMonitors.enabled` | `true` | Per-pod scraping of mongot and Envoy; needs user workload monitoring |
-| `monitoring.alerts.enabled` | `true` | Alerts when traffic concentrates on one mongot pod |
+| `monitoring.alerts.enabled` | `true` | The nine [alerts](#alerts): traffic that concentrates on one mongot pod, and an index in trouble |
 | `monitoring.persesDashboard.enabled`, `.thanosURL` | `true`, Thanos Querier port 9091 | The "MongoDB Search" dashboard in the console; set it to `false` on a cluster without the Cluster Observability Operator |
 | `monitoring.grafanaDashboard` | `false` | The same dashboard as a ConfigMap for a Grafana dashboard sidecar |
 | `preflight.enabled` | `true` | |
@@ -257,7 +257,7 @@ Eleven panels read mongot's own metrics, one line per mongot pod; *Indexes not S
 What to know when reading them:
 
 - **They show that every pod holds the same data, not how queries are spread.** Every mongot pod holds every index (the lab's three pods each report the same five). The second section shows the spread of queries.
-- **Documents indexed is the strict comparison; index size is a loose one.** On the lab both are equal on every pod, with no update, delete or merge recorded. Each pod writes and merges its own index files, so sizes on a busy cluster are expected to differ somewhat; that was not measured.
+- **Documents indexed is the strict comparison; index size is a loose one.** Each pod writes and merges its own index files, so the same documents need not take the same bytes. On the lab the indexes built once from a collection have the same size on every pod; after 600 documents were written to one of them, its 605 documents took 112,781 bytes on two pods and 113,402 on the third, and still did after 12 quiet minutes. While an index is written to, the document counts differ too, by what arrived between the readings of the pods: on the lab Prometheus reads the first pod 9 seconds after the other two, and at two inserts a second the readings taken every 15 seconds on the minute were 17 to 24 documents apart, those taken 4 or 8 seconds later 7 to 15. The gap is the readings', not the pods'.
 - **Data volume used is the file system under mongot's data path.** With a volume of its own per pod, that is the volume. The lab's storage class is a hostpath provisioner, so there it is the node's disk: 160.5 GB in total and 82.5% used on every pod, while each pod's data takes about 18 MiB.
 - **The pool panel does not count refused searches.** mongot's source gives the counter to a caller-runs policy: when the concurrent search pool is full the work runs on the calling thread, and the search is still answered. Above zero, the pool is saturated.
 - **The heap limit is the JVM's, not the pod's.** On the lab it is 495 MiB, a quarter of the pod's 2 Gi memory limit. The older *JVM memory used* panel shows heap and non-heap together, in bytes.
@@ -271,7 +271,7 @@ The sixth section, *What does each index hold?*, is about the indexes themselves
 | --- | --- | --- |
 | Indexes | The number of index ids that report a size | 8 |
 | Indexes being built | Index ids that some pod holds in the state `INITIAL_SYNC` or `NOT_STARTED` | 0 |
-| Indexes that differ by pod | Index ids that some pod does not report, or whose size or document count is not the same on every pod, among the pods that report any index | 0 |
+| Indexes that differ by pod | Index ids that some pod does not report, or whose document count is not the same on every pod, among the pods that report any index | 0 |
 | Size of all indexes, on one pod | `mongot_index_stats_indexSizeBytes`, the largest reading of each index, added up | 16,695,001 bytes |
 | Stored source searches, 1 hour | The increase of `mongot_index_stats_query_feature_total{name="returnStoredSource"}` | 654 |
 | Stored source share, searches | The rate of that counter over the rate of `mongot_search_metrics_searchCommandTotalCount_total`, 5 minutes | 34% |
@@ -297,7 +297,7 @@ What to know when reading them:
 - **A long name can be cut in a table.** The *Index* column is 290 pixels wide, which holds the lab's longest name, 41 characters. The size chart and the state history show a name whole whatever its length; in Grafana a bar's name is above the bar for that reason.
 - **Stored source is counted, and located only with the exporter.** The two counters count the queries sent with `returnStoredSource`: on the lab, 30 `$search` and 30 `$vectorSearch` queries with it moved them from 0 to 30 each, 10 on each pod, and 60 queries without it moved neither. No metric says which index defines stored source or how many bytes it takes. Creating three indexes that define it added no metric name and no label.
 - **What stored source adds is a comparison, not a measurement.** No metric says what stored source takes. *What stored source adds* compares each index that stores fields with the smallest index of the same collection and type that stores nothing. On the lab's `movies`, 20,024 documents with the same mappings: 3,514,585 bytes with no stored source, 721,648 more with three fields stored (36 bytes a document), 2,385,902 more with every field stored (119 bytes a document). Whatever else differs between the two definitions is in the difference too: the lab's `ss_vector` has one filter field fewer than `vector_index`, so its 494,313 bytes are not only stored source. Without the exporter the table has one row that says no index is known to store fields, with a dash under *Stored source*.
-- **A new index reads 0 bytes for up to 3 minutes.** mongot reads the size of an index from disk and keeps the reading for 3 minutes (`Suppliers.memoizeWithExpiration(..., Duration.ofMinutes(3))` in its `DiskIndexBackingStrategy`). Measured on the lab: an index whose 20,024 documents were there at 02:35:45Z read 0 bytes until 02:38:45Z. *Indexes that differ by pod* can be above 0 for that long. An earlier version of this page said "under a minute"; that was wrong.
+- **A new index reads 0 bytes for up to 3 minutes.** mongot reads the size of an index from disk and keeps the reading for 3 minutes (`Suppliers.memoizeWithExpiration(..., Duration.ofMinutes(3))` in its `DiskIndexBackingStrategy`). Measured on the lab: an index whose 20,024 documents were there at 02:35:45Z read 0 bytes until 02:38:45Z. An earlier version of this page said "under a minute"; that was wrong.
 - **The size is the whole index directory**: mongot adds up every file in it, so it includes stored source and vectors.
 - **Documents are Lucene documents.** The metric is the index writer's document count. An index with an `embeddedDocuments` field holds one Lucene document more for every embedded document, so the count can be above the collection's; for such an index mongot also emits `mongot_index_stats_numEmbeddedRootDocs`. The lab has no such index, and its counts equal the collections'. The older panel *Documents indexed, per mongot pod* reads the same metric.
 - **The lag is in whole seconds**, although the metric is in milliseconds, and is empty while an index is built.
@@ -398,6 +398,35 @@ The chart's Envoy ServiceMonitor therefore renames the two at the scrape, to `en
 - on an upgrade from a release without the rename, those two panels start again from the upgrade: the earlier samples stay under the old names.
 
 Measured on the lab on 2026-10-06, through Thanos Querier: before, each of the two queries came back with one warning; after, every query of the dashboard came back with none (16 queries then, 27 in chart 0.3.0, 90 in 0.3.1, 97 since 0.3.2).
+
+## Alerts
+
+On by default (`monitoring.alerts.enabled`): one PrometheusRule, `<search.name>-distribution`, with two groups. They need the ServiceMonitors, and user workload monitoring on the cluster.
+
+| Alert | Fires when | For | Severity |
+| --- | --- | --- | --- |
+| `MongotTrafficNotDistributed` | One mongot pod serves over 90% of the searches | 10 m | warning |
+| `MongotPodReceivingNoTraffic` | A mongot pod serves nothing while the others are busy | 15 m | info |
+| `MongotEnvoyRetriesElevated` | Envoy retries more than one request a second | 10 m | warning |
+| `MongotNoSearchTraffic` | Envoy has forwarded nothing to mongot | 30 m | info |
+| `MongotIndexFailed` | An index is `FAILED` on a pod | 1 m | critical |
+| `MongotIndexNotFollowing` | An index is `STALE`, or recovering from an error that is not transient, on a pod | 10 m | warning |
+| `MongotIndexBuildRetrying` | The build of an index has failed and started again, on a pod | 15 m | warning |
+| `MongotIndexesDifferByPod` | An index is missing on a pod; or it is `STEADY` on every pod, has not been written to for 10 minutes, and its document count differs between pods | 10 m | warning |
+| `MongotIndexSearchesFailing` | mongot keeps failing searches on an index: failures less than 5 minutes apart | 5 m | warning |
+
+About the five index alerts:
+
+- **They name the index by its id**, the label `indexId_logString` of mongot's metrics; three also name the pod. The dashboard's section *What does each index hold?* shows the same id.
+- **Which states they watch.** mongot answers searches from an index that is `STEADY`, `STALE` or `RECOVERING`, and not from one that is `FAILED` or being built. So `FAILED` is critical after a minute; `STALE` and `RECOVERING_NON_TRANSIENT` are a warning, because results fall behind while searches still answer; `INITIAL_SYNC` and `RECOVERING_TRANSIENT` are no alert, a build and a hiccup being normal.
+- **Where the times come from.** `MongotIndexBuildRetrying` waits the 15 minutes that MongoDB's metrics reference uses as the window of its initial-sync exception queries (`rate(mongot_index_stats_indexing_initialSyncExceptions_total[15m])`); the reference gives no hold time of its own. `MongotIndexesDifferByPod` compares an index once it has gone 10 minutes without a write and then waits its 10 minutes, so 20 minutes pass between the last write and the alert. An index written to at least once every 10 minutes is never compared, and no alert names a pod that falls behind on it: the dashboard does, in *Documents indexed, per mongot pod*, *Replication lag, per mongot pod* and the table *Each mongot pod, now*. Those two, the 10 minutes of `MongotIndexNotFollowing` and the 5 of `MongotIndexSearchesFailing` are this chart's choice, with no published figure behind them: change them if they are wrong for you.
+- **What a failed search is.** One that reached the index and failed there: an error inside mongot, or a search the index refused, such as an operator on a field the index does not define. In mongot's source `failedQueries` is the sum of the two (`IndexMetricsUpdater.handleQueryException`), and only the per-pod counter `mongot_index_stats_query_invalidQueries_total` tells them apart. Measured on the lab, 2026-10-09: three `autocomplete` searches on a path not indexed for it moved the index's `totalQueries` and `failedQueries` by 3 and `invalidQueries` by 3; three searches with an operator that does not exist moved none of them, because mongot refused them before any index. So a client that keeps sending a search the index cannot run fires `MongotIndexSearchesFailing`. Until chart 0.3.9 the panel *Each index, in the last hour* said a query refused as invalid is not counted: that is true only of one mongot cannot parse.
+- **What "differ by pod" compares, and why.** Document counts, of an index that is `STEADY` on every pod and that nothing has written to for 10 minutes. Measured on the lab, 2026-10-09, with the rule as first written (size or documents, at any time):
+  - *An index that is written to never agrees.* Each pod is read at its own instant, on the lab the first pod 9 seconds after the other two: with two inserts a second the three pods were 17 to 24 documents apart at every one of 53 readings taken every 15 seconds on the minute (7 to 15 apart when read 4 or 8 seconds later), and the alert fired after its 10 minutes. The counts were equal within a minute of the last write.
+  - *Sizes do not agree even when the documents do.* Each pod writes its own index files. The same 605 documents took 112,781 bytes on two pods and 113,402 on the third, and still did after 12 quiet minutes. So sizes are not compared, by the alert or by the number *Indexes that differ by pod*.
+  - *A build or a rebuild is not a difference.* Every pod builds at its own pace, and a rebuild keeps the old generation beside the new one; a generation is compared with itself, and only when it is `STEADY` everywhere. From mongot's source and a promtool test, not seen on the lab.
+- **One failed search does not fire `MongotIndexSearchesFailing`.** Its 5 minute rate is above 0 for under 5 minutes. Two failures less than 5 minutes apart do, 5 minutes after the first. The alert prints the rate with three decimals: one failure in 5 minutes is 0.003 a second.
+- **Tested with promtool, and one of them on the lab.** [`test/alerts.sh`](../../test/alerts.sh) renders the rules and runs [`test/alerts.test.yaml`](../../test/alerts.test.yaml): each alert fires for its index and only for it, after its time and not before; an index being built is not "not following"; an index that is written to, one being built on three pods at their own pace, a rebuild beside its old generation, and one whose size alone differs do not "differ by pod"; one that stays a document short on a pod does, 20 minutes after its last write. On the lab, 2026-10-09: the rule as first written fired on an index that was only being written to; with this one loaded, the same writes for 14 minutes (1,668 documents, the pods 17 to 24 apart at every reading) left it inactive at each of the 30 readings taken of it. None of the five has been seen to fire for its real cause there.
 
 ## Maintaining the chart
 
