@@ -58,7 +58,7 @@ bash $P --clean                                       # removes the key files on
 From the package alone, with no clone:
 
 ```bash
-helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.7/mongodb-search-helm-0.3.7.tgz --untar
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.8/mongodb-search-helm-0.3.8.tgz --untar
 bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
 ```
 
@@ -66,7 +66,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.7/mongodb-search-helm-0.3.7.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.8/mongodb-search-helm-0.3.8.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -145,6 +145,20 @@ On by default (`monitoring.persesDashboard.enabled`). In the console it is under
 
 *Does every mongot pod hold the same data: equal rows in the table, one line in each chart.*
 
+<!-- markdownlint-disable MD033 -->
+<img alt="The section What does each index hold, in the OpenShift console, light theme. Eight numbers in green: 8 indexes, 0 being built, 0 that differ by pod, 15.92 MiB for all indexes on one pod, 5 search indexes, 3 vector indexes, 5.66 MiB of memory for vector indexes, 0 builds waiting. A table with one row per index id, each id whole: type search or vector, 3 pods STEADY on every row, 5 to 20 thousand Lucene documents, sizes from 5.21 KiB to 5.63 MiB, from 62.7 bytes to 1.31 KiB per document, and 2.83 MiB of vector memory on two vector indexes. A second table for the last hour: 767 or 768 searches on five indexes and 0 on three, 0 failed searches, a batch time of 1.29 to 1.57 ms on three search indexes, 0 sync errors, 0 lag, and a growth of 4.04, 1.67 and 5.63 MiB on the three indexes made that day. A bar chart of the size of each index, biggest first, the ids whole on its axis. A state history with one green row per index, STEADY throughout." src="../../docs/screenshots/dashboard-console-indexes.light.png">
+<!-- markdownlint-enable MD033 -->
+
+*What does each index hold: an index is named by its id, whole, in the tables and on the charts.*
+
+<!-- markdownlint-disable MD033 -->
+<img alt="The section Is stored source used, in the OpenShift console, light theme. Four numbers in green: 768 stored source searches in an hour, a 33 percent share of searches, 768 stored source vector searches, a 50 percent share of vector searches. A line chart of the searches that ask for stored source, both lines between 0.24 and 0.5 a second, the dashed red one on the blue one. A bar chart of the query features used in the last hour: valueBoost and text the longest bars, approximate shorter, returnStoredSource 768." src="../../docs/screenshots/dashboard-console-stored-source.light.png">
+<!-- markdownlint-enable MD033 -->
+
+*Is stored source used: how many searches ask for it, and what share of all searches that is.*
+
+The two pictures above are from a capture of 2026-10-09, with chart 0.3.8 and test searches running; the three before them are from 2026-10-07.
+
 The dashboard in the lab's own OpenShift console (4.22.7, Cluster Observability Operator 1.5.3), opened by [`scripts/capture-console-dashboard.py`](../../scripts/capture-console-dashboard.py) as the lab's `developer` user, who held only the roles below. The three pictures are cut from one capture of the whole page, [`dashboard-console.light.png`](../../docs/screenshots/dashboard-console.light.png), which also holds the *Is Envoy healthy?* section; a `.dark.png` is beside each.
 
 **Who can see it.** Measured with that user: before the roles below, the API refused it the dashboard (`oc auth can-i get persesdashboards`: `no`); with them, every panel drew. The three namespace roles were given together; whether fewer would do was not measured.
@@ -169,6 +183,12 @@ Off by default (`monitoring.grafanaDashboard`). The chart ships it as a ConfigMa
 <!-- markdownlint-enable MD033 -->
 
 *The chart's ConfigMap, loaded by the dashboard sidecar of a Grafana installed in the lab namespace for this measurement and removed afterwards (the Grafana Helm chart 10.5.15, Grafana 12.3.1, sidecar 2.5.0; [`test/grafana-sidecar/`](../../test/grafana-sidecar/)). Measured when the dashboard had 16 panels: the Grafana held no such dashboard before `monitoring.grafanaDashboard=true`, and 37 s after that upgrade started the sidecar had written the file and Grafana listed it. Measured again with the 27 panels of chart 0.3.0: listed with 27 panels in 5 rows, and all 27 queries answered through its Thanos Querier data source. Measured again on 2026-10-07 with the 29 panels shown here: listed with 29 panels and 97 queries, all 97 answered through its Thanos Querier data source (26 with no series, each expected: no fourth pod, no third Envoy pod, no 4xx, 5xx or other response class), and the page drew every panel in both themes.*
+
+<!-- markdownlint-disable MD033 -->
+<img alt="The two index sections in the same Grafana, light theme, on 2026-10-09. The same eight numbers as in the console: 8 indexes, 0 being built, 0 that differ by pod, 15.9 MiB, 5 search and 3 vector indexes, 5.66 MiB of memory for vector indexes, 0 builds waiting. The same two tables with every header and every id whole and all eight rows showing. The size of each index as bars, biggest first, the ids whole in small type. The state history green for every index. Then Is stored source used: 667 searches and 666 vector searches in an hour, shares of 34 and 51 percent, the two rates on each other up to 0.5 a second, and the features text, valueBoost, approximate and returnStoredSource." src="../../docs/screenshots/dashboard-grafana-indexes.light.png">
+<!-- markdownlint-enable MD033 -->
+
+*The two index sections in Grafana: the same panels and readings as in the console.*
 
 Two things that Grafana needed, which the chart does not provide: a Prometheus data source (the dashboard starts on Grafana's default one and lists any other under *Data source*; here Thanos Querier on port 9091 with the Grafana pod's own token), and a Role that lets the sidecar read ConfigMaps. The Grafana Helm chart's own Role also lets it read every Secret in the namespace; `test/grafana-sidecar/` replaces it with one for ConfigMaps only.
 
@@ -260,8 +280,8 @@ The sixth section, *What does each index hold?*, is about the indexes themselves
 | Search indexes; Vector indexes | Index ids by the `indexType` label of their insert counter | 5 and 3 |
 | Memory for vector indexes | `mongot_index_stats_requiredMemoryBytes`, the largest reading of each index, added up | 5,930,144 bytes |
 | Index builds waiting | `mongot_initialsync_queue_queuedSyncs`, on the pod that has the most | 0 |
-| Each index, now | A table, one row per index id: type, pods where it is `STEADY`, Lucene documents, size, bytes per Lucene document, vector memory, growth in 24 hours | 5 search and 3 vector indexes, each `STEADY` on 3 pods, 5 to 20,024 documents, 5,339 to 5,900,486 bytes; 2,963,552 bytes of vector memory on two of them |
-| Each index, in the last hour | A table, one row per index id: searches, failed searches, average batch time, sync errors, and the replication lag now | Searches on the five indexes that were queried, 0 failed, batches in 0.7 to 1.0 ms on the three search indexes that were searched, 0 sync errors, 0 ms |
+| Each index, now | A table, one row per index id: type, pods where it is `STEADY`, Lucene documents, size, bytes per Lucene document, vector memory | 5 search and 3 vector indexes, each `STEADY` on 3 pods, 5 to 20,024 documents, 5,339 to 5,900,486 bytes; 2,963,552 bytes of vector memory on two of them |
+| Each index, in the last hour | A table, one row per index id: searches, failed searches, average batch time and sync errors in the last hour, the replication lag now, and the growth in 24 hours | 767 or 768 searches on each of the five indexes that were queried, 0 failed, batches in 1.3 to 1.6 ms on the three search indexes that were searched, 0 sync errors, 0 ms |
 | Size of each index | The same size, biggest first | 5,900,486 bytes down to 5,339 |
 | Indexes not STEADY, per index | `mongot_index_stats_indexStatusCode` for every state but `STEADY`, summed over the pods | `STEADY` on all 8 |
 | Searches that ask for stored source, per second | The two stored source counters as 5 minute rates | 0.37 to 0.49 a second each during the test searches |
@@ -281,13 +301,18 @@ What to know when reading them:
 - **Growth counts a new index from 0.** An index that did not exist 24 hours ago has its whole size as its growth.
 - **Counts over an hour are estimates.** Prometheus extends an increase to the edges of its window: 60 queries read as 61.
 - **Vector memory** is `mongot_index_stats_requiredMemoryBytes`: what a vector index wants resident, the vectors plus 128 bytes of graph for each. On the lab 20,024 vectors of 5 dimensions read 2,963,552 bytes, which is 20,024 x (5 x 4 + 128). It is 0 for a search index.
-- **The batch time is not the time of a whole search.** `mongot_index_stats_query_searchResultBatchLatencies_seconds` times the making of one batch of results, for search indexes only, and is an average here: mongot gives a sum and a count. The lab's 0.7 to 1.0 ms sits under the 1.4 ms average of the whole search command.
+- **The batch time is an average, and not the time of a whole search.** `mongot_index_stats_query_searchResultBatchLatencies_seconds` times the making of one batch of results, for search indexes only, and is an average here: mongot gives a sum and a count, and no buckets. The lab read 0.7 to 1.0 ms, when the whole search command averaged 1.4 ms, and about an hour later, with the test searches running, 1.3 to 1.6 ms.
 - **`$listSearchIndexes` can say `PENDING` while the index is served.** On the lab it reports every index `PENDING` and not queryable, while mongot reports `STEADY` and searches return results. mongod builds that answer from the hosts whose heartbeat row in `__mdb_internal_search.serverState` is under 2 hours old. The lab was suspended for over 2 hours twice; a pod's hourly cleanup then removed the others' rows, and mongot 1.70.1 only updates its row, never re-creates it: each pod logs `Failed to update server state entry` every 30 seconds, and the collection holds 0 rows (read 2026-10-09). The index names and definitions in that answer are right; its status is not to be trusted there. mongot's own `indexStatusCode`, which these panels read, is. Restarting the three mongot pods one at a time put it right on 2026-10-09: a pod writes its row when it starts. Afterwards the collection held 3 rows, every index was `READY` and queryable on 3 hosts, and the warning had stopped.
 - **Not seen on the lab:** an index being built while the dashboard was open, an index out of `STEADY`, a failed search, a sync error. Those panels and columns read 0 throughout.
 
-**Where these 18 panels were looked at:** in the lab's console, dark theme, on pages 1,600 and 1,280 pixels wide, on 2026-10-08: no panel said "No data", and every id was whole. They were not drawn in a Grafana; the pictures above were taken before these sections existed and do not show them.
+**Where these 18 panels were looked at**, on 2026-10-09 with chart 0.3.8:
 
-The two bar charts are one colour: they rank or count, and a colour per bar would change with every new index. In the Grafana form it is the dashboard's blue. The console draws its bar chart in a brighter blue of its own and takes no colour from the dashboard, and it lists bars by their value whatever the query's order. The two sections add 29 queries to a refresh, 126 in all.
+- In the lab's console as the viewer, in both themes, on pages 1,600 and 1,280 pixels wide: all 7 sections, no panel said "No data", and every id and table header was whole.
+- In a Grafana 12.3.1 that loaded the chart's ConfigMap through its sidecar, in both themes: it lists the dashboard with the same 47 panels in the same 7 rows; all 126 queries answered through its Thanos Querier data source with no failure and no notice; no panel said "No data". The 26 queries that return no series are the ones the lab has nothing for (no fourth mongot pod, no third Envoy pod, no 4xx, 5xx or other response class), none of them in these two sections.
+
+Three things were wrong in the Grafana form of chart 0.3.7 and are corrected: its table headers were cut ("Pods STE..."), its tables showed seven rows of eight, and its bar chart cut the index ids. Grafana draws a header in wider type than the console and a bar's name in a column it caps at about 165 pixels, so the columns are wider, the tables a unit taller, and the ids of *Size of each index* are in 10 pixel type there. The console draws them full size.
+
+The two bar charts are one colour: they rank or count, and a colour per bar would change with every new index. In the Grafana form it is the dashboard's blue, as a pale fill with its edge in the full colour. The console draws its bar chart in a brighter blue of its own and takes no colour from the dashboard, and it lists bars by their value whatever the query's order. The two sections add 29 queries to a refresh, 126 in all.
 
 ### Envoy counters without `_total`
 

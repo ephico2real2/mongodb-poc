@@ -3541,7 +3541,7 @@
       "spec": {
         "display": {
           "name": "Each index, now",
-          "description": "One row per index, by its id: mongot's metrics carry no index name, database or collection. `$listSearchIndexes` on the source mongod gives the name of an id. Size, documents and memory are the largest reading over the pods. The size is everything in the index's directory, stored source and vectors included. Lucene docs are the documents as the index holds them: the collection's documents, and one more for every embedded document of an embeddedDocuments field; bytes per doc is the size over that count. Vector memory is what a vector index wants resident, 0 for a search index. Growth is the size now less the size 24 hours ago, or the whole size of an index younger than that."
+          "description": "One row per index, by its id: mongot's metrics carry no index name, database or collection. `$listSearchIndexes` on the source mongod gives the name of an id. Size, documents and memory are the largest reading over the pods. The size is everything in the index's directory, stored source and vectors included. Lucene docs are the documents as the index holds them: the collection's documents, and one more for every embedded document of an embeddedDocuments field; bytes per doc is the size over that count. Vector memory is what a vector index wants resident, 0 for a search index."
         },
         "plugin": {
           "kind": "Table",
@@ -3590,7 +3590,7 @@
                 },
                 "header": "Pods STEADY",
                 "name": "value #2",
-                "width": 100
+                "width": 125
               },
               {
                 "format": {
@@ -3598,7 +3598,7 @@
                 },
                 "header": "Lucene docs",
                 "name": "value #3",
-                "width": 90
+                "width": 115
               },
               {
                 "format": {
@@ -3614,7 +3614,7 @@
                 },
                 "header": "Bytes per doc",
                 "name": "value #5",
-                "width": 105
+                "width": 125
               },
               {
                 "format": {
@@ -3622,15 +3622,7 @@
                 },
                 "header": "Vector memory",
                 "name": "value #6",
-                "width": 115
-              },
-              {
-                "format": {
-                  "unit": "bytes"
-                },
-                "header": "Growth, 24 h",
-                "name": "value #7",
-                "width": 95
+                "width": 135
               }
             ],
             "density": "compact",
@@ -3738,22 +3730,6 @@
                 }
               }
             }
-          },
-          {
-            "kind": "TimeSeriesQuery",
-            "spec": {
-              "plugin": {
-                "kind": "PrometheusTimeSeriesQuery",
-                "spec": {
-                  "datasource": {
-                    "kind": "PrometheusDatasource",
-                    "name": "__SEARCH__-thanos"
-                  },
-                  "query": "max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) - (max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"} offset 24h) or max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) * 0)",
-                  "seriesNameFormat": ""
-                }
-              }
-            }
           }
         ]
       }
@@ -3763,7 +3739,7 @@
       "spec": {
         "display": {
           "name": "Each index, in the last hour",
-          "description": "One row per index, by its id: mongot's metrics carry no index name, database or collection. `$listSearchIndexes` on the source mongod gives the name of an id. Counted over the last hour, all pods. A search is one query the index ran, a search or a vector search; a query mongot refused as invalid is not counted. The batch time is the average time to produce one batch of results, for search indexes that were searched; empty otherwise. Sync errors are the exceptions mongot met while it built or followed the index. The lag is the largest over the pods, now, in whole seconds, and is empty while the index is built."
+          "description": "One row per index, by its id: mongot's metrics carry no index name, database or collection. `$listSearchIndexes` on the source mongod gives the name of an id. Counted over the last hour, all pods. A search is one query the index ran, a search or a vector search; a query mongot refused as invalid is not counted. The batch time is the average time to produce one batch of results, for search indexes that were searched; empty otherwise. Sync errors are the exceptions mongot met while it built or followed the index. Two columns have a window of their own: the lag is the largest over the pods, now, in whole seconds, and is empty while the index is built; growth is the size now less the size 24 hours ago, or the whole size of an index younger than that."
         },
         "plugin": {
           "kind": "Table",
@@ -3784,7 +3760,7 @@
                 },
                 "header": "Searches",
                 "name": "value #1",
-                "width": 100
+                "width": 95
               },
               {
                 "format": {
@@ -3798,9 +3774,9 @@
                 "format": {
                   "unit": "seconds"
                 },
-                "header": "Average batch time",
+                "header": "Batch time",
                 "name": "value #3",
-                "width": 150
+                "width": 110
               },
               {
                 "format": {
@@ -3817,6 +3793,14 @@
                 "header": "Lag, now",
                 "name": "value #5",
                 "width": 90
+              },
+              {
+                "format": {
+                  "unit": "bytes"
+                },
+                "header": "Growth, 24 h",
+                "name": "value #6",
+                "width": 125
               }
             ],
             "density": "compact",
@@ -3904,6 +3888,22 @@
                     "name": "__SEARCH__-thanos"
                   },
                   "query": "max by (indexId_logString) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "__SEARCH__-thanos"
+                  },
+                  "query": "max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) - (max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"} offset 24h) or max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) * 0)",
                   "seriesNameFormat": ""
                 }
               }
@@ -4623,23 +4623,23 @@
             "x": 0,
             "y": 122,
             "width": 24,
-            "height": 9,
+            "height": 10,
             "content": {
               "$ref": "#/spec/panels/5_8"
             }
           },
           {
             "x": 0,
-            "y": 131,
+            "y": 132,
             "width": 24,
-            "height": 9,
+            "height": 10,
             "content": {
               "$ref": "#/spec/panels/5_9"
             }
           },
           {
             "x": 0,
-            "y": 140,
+            "y": 142,
             "width": 24,
             "height": 9,
             "content": {
@@ -4648,7 +4648,7 @@
           },
           {
             "x": 0,
-            "y": 149,
+            "y": 151,
             "width": 24,
             "height": 9,
             "content": {
@@ -4670,7 +4670,7 @@
         "items": [
           {
             "x": 0,
-            "y": 159,
+            "y": 161,
             "width": 6,
             "height": 4,
             "content": {
@@ -4679,7 +4679,7 @@
           },
           {
             "x": 6,
-            "y": 159,
+            "y": 161,
             "width": 6,
             "height": 4,
             "content": {
@@ -4688,7 +4688,7 @@
           },
           {
             "x": 12,
-            "y": 159,
+            "y": 161,
             "width": 6,
             "height": 4,
             "content": {
@@ -4697,7 +4697,7 @@
           },
           {
             "x": 18,
-            "y": 159,
+            "y": 161,
             "width": 6,
             "height": 4,
             "content": {
@@ -4706,7 +4706,7 @@
           },
           {
             "x": 0,
-            "y": 163,
+            "y": 165,
             "width": 12,
             "height": 8,
             "content": {
@@ -4715,7 +4715,7 @@
           },
           {
             "x": 12,
-            "y": 163,
+            "y": 165,
             "width": 12,
             "height": 8,
             "content": {

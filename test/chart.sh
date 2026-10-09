@@ -171,8 +171,19 @@ for x in g["panels"]:
         cols = chart["columnSettings"]
         ok &= cols[0] == {"name": "timestamp", "hide": True} and (cols[1]["name"], cols[1]["header"]) == ("indexId_logString", "Index id")
         ok &= [c["header"] for c in cols[2:]] == {
-            "Each index, now": ["Type", "Pods STEADY", "Lucene docs", "Size", "Bytes per doc", "Vector memory", "Growth, 24 h"],
-            "Each index, in the last hour": ["Searches", "Failed searches", "Average batch time", "Sync errors", "Lag, now"]}[x["title"]]
+            "Each index, now": ["Type", "Pods STEADY", "Lucene docs", "Size", "Bytes per doc", "Vector memory"],
+            "Each index, in the last hour": ["Searches", "Failed searches", "Batch time", "Sync errors", "Lag, now", "Growth, 24 h"]}[x["title"]]
+        # Grafana's header type is wider than the console's: at 90 pixels it cut "Lucene docs", and at nine units
+        # high it showed seven rows of eight.
+        widths = {"Each index, now": [215, 70, 125, 115, 80, 125, 135],
+                  "Each index, in the last hour": [215, 95, 130, 110, 105, 90, 125]}[x["title"]]
+        ok &= [c["width"] for c in cols[1:]] == widths
+        # The same widths in the Grafana source: the Perses file is generated from it, and a width changed there
+        # without regenerating would otherwise pass.
+        grafana_widths = {o["matcher"]["options"]: {q["id"]: q["value"] for q in o["properties"]}.get("custom.width")
+                          for o in x["fieldConfig"]["overrides"] if o["matcher"]["id"] == "byName"}
+        ok &= [grafana_widths.get(c["header"]) for c in cols[1:]] == widths
+        ok &= x["gridPos"]["h"] >= 10
         # The whole id, 24 characters, drew 165 pixels wide in the console. On a page 1,280 wide the console drew 876
         # pixels of table: wider than that, the last header was cut.
         ok &= cols[1]["width"] >= 190 and sum(c["width"] for c in cols[1:]) <= 870
@@ -186,8 +197,10 @@ for x in g["panels"]:
         # Bars rank or count: one colour, since a colour per bar would change with every new index and mean nothing.
         ok &= x["fieldConfig"]["defaults"]["color"] == {"mode": "fixed", "fixedColor": BLUE} and x["fieldConfig"]["defaults"]["min"] == 0
         ok &= perses[x["title"]]["kind"] == "BarChart"
+        ok &= x["options"]["namePlacement"] == "left"
         if "{{indexId_logString}}" in x["targets"][0].get("legendFormat", ""):
             ok &= x["gridPos"]["w"] == 24                    # at less, the console cut the 24 character id on the axis
+            ok &= x["options"]["text"]["titleSize"] <= 10    # Grafana caps the name's column: in 12 pixel type it cut the id
     elif x["type"] == "table":
         cols = chart["columnSettings"]
         ok &= cols[0] == {"name": "timestamp", "hide": True} and cols[1]["name"] == "pod" and [c["header"] for c in cols[2:]] == ["Index size", "Documents", "Indexes", "Not STEADY", "Volume used", "Uptime"]

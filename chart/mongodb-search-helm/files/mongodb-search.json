@@ -4715,14 +4715,14 @@
     {
       "type": "table",
       "title": "Each index, now",
-      "description": "One row per index, by its id: mongot's metrics carry no index name, database or collection. `$listSearchIndexes` on the source mongod gives the name of an id. Size, documents and memory are the largest reading over the pods. The size is everything in the index's directory, stored source and vectors included. Lucene docs are the documents as the index holds them: the collection's documents, and one more for every embedded document of an embeddedDocuments field; bytes per doc is the size over that count. Vector memory is what a vector index wants resident, 0 for a search index. Growth is the size now less the size 24 hours ago, or the whole size of an index younger than that.",
+      "description": "One row per index, by its id: mongot's metrics carry no index name, database or collection. `$listSearchIndexes` on the source mongod gives the name of an id. Size, documents and memory are the largest reading over the pods. The size is everything in the index's directory, stored source and vectors included. Lucene docs are the documents as the index holds them: the collection's documents, and one more for every embedded document of an embeddedDocuments field; bytes per doc is the size over that count. Vector memory is what a vector index wants resident, 0 for a search index.",
       "id": 44,
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
       "gridPos": {
-        "h": 9,
+        "h": 10,
         "w": 24,
         "x": 0,
         "y": 122
@@ -4793,17 +4793,6 @@
           "legendFormat": "",
           "instant": true,
           "format": "table"
-        },
-        {
-          "expr": "max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) - (max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"} offset 24h) or max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) * 0)",
-          "refId": "G",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "legendFormat": "",
-          "instant": true,
-          "format": "table"
         }
       ],
       "fieldConfig": {
@@ -4867,7 +4856,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 100
+                "value": 125
               }
             ]
           },
@@ -4883,7 +4872,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 90
+                "value": 115
               }
             ]
           },
@@ -4915,7 +4904,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 105
+                "value": 125
               }
             ]
           },
@@ -4931,23 +4920,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 115
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Growth, 24 h"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "bytes"
-              },
-              {
-                "id": "custom.width",
-                "value": 95
+                "value": 135
               }
             ]
           }
@@ -4975,8 +4948,7 @@
               "Value #C": "Lucene docs",
               "Value #D": "Size",
               "Value #E": "Bytes per doc",
-              "Value #F": "Vector memory",
-              "Value #G": "Growth, 24 h"
+              "Value #F": "Vector memory"
             }
           }
         }
@@ -4985,17 +4957,17 @@
     {
       "type": "table",
       "title": "Each index, in the last hour",
-      "description": "One row per index, by its id: mongot's metrics carry no index name, database or collection. `$listSearchIndexes` on the source mongod gives the name of an id. Counted over the last hour, all pods. A search is one query the index ran, a search or a vector search; a query mongot refused as invalid is not counted. The batch time is the average time to produce one batch of results, for search indexes that were searched; empty otherwise. Sync errors are the exceptions mongot met while it built or followed the index. The lag is the largest over the pods, now, in whole seconds, and is empty while the index is built.",
+      "description": "One row per index, by its id: mongot's metrics carry no index name, database or collection. `$listSearchIndexes` on the source mongod gives the name of an id. Counted over the last hour, all pods. A search is one query the index ran, a search or a vector search; a query mongot refused as invalid is not counted. The batch time is the average time to produce one batch of results, for search indexes that were searched; empty otherwise. Sync errors are the exceptions mongot met while it built or followed the index. Two columns have a window of their own: the lag is the largest over the pods, now, in whole seconds, and is empty while the index is built; growth is the size now less the size 24 hours ago, or the whole size of an index younger than that.",
       "id": 45,
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
       "gridPos": {
-        "h": 9,
+        "h": 10,
         "w": 24,
         "x": 0,
-        "y": 131
+        "y": 132
       },
       "targets": [
         {
@@ -5052,6 +5024,17 @@
           "legendFormat": "",
           "instant": true,
           "format": "table"
+        },
+        {
+          "expr": "max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) - (max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"} offset 24h) or max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) * 0)",
+          "refId": "F",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "",
+          "instant": true,
+          "format": "table"
         }
       ],
       "fieldConfig": {
@@ -5081,7 +5064,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 100
+                "value": 95
               },
               {
                 "id": "decimals",
@@ -5112,7 +5095,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Average batch time"
+              "options": "Batch time"
             },
             "properties": [
               {
@@ -5121,7 +5104,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 150
+                "value": 110
               }
             ]
           },
@@ -5160,6 +5143,22 @@
                 "value": 90
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Growth, 24 h"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "custom.width",
+                "value": 125
+              }
+            ]
           }
         ]
       },
@@ -5182,9 +5181,10 @@
               "indexId_logString": "Index id",
               "Value #A": "Searches",
               "Value #B": "Failed searches",
-              "Value #C": "Average batch time",
+              "Value #C": "Batch time",
               "Value #D": "Sync errors",
-              "Value #E": "Lag, now"
+              "Value #E": "Lag, now",
+              "Value #F": "Growth, 24 h"
             }
           }
         }
@@ -5203,7 +5203,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 140
+        "y": 142
       },
       "targets": [
         {
@@ -5248,7 +5248,12 @@
         "orientation": "horizontal",
         "displayMode": "basic",
         "valueMode": "color",
-        "showUnfilled": false
+        "showUnfilled": false,
+        "namePlacement": "left",
+        "text": {
+          "titleSize": 10,
+          "valueSize": 14
+        }
       }
     },
     {
@@ -5264,7 +5269,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 149
+        "y": 151
       },
       "targets": [
         {
@@ -5332,7 +5337,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 158
+        "y": 160
       },
       "panels": []
     },
@@ -5349,7 +5354,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 159
+        "y": 161
       },
       "targets": [
         {
@@ -5404,7 +5409,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 159
+        "y": 161
       },
       "targets": [
         {
@@ -5459,7 +5464,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 159
+        "y": 161
       },
       "targets": [
         {
@@ -5514,7 +5519,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 159
+        "y": 161
       },
       "targets": [
         {
@@ -5569,7 +5574,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 163
+        "y": 165
       },
       "targets": [
         {
@@ -5677,7 +5682,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 163
+        "y": 165
       },
       "targets": [
         {
@@ -5723,7 +5728,12 @@
         "orientation": "horizontal",
         "displayMode": "basic",
         "valueMode": "color",
-        "showUnfilled": false
+        "showUnfilled": false,
+        "namePlacement": "left",
+        "text": {
+          "titleSize": 12,
+          "valueSize": 14
+        }
       }
     }
   ]
