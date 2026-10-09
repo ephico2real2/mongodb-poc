@@ -111,8 +111,10 @@ done
 o="$(objects)"
 { has "$o" "ServiceMonitor/mongot" && has "$o" "ServiceMonitor/mongot-envoy" && has "$o" "Service/mongot-envoy-stats"; } && ok "ServiceMonitors and the Envoy stats Service by default" || bad "ServiceMonitors missing by default"
 has "$o" "PrometheusRule/mongot-distribution" && ok "the alert rules by default" || bad "alert rules missing by default"
-# The dashboard: 29 panels in 5 sections. The 16 it started with are all still there: panels are added, not replaced.
-python3 - "${CHART}/files/mongodb-search.json" <<'PY' && ok "the dashboard has 29 panels in 5 sections, the first 16 among them" || bad "dashboard panels or sections"
+# The dashboard: 45 panels in 7 sections. The 16 it started with are all still there: panels are added, not replaced.
+# The sixth section is about the indexes themselves, by index id (mongot's metrics carry no index name), and the
+# seventh about the searches that ask for stored source.
+python3 - "${CHART}/files/mongodb-search.json" <<'PY' && ok "the dashboard has 45 panels in 7 sections, the first 16 among them" || bad "dashboard panels or sections"
 import json, sys
 g = json.load(open(sys.argv[1]))
 charts = [p["title"] for p in g["panels"] if p["type"] != "row"]; rows = [p["title"] for p in g["panels"] if p["type"] == "row"]
@@ -122,7 +124,8 @@ first = ["mongot pods up", "Envoy pods up", "mongot pods in Envoy", "Searches pe
          "Retries per second, per Envoy pod", "Responses per second from mongot, by class", "Envoy to mongot latency, 95th percentile",
          "Average search latency, per mongot pod", "Search failures per second, per mongot pod",
          "Replication lag, per mongot pod", "JVM memory used, per mongot pod"]
-sys.exit(0 if len(charts) == 29 and len(set(charts)) == 29 and len(rows) == 5 and set(first) <= set(charts) and rows[-1] == "Does every mongot pod hold the same data?" else 1)
+sys.exit(0 if len(charts) == 45 and len(set(charts)) == 45 and len(rows) == 7 and set(first) <= set(charts)
+         and rows[-3:] == ["Does every mongot pod hold the same data?", "What does each index hold?", "Is stored source used?"] else 1)
 PY
 # Colours (issue #35): one palette, Tableau 10. A pod has one colour in every panel: the first blue, the second red,
 # the third yellow, any further purple. Perses fixes a colour per query, so every line has a query of its own. A
@@ -163,6 +166,25 @@ for x in g["panels"]:
         ok &= [by[r]["color"]["fixedColor"] for r in refs] == pods == chart["colorPalette"]
     elif x["type"] == "status-history":
         ok &= [m["spec"]["result"]["color"] for m in chart["mappings"]] == [GREEN, RED] and all(v is not None for m in chart["mappings"] for v in m["spec"].values())
+    elif x["title"] in ("Each index, now", "Each index, in use"):
+        # One row per index id. Every query carries that one label, or Perses splits an index into several rows.
+        cols = chart["columnSettings"]
+        ok &= cols[0] == {"name": "timestamp", "hide": True} and (cols[1]["name"], cols[1]["header"]) == ("indexId_logString", "Index id")
+        ok &= [c["header"] for c in cols[2:]] == {
+            "Each index, now": ["Type", "Pods STEADY", "Documents", "Size", "Bytes per document", "Growth, 24 hours"],
+            "Each index, in use": ["Searches, last hour", "Failed searches, last hour", "Sync errors, last hour", "Replication lag"]}[x["title"]]
+        # The whole id, 24 characters, drew 165 pixels wide in the console. On a page 1,280 wide the console drew 876
+        # pixels of table: wider than that, the last header was cut.
+        ok &= cols[1]["width"] >= 190 and sum(c["width"] for c in cols[1:]) <= 870
+        if x["title"] == "Each index, now":
+            ok &= [(c["condition"]["spec"]["value"], c["text"]) for c in cols[2]["cellSettings"]] == [("0", "search"), ("1", "vector")]
+        ok &= all(" by (indexId_logString) " in t["expr"] and " by (pod" not in t["expr"] for t in x["targets"])
+    elif x["type"] == "bargauge":
+        # Bars rank or count: one colour, since a colour per bar would change with every new index and mean nothing.
+        ok &= x["fieldConfig"]["defaults"]["color"] == {"mode": "fixed", "fixedColor": BLUE} and x["fieldConfig"]["defaults"]["min"] == 0
+        ok &= perses[x["title"]]["kind"] == "BarChart"
+        if "{{indexId_logString}}" in x["targets"][0].get("legendFormat", ""):
+            ok &= x["gridPos"]["w"] == 24                    # at less, the console cut the 24 character id on the axis
     elif x["type"] == "table":
         cols = chart["columnSettings"]
         ok &= cols[0] == {"name": "timestamp", "hide": True} and cols[1]["name"] == "pod" and [c["header"] for c in cols[2:]] == ["Index size", "Documents", "Indexes", "Not STEADY", "Volume used", "Uptime"]
@@ -198,7 +220,11 @@ TAILS = {"mongot": [f" and on (pod) {NAME(i)}" for i in range(3)] + [f" unless o
          "Envoy": [f" and on (pod) topk(1, {START})", f" and on (pod) (topk(2, {START}) unless topk(1, {START}))",
                    f" and on (pod) (topk(3, {START}) unless topk(2, {START}))", f" unless on (pod) topk(3, {START})"]}
 STATS = {"mongot pods up": [RED, GREEN], "Envoy pods up": [RED, GREEN], "mongot pods in Envoy": [RED, GREEN],
-         "Searches per second": [GREEN], "Largest share on one pod": [GREEN, ORANGE, RED]}
+         "Searches per second": [GREEN], "Largest share on one pod": [GREEN, ORANGE, RED],
+         "Indexes": [GREEN], "Indexes being built": [GREEN], "Indexes that differ by pod": [GREEN, RED],
+         "Size of all indexes, on one pod": [GREEN], "Stored source searches, 1 hour": [GREEN],
+         "Stored source share, searches": [GREEN], "Stored source vector, 1 hour": [GREEN],
+         "Stored source share, vector": [GREEN]}
 def own(m):                                        # the searches per second of the pods a matcher selects, at the end of the range
     return (f"sum by (pod) (rate(mongot_command_searchCommandTotalLatency_seconds_count{{{J}{m}}}[5m] @ end())"
             f" + rate(mongot_command_vectorSearchCommandTotalLatency_seconds_count{{{J}{m}}}[5m] @ end()))")
@@ -238,7 +264,7 @@ for x in g["panels"]:
         steps = d["thresholds"]["steps"]
         ok &= [s["color"] for s in steps] == STATS[x["title"]]
         ok &= chart["thresholds"]["steps"] == [{"color": s["color"], "value": s["value"] or 0} for s in steps]
-    if x["type"] == "table":
+    if x["title"] == "Each mongot pod, now":
         maps = [m for o in x["fieldConfig"]["overrides"] for q in o["properties"] if q["id"] == "mappings" for m in q["value"]]
         want = [(k, v["color"]) for m in maps if m["type"] == "value" for k, v in m["options"].items()]
         want += [(m["options"]["pattern"], m["options"]["result"]["color"]) for m in maps if m["type"] == "regex"]
