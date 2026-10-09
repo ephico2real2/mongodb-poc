@@ -56,11 +56,22 @@ search:
   # 1.13.0), so mongot moves only when operator.version does. Set it to keep mongot on one version across operator
   # upgrades.
   version: ""
+  # The number of mongot pods. LOWERING IT DELETES VOLUMES: the operator sets the StatefulSet to delete the volume
+  # claim of every pod that is scaled away, and every claim at 0. A pod that comes back builds every index again
+  # from the collection: hours on a large deployment. An upgrade to fewer pods is refused by the preflight unless
+  # allowVolumeLoss is true for that upgrade. Never scale the StatefulSet by hand. See volumes.md and scaling.md.
   replicas: 3
+  allowVolumeLoss: false
+  # CPU and memory of each mongot pod. A change restarts the pods one at a time, each on its volume. Without
+  # -Xms or -Xmx among the JVM flags the operator sets the heap to half of the memory request.
   resources:
     requests: {cpu: "1", memory: 3Gi}
     limits: {cpu: "3", memory: 5Gi}
   persistence:
+    # The size of each pod's volume. Raising it here does not grow a volume that exists: Kubernetes forbids a
+    # change of a StatefulSet's volume claim template, the MongoDBSearch goes Failed (the pods keep running and
+    # answering), and the upgrade's gate stops and says so. The volumes are then grown by hand:
+    # volume-expansion-runbook.md, with expand-mongot-volumes.sh, both beside this file. It cannot be lowered.
     storage: 10Gi
     # Empty: the cluster's default storage class.
     storageClass: thin-csi
@@ -131,11 +142,24 @@ monitoring:
     interval: 15s
     labels: {}
   alerts:
-    # A PrometheusRule with per-pod share recording rules and nine alerts, the first of which fires when one
-    # mongot pod serves over 90% of search traffic. On by default.
+    # A PrometheusRule with recording rules and twelve alerts: four on traffic (the first fires when one mongot
+    # pod serves over 90% of search traffic), five on the indexes, and the volume alert at three levels. On by
+    # default.
     enabled: true
     labels: {}
     runbookUrl: https://github.com/ephico2real2/mongodb-poc/blob/main/README.md#the-failure-that-produces-no-error
+    # MongotDataPathFillingUp: three levels, as the used share (per cent) of the file system under mongot's data
+    # path, per pod. A pod is in one level at a time, from that level's value up to the next one's.
+    #   info      70: MongoDB, "below 30% free, consider having a planning conversation to increase storage".
+    #   warning   80: MongoDB, "less than 20% free on the mongot dataPath volume can cause availability issues".
+    #   critical  90: above it mongot stops following the source (and builds no index above 85, exits at 95).
+    # To change one: --set monitoring.alerts.dataPathUsed.info=75. Whole numbers, and they must rise. null leaves a level out
+    # (--set monitoring.alerts.dataPathUsed.info=null), and the level below it then runs up to the next one; all
+    # three null leaves the alert out.
+    dataPathUsed:
+      info: 70
+      warning: 80
+      critical: 90
   # The "MongoDB Search" dashboard in the OpenShift console (Observe -> Dashboards (Perses)): a PersesDashboard
   # and the PersesDatasource it queries, in this namespace. Needs the Cluster Observability Operator (COO 1.5 or
   # later) on the cluster, and the ServiceMonitors above for data. On by default: set it to false on a cluster

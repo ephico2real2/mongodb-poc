@@ -54,6 +54,13 @@ jobs:
           BASH_UNDER_TEST: ${{ matrix.bash }}
         run: |
           "${BASH_UNDER_TEST}" test/prerequisites.sh
+      # test/expand-volumes.sh: the script that grows mongot's volume claims, against a stand-in oc that keeps a
+      # small cluster in files. On the same two systems, for the same reason: bash 3.2 reads some things otherwise.
+      - name: The volume expansion script's tests
+        env:
+          BASH_UNDER_TEST: ${{ matrix.bash }}
+        run: |
+          "${BASH_UNDER_TEST}" test/expand-volumes.sh
       - name: The tests left the tree as it was
         run: git status --porcelain && git diff --exit-code
   # Publishes the chart when its version is new: the package of this commit, as the release

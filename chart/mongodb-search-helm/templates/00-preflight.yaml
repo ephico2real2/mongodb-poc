@@ -55,6 +55,11 @@ rules:
     resources: ["configmaps"]
     resourceNames: [{{ .Values.tls.trustBundleConfigMap | quote }}]
     verbs: ["get"]
+  # The resource as it runs, for its replica count: fewer mongot pods means their volumes are deleted.
+  - apiGroups: ["mongodb.com"]
+    resources: ["mongodbsearch"]
+    resourceNames: [{{ .Values.search.name | quote }}]
+    verbs: ["get"]
   {{- if .Values.operator.install }}
   # A second OperatorGroup in a namespace stops OLM for every operator in it.
   - apiGroups: ["operators.coreos.com"]
@@ -140,6 +145,12 @@ spec:
             - name: INDEX_INFO_KEY
               value: {{ .Values.monitoring.indexInfo.passwordSecret.key | quote }}
             {{- end }}
+            - name: SEARCH
+              value: {{ .Values.search.name | quote }}
+            - name: WANT_REPLICAS
+              value: {{ .Values.search.replicas | quote }}
+            - name: ALLOW_VOLUME_LOSS
+              value: {{ .Values.search.allowVolumeLoss | quote }}
             - name: OPERATOR_INSTALL
               value: {{ .Values.operator.install | quote }}
             - name: OPERATORGROUP
@@ -202,6 +213,29 @@ spec:
                   || bad "no Succeeded ${PACKAGE} CSV in ${NAMESPACE}: install the operator, or set operator.install=true"
                 oc get serviceaccount mongodb-kubernetes-database-pods -n "$NAMESPACE" >/dev/null 2>&1 \
                   || bad "ServiceAccount mongodb-kubernetes-database-pods (mongot pods run as it; the operator's bundle creates it in the operator's own namespace only)"
+              fi
+
+              # Fewer mongot pods. The operator sets the StatefulSet to delete the volume claim of every pod that is
+              # scaled away (and of every pod, at 0), and a pod that comes back builds every index again from the
+              # collection: hours on a large deployment. Refused unless it is asked for by name. On a first
+              # install there is no resource yet, and nothing to compare.
+              # The read is trusted only when it succeeds, or fails because there is nothing to read: a first install
+              # (no resource; under Argo CD's PreSync not even the CRD yet). Any other failure (RBAC, the API) is
+              # refused, since "no resource" would otherwise let a scale-down through unseen.
+              if have="$(oc get mongodbsearch.mongodb.com "$SEARCH" -n "$NAMESPACE" -o jsonpath='{.spec.clusters[0].replicas}' 2>&1)"; then :; else
+                case "$have" in
+                  *NotFound*|*"not found"*|*"doesn't have a resource type"*) have="" ;;
+                  *) printf '[preflight] REFUSED: cannot read MongoDBSearch %s for its replica count, so an upgrade to fewer mongot pods cannot be ruled out: %s. Nothing was changed.\n' "$SEARCH" "$(printf '%s' "$have" | tail -1)" >&2; exit 1 ;;
+                esac
+              fi
+              case "$have" in *[!0-9]*) printf '[preflight] REFUSED: MongoDBSearch %s names a replica count that is not a number: %s. Nothing was changed.\n' "$SEARCH" "$have" >&2; exit 1 ;; esac
+              if [ -n "$have" ] && [ "$WANT_REPLICAS" -lt "$have" ]; then
+                if [ "$ALLOW_VOLUME_LOSS" = "true" ]; then
+                  log "note: search.replicas goes from ${have} to ${WANT_REPLICAS} with search.allowVolumeLoss=true: the volumes of the pods that go are deleted"
+                else
+                  printf '[preflight] REFUSED: search.replicas would go from %s to %s. The operator deletes the volume of every mongot pod that is scaled away, and a pod that comes back builds every index again from the collection (hours on a large deployment; see volumes.md in the chart). To do it knowingly, set search.allowVolumeLoss=true for this one upgrade. Nothing was changed.\n' "$have" "$WANT_REPLICAS" >&2
+                  exit 1
+                fi
               fi
 
               if [ "$PROBLEMS" -gt 0 ]; then
