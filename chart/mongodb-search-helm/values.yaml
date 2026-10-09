@@ -157,8 +157,10 @@ monitoring:
   # it no right to read a document. Do not use the sync user (source.username).
   indexInfo:
     enabled: false
-    # The stock MongoDB Community Server image: it has python3 and mongosh, and nothing is built for this.
-    image: quay.io/mongodb/mongodb-community-server:8.3.4-ubi9
+    # The stock MongoDB Community Server image: it has python3 and mongosh, and nothing is built for this. By digest
+    # (the index: each platform takes its own image), so that the tag cannot be moved under it. Where outside
+    # registries are closed, mirror it and name the mirror here.
+    image: quay.io/mongodb/mongodb-community-server:8.3.4-ubi9@sha256:fc8c72e07934aecdff8ac7053c1c7ee8bf1f6a6b594618f2aff8e024006fb569
     username: search-index-info
     passwordSecret:
       name: search-index-info-password

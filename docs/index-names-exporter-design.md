@@ -156,7 +156,7 @@ The panels show `index`:
 - **One question per collection.** Measured with 3 collections: 0.49 s. Not measured with thousands, where `cacheSeconds` and `interval` should be raised.
 - **Views and time series collections are not asked.**
 - **Whoever can read the namespace's metrics can read the names** of its indexes, collections and databases.
-- **The image is large, about 1 GB, and referenced by tag.** Where outside registries are closed it must be mirrored and `monitoring.indexInfo.image` set.
+- **The image is large, about 1 GB.** It is referenced by digest. Where outside registries are closed it must be mirrored and `monitoring.indexInfo.image` set.
 - **A source that cannot be reached was tested with a stand-in `mongosh`**, not on the lab.
 
 ## Measured on the lab

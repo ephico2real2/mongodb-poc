@@ -5274,7 +5274,7 @@
     {
       "type": "table",
       "title": "Each index, in the last hour",
-      "description": "One row per index. With the index info exporter on (monitoring.indexInfo) an index is named as the source deployment names it, database.collection / index; without it, by the id mongot's metrics carry. Counted over the last hour, all pods. A search is one query the index ran, a search or a vector search; a query mongot refused as invalid is not counted. The batch time is the average time to produce one batch of results, for search indexes that were searched; empty otherwise. Sync errors are the exceptions mongot met while it built or followed the index. The lag is the largest over the pods, now, in whole seconds, and is empty while the index is built.",
+      "description": "One row per index. With the index info exporter on (monitoring.indexInfo) an index is named as the source deployment names it, database.collection / index; without it, by the id mongot's metrics carry. Counted over the last hour, all pods. A search is one query the index ran, a search or a vector search; a query mongot refused as invalid is not counted. The batch time is the average time to produce one batch of results (mongot gives a sum and a count, and no buckets for a percentile), for search indexes that were searched; empty otherwise. Sync errors are the exceptions mongot met while it built or followed the index. The lag is the largest over the pods, now, in whole seconds, and is empty while the index is built.",
       "id": 49,
       "datasource": {
         "type": "prometheus",
@@ -5332,7 +5332,7 @@
           "format": "table"
         },
         {
-          "expr": "max by (index) (label_join(label_join((max by (indexId_logString) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(max by (indexId_logString) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}), \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
+          "expr": "max by (index) (label_join(label_join((max by (indexId_logString) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / 1000) * on (indexId_logString) group_left (database, collection, index_name) max by (indexId_logString, database, collection, index_name) (mongodb_search_index_info{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-index-info\"} @ end()), \"ns\", \".\", \"database\", \"collection\"), \"index\", \" / \", \"ns\", \"index_name\") or on (indexId_logString) label_replace(max by (indexId_logString) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / 1000, \"index\", \"$1\", \"indexId_logString\", \"(.*)\"))",
           "refId": "E",
           "datasource": {
             "type": "prometheus",
@@ -5442,7 +5442,7 @@
             "properties": [
               {
                 "id": "unit",
-                "value": "ms"
+                "value": "s"
               },
               {
                 "id": "custom.width",
