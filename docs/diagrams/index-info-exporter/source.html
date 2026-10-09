@@ -1,0 +1,222 @@
+<!-- SPDX-License-Identifier: MIT-0. Started from the diagram-kit template, https://github.com/ephico2real2/diagram-kit -->
+<title>Index Names Exporter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --ground: #f5f6f8; --surface: #ffffff; --ink: #18212c; --muted: #58636f; --rule: #d7dce3;
+  --host: #a55a0b; --host-wash: #fbf1e4; --remote: #0e6f68; --remote-wash: #e3f3f1;
+  --gap: #b3261e; --gap-wash: #fbe9e7; --none: #5f6a77; --none-wash: #eef0f3;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+    --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+    --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+  --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+  --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55; margin: 0; }
+.page { max-width: 1060px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 72px; display: grid; gap: 44px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0 0 6px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+.lede { font-size: 17px; max-width: 70ch; }
+code { font-family: var(--font-mono); font-size: .9em; }
+section { display: grid; gap: 14px; }
+figure { margin: 0; display: grid; gap: 10px; }
+.fig-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px; }
+.fig-scroll svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--ink); }
+figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow">mongodb-poc · design · 2026-10-09</div>
+    <h1>How the dashboard gets an index's name</h1>
+    <p class="lede">mongot's metrics name a search index by an id. The names are in the source deployment. A small exporter asks for them when Prometheus scrapes it, and the dashboard joins the two on the id.</p>
+  </header>
+
+  <section>
+    <h2>The path of a name</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 700" role="img" aria-label="How the dashboard gets an index's name: Prometheus scrapes the index info exporter, which asks the source deployment over TLS with a user that may only list, and answers one series per index with its id and its names; Prometheus also scrapes the mongot pods, whose metrics carry the id only; one dashboard query joins the two on the id, and falls back to the id where no name is there.">
+          <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+          <g font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)" letter-spacing="1">
+            <text x="30" y="30">OUTSIDE OPENSHIFT</text>
+            <text x="30" y="172">NAMESPACE OF THE RELEASE</text>
+            <text x="30" y="348">OPENSHIFT-USER-WORKLOAD-MONITORING</text>
+            <text x="30" y="468">WHO READS IT</text>
+          </g>
+          <g stroke="var(--rule)" stroke-width="1.5" stroke-dasharray="6 5">
+            <line x1="20" y1="146" x2="960" y2="146"/>
+            <line x1="20" y1="324" x2="960" y2="324"/>
+            <line x1="20" y1="444" x2="960" y2="444"/>
+          </g>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+            <!-- the source deployment -->
+            <rect x="560" y="44" width="380" height="72" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="576" y="66" font-weight="600">source replica set · mongod</text>
+            <text x="576" y="84" font-family="IBM Plex Mono, monospace" font-size="12">source.hostAndPorts</text>
+            <text x="576" y="102" fill="var(--muted)">holds each index's name and definition</text>
+
+            <!-- mongot -->
+            <rect x="30" y="186" width="400" height="72" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="46" y="208" font-weight="600">mongot pods</text>
+            <text x="46" y="226" font-family="IBM Plex Mono, monospace" font-size="12">mongot_index_stats_*{indexId_logString}</text>
+            <text x="46" y="244" fill="var(--muted)">an index is an id here: no name, no collection</text>
+
+            <!-- the exporter -->
+            <rect x="560" y="186" width="380" height="72" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="576" y="208" font-weight="600" fill="var(--remote)">index info exporter · one pod</text>
+            <text x="576" y="226">a Python server that runs mongosh when scraped</text>
+            <text x="576" y="244" fill="var(--muted)">its own database user: may list, may not read</text>
+
+            <!-- 2: the exporter asks the source -->
+            <line x1="750" y1="186" x2="750" y2="120" stroke="var(--remote)" stroke-width="1.5" marker-end="url(#ah)"/>
+            <text x="762" y="138" fill="var(--remote)" font-weight="600">② asks over TLS</text>
+            <text x="762" y="164">names only: $listSearchIndexes</text>
+
+            <!-- 3 and the failure, beside arrow 1 -->
+            <text x="660" y="278" fill="var(--remote)" font-weight="600">③ answers one series per index</text>
+            <text x="660" y="296" fill="var(--gap)">source cannot be asked → 503:</text>
+            <text x="660" y="312" fill="var(--gap)">the scrape fails, no old name is served</text>
+
+            <!-- Prometheus -->
+            <rect x="300" y="360" width="380" height="56" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="316" y="382" font-weight="600">Prometheus</text>
+            <text x="316" y="400" fill="var(--muted)">holds both: the sizes by id, and the names by id</text>
+
+            <!-- 4: Prometheus scrapes mongot -->
+            <line x1="340" y1="360" x2="340" y2="262" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah)"/>
+            <text x="330" y="300" text-anchor="end">④ scrapes each pod, every 15 s</text>
+
+            <!-- 1: Prometheus scrapes the exporter -->
+            <line x1="640" y1="360" x2="640" y2="262" stroke="var(--remote)" stroke-width="1.5" marker-end="url(#ah)"/>
+            <text x="630" y="300" text-anchor="end" fill="var(--remote)" font-weight="600">① scrapes port 9947, every 60 s</text>
+
+            <!-- the dashboard -->
+            <rect x="300" y="480" width="380" height="72" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="316" y="502" font-weight="600">the dashboard · console and Grafana</text>
+            <text x="316" y="520" font-family="IBM Plex Mono, monospace" font-size="12">size * on (indexId_logString) names</text>
+            <text x="316" y="538" fill="var(--muted)">one query joins the sizes to the names</text>
+
+            <!-- 5: the dashboard asks Prometheus -->
+            <line x1="490" y1="480" x2="490" y2="420" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah)"/>
+            <text x="502" y="436">⑤ asks</text>
+
+            <!-- what the reader sees -->
+            <line x1="490" y1="552" x2="490" y2="570" stroke="currentColor" stroke-width="1.2"/>
+            <line x1="250" y1="570" x2="725" y2="570" stroke="currentColor" stroke-width="1.2"/>
+            <line x1="250" y1="570" x2="250" y2="584" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah)"/>
+            <line x1="725" y1="570" x2="725" y2="584" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah)"/>
+            <text x="262" y="564" fill="var(--muted)">a name is there</text>
+            <text x="713" y="564" text-anchor="end" fill="var(--muted)">no name</text>
+
+            <rect x="30" y="588" width="440" height="62" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="46" y="610" font-weight="600" fill="var(--remote)">with the exporter on</text>
+            <text x="46" y="628" font-family="IBM Plex Mono, monospace" font-size="12">sample_mflix.movies / ss_all</text>
+            <text x="46" y="644" fill="var(--muted)">and what it stores: all fields</text>
+
+            <rect x="510" y="588" width="430" height="62" rx="8" fill="var(--none-wash)" stroke="var(--none)" stroke-width="1.2"/>
+            <text x="526" y="610" font-weight="600" fill="var(--none)">with it off, or for an index not listed yet</text>
+            <text x="526" y="628" font-family="IBM Plex Mono, monospace" font-size="12">6ac852ebd65a7a3f117a6fb1</text>
+            <text x="526" y="644" fill="var(--muted)">every panel falls back to the id</text>
+
+            <text x="30" y="682" fill="var(--muted)">The exporter adds the one fact mongot does not emit. It reads no document, and nothing here is proposed: all of it ran on the lab.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>Prometheus scrapes the exporter (①), which asks the source deployment for names only (②) and answers one series per index (③), or 503 when it cannot ask. Prometheus also scrapes mongot, whose metrics carry the id only (④). One dashboard query joins the two on the id (⑤) and shows the name, or the id where no name is there.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>What the chart adds</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 330" role="img" aria-label="The objects of the index info exporter: a Deployment of one pod that mounts a ConfigMap with its two scripts, a Secret with its database user's password and the ConfigMap with the source's CA; a ClusterIP Service that selects the pod; a ServiceMonitor that names the Service's port; and Prometheus, which scrapes the pod. The Secret and the CA ConfigMap are made by hand.">
+          <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+            <!-- what the pod mounts -->
+            <rect x="30" y="34" width="290" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="46" y="56" font-weight="600">ConfigMap · the two scripts</text>
+            <text x="46" y="73" font-family="IBM Plex Mono, monospace" font-size="12">&lt;search.name&gt;-index-info</text>
+            <text x="46" y="89" fill="var(--muted)">made by the chart; nothing is built</text>
+
+            <rect x="30" y="112" width="290" height="62" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="46" y="134" font-weight="600" fill="var(--host)">Secret · the user's password</text>
+            <text x="46" y="151" font-family="IBM Plex Mono, monospace" font-size="12">search-index-info-password</text>
+            <text x="46" y="167" fill="var(--muted)">made by hand; the preflight checks it</text>
+
+            <rect x="30" y="190" width="290" height="62" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="46" y="212" font-weight="600" fill="var(--host)">ConfigMap · the source's CA</text>
+            <text x="46" y="229" font-family="IBM Plex Mono, monospace" font-size="12">tls.trustBundleConfigMap</text>
+            <text x="46" y="245" fill="var(--muted)">made by hand; mongot uses the same</text>
+
+            <g stroke="var(--muted)" stroke-width="1.2" stroke-dasharray="5 4">
+              <line x1="320" y1="65" x2="406" y2="65" marker-end="url(#ah2)"/>
+              <line x1="320" y1="143" x2="406" y2="143" marker-end="url(#ah2)"/>
+              <line x1="320" y1="221" x2="406" y2="221" marker-end="url(#ah2)"/>
+            </g>
+            <g fill="var(--muted)">
+              <text x="336" y="58">mounted</text>
+              <text x="336" y="136">mounted</text>
+              <text x="336" y="214">mounted</text>
+            </g>
+
+            <!-- the pod -->
+            <rect x="410" y="34" width="230" height="218" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="426" y="128" font-weight="600" fill="var(--remote)">Deployment · one pod</text>
+            <text x="426" y="146">the server, and mongosh</text>
+            <text x="426" y="164" fill="var(--muted)">unprivileged, read-only files</text>
+
+            <!-- how it is reached -->
+            <rect x="740" y="34" width="210" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="756" y="56" font-weight="600">Service · ClusterIP</text>
+            <text x="756" y="73" font-family="IBM Plex Mono, monospace" font-size="12">port 9947, metrics</text>
+            <text x="756" y="89" fill="var(--muted)">never given a Route</text>
+
+            <rect x="740" y="130" width="210" height="46" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="756" y="151" font-weight="600">ServiceMonitor</text>
+            <text x="756" y="168" fill="var(--muted)">every 60 s</text>
+
+            <rect x="740" y="206" width="210" height="46" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="756" y="227" font-weight="600">Prometheus</text>
+            <text x="756" y="244" fill="var(--muted)">user workload monitoring</text>
+
+            <g stroke="var(--muted)" stroke-width="1.2" stroke-dasharray="5 4">
+              <line x1="740" y1="65" x2="644" y2="65" marker-end="url(#ah2)"/>
+              <line x1="845" y1="130" x2="845" y2="100" marker-end="url(#ah2)"/>
+              <line x1="845" y1="176" x2="845" y2="202" marker-end="url(#ah2)"/>
+            </g>
+            <g fill="var(--muted)">
+              <text x="664" y="58">selects</text>
+              <text x="855" y="119">names its port</text>
+              <text x="855" y="193">tells where</text>
+            </g>
+            <line x1="740" y1="229" x2="644" y2="229" stroke="var(--remote)" stroke-width="1.5" marker-end="url(#ah2)"/>
+            <text x="664" y="222" fill="var(--remote)" font-weight="600">scrapes</text>
+
+            <text x="30" y="286" fill="var(--muted)">All of it is rendered only when monitoring.indexInfo.enabled is true.</text>
+            <text x="30" y="306" fill="var(--host)" font-weight="600">Amber: made by hand, like the chart's other prerequisites.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>One pod mounts its scripts, its password and the source's CA. A ClusterIP Service selects it, a ServiceMonitor names that Service's port, and Prometheus scrapes it. The Secret and the CA are made by hand; the chart makes the rest.</figcaption>
+    </figure>
+  </section>
+</div>

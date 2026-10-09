@@ -49,7 +49,7 @@ NS=$TargetNamespace                       # Part 2 uses $NS
 # The script is a file of the chart. From a checkout of this repository, at its root:
 PREREQ=chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
 # From the published chart, with no clone (chart 0.3.3 and later):
-#   helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.8/mongodb-search-helm-0.3.8.tgz --untar
+#   helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.9/mongodb-search-helm-0.3.9.tgz --untar
 #   PREREQ=mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
 
 mkdir -m 700 $TargetNamespace             # the script never creates it
@@ -164,7 +164,7 @@ From the published package, with no clone of the repository:
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.8/mongodb-search-helm-0.3.8.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.9/mongodb-search-helm-0.3.9.tgz \
   -n $NS -f my-values.yaml --timeout 20m
 ```
 
@@ -226,6 +226,8 @@ helm upgrade mongot chart/mongodb-search-helm -n $NS -f my-values.yaml --timeout
 ```
 
 **Upgrade the operator.** The Subscription is on Manual approval, so the operator never upgrades by itself. Set `operator.version` and run the same `helm upgrade`; the approver approves that version only. mongot follows the operator: with `search.version` empty it runs the operator's default mongot version, so it moves only when the operator does.
+
+**Publish the index names as metrics (optional).** mongot's metrics name a search index by its id only. `monitoring.indexInfo.enabled=true` adds a small exporter that asks the source deployment for the names; it needs a sixth hand-made object, the password of a database user that may only list. The user, the Secret and what is published are in the chart's README, [Index names, as metrics](../chart/mongodb-search-helm/README.md#index-names-as-metrics).
 
 **Release a new chart version.** Change `version` in `chart/mongodb-search-helm/Chart.yaml`, and the version in the install commands of this document and of the chart's README, in one pull request. When it is merged and the checks on `main` have passed, the `release` job of [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) packages the chart and publishes it as the release `mongodb-search-helm-<version>`, with notes made from the pull requests since the last one. A version that is already released is left alone, so a merge that does not change the version publishes nothing.
 

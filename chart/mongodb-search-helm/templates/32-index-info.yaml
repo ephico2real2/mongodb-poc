@@ -1,0 +1,165 @@
+{{- /*
+Optional, off by default: the names of the search indexes, as metrics. mongot's metrics name an index by its id
+only, so the dashboard can show sample_mflix.movies / default only with this.
+
+One small Deployment asks the source deployment ($listSearchIndexes of every collection) when Prometheus scrapes
+it, and serves mongodb_search_index_info{indexId_logString, database, collection, index_name, stored_source}.
+It runs on the stock MongoDB Community Server image, which has python3 and mongosh; nothing is built for it.
+
+It needs a database user of its own, made by hand like the other prerequisites, and its password in a Secret:
+listDatabases on the cluster, listCollections and listSearchIndexes on every database, and no right to read a
+document. Not the sync user: that one may read every collection and write mongot's catalog.
+*/ -}}
+{{- if .Values.monitoring.indexInfo.enabled }}
+{{- $name := printf "%s-index-info" .Values.search.name }}
+{{- /* The scrape timeout below is 25s. Prometheus refuses a timeout longer than its interval, and the Prometheus
+       operator then drops the ServiceMonitor without a word to helm: refused here instead. */ -}}
+{{- $interval := .Values.monitoring.indexInfo.interval }}
+{{- $seconds := mul (int (regexFind "^[0-9]+" $interval)) (get (dict "s" 1 "m" 60 "h" 3600) (regexFind "[smh]$" $interval)) }}
+{{- if lt $seconds 25 }}
+{{- fail (printf "monitoring.indexInfo.interval is %s: it must be at least 25s, the exporter's scrape timeout" $interval) }}
+{{- end }}
+{{- /* mongosh's telemetry is on unless it is told otherwise, and only its global file can forbid it. */ -}}
+{{- $mongoshConf := "mongosh:\n  enableTelemetry: false\n  forceDisableTelemetry: true\n" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: index-info
+data:
+  index-info-exporter.py: |
+    {{- .Files.Get "files/index-info-exporter.py" | nindent 4 }}
+  index-info-list.js: |
+    {{- .Files.Get "files/index-info-list.js" | nindent 4 }}
+  mongosh.conf: |
+    {{- $mongoshConf | trim | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: index-info
+spec:
+  # One is enough, and more would only ask the source more often: every replica answers the same.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ $name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $name }}
+      annotations:
+        # The scripts are read at start: a changed script is a new pod.
+        checksum/scripts: {{ printf "%s%s%s" (.Files.Get "files/index-info-exporter.py") (.Files.Get "files/index-info-list.js") $mongoshConf | sha256sum }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: index-info
+          image: {{ .Values.monitoring.indexInfo.image | quote }}
+          command: ["python3", "/app/index-info-exporter.py"]
+          env:
+            - name: SOURCE_HOSTS
+              value: {{ join "," .Values.source.hostAndPorts | quote }}
+            - name: SOURCE_USERNAME
+              value: {{ .Values.monitoring.indexInfo.username | quote }}
+            - name: SOURCE_URI_OPTIONS
+              value: {{ .Values.monitoring.indexInfo.uriOptions | quote }}
+            - name: CACHE_SECONDS
+              value: {{ .Values.monitoring.indexInfo.cacheSeconds | quote }}
+            # mongosh keeps its own files under HOME; the image's home is not writable here.
+            - name: HOME
+              value: /tmp
+          ports:
+            - name: metrics
+              containerPort: 9947
+          # The process, not the source: a source that cannot be reached is reported by the scrape (503), and
+          # restarting this pod would not reach it.
+          readinessProbe:
+            httpGet: {path: /healthz, port: metrics}
+          livenessProbe:
+            httpGet: {path: /healthz, port: metrics}
+          resources:
+            {{- toYaml .Values.monitoring.indexInfo.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - {name: scripts, mountPath: /app, readOnly: true}
+            # mongosh's global configuration file: the one place it reads forceDisableTelemetry from.
+            - {name: scripts, mountPath: /etc/mongosh.conf, subPath: mongosh.conf, readOnly: true}
+            - {name: password, mountPath: /etc/index-info, readOnly: true}
+            - {name: source-ca, mountPath: /etc/source-ca, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ $name }}
+        - name: password
+          secret:
+            secretName: {{ .Values.monitoring.indexInfo.passwordSecret.name }}
+            items:
+              - {key: {{ .Values.monitoring.indexInfo.passwordSecret.key | quote }}, path: password}
+        # The CA mongot itself checks the source with.
+        - name: source-ca
+          configMap:
+            name: {{ .Values.tls.trustBundleConfigMap }}
+            items:
+              - {key: ca.crt, path: ca.crt}
+        - name: tmp
+          emptyDir: {}
+---
+# ClusterIP only: it serves index, collection and database names. Never give it a Route.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: index-info
+    mongodb.com/search-name: {{ .Values.search.name }}
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ $name }}
+  ports:
+    - name: metrics
+      port: 9947
+      targetPort: metrics
+      protocol: TCP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ $name }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.serviceMonitors.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: index-info
+      mongodb.com/search-name: {{ .Values.search.name }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+      # Index names change rarely, and the exporter keeps its answer for cacheSeconds: no need to ask as often as
+      # the mongot pods are scraped.
+      interval: {{ .Values.monitoring.indexInfo.interval }}
+      scrapeTimeout: 25s
+{{- end }}

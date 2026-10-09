@@ -111,10 +111,10 @@ done
 o="$(objects)"
 { has "$o" "ServiceMonitor/mongot" && has "$o" "ServiceMonitor/mongot-envoy" && has "$o" "Service/mongot-envoy-stats"; } && ok "ServiceMonitors and the Envoy stats Service by default" || bad "ServiceMonitors missing by default"
 has "$o" "PrometheusRule/mongot-distribution" && ok "the alert rules by default" || bad "alert rules missing by default"
-# The dashboard: 47 panels in 7 sections. The 16 it started with are all still there: panels are added, not replaced.
+# The dashboard: 52 panels in 7 sections. The 16 it started with are all still there: panels are added, not replaced.
 # The sixth section is about the indexes themselves, by index id (mongot's metrics carry no index name), and the
 # seventh about the searches that ask for stored source.
-python3 - "${CHART}/files/mongodb-search.json" <<'PY' && ok "the dashboard has 47 panels in 7 sections, the first 16 among them" || bad "dashboard panels or sections"
+python3 - "${CHART}/files/mongodb-search.json" <<'PY' && ok "the dashboard has 52 panels in 7 sections, the first 16 among them" || bad "dashboard panels or sections"
 import json, sys
 g = json.load(open(sys.argv[1]))
 charts = [p["title"] for p in g["panels"] if p["type"] != "row"]; rows = [p["title"] for p in g["panels"] if p["type"] == "row"]
@@ -124,7 +124,7 @@ first = ["mongot pods up", "Envoy pods up", "mongot pods in Envoy", "Searches pe
          "Retries per second, per Envoy pod", "Responses per second from mongot, by class", "Envoy to mongot latency, 95th percentile",
          "Average search latency, per mongot pod", "Search failures per second, per mongot pod",
          "Replication lag, per mongot pod", "JVM memory used, per mongot pod"]
-sys.exit(0 if len(charts) == 47 and len(set(charts)) == 47 and len(rows) == 7 and set(first) <= set(charts)
+sys.exit(0 if len(charts) == 52 and len(set(charts)) == 52 and len(rows) == 7 and set(first) <= set(charts)
          and rows[-3:] == ["Does every mongot pod hold the same data?", "What does each index hold?", "Is stored source used?"] else 1)
 PY
 # Colours (issue #35): one palette, Tableau 10. A pod has one colour in every panel: the first blue, the second red,
@@ -166,41 +166,76 @@ for x in g["panels"]:
         ok &= [by[r]["color"]["fixedColor"] for r in refs] == pods == chart["colorPalette"]
     elif x["type"] == "status-history":
         ok &= [m["spec"]["result"]["color"] for m in chart["mappings"]] == [GREEN, RED] and all(v is not None for m in chart["mappings"] for v in m["spec"].values())
-    elif x["title"] in ("Each index, now", "Each index, in the last hour"):
-        # One row per index id. Every query carries that one label, or Perses splits an index into several rows.
+        if x["title"].endswith("per index"):
+            ok &= x["targets"][0]["legendFormat"] == "{{index}}" and " or on (indexId_logString) " in x["targets"][0]["expr"]
+            ok &= "job=\"__SEARCH__-index-info\"} @ end())" in x["targets"][0]["expr"]
+    elif x["title"] in ("Each index", "Each index, now", "Each index, in the last hour", "What stored source adds"):
+        # One row per index, under the label `index`: its name when the index info exporter gives one, its id otherwise.
+        # Every query of a table carries the same labels, or Perses splits an index into several rows.
         cols = chart["columnSettings"]
-        ok &= cols[0] == {"name": "timestamp", "hide": True} and (cols[1]["name"], cols[1]["header"]) == ("indexId_logString", "Index id")
-        ok &= [c["header"] for c in cols[2:]] == {
-            "Each index, now": ["Type", "Pods STEADY", "Lucene docs", "Size", "Bytes per doc", "Vector memory"],
-            "Each index, in the last hour": ["Searches", "Failed searches", "Batch time", "Sync errors", "Lag, now", "Growth, 24 h"]}[x["title"]]
-        # Grafana's header type is wider than the console's: at 90 pixels it cut "Lucene docs", and at nine units
-        # high it showed seven rows of eight.
-        widths = {"Each index, now": [215, 70, 125, 115, 80, 125, 135],
-                  "Each index, in the last hour": [215, 95, 130, 110, 105, 90, 125]}[x["title"]]
-        ok &= [c["width"] for c in cols[1:]] == widths
+        ok &= cols[0] == {"name": "timestamp", "hide": True} and (cols[1]["name"], cols[1]["header"]) == ("index", "Index")
+        first = 2
+        if x["title"] == "Each index":                       # the one table that also shows the id
+            ok &= (cols[2]["name"], cols[2]["header"]) == ("indexId_logString", "Index id")
+            first = 3
+        ok &= [c["header"] for c in cols[first:]] == {
+            "Each index": ["Type", "Stored source", "Vector memory"],
+            "Each index, now": ["Pods STEADY", "Lucene docs", "Size", "Bytes per doc", "Growth, 24 h"],
+            "Each index, in the last hour": ["Searches", "Failed searches", "Batch time", "Sync errors", "Lag, now"],
+            "What stored source adds": ["Stored source", "Size", "Without it", "It adds", "Added per doc"]}[x["title"]]
+        # Widths that hold every header in Grafana, whose header type is wider than the console's, and that add up to
+        # no more than the 876 pixels of table the console drew on a page 1,280 wide. The name's column is 290.
+        ok &= [c["width"] for c in cols[1:]] == {"Each index": [290, 215, 70, 125, 135],
+                                                 "Each index, now": [290, 125, 115, 80, 125, 125],
+                                                 "Each index, in the last hour": [290, 95, 130, 110, 105, 90],
+                                                 "What stored source adds": [290, 125, 80, 110, 100, 130]}[x["title"]]
         # The same widths in the Grafana source: the Perses file is generated from it, and a width changed there
         # without regenerating would otherwise pass.
         grafana_widths = {o["matcher"]["options"]: {q["id"]: q["value"] for q in o["properties"]}.get("custom.width")
                           for o in x["fieldConfig"]["overrides"] if o["matcher"]["id"] == "byName"}
-        ok &= [grafana_widths.get(c["header"]) for c in cols[1:]] == widths
-        ok &= x["gridPos"]["h"] >= 10
-        # The whole id, 24 characters, drew 165 pixels wide in the console. On a page 1,280 wide the console drew 876
-        # pixels of table: wider than that, the last header was cut.
-        ok &= cols[1]["width"] >= 190 and sum(c["width"] for c in cols[1:]) <= 870
-        if x["title"] == "Each index, now":
-            ok &= [(c["condition"]["spec"]["value"], c["text"]) for c in cols[2]["cellSettings"]] == [("0", "search"), ("1", "vector")]
-        ok &= all(" by (indexId_logString) " in t["expr"] and " by (pod" not in t["expr"] for t in x["targets"])
-        # The type of an index is read from a counter that exists from its creation: the lag gauge is NaN while it is built.
-        if x["title"] == "Each index, now":
+        ok &= [grafana_widths.get(c["header"]) for c in cols[1:]] == [c["width"] for c in cols[1:]]
+        ok &= sum(c["width"] for c in cols[1:]) <= 870 and x["gridPos"]["h"] >= (9 if x["title"] == "What stored source adds" else 10)
+        if x["title"] == "What stored source adds":
+            # What stored source adds is a comparison with the smallest index of the same collection and type that stores
+            # nothing. With nothing to show it says so in a row: an empty table would read "No data".
+            e = x["targets"][0]["expr"]
+            ok &= e.endswith(' or on () label_replace(vector(0), "index", "no index is known to store fields", "", "")')
+            ok &= all("min by (database, collection, indexType)" in t["expr"] for t in x["targets"][2:])
+            # That row's value is 0, which is "none" in the other table: here a dash, in both forms. Not an empty
+            # text: the console drew the 0 for it.
+            stored = {q["id"]: q["value"] for o in x["fieldConfig"]["overrides"] if o["matcher"]["options"] == "Stored source"
+                      for q in o["properties"]}["mappings"][0]["options"]
+            ok &= [stored[k]["text"] for k in "0123"] == ["-", "some fields", "all but some", "all fields"]
+            ok &= [(c["condition"]["spec"]["value"], c["text"]) for c in cols[2]["cellSettings"]] == [
+                ("0", "-"), ("1", "some fields"), ("2", "all but some"), ("3", "all fields")]
+        by = "max by (index, indexId_logString) (" if x["title"] == "Each index" else "max by (index) ("
+        for t in x["targets"]:
+            e = t["expr"]
+            # The name where there is one, the id where there is none, each index once; and never a row per pod.
+            ok &= e.startswith(by + "label_join(label_join(") and ' or on (indexId_logString) label_replace(' in e and " by (pod" not in e
+            # The names are read at the end of the range: read along it, a chart carried an index twice when its name came
+            # or went inside the range, once by its id and once by its name.
+            ok &= 'mongodb_search_index_info{namespace="__NAMESPACE__",job="__SEARCH__-index-info"} @ end())' in e
+        if x["title"] == "Each index":
+            ok &= [(c["condition"]["spec"]["value"], c["text"]) for c in cols[3]["cellSettings"]] == [("0", "search"), ("1", "vector")]
+            ok &= [(c["condition"]["spec"]["value"], c["text"]) for c in cols[4]["cellSettings"]] == [
+                ("0", "none"), ("1", "some fields"), ("2", "all but some"), ("3", "all fields")]
+            # The type of an index is read from a counter that exists from its creation: the lag gauge is NaN while it is built.
             ok &= "indexing_insert_total" in x["targets"][0]["expr"] and "replicationLagMs" not in x["targets"][0]["expr"]
     elif x["type"] == "bargauge":
         # Bars rank or count: one colour, since a colour per bar would change with every new index and mean nothing.
         ok &= x["fieldConfig"]["defaults"]["color"] == {"mode": "fixed", "fixedColor": BLUE} and x["fieldConfig"]["defaults"]["min"] == 0
         ok &= perses[x["title"]]["kind"] == "BarChart"
-        ok &= x["options"]["namePlacement"] == "left"
-        if "{{indexId_logString}}" in x["targets"][0].get("legendFormat", ""):
-            ok &= x["gridPos"]["w"] == 24                    # at less, the console cut the 24 character id on the axis
-            ok &= x["options"]["text"]["titleSize"] <= 10    # Grafana caps the name's column: in 12 pixel type it cut the id
+        if x["targets"][0].get("legendFormat") == "{{index}}":
+            # A bar of an index is named above it, where a name is whole whatever its length: on the left Grafana cut
+            # a 24 character id in 12 pixel type. The whole width: at less, the console cut the id on its axis.
+            ok &= x["options"]["namePlacement"] == "top" and x["gridPos"]["w"] == 24 and " or on (indexId_logString) " in x["targets"][0]["expr"]
+            # A bar is of "now": every selector is read at the end of the range, or an index that is gone, or a name that
+            # is, keeps its bar for as long as the range reaches back.
+            e = x["targets"][0]["expr"]
+            ok &= e.count("} @ end()") == e.count("{namespace=")
+        else:
+            ok &= x["options"]["namePlacement"] == "left"
     elif x["type"] == "table":
         cols = chart["columnSettings"]
         ok &= cols[0] == {"name": "timestamp", "hide": True} and cols[1]["name"] == "pod" and [c["header"] for c in cols[2:]] == ["Index size", "Documents", "Indexes", "Not STEADY", "Volume used", "Uptime"]
@@ -247,7 +282,8 @@ STATS = {"mongot pods up": [RED, GREEN], "Envoy pods up": [RED, GREEN], "mongot 
          "Searches per second": [GREEN], "Largest share on one pod": [GREEN, ORANGE, RED],
          "Indexes": [GREEN], "Indexes being built": [GREEN], "Indexes that differ by pod": [GREEN, RED],
          "Size of all indexes, on one pod": [GREEN], "Search indexes": [GREEN], "Vector indexes": [GREEN],
-         "Memory for vector indexes": [GREEN], "Index builds waiting": [GREEN], "Stored source searches, 1 hour": [GREEN],
+         "Memory for vector indexes": [GREEN], "Index builds waiting": [GREEN], "Indexes with a name": [GREEN],
+         "Indexes with stored source": [GREEN], "Indexes with no host listed": [GREEN, RED], "Stored source searches, 1 hour": [GREEN],
          "Stored source share, searches": [GREEN], "Stored source vector, 1 hour": [GREEN],
          "Stored source share, vector": [GREEN]}
 def own(m):                                        # the searches per second of the pods a matcher selects, at the end of the range
@@ -386,5 +422,115 @@ done
 for s in scripts/refresh-mongodbsearch-crd.sh scripts/perses-dashboard.sh; do
   bash -n "$s" && ok "bash -n $s" || bad "bash -n $s"
 done
+
+# ------------------------------------------------------------------------------------------------ index names
+# monitoring.indexInfo: off by default, and when on a Deployment, its scripts, a Service and a ServiceMonitor of its
+# own. The Service has a component of its own: the Envoy ServiceMonitor takes every Service of "observability".
+! helm template mongot "${CHART}" -n dvh-gp6-rnd -f "${REMOTE}" | grep -q 'index-info' && ok "no index info exporter by default" || bad "index info objects rendered by default"
+i="$(render -s templates/32-index-info.yaml --set monitoring.indexInfo.enabled=true --set monitoring.indexInfo.uriOptions=replicaSet=rs0)"
+{ [[ "$(grep -c '^kind: ' <<<"$i")" == 4 ]] && grep -q '^kind: Deployment$' <<<"$i" && grep -q '^kind: ServiceMonitor$' <<<"$i" \
+  && grep -q 'app.kubernetes.io/component: index-info' <<<"$i" && ! grep -q 'component: observability' <<<"$i"; } \
+  && ok "the index info exporter is a Deployment, its scripts, a Service and a ServiceMonitor of its own" || bad "index info objects: $(grep '^kind: ' <<<"$i" | tr '\n' ' ')"
+# It reaches the source with what the MongoDBSearch uses (hosts, CA) and with a user and a password of its own.
+search="$(render -s templates/10-mongodbsearch.yaml)"
+hosts="$(awk '/hostAndPorts:/{f=1; next} f && /^ *- /{gsub(/[" -]/, ""); printf "%s%s", s, $0; s=","; next} f{exit}' <<<"$search")"
+ca="$(awk '/ca:/{getline; print $2; exit}' <<<"$search")"
+sync="$(awk '/passwordSecretRef:/{f=1} f && /name:/{print $2; exit}' <<<"$search")"
+{ [[ -n "$hosts" && -n "$ca" && -n "$sync" ]] && grep -q "value: \"${hosts}\"" <<<"$i" && grep -q "name: ${ca}$" <<<"$i" \
+  && grep -q 'secretName: search-index-info-password' <<<"$i" && grep -q 'value: "replicaSet=rs0"' <<<"$i" && ! grep -q "${sync}" <<<"$i"; } \
+  && ok "it uses the source's hosts and CA, and a password Secret of its own, not the sync user's" || bad "index info connection settings (hosts ${hosts}, CA ${ca})"
+grep -q 'readOnlyRootFilesystem: true' <<<"$i" && grep -q 'runAsNonRoot: true' <<<"$i" && ! grep -q -E 'privileged: true|hostPath|hostNetwork' <<<"$i" \
+  && ok "it runs unprivileged on a read-only file system" || bad "index info security context"
+pre="$(render -s templates/00-preflight.yaml --set monitoring.indexInfo.enabled=true)"
+grep -q 'name: INDEX_INFO_SECRET' <<<"$pre" && [[ "$(grep -c '"search-index-info-password"' <<<"$pre")" == 2 ]] && ! render -s templates/00-preflight.yaml | grep -q -e 'name: INDEX_INFO_SECRET' -e '"search-index-info-password"' \
+  && ok "the preflight checks the exporter's password Secret, only when the exporter is on" || bad "preflight and index info"
+refused "a question mark in indexInfo.uriOptions" --set monitoring.indexInfo.uriOptions='?x=1'
+refused "an unknown key under indexInfo" --set monitoring.indexInfo.user=x
+# Prometheus refuses a scrape timeout (25s here) longer than the interval, and the operator would then drop the
+# ServiceMonitor in silence: the render fails instead, whatever the unit, and says why.
+short="$(render --set monitoring.indexInfo.enabled=true --set monitoring.indexInfo.interval=15s)"
+{ grep -q 'monitoring.indexInfo.interval is 15s: it must be at least 25s' <<<"$short" \
+  && ! render --set monitoring.indexInfo.enabled=true --set monitoring.indexInfo.interval=0m >/dev/null 2>&1 \
+  && render --set monitoring.indexInfo.enabled=true --set monitoring.indexInfo.interval=25s | grep -q '^      interval: 25s$' \
+  && render --set monitoring.indexInfo.enabled=true --set monitoring.indexInfo.interval=2m | grep -q '^      interval: 2m$' \
+  && render --set monitoring.indexInfo.interval=15s >/dev/null 2>&1; } \
+  && ok "an indexInfo.interval shorter than the 25s scrape timeout is refused, and only when the exporter is on" || bad "indexInfo.interval and the scrape timeout"
+# mongosh's telemetry is forbidden by its global configuration file, the one place it reads that from.
+{ grep -q -A3 '^  mongosh.conf: |$' <<<"$i" && grep -q '^      forceDisableTelemetry: true$' <<<"$i" \
+  && grep -q 'mountPath: /etc/mongosh.conf, subPath: mongosh.conf, readOnly: true' <<<"$i"; } \
+  && ok "mongosh's telemetry is forbidden in its global configuration file" || bad "mongosh.conf of the index info exporter"
+
+# The exporter itself, with a stand-in mongosh: the page it serves (for a name with a quote, a backslash, a newline,
+# a letter outside ASCII and U+2028, a line separator to Python and not to JSON), a failure answered 503 and never old
+# names, a mongosh that hangs answered 503 at its timeout, one listing for several scrapes, and the password in no
+# argument list.
+python3 - "${CHART}/files/index-info-exporter.py" <<'EXPORTER' && ok "the exporter serves the index names, fails the scrape when the source cannot be asked, and keeps the password out of arguments" || bad "the index info exporter"
+import json, os, pathlib, socket, stat, subprocess, sys, tempfile, time, urllib.error, urllib.request
+work = pathlib.Path(tempfile.mkdtemp()); (work / "bin").mkdir()
+answer = {"collections": 2, "indexes": [
+    {"id": "aaaaaaaaaaaaaaaaaaaaaaaa", "database": "shop", "collection": "items", "name": 'a "quoted" \\ name\nline two \u2028 \u00e9', "storedSource": "include", "storedSourcePaths": 3, "hosts": 3},
+    {"id": "bbbbbbbbbbbbbbbbbbbbbbbb", "database": "shop", "collection": "orders", "name": "default", "storedSource": "none", "storedSourcePaths": 0, "hosts": 0}]}
+fake = work / "bin" / "mongosh"
+fake.write_text(f"""#!{sys.executable}
+import json, os, sys
+open({str(work / 'calls')!r}, "a").write(json.dumps({{"argv": sys.argv[1:], "uri": os.environ.get("SOURCE_URI", "")}}) + "\\n")
+if os.path.exists({str(work / 'fail')!r}):
+    sys.stderr.write("MongoServerError: Authentication failed.\\n"); sys.exit(1)
+if os.path.exists({str(work / 'hang')!r}):
+    import time; time.sleep(30)
+# As mongosh writes it: UTF-8, and U+2028 as itself (JSON.stringify does not escape it).
+sys.stdout.buffer.write(("a line mongosh may print first\\nRESULT " + {json.dumps(json.dumps(answer, ensure_ascii=False))} + "\\n").encode("utf-8"))
+""")
+fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+(work / "password").write_text("p@ss/w:rd\n")
+with socket.socket() as s:
+    s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]
+env = dict(os.environ, PATH=f"{work}/bin:{os.environ['PATH']}", SOURCE_HOSTS="h1:27017,h2:27017", SOURCE_USERNAME="search-index-info",
+           SOURCE_PASSWORD_FILE=str(work / "password"), SOURCE_CA_FILE="/etc/source-ca/ca.crt", SOURCE_URI_OPTIONS="replicaSet=rs0",
+           LIST_SCRIPT="/app/index-info-list.js", CACHE_SECONDS="1", TIMEOUT_SECONDS="2", PORT=str(port))
+server = subprocess.Popen([sys.executable, sys.argv[1]], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+def get(path):
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=10) as r:
+            return r.status, r.read().decode()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode()
+ok = True
+try:
+    for _ in range(50):
+        try:
+            if get("/healthz")[0] == 200: break
+        except OSError:
+            time.sleep(0.1)
+    status, text = get("/metrics"); get("/metrics")
+    calls = [json.loads(l) for l in (work / "calls").read_text().splitlines()]
+    ok &= status == 200 and len(calls) == 1                                   # the second scrape was answered from the first
+    ok &= 'mongodb_search_index_info{indexId_logString="aaaaaaaaaaaaaaaaaaaaaaaa",database="shop",collection="items",index_name="a \\"quoted\\" \\\\ name\\nline two \u2028 \u00e9",stored_source="include"} 1' in text
+    ok &= 'mongodb_search_index_stored_source_paths{indexId_logString="aaaaaaaaaaaaaaaaaaaaaaaa"} 3' in text
+    ok &= 'mongodb_search_index_listed_hosts{indexId_logString="bbbbbbbbbbbbbbbbbbbbbbbb"} 0' in text and "mongodb_search_index_info_collections 2" in text
+    ok &= "mongodb_search_index_info_collect_timestamp_seconds " in text and text.endswith("\n")
+    # The password is in the child's environment, percent-encoded, and in no argument; the hosts, the CA and the options are in the string.
+    ok &= calls[0]["argv"] == ["--nodb", "--quiet", "--norc", "--file", "/app/index-info-list.js"]
+    ok &= calls[0]["uri"] == "mongodb://search-index-info:p%40ss%2Fw%3Ard@h1:27017,h2:27017/admin?tls=true&tlsCAFile=%2Fetc%2Fsource-ca%2Fca.crt&appName=search-index-info&replicaSet=rs0"
+    ok &= "p@ss" not in text and "p%40ss" not in text
+    # A source that cannot be asked: 503 and no names, although a good answer was served a moment ago.
+    (work / "fail").write_text(""); time.sleep(1.2)
+    status, text = get("/metrics")
+    ok &= status == 503 and "mongodb_search_index_info" not in text and "p%40ss" not in text
+    ok &= get("/healthz")[0] == 200 and get("/other")[0] == 404
+    (work / "fail").unlink()
+    ok &= get("/metrics")[0] == 200                                           # and it recovers by itself
+    # A mongosh that hangs is ended at TIMEOUT_SECONDS (2 here, 20 in the pod, under the 25 of the scrape) and answered 503.
+    (work / "hang").write_text(""); time.sleep(1.2); started = time.time()
+    ok &= get("/metrics")[0] == 503 and 1.5 < time.time() - started < 8
+    (work / "hang").unlink()
+    ok &= get("/metrics")[0] == 200
+finally:
+    server.kill()
+sys.exit(0 if ok else 1)
+EXPORTER
+if command -v node >/dev/null; then
+  node --check "${CHART}/files/index-info-list.js" 2>/dev/null && ok "the listing script parses (node --check)" || bad "index-info-list.js does not parse"
+fi
 
 [[ $fails == 0 ]] && echo "all chart tests passed" || { echo "${fails} failed"; exit 1; }
