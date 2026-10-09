@@ -307,6 +307,26 @@ tests:
               summary: "Search index q is not the same on every mongot pod"
               description: "Every mongot pod holds every index, so the same search can return different results depending on the pod that answers. The dashboard's table \"Each mongot pod, now\" shows which pod differs."
 
+  # Two pods, not three: an index both hold, with the same documents, is no alert. The pods are counted, not assumed.
+  - interval: 1m
+    input_series:
+      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="t", pod="mongot-search-0-0"}'
+        values: '100x20'
+      - series: 'mongot_index_stats_numLuceneDocs{indexId_logString="t", pod="mongot-search-0-0"}'
+        values: '10x20'
+      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="t", pod="mongot-search-0-0", status="STEADY"}'
+        values: '1x20'
+      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="t", pod="mongot-search-0-1"}'
+        values: '100x20'
+      - series: 'mongot_index_stats_numLuceneDocs{indexId_logString="t", pod="mongot-search-0-1"}'
+        values: '10x20'
+      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="t", pod="mongot-search-0-1", status="STEADY"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: MongotIndexesDifferByPod
+        exp_alerts: []
+
   # Failed searches on index a for long enough; none on b.
   - interval: 1m
     input_series:
