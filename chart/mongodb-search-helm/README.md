@@ -428,6 +428,38 @@ About the five index alerts:
 - **One failed search does not fire `MongotIndexSearchesFailing`.** Its 5 minute rate is above 0 for under 5 minutes. Two failures less than 5 minutes apart do, 5 minutes after the first. The alert prints the rate with three decimals: one failure in 5 minutes is 0.003 a second.
 - **Tested with promtool, and one of them on the lab.** [`test/alerts.sh`](../../test/alerts.sh) renders the rules and runs [`test/alerts.test.yaml`](../../test/alerts.test.yaml): each alert fires for its index and only for it, after its time and not before; an index being built is not "not following"; an index that is written to, one being built on three pods at their own pace, a rebuild beside its old generation, and one whose size alone differs do not "differ by pod"; one that stays a document short on a pod does, 20 minutes after its last write. On the lab, 2026-10-09: the rule as first written fired on an index that was only being written to; with this one loaded, the same writes for 14 minutes (1,668 documents, the pods 17 to 24 apart at every reading) left it inactive at each of the 30 readings taken of it. None of the five has been seen to fire for its real cause there.
 
+## Replication lag
+
+Each mongot pod follows the source deployment by itself, so a search can be answered from an index that is a little behind the collection, and one pod can be further behind than another. This is what MongoDB says about it, where this chart shows it, and what was decided about alerting on it.
+
+**What MongoDB says** (its pages for self-managed Search, read on 2026-10-09):
+
+| Question | MongoDB's words | Page |
+| --- | --- | --- |
+| What is it | "`mongot` is a downstream consumer of `mongod` change streams." Lag is the "time since the last applied change event from mongod", exposed as `mongot_index_stats_indexing_replicationLagMs`, per index, in milliseconds | [Monitor mongot Deployment](https://www.mongodb.com/docs/search/self-managed/current/deployment/monitoring/), [Metrics Reference for mongot](https://www.mongodb.com/docs/search/self-managed/current/monitoring/metrics-reference/) |
+| What is normal | "A small steady-state lag, from sub-second to seconds, is normal." A healthy deployment's lag "is consistently sub-second" | Monitor mongot Deployment |
+| What a growing lag means | "[A] growing lag indicates `mongot` cannot keep up. Sustained lag eventually falls off the oplog and forces a re-sync", which "requires a full rebuild of the index" | Monitor mongot Deployment |
+| What causes it | A very large number of indexes; broad use of `dynamic: true`; repeated out-of-memory events; or "[t]he bottleneck is on the source database" | [Troubleshoot Self-Managed mongot Deployments](https://www.mongodb.com/docs/search/self-managed/current/troubleshooting/), *Large Replication Lag* |
+| What to do | "Scale `mongot` CPU and memory first"; reduce the number of indexes; prefer `dynamic: false`; index fewer fields; scale `mongod` if it is the bottleneck | The same section |
+| When a pod keeps rebuilding | "The `mongod` oplog rolled over before `mongot` could catch up": increase the oplog size, "or close the gap with more `mongot` capacity or fewer concurrent indexes" | The same page, *mongot Keeps Re-Syncing* |
+| While it is not there | The gauge does "not populate while an index is in initial sync", and with no index at all the series "is absent rather than zero" | Metrics Reference; Monitor mongot Deployment |
+
+So lag is reduced by giving mongot and mongod room, and by indexing less. **Nothing forces a pod to catch up.** A pod applies the change stream as fast as it can; the only re-sync is the one mongot starts by itself when it has fallen off the oplog, and that is a rebuild. mongot's source at v1.70.1 was searched for a way to ask for a catch-up or a re-sync from outside, and none was found; that was a search, not a reading of all of it.
+
+**Where this chart shows it:**
+
+| Where | What it shows |
+| --- | --- |
+| *Replication lag, per mongot pod* (section *How is each mongot pod doing?*) | The largest lag of any index on each pod, over time: a pod that falls behind is a line that leaves the others |
+| *Lag, now* in the table *Each index, in the last hour* | The largest lag of each index over the pods, now, in whole seconds |
+| *Documents indexed, per mongot pod* and the table *Each mongot pod, now* | The documents each pod holds. Read while an index is written to, the pods differ by what arrived between their readings, which is not lag |
+| The alert `MongotIndexNotFollowing` | An index that has stopped following on a pod: `STALE`, or recovering from an error that is not transient. That is after the lag, not during it |
+| The alert `MongotIndexBuildRetrying` | A build, or the rebuild after a re-sync, that keeps failing |
+
+**There is no alert on the lag itself**, by decision (2026-10-09): the panels show it, `MongotIndexNotFollowing` fires once a pod has stopped following, and a threshold on a number that MongoDB calls normal "from sub-second to seconds" would be this chart's guess. `MongotIndexesDifferByPod` does not cover it either: it never compares an index that is written to at least once every 10 minutes.
+
+**Measured on the lab**, 2026-10-09: while two inserts a second were written to one index for 14 minutes, twice, its lag read 0 on two pods at each of 61 readings and 0 or 1 second on the third (1 second at 5 of 61 readings in the first run and 14 of 61 in the second). The document counts of the three pods read 17 to 24 apart during the same minutes: Prometheus reads the first pod 9 seconds after the other two. With nothing written, the gauge read 6 to 10 seconds for minutes at a time on one pod or another; why was not looked into.
+
 ## Maintaining the chart
 
 The dashboard has one source, `files/mongodb-search.json` (Grafana). After changing it, run
