@@ -201,6 +201,13 @@ for x in g["panels"]:
             e = x["targets"][0]["expr"]
             ok &= e.endswith(' or on () label_replace(vector(0), "index", "no index is known to store fields", "", "")')
             ok &= all("min by (database, collection, indexType)" in t["expr"] for t in x["targets"][2:])
+            # That row's value is 0, which is "none" in the other table: here a dash, in both forms. Not an empty
+            # text: the console drew the 0 for it.
+            stored = {q["id"]: q["value"] for o in x["fieldConfig"]["overrides"] if o["matcher"]["options"] == "Stored source"
+                      for q in o["properties"]}["mappings"][0]["options"]
+            ok &= [stored[k]["text"] for k in "0123"] == ["-", "some fields", "all but some", "all fields"]
+            ok &= [(c["condition"]["spec"]["value"], c["text"]) for c in cols[2]["cellSettings"]] == [
+                ("0", "-"), ("1", "some fields"), ("2", "all but some"), ("3", "all fields")]
         by = "max by (index, indexId_logString) (" if x["title"] == "Each index" else "max by (index) ("
         for t in x["targets"]:
             e = t["expr"]

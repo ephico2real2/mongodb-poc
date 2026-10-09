@@ -75,7 +75,7 @@ All rendered only when monitoring.indexInfo.enabled is true.
 
 | Object | What it is for |
 | --- | --- |
-| ConfigMap `<search.name>-index-info` | Holds the two scripts, `index-info-exporter.py` and `index-info-list.js`. The pod mounts them, so there is no image to build |
+| ConfigMap `<search.name>-index-info` | Holds the two scripts, `index-info-exporter.py` and `index-info-list.js`, and `mongosh.conf`, which forbids mongosh's telemetry. The pod mounts them, so there is no image to build |
 | Deployment `<search.name>-index-info` | One pod running the Python server. Unprivileged, read-only file system. Mounts the scripts, the password Secret and the CA bundle |
 | Service `<search.name>-index-info` | ClusterIP only, port 9947, so nothing outside the cluster reaches it |
 | ServiceMonitor `<search.name>-index-info` | Tells Prometheus to scrape it, every 60 s |
@@ -131,6 +131,8 @@ The panels show `index`:
 | How the script reaches the pod | A ConfigMap, mounted | Baked into an image | Follows from the choice of image; a changed script is a new pod through a checksum |
 | The label of the id | `indexId_logString`, as mongot spells it | `index_id`, as Prometheus would name it | The two join without a relabelling in every query |
 | The status of an index | Not published | Publishing `status` and `queryable` | The source's status was wrong on the lab for two days. The number of hosts it lists is published instead, which is what goes wrong |
+| mongosh's telemetry | Forbidden, in a global configuration file mounted at `/etc/mongosh.conf` | `disableTelemetry()` in the listing script; leaving it on | A monitoring pod should send nothing outside its cluster. `forceDisableTelemetry` is read from the global file only, and a call in the script would run after mongosh has started |
+| A scrape interval under the 25 s timeout | The chart refuses to render | Rendering it as asked | Prometheus refuses a timeout longer than the interval (`promtool check config` on the lab: "scrape timeout greater than scrape interval"), and the operator then leaves the ServiceMonitor out with no word to Helm |
 | On by default | No | Yes | It needs a database user and a Secret made by hand; the chart must install without them |
 | The dashboard with the exporter off | The same panels, by id | A second set of panels, or a second dashboard | One dashboard to keep; and an index not listed yet must show too, which is the same case |
 | The name of a bar in Grafana | Above the bar | On its left | On the left Grafana cut a 24 character id in 12 pixel type; above, a name is whole whatever its length |
@@ -158,6 +160,8 @@ The panels show `index`:
 - **Whoever can read the namespace's metrics can read the names** of its indexes, collections and databases.
 - **The image is large, about 1 GB.** It is referenced by digest. Where outside registries are closed it must be mirrored and `monitoring.indexInfo.image` set.
 - **A source that cannot be reached was tested with a stand-in `mongosh`**, not on the lab.
+- **A source that hangs costs each Prometheus replica its scrape, one after the other.** The exporter asks once at a time and gives the source 20 s. With two replicas, as user workload monitoring has outside OpenShift Local, a scrape that arrives during another's 20 s waits for it and then asks again: up to 40 s, past its own 25 s timeout. Both fail, which is the signal. Seen in the review with a stand-in `mongosh` and a timeout of 2 s: two scrapes at once were answered 503 after 2 s and after 4 s.
+- **A sharded source was not tried.** What `$listSearchIndexes` returns through `mongos`, and so what *Indexes with no host listed* counts there, was not looked at.
 
 ## Measured on the lab
 
@@ -170,14 +174,16 @@ Oct 9, 2026, namespace `mongodb-poc`, 8 indexes in 3 collections.
 | The first `up` of 1 after the upgrade | Under 2 minutes |
 | Series the exporter serves | 27 |
 | Memory of the pod between scrapes | 9 Mi |
-| The 33 queries of the two index sections, exporter on | 33 answer, none empty; 8 rows by name |
-| The same 33 with no names in Prometheus | 33 answer; 8 rows by id; one empty, the *Stored source* column |
+| The 38 queries of the two index sections, exporter on | 38 answer, none empty; 8 rows by name |
+| The same 38 asked for the names of a job that does not exist | 38 answer; 8 rows by id; five empty: the *Stored source* column of *Each index*, and the four columns of *What stored source adds* beside its one row |
+| *What stored source adds* with no names, in the console and in Grafana 12.3.1 | One row: "no index is known to store fields", and a dash. With an empty text for that cell the console drew `0` |
+| mongosh 2.6.0 in the pod, with the global configuration file | Its log: `/etc/mongosh.conf` found; `config.get("forceDisableTelemetry")`: `true` |
 | An index in the charts when its name comes or goes inside the range shown | Once: 8 bars by id just after the exporter was switched off, 8 by name just after it was switched on. Before the names were read at the end of the range: 16 |
 | The Grafana form, exporter on | 52 panels in 7 rows listed; 135 of 135 queries answered; no "No data" in either theme |
 
 ## Tests
 
-`test/chart.sh` renders the exporter on and off, checks its connection settings, its security context, the preflight and two refusals of the schema, and runs the server against a stand-in `mongosh`: the page, one listing for several scrapes, the password in no argument, 503 on failure, recovery. It also checks that every per-index query of the dashboard has the two halves above. Five deliberate breakages of the exporter were each caught.
+`test/chart.sh` renders the exporter on and off, checks its connection settings, its security context, mongosh's configuration file, the preflight, two refusals of the schema and the refusal of an interval under 25 s, and runs the server against a stand-in `mongosh`: the page, for a name with a quote, a backslash, a newline, a letter outside ASCII and U+2028; one listing for several scrapes; the password in no argument; 503 on failure and on a `mongosh` that hangs; recovery. It also checks that every per-index query of the dashboard has the two halves above. Nine deliberate breakages of the exporter were each caught: a 200 on failure, the password in an argument, no percent-encoding, no cache, old names served on failure, no timeout, a newline not escaped, a line cut at U+2028, and output read as ASCII.
 
 ## Diagram sources
 
