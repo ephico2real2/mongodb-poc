@@ -238,6 +238,12 @@ out="$(run --expand --statefulset mongot-search-0 --restart-if-pending --apply -
   && [[ "$out" == *"deleting pod mongot-search-0-0, which keeps its claim"* && "$(cat "${FAKE}/pvc.2.has")" == 300Gi ]] \
   && ok "with --restart-if-pending it deletes that pod, and only pods, and goes on" || bad "--restart-if-pending (exit ${rc}, patched $(patched)): ${out##*$'\n'}"
 
+# A claim that has the size already and still waits for its file system is not done: the same stop, and no "nothing to do".
+cluster 300Gi 300Gi 300Gi; printf FileSystemResizePending > "${FAKE}/pvc.0.conds"
+out="$(run --expand --statefulset mongot-search-0 --pod 0 --apply --yes)"; rc=$?
+[[ $rc == 3 && "$(writes)" == 0 && "$out" != *"nothing to do"* && "$out" == *"FileSystemResizePending"* ]] \
+  && ok "a claim at its size whose file system has not grown yet is waited for, not passed over" || bad "a claim at size with FileSystemResizePending (exit ${rc}, $(writes) writes): ${out##*$'\n'}"
+
 # A resize the cluster reports as failed: it stops at once, and says how such a request is withdrawn.
 cluster 250Gi 250Gi 300Gi; printf never > "${FAKE}/behaviour"
 sed -i.bak 's|set_f "pvc.${i}.conds" Resizing; set_f "pvc.${i}.growing" 2|set_f "pvc.${i}.conds" "Resizing ControllerResizeError"; set_f "pvc.${i}.growing" 2|' "${work}/bin/oc"

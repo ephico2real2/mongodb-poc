@@ -219,7 +219,16 @@ spec:
               # scaled away (and of every pod, at 0), and a pod that comes back builds every index again from the
               # collection: hours on a large deployment. Refused unless it is asked for by name. On a first
               # install there is no resource yet, and nothing to compare.
-              have="$(oc get mongodbsearch.mongodb.com "$SEARCH" -n "$NAMESPACE" -o jsonpath='{.spec.clusters[0].replicas}' 2>/dev/null)"
+              # The read is trusted only when it succeeds, or fails because there is nothing to read: a first install
+              # (no resource; under Argo CD's PreSync not even the CRD yet). Any other failure (RBAC, the API) is
+              # refused, since "no resource" would otherwise let a scale-down through unseen.
+              if have="$(oc get mongodbsearch.mongodb.com "$SEARCH" -n "$NAMESPACE" -o jsonpath='{.spec.clusters[0].replicas}' 2>&1)"; then :; else
+                case "$have" in
+                  *NotFound*|*"not found"*|*"doesn't have a resource type"*) have="" ;;
+                  *) printf '[preflight] REFUSED: cannot read MongoDBSearch %s for its replica count, so an upgrade to fewer mongot pods cannot be ruled out: %s. Nothing was changed.\n' "$SEARCH" "$(printf '%s' "$have" | tail -1)" >&2; exit 1 ;;
+                esac
+              fi
+              case "$have" in *[!0-9]*) printf '[preflight] REFUSED: MongoDBSearch %s names a replica count that is not a number: %s. Nothing was changed.\n' "$SEARCH" "$have" >&2; exit 1 ;; esac
               if [ -n "$have" ] && [ "$WANT_REPLICAS" -lt "$have" ]; then
                 if [ "$ALLOW_VOLUME_LOSS" = "true" ]; then
                   log "note: search.replicas goes from ${have} to ${WANT_REPLICAS} with search.allowVolumeLoss=true: the volumes of the pods that go are deleted"

@@ -58,7 +58,7 @@ varies from one build to the next.
 | Where | Indexes on a pod | One pod builds everything again in |
 | --- | --- | --- |
 | The owner's QA cluster, as the owner reports it (2026-10-08) | About 180 to 190 GB | 4 to 5 hours |
-| The lab (2026-10-09) | 16 MiB, 8 indexes | 44 s from the pod's creation |
+| The lab (2026-10-09) | 16 MiB, 8 indexes | Under 45 s from the pod's creation: 5 of its 8 indexes were `STEADY` at the reading 29 s after it, all 8 at the next, 15 s later |
 
 - **One pod loses its volume**: that pod answers nothing from its indexes for that long, and the source carries an
   initial sync of every index while it serves its own load.

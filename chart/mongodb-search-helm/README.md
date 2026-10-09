@@ -435,7 +435,7 @@ Three documents beside this one, and a script, for running mongot once it is ins
 
 | Document | For |
 | --- | --- |
-| [volumes.md](volumes.md) | Which actions keep a mongot pod's volume and which delete it. The operator deletes the volume of every pod that is scaled away, and a pod without its volume builds every index again: 4 to 5 hours for about 180 GB, as the owner reports for a QA cluster. What the chart refuses, and what protects a volume |
+| [volumes.md](volumes.md) | Which actions keep a mongot pod's volume and which delete it. The operator deletes the volume of every pod that is scaled away, and a pod without its volume builds every index again: 4 to 5 hours for about 180 to 190 GB a pod, as the owner reports for a QA cluster. What the chart refuses, and what protects a volume |
 | [scaling.md](scaling.md) | How mongot is given more CPU, memory or pods through the values; that nothing scales it by itself; and why its StatefulSet is never scaled by hand |
 | [volume-expansion-runbook.md](volume-expansion-runbook.md) | Growing the volumes: the size in the values, the sync, and then the steps by hand, in order, with what to check and what to do when one stops |
 | [`expand-mongot-volumes.sh`](expand-mongot-volumes.sh) | The script of that runbook: grows the volume claims one pod at a time, then lets the operator take the new size. `--check` and `--dry-run` change nothing |

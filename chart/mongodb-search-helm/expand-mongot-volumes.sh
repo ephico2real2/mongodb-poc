@@ -298,6 +298,8 @@ recreate() {
     return 0
   fi
   confirm "About to delete StatefulSet ${STS} with --cascade=orphan. Its ${REPLICAS} pods and their claims stay; the operator makes the StatefulSet again at ${WANTED}."
+  # The $k and $v are the template's, not the shell's: single quotes are what keeps them so.
+  # shellcheck disable=SC2016
   selector="$(oc get statefulset "${STS}" -n "${NS}" -o 'go-template={{range $k, $v := .spec.selector.matchLabels}}{{$k}}={{$v}},{{end}}' 2>/dev/null)"
   selector="${selector%,}"
   [[ -n "${selector}" ]] || die "StatefulSet ${STS} has no pod selector that can be read"

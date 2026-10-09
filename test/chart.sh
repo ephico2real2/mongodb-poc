@@ -452,7 +452,8 @@ cat > "${hooks}/bin/oc" <<'OC'
 # A cluster in which every hand-made object is there, the operator is installed, and the MongoDBSearch is what the
 # FAKE_ variables say.
 case "$*" in
-  *mongodbsearch*"{.spec.clusters[0].replicas}"*) [ -n "${FAKE_REPLICAS:-}" ] || exit 1; printf '%s' "$FAKE_REPLICAS" ;;
+  *mongodbsearch*"{.spec.clusters[0].replicas}"*) [ -z "${FAKE_REPLICAS_ERR:-}" ] || { echo "$FAKE_REPLICAS_ERR" >&2; exit 1; }
+    [ -n "${FAKE_REPLICAS:-}" ] || { echo 'Error from server (NotFound): mongodbsearch.mongodb.com "mongot" not found' >&2; exit 1; }; printf '%s' "$FAKE_REPLICAS" ;;
   *mongodbsearch*"{.spec.clusters[0].persistence.single.storage}"*) printf '%s' "${FAKE_WANT_SIZE:-}" ;;
   *statefulsets.apps*volumeClaimTemplates*) printf '%s' "${FAKE_HAVE_SIZE:-}" ;;
   *mongodbsearch*"{.status.phase}"*) printf '%s' "${FAKE_PHASE:-Running}" ;;
@@ -482,6 +483,16 @@ for case in "FAKE_REPLICAS=3 WANT_REPLICAS=3" "FAKE_REPLICAS=3 WANT_REPLICAS=5" 
   [[ $rc == 0 && "$out" != *REFUSED* ]] || bad "the preflight stopped ${case} (exit ${rc}): ${out##*$'\n'}"
 done
 ok "the same, more or a first install pass the preflight"
+# A read of the resource that fails for any reason but "there is none" is refused: "no resource" would otherwise let
+# a scale-down through unseen. No CRD yet (Argo CD's PreSync runs before the sync) is a first install.
+out="$(pre FAKE_REPLICAS_ERR='Error from server (Forbidden): mongodbsearch.mongodb.com "mongot" is forbidden: User "system:serviceaccount:x:p" cannot get resource "mongodbsearch" in API group "mongodb.com"' WANT_REPLICAS=2 ALLOW_VOLUME_LOSS=false)"; rc=$?
+out2="$(pre FAKE_REPLICAS_ERR='Unable to connect to the server: dial tcp: i/o timeout' WANT_REPLICAS=2 ALLOW_VOLUME_LOSS=false)"; rc2=$?
+[[ $rc == 1 && $rc2 == 1 && "$out" == *"REFUSED: cannot read MongoDBSearch mongot"*"is forbidden"* && "$out2" == *"REFUSED: cannot read MongoDBSearch mongot"* ]] \
+  && ok "the preflight refuses when it cannot read the resource (RBAC, the API), instead of taking that for a first install" || bad "preflight and an unreadable resource (exit ${rc}, ${rc2}): ${out##*$'\n'}"
+out="$(pre FAKE_REPLICAS_ERR="error: the server doesn't have a resource type \"mongodbsearch\"" WANT_REPLICAS=2 ALLOW_VOLUME_LOSS=false)"; rc=$?
+[[ $rc == 0 && "$out" != *REFUSED* ]] && ok "no CRD yet is a first install" || bad "preflight before the CRD exists (exit ${rc}): ${out##*$'\n'}"
+out="$(pre FAKE_REPLICAS=abc WANT_REPLICAS=2 ALLOW_VOLUME_LOSS=false)"; rc=$?
+[[ $rc == 1 && "$out" == *"not a number: abc"* ]] && ok "a replica count that is not a number is refused, not compared" || bad "preflight and a replica count of abc (exit ${rc}): ${out##*$'\n'}"
 
 gate() { env PATH="${hooks}/bin:${PATH}" NAMESPACE=x OPERATOR_INSTALL=true SUBSCRIPTION=mongodb-kubernetes PACKAGE=mongodb-kubernetes \
            TARGET=mongodb-kubernetes.v1.13.0 SEARCH=mongot MONGOT_STS=mongot-search-0 MONGOT_REPLICAS=3 ENVOY_DEPLOY=mongot-search-lb-0 ENVOY_REPLICAS=2 \
@@ -496,7 +507,8 @@ out="$(gate WAIT_SECONDS=60 FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WAN
 # Failed for another reason, or with the sizes equal: the gate waits and fails as before, and does not blame the volumes.
 out="$(gate WAIT_SECONDS=3 FAKE_PHASE=Failed FAKE_MESSAGE="something else" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi)"; rc=$?
 out2="$(gate WAIT_SECONDS=3 FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=250Gi FAKE_HAVE_SIZE=250Gi)"; rc2=$?
-[[ $rc == 1 && $rc2 == 1 && "$out$out2" != *STOPPED* && "$out" == *"MongoDBSearch mongot Running: not within 3s"* && "$out2" == *"not within 3s"* ]] \
+out3="$(gate WAIT_SECONDS=3 FAKE_PHASE=Pending FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi)"; rc3=$?
+[[ $rc == 1 && $rc2 == 1 && $rc3 == 1 && "$out$out2$out3" != *STOPPED* && "$out" == *"MongoDBSearch mongot Running: not within 3s"* && "$out2" == *"not within 3s"* && "$out3" == *"not within 3s"* ]] \
   && ok "any other failure is waited for and reported as before" || bad "the gate and another failure (exit ${rc}, ${rc2})"
 rm -rf "${hooks}"
 

@@ -52,7 +52,7 @@ All of these must hold. Stop if one does not.
 | No claim is being resized | The same `--check`: "conditions []" | Empty |
 | No snapshot of the disks | Ask the vSphere administrator | VMware: "Expanding volume is not supported when volume snapshot is present, and when a Node VM snapshot is present with the volume attached to it" |
 | The datastore has room for the growth of every pod's volume | Ask the vSphere administrator: it cannot be seen from the cluster | Pods times (new size less old size) |
-| vSphere is new enough to grow a disk in use | Ask the vSphere administrator | OpenShift: "Online expansion is supported from VMware vSphere version 8.0 Update 1 and later." Older: the file system grows when the pod is started again (step 3) |
+| vSphere is new enough to grow a disk in use | Ask the vSphere administrator | OpenShift: "Online expansion is supported from VMware vSphere version 8.0 Update 1 and later, or VVF 9, or VCF 9." Older: the file system grows when the pod is started again (step 3) |
 | Nobody else is changing this release | Your change process | One change at a time |
 
 Write down what `--check` prints. It is the "before".
@@ -106,7 +106,7 @@ PostSync hook in Argo CD, a post-upgrade hook in Helm) stops with:
 Do not try to mend the `Failed` resource in any other way. In particular **do not delete the StatefulSet with a
 plain `oc delete`, and do not scale it**: either deletes volumes.
 
-To back out here: put the old size back in the values and sync. The resource returns to `Running`.
+To back out here: put the old size back in the values and sync. The resource returns to `Running` and the gate passes: on the lab, 32 seconds, with the StatefulSet and the pods untouched.
 
 ## After the sync
 
@@ -245,8 +245,9 @@ bash $X --expand --statefulset $STS --size 300Gi --apply     # the resource stil
 | The same before the gate knew this state | The lab | The gate waited out the upgrade's 4 minutes and the release was `failed`: why the gate now says what it is |
 | Step 4: `oc delete statefulset --cascade=orphan` | The lab, four times | Made again within 2 s at the new size; the resource `Running` within 6 s; the same three pods, not restarted; the same three claims |
 | Step 5: the same upgrade again | The lab | Passed in 31 and 36 s; the release `deployed` |
+| Backing out of step 2: the old size put back | The lab | The resource `Running` again and the upgrade passed in 32 s; the StatefulSet and the pods untouched |
 | A pod deleted keeps its claim | The lab | The same claim, Ready in 24 s |
-| The script | `test/expand-volumes.sh`, 52 checks against a stand-in `oc`, under bash 5 and bash 3.2, in CI on Linux and macOS | Every refusal changes nothing; one claim at a time; a pending or failed resize stops before the next pod; the one delete always has `--cascade=orphan` |
+| The script | `test/expand-volumes.sh`, 53 checks against a stand-in `oc`, under bash 5 and bash 3.2, in CI on Linux and macOS | Every refusal changes nothing; one claim at a time; a pending or failed resize stops before the next pod; the one delete always has `--cascade=orphan` |
 | The script's `--check` and `--dry-run` | The lab | Read the three sizes, the class, the volumes and the pods' file systems |
 | **Step 3 on a real volume: a claim that grows** | **Nowhere by this repository.** No storage class of the lab allows it; the API refuses there with "only dynamically provisioned pvc can be resized and the storageclass that provisions the pvc must support resize" | Rests on Kubernetes', OpenShift's and VMware's documents below, and on MongoDB's own test of the same steps on another storage class (pull request 1621, open) |
 | Argo CD | Not run. The hooks carry Argo CD's annotations (PreSync, PostSync) | |

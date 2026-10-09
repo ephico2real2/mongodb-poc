@@ -69,7 +69,7 @@ search:
 ```
 
 A new pod gets a new, empty volume and builds every index from the collection before it serves it. On a large
-deployment that is hours (4 to 5 for about 180 GB, as the owner reports for QA), during which the source carries
+deployment that is hours (4 to 5 for about 180 to 190 GB a pod, as the owner reports for QA), during which the source carries
 that pod's initial sync. Add pods one upgrade at a time, and wait for each to be `STEADY` on every index.
 
 ## Fewer pods: `search.replicas`, downward
@@ -104,7 +104,7 @@ resource and undoes what was changed by hand. On the lab:
 
 | Done by hand | What followed |
 | --- | --- |
-| `oc scale statefulset mongot-search-0 --replicas=2` | The operator set 3 again within 5 s. The third pod was already terminating, and its volume claim was deleted 8 s after the command. The StatefulSet then ran with 2 pods for 7 min 11 s before the third came back, on a new volume, and built its indexes again |
+| `oc scale statefulset mongot-search-0 --replicas=2` | The operator set 3 again within 5 s. The third pod was already terminating, and its volume claim was deleted 8 s after the command, by the controller manager's log. The StatefulSet then ran with 2 pods for 7 min 11 s before the third came back, on a new volume, and built its indexes again |
 | The volume retention policy patched on the StatefulSet | Put back by the operator within 11 s |
 
 So a change made on the StatefulSet does not last, and a scale-down made there costs a volume all the same. The
