@@ -4262,6 +4262,1379 @@
           "mode": "multi"
         }
       }
+    },
+    {
+      "type": "row",
+      "title": "What does each index hold?",
+      "collapsed": false,
+      "id": 35,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 113
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Indexes",
+      "description": "Search and vector indexes mongot holds, counted by index id over all pods.",
+      "id": 36,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 114
+      },
+      "targets": [
+        {
+          "expr": "count(max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) or vector(0)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#59a14f",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Indexes being built",
+      "description": "Initial syncs running or waiting on the pod that has the most: an index is being built or rebuilt. 0 when none is.",
+      "id": 37,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 114
+      },
+      "targets": [
+        {
+          "expr": "(max(sum by (pod) (mongot_initialsync_dispatcher_inProgressSyncs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) + max(sum by (pod) (mongot_initialsync_dispatcher_queuedSyncs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) or vector(0)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#59a14f",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Indexes that differ by pod",
+      "description": "Indexes that some pod does not hold, or whose size or document count is not the same on every pod. Should be 0. It is above 0 for under a minute while an index is built: a pod reports a new index's size as 0 at first.",
+      "id": 38,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 114
+      },
+      "targets": [
+        {
+          "expr": "count((count by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) != scalar(count(up{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"} == 1))) or (max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) != min by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) or (max by (indexId_logString) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) != min by (indexId_logString) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))) or vector(0)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#59a14f",
+                "value": null
+              },
+              {
+                "color": "#e15759",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Size of all indexes, on one pod",
+      "description": "The sizes of all indexes added up, as one pod holds them. Every pod holds every index.",
+      "id": 39,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 114
+      },
+      "targets": [
+        {
+          "expr": "sum(max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})) or vector(0)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#59a14f",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Each index, now",
+      "description": "One row per index, by its id: mongot's metrics carry no index name, database or collection. `$listSearchIndexes` on the source mongod gives the name of an id. Size and documents are the largest reading over the pods. Growth is the size now less the size 24 hours ago; an index that did not exist then counts from 0.",
+      "id": 40,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 118
+      },
+      "targets": [
+        {
+          "expr": "max by (indexId_logString) (0 * mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",indexType=\"search\"} or 0 * mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",indexType!=\"search\"} + 1)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "expr": "sum by (indexId_logString) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status=\"STEADY\"})",
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "expr": "max by (indexId_logString) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "expr": "max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "expr": "max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) / (max by (indexId_logString) (mongot_index_stats_numLuceneDocs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) > 0)",
+          "refId": "E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "expr": "max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) - (max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"} offset 24h) or max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) * 0)",
+          "refId": "F",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Index id"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 215
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Type"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "custom.width",
+                "value": 75
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "search",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "vector",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Pods STEADY"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Documents"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "custom.width",
+                "value": 95
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Size"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Bytes per document"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Growth, 24 hours"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "indexId_logString": "Index id",
+              "Value #A": "Type",
+              "Value #B": "Pods STEADY",
+              "Value #C": "Documents",
+              "Value #D": "Size",
+              "Value #E": "Bytes per document",
+              "Value #F": "Growth, 24 hours"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Each index, in use",
+      "description": "One row per index, by its id: mongot's metrics carry no index name, database or collection. `$listSearchIndexes` on the source mongod gives the name of an id. Searches, failed searches and sync errors are counted over the last hour, all pods; sync errors are the exceptions mongot met while it built or followed the index. The lag is the largest over the pods, now.",
+      "id": 41,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 127
+      },
+      "targets": [
+        {
+          "expr": "sum by (indexId_logString) (increase(mongot_index_stats_query_totalQueries_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h]))",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "expr": "sum by (indexId_logString) (increase(mongot_index_stats_query_failedQueries_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h]))",
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "expr": "sum by (indexId_logString) (increase(mongot_index_stats_indexing_steadyStateExceptions_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h]) + increase(mongot_index_stats_indexing_initialSyncExceptions_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h]))",
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "",
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "expr": "max by (indexId_logString) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"})",
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Index id"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 215
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Searches, last hour"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Failed searches, last hour"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "custom.width",
+                "value": 190
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Sync errors, last hour"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "custom.width",
+                "value": 170
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Replication lag"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "indexId_logString": "Index id",
+              "Value #A": "Searches, last hour",
+              "Value #B": "Failed searches, last hour",
+              "Value #C": "Sync errors, last hour",
+              "Value #D": "Replication lag"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Size of each index",
+      "description": "Every index mongot holds, by id, biggest first. The largest reading over the pods.",
+      "id": 42,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 136
+      },
+      "targets": [
+        {
+          "expr": "sort_desc(max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}))",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "{{indexId_logString}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#4e79a7"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#4e79a7",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "valueMode": "color",
+        "showUnfilled": false
+      }
+    },
+    {
+      "type": "status-history",
+      "title": "Indexes not STEADY, per index",
+      "description": "For each index, by id: whether any pod holds it in a state other than STEADY (INITIAL_SYNC, STALE, FAILED, RECOVERING and the rest). The panel of the section above says which pod; this one says which index.",
+      "id": 43,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 145
+      },
+      "targets": [
+        {
+          "expr": "sum by (indexId_logString) (mongot_index_stats_indexStatusCode{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",status!=\"STEADY\"})",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "{{indexId_logString}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "STEADY",
+                  "color": "#59a14f",
+                  "index": 0
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 1,
+                "to": null,
+                "result": {
+                  "text": "not STEADY",
+                  "color": "#e15759",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#59a14f"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "never",
+        "rowHeight": 0.8,
+        "colWidth": 0.95,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Indexes by size",
+      "description": "How many indexes fall in each size class: a histogram of index size. An empty class reads 0. Grafana lists the classes from the smallest; the console lists them by their count, the fullest class first.",
+      "id": 44,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 154
+      },
+      "targets": [
+        {
+          "expr": "count(max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) < 1e4) or vector(0)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "under 10 KB",
+          "instant": true
+        },
+        {
+          "expr": "count(max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) >= 1e4 < 1e5) or vector(0)",
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "10 KB to 100 KB",
+          "instant": true
+        },
+        {
+          "expr": "count(max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) >= 1e5 < 1e6) or vector(0)",
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "100 KB to 1 MB",
+          "instant": true
+        },
+        {
+          "expr": "count(max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) >= 1e6 < 1e7) or vector(0)",
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "1 MB to 10 MB",
+          "instant": true
+        },
+        {
+          "expr": "count(max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) >= 1e7 < 1e8) or vector(0)",
+          "refId": "E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "10 MB to 100 MB",
+          "instant": true
+        },
+        {
+          "expr": "count(max by (indexId_logString) (mongot_index_stats_indexSizeBytes{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}) >= 1e8) or vector(0)",
+          "refId": "F",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "100 MB and over",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#4e79a7"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#4e79a7",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "valueMode": "color",
+        "showUnfilled": false
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Indexes by type",
+      "description": "How many indexes are search indexes and how many are vector indexes.",
+      "id": 45,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 154
+      },
+      "targets": [
+        {
+          "expr": "count(max by (indexId_logString) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",indexType=\"search\"})) or vector(0)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "search",
+          "instant": true
+        },
+        {
+          "expr": "count(max by (indexId_logString) (mongot_index_stats_indexing_replicationLagMs{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",indexType!=\"search\"})) or vector(0)",
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "vector",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#4e79a7"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#4e79a7",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "valueMode": "color",
+        "showUnfilled": false
+      }
+    },
+    {
+      "type": "row",
+      "title": "Is stored source used?",
+      "collapsed": false,
+      "id": 46,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 162
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Stored source searches, 1 hour",
+      "description": "$search queries sent with returnStoredSource in the last hour, all pods: mongot answers them from the fields the index stores, with no lookup in the collection. Estimated from a counter, so it can read a fraction off. mongot counts these queries; it does not say which index has stored source or how many bytes it takes.",
+      "id": 47,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 163
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(mongot_index_stats_query_feature_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",name=\"returnStoredSource\"}[1h])) or vector(0)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#59a14f",
+                "value": null
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Stored source share, searches",
+      "description": "Of the $search queries, the share sent with returnStoredSource, 5 minute rate. 0 when no search ran.",
+      "id": 48,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 163
+      },
+      "targets": [
+        {
+          "expr": "((sum(rate(mongot_index_stats_query_feature_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",name=\"returnStoredSource\"}[5m]))) / (sum(rate(mongot_search_metrics_searchCommandTotalCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) > 0)) or vector(0)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#59a14f",
+                "value": null
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Stored source vector, 1 hour",
+      "description": "$vectorSearch queries sent with returnStoredSource in the last hour, all pods. Estimated from a counter.",
+      "id": 49,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 163
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(mongot_search_metrics_vectorStoredSourceQueries_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h])) or vector(0)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#59a14f",
+                "value": null
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Stored source share, vector",
+      "description": "Of the $vectorSearch queries, the share sent with returnStoredSource, 5 minute rate. 0 when no vector search ran.",
+      "id": 50,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 163
+      },
+      "targets": [
+        {
+          "expr": "((sum(rate(mongot_search_metrics_vectorStoredSourceQueries_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))) / (sum(rate(mongot_search_metrics_vectorSearchCommandTotalCount_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m])) > 0)) or vector(0)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#59a14f",
+                "value": null
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Searches that ask for stored source, per second",
+      "description": "Queries sent with returnStoredSource, all mongot pods, 5 minute rate: $search and $vectorSearch apart. 0 when none is sent.",
+      "id": 51,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 167
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(mongot_index_stats_query_feature_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\",name=\"returnStoredSource\"}[5m]))",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "search"
+        },
+        {
+          "expr": "sum(rate(mongot_search_metrics_vectorStoredSourceQueries_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[5m]))",
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "vector search"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "A"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#4e79a7"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#e15759"
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Query features used, last hour",
+      "description": "How many queries used each feature mongot counts, in the last hour, all pods, most used first. returnStoredSource is one of them. Empty when no query ran.",
+      "id": 52,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 167
+      },
+      "targets": [
+        {
+          "expr": "sort_desc(sum by (name) (increase(mongot_index_stats_query_feature_total{namespace=\"__NAMESPACE__\",job=\"__SEARCH__-search-0-svc\"}[1h])) > 0)",
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "legendFormat": "{{name}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#4e79a7"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#4e79a7",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "valueMode": "color",
+        "showUnfilled": false
+      }
     }
   ]
 }

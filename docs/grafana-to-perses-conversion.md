@@ -33,7 +33,7 @@ scripts/perses-dashboard.sh
 Expected:
 
 ```text
-wrote chart/mongodb-search-helm/files/mongodb-search.perses.json (29 panels)
+wrote chart/mongodb-search-helm/files/mongodb-search.perses.json (45 panels)
 ```
 
 It takes `perses-dashboard` from `PERSES_DASHBOARD`, from your `PATH`, or from `.venv/bin`, and the command runs `percli` from the Perses image named by `PERSES_IMAGE` (default `docker.io/persesdev/perses:v0.54.0`) with podman or docker. Then run the chart tests, which fail if the two files disagree:
@@ -158,6 +158,8 @@ Since chart 0.3.0 the dashboard has 27 panels (5 stat, 22 time series) in 5 sect
 
 Chart 0.3.1 kept those 27 panels and gave every line a query of its own: 90 queries. It was merged and never published. Since chart 0.3.2 it has 29 panels (5 stat, 21 time series, a pie, a table and a status history) and 97 queries, produced by the script through Way 1.
 
+Since chart 0.3.6 it has 45 panels in 7 sections (13 stat, 22 time series, a pie, 3 tables, 2 status histories and 4 bar gauges) and 128 queries, produced the same way on Oct 8, 2026. A Grafana bar gauge becomes a Perses bar chart; the 29 earlier panels came out identical to before.
+
 | Section | Panels |
 | --- | --- |
 | Is search up? | mongot pods up; Envoy pods up; mongot pods in Envoy; searches per second; largest share on one pod |
@@ -168,7 +170,7 @@ Chart 0.3.1 kept those 27 panels and gave every line a query of its own: 90 quer
 
 | Way | Ran here | Result |
 | --- | --- | --- |
-| 1. Container, with podman | Yes; it is what produced the committed file | 29 panels, no placeholders (16 before chart 0.3.0, 27 in it) |
+| 1. Container, with podman | Yes; it is what produced the committed file | 45 panels, no placeholders (16 before chart 0.3.0, 27 in it, 29 from 0.3.2) |
 | 2. `percli` binary | No: no `percli` is installed on this workstation | Same command as Way 1 without the container |
 | 3. Server `/api/migrate` on the lab | Yes | Same 16 panels, queries, units and sections as Way 1 |
 
