@@ -250,6 +250,10 @@ for x in g["panels"]:
         # its state: the initial sync gauges count syncs on a pod, not indexes.
         if x["title"] == "Indexes that differ by pod":
             ok &= "up{" not in e and "max by (indexId_logString, pod)" in e and "count(count by (pod) (" in e
+            # Documents are compared, a generation with itself, and sizes are not: each pod writes its own index files,
+            # and the same documents took another number of bytes on one lab pod.
+            ok &= "max by (indexId_logString, generationId_logString) (mongot_index_stats_numLuceneDocs{" in e
+            ok &= "!= min by (indexId_logString) (mongot_index_stats_indexSizeBytes" not in e and e.count("indexSizeBytes") == 2
         if x["title"] == "Indexes being built":
             ok &= "status=~\"INITIAL_SYNC|NOT_STARTED\"" in e and "initialsync" not in e
     # A legend is below its chart, never beside it. A panel narrower than half the page needs two legend lines for
