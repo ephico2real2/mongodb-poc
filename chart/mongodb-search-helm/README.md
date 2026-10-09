@@ -58,7 +58,7 @@ bash $P --clean                                       # removes the key files on
 From the package alone, with no clone:
 
 ```bash
-helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.8/mongodb-search-helm-0.3.8.tgz --untar
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.9/mongodb-search-helm-0.3.9.tgz --untar
 bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
 ```
 
@@ -66,7 +66,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.8/mongodb-search-helm-0.3.8.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.9/mongodb-search-helm-0.3.9.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -119,7 +119,7 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 
 ## Dashboards
 
-The chart ships one dashboard, **MongoDB Search**, in two forms from one source. Its seven sections each answer a question: is search up, is traffic spread across the mongot pods, is Envoy healthy, how is each mongot pod doing, does every mongot pod hold the same data, what does each index hold, and is stored source used. It has 47 panels: 17 single numbers, 22 line charts, a pie, 3 tables, 2 status histories and 2 bar charts. Those about mongot's process and its data are [described below](#the-mongot-process-and-data-panels), and those about the indexes [after them](#the-index-panels).
+The chart ships one dashboard, **MongoDB Search**, in two forms from one source. Its seven sections each answer a question: is search up, is traffic spread across the mongot pods, is Envoy healthy, how is each mongot pod doing, does every mongot pod hold the same data, what does each index hold, and is stored source used. It has 52 panels: 20 single numbers, 22 line charts, a pie, 5 tables, 2 status histories and 2 bar charts. Those about mongot's process and its data are [described below](#the-mongot-process-and-data-panels), and those about the indexes [after them](#the-index-panels).
 
 The captures below were taken on the lab on 2026-10-07, after 16 minutes of searches through the lab's search GUI. Click an image to open it full size. The dark captures, and earlier ones from a Perses and a Grafana run on a workstation, are beside them in [`docs/screenshots/`](../../docs/screenshots/).
 
@@ -265,7 +265,7 @@ What to know when reading them:
 
 ### The index panels
 
-The sixth section, *What does each index hold?*, is about the indexes themselves: 12 panels that read mongot's per-index metrics, `mongot_index_stats_*`, by the label `indexId_logString`. The seventh, *Is stored source used?*, has 6 panels on the searches that ask for stored source. Readings are the lab's on 2026-10-08, with eight indexes, three of them made for this measurement, while test searches ran.
+The sixth section, *What does each index hold?*, is about the indexes themselves: 16 panels that read mongot's per-index metrics, `mongot_index_stats_*`, by the label `indexId_logString`. The seventh, *Is stored source used?*, has 7 panels on the searches that ask for stored source and on what it adds to an index. With the optional [index info exporter](#index-names-as-metrics) on, these panels show an index by its name; without it, by its id. Readings are the lab's on 2026-10-08, with eight indexes, three of them made for this measurement, while test searches ran.
 
 | Panel | What it reads | Lab reading |
 | --- | --- | --- |
@@ -280,18 +280,23 @@ The sixth section, *What does each index hold?*, is about the indexes themselves
 | Search indexes; Vector indexes | Index ids by the `indexType` label of their insert counter | 5 and 3 |
 | Memory for vector indexes | `mongot_index_stats_requiredMemoryBytes`, the largest reading of each index, added up | 5,930,144 bytes |
 | Index builds waiting | `mongot_initialsync_queue_queuedSyncs`, on the pod that has the most | 0 |
-| Each index, now | A table, one row per index id: type, pods where it is `STEADY`, Lucene documents, size, bytes per Lucene document, vector memory | 5 search and 3 vector indexes, each `STEADY` on 3 pods, 5 to 20,024 documents, 5,339 to 5,900,486 bytes; 2,963,552 bytes of vector memory on two of them |
-| Each index, in the last hour | A table, one row per index id: searches, failed searches, average batch time and sync errors in the last hour, the replication lag now, and the growth in 24 hours | 767 or 768 searches on each of the five indexes that were queried, 0 failed, batches in 1.3 to 1.6 ms on the three search indexes that were searched, 0 sync errors, 0 ms |
-| Size of each index | The same size, biggest first | 5,900,486 bytes down to 5,339 |
+| Indexes with a name; Indexes with stored source; Indexes with no host listed | From the index info exporter: the indexes it names, those whose definition stores fields, and those the source lists no mongot host for | 8, 3 and 0; all 0 with the exporter off |
+| Each index | A table, one row per index: its id, its type, what its definition stores, its vector memory | 5 search and 3 vector indexes; 2 store some fields and 1 all fields; 2,963,552 bytes of vector memory on two of them |
+| Each index, now | A table, one row per index: pods where it is `STEADY`, Lucene documents, size, bytes per Lucene document, growth in 24 hours | Each `STEADY` on 3 pods, 5 to 20,024 documents, 5,339 to 5,900,487 bytes |
+| Each index, in the last hour | A table, one row per index: searches, failed searches, average batch time and sync errors in the last hour, and the replication lag now | Searches on the five indexes that were queried, 0 failed, batches in about 1 ms on the three search indexes that were searched, 0 sync errors, a lag of 0 s |
+| What stored source adds | A table of the indexes that store fields: their size, the smallest index of the same collection and type that stores nothing, and the difference | `ss_include` 721,648 bytes over `default`, `ss_all` 2,385,902, `ss_vector` 494,313 over `vector_index` |
+| Size of each index | The same size, biggest first | 5,900,487 bytes down to 5,339 |
 | Indexes not STEADY, per index | `mongot_index_stats_indexStatusCode` for every state but `STEADY`, summed over the pods | `STEADY` on all 8 |
 | Searches that ask for stored source, per second | The two stored source counters as 5 minute rates | 0.37 to 0.49 a second each during the test searches |
 | Query features used, last hour | The increase of `mongot_index_stats_query_feature_total`, by feature | `valueBoost`, `text`, `approximate`, `returnStoredSource`, and one each of `exists`, `phrase` and `compound` |
 
 What to know when reading them:
 
-- **An index is named by its id, not by its name.** mongot's metrics carry no index name, database or collection: one pod emitted 1,017 metric names and none has such a label. `$listSearchIndexes` on the source mongod returns the `id` and the `name` of each index of a collection, and its ids are the ones in the metrics. The tables and the charts show the whole id. The two charts that name every index on an axis take the whole width of the page: at less than half of it the console cut the 24 character id.
-- **Stored source is counted, not located.** The two counters count the queries sent with `returnStoredSource`: on the lab, 30 `$search` and 30 `$vectorSearch` queries with it moved them from 0 to 30 each, 10 on each pod, and 60 queries without it moved neither. No metric says which index defines stored source or how many bytes it takes. Creating three indexes that define it added no metric name and no label.
-- **What stored source costs shows only by comparison.** On one collection of 20,024 documents with the same mappings: 3,514,585 bytes with no stored source, 4,236,232 with three fields stored, 5,900,486 with every field stored. *Bytes per document* in the table is where that shows: 176, 212 and 295.
+- **An index is named by its id, unless the index info exporter is on.** mongot's metrics carry no index name, database or collection: one pod emitted 1,017 metric names and none has such a label. With the exporter on (`monitoring.indexInfo`), the tables, the size chart and the state history show `database.collection / index`, and *Each index* shows the id beside it; with it off, or for an index the source has not listed yet, they show the id. Both were drawn on the lab: 8 rows by name with the exporter on, the same 8 by id with it off.
+- **An index is drawn once, whichever way it is named.** The names are read at the end of the range the page shows. Read along the range, a chart drew an index twice when its name came or went inside the range: 16 bars for 8 indexes on the lab, just after the exporter was switched off.
+- **A long name can be cut in a table.** The *Index* column is 290 pixels wide, which holds the lab's longest name, 41 characters. The size chart and the state history show a name whole whatever its length; in Grafana a bar's name is above the bar for that reason.
+- **Stored source is counted, and located only with the exporter.** The two counters count the queries sent with `returnStoredSource`: on the lab, 30 `$search` and 30 `$vectorSearch` queries with it moved them from 0 to 30 each, 10 on each pod, and 60 queries without it moved neither. No metric says which index defines stored source or how many bytes it takes. Creating three indexes that define it added no metric name and no label.
+- **What stored source adds is a comparison, not a measurement.** No metric says what stored source takes. *What stored source adds* compares each index that stores fields with the smallest index of the same collection and type that stores nothing. On the lab's `movies`, 20,024 documents with the same mappings: 3,514,585 bytes with no stored source, 721,648 more with three fields stored (36 bytes a document), 2,385,902 more with every field stored (119 bytes a document). Whatever else differs between the two definitions is in the difference too: the lab's `ss_vector` has one filter field fewer than `vector_index`, so its 494,313 bytes are not only stored source. Without the exporter the table has one row that says no index is known to store fields, with a dash under *Stored source*.
 - **A new index reads 0 bytes for up to 3 minutes.** mongot reads the size of an index from disk and keeps the reading for 3 minutes (`Suppliers.memoizeWithExpiration(..., Duration.ofMinutes(3))` in its `DiskIndexBackingStrategy`). Measured on the lab: an index whose 20,024 documents were there at 02:35:45Z read 0 bytes until 02:38:45Z. *Indexes that differ by pod* can be above 0 for that long. An earlier version of this page said "under a minute"; that was wrong.
 - **The size is the whole index directory**: mongot adds up every file in it, so it includes stored source and vectors.
 - **Documents are Lucene documents.** The metric is the index writer's document count. An index with an `embeddedDocuments` field holds one Lucene document more for every embedded document, so the count can be above the collection's; for such an index mongot also emits `mongot_index_stats_numEmbeddedRootDocs`. The lab has no such index, and its counts equal the collections'. The older panel *Documents indexed, per mongot pod* reads the same metric.
@@ -299,26 +304,26 @@ What to know when reading them:
 - **Not `STEADY` is not always not served.** mongot answers searches from an index that is `STEADY`, `STALE` or `RECOVERING`; not from one that is `INITIAL_SYNC`, `NOT_STARTED` or `FAILED`.
 - **There is no histogram of index sizes.** One was drawn in chart 0.3.6, with size classes of this dashboard's own, and removed in 0.3.7: the console's bar chart lists bars by their value, so the classes came out in the order of their counts, not of their sizes. mongot's own size classes are coarse and for other things (`small`, `medium`, `large`, `xlarge` at 1, 10 and 100 GiB, for the latency of vector searches); every index of the lab is `small`. *Size of each index* and the two counts by type say the same more plainly. Grafana lists the classes from the smallest; the console's bar chart lists bars by their value, so there the fullest class is first.
 - **Growth counts a new index from 0.** An index that did not exist 24 hours ago has its whole size as its growth.
-- **Counts over an hour are estimates.** Prometheus extends an increase to the edges of its window: 60 queries read as 61.
+- **Counts over an hour are estimates.** Prometheus extends an increase to the edges of its window: 60 queries read as 61. The console also shortens a count of a thousand or more (`1.1K`); Grafana writes it out.
 - **Vector memory** is `mongot_index_stats_requiredMemoryBytes`: what a vector index wants resident, the vectors plus 128 bytes of graph for each. On the lab 20,024 vectors of 5 dimensions read 2,963,552 bytes, which is 20,024 x (5 x 4 + 128). It is 0 for a search index.
 - **The batch time is an average, and not the time of a whole search.** `mongot_index_stats_query_searchResultBatchLatencies_seconds` times the making of one batch of results, for search indexes only, and is an average here: mongot gives a sum and a count, and no buckets. The lab read 0.7 to 1.0 ms, when the whole search command averaged 1.4 ms, and about an hour later, with the test searches running, 1.3 to 1.6 ms.
 - **`$listSearchIndexes` can say `PENDING` while the index is served.** On the lab it reports every index `PENDING` and not queryable, while mongot reports `STEADY` and searches return results. mongod builds that answer from the hosts whose heartbeat row in `__mdb_internal_search.serverState` is under 2 hours old. The lab was suspended for over 2 hours twice; a pod's hourly cleanup then removed the others' rows, and mongot 1.70.1 only updates its row, never re-creates it: each pod logs `Failed to update server state entry` every 30 seconds, and the collection holds 0 rows (read 2026-10-09). The index names and definitions in that answer are right; its status is not to be trusted there. mongot's own `indexStatusCode`, which these panels read, is. Restarting the three mongot pods one at a time put it right on 2026-10-09: a pod writes its row when it starts. Afterwards the collection held 3 rows, every index was `READY` and queryable on 3 hosts, and the warning had stopped.
 - **Not seen on the lab:** an index being built while the dashboard was open, an index out of `STEADY`, a failed search, a sync error. Those panels and columns read 0 throughout.
 
-**Where these 18 panels were looked at**, on 2026-10-09 with chart 0.3.8:
+**Where these 23 panels were looked at**, on 2026-10-09 with chart 0.3.9:
 
-- In the lab's console as the viewer, in both themes, on pages 1,600 and 1,280 pixels wide: all 7 sections, no panel said "No data", and every id and table header was whole.
-- In a Grafana 12.3.1 that loaded the chart's ConfigMap through its sidecar, in both themes: it lists the dashboard with the same 47 panels in the same 7 rows; all 126 queries answered through its Thanos Querier data source with no failure and no notice; no panel said "No data". The 26 queries that return no series are the ones the lab has nothing for (no fourth mongot pod, no third Envoy pod, no 4xx, 5xx or other response class), none of them in these two sections.
+- In the lab's console as the viewer, with the index info exporter on, in both themes, on pages 1,600 and 1,280 pixels wide: all 7 sections, no panel said "No data", and every name, id and table header was whole. And with the exporter off, in the dark theme: the same, by id.
+- In a Grafana 12.3.1 that loaded the chart's ConfigMap through its sidecar, with the exporter on, in both themes: it lists the dashboard with the same 52 panels in the same 7 rows; all 135 queries answered through its Thanos Querier data source with no failure and no notice; no panel said "No data".
 
 Three things were wrong in the Grafana form of chart 0.3.7 and are corrected: its table headers were cut ("Pods STE..."), its tables showed seven rows of eight, and its bar chart cut the index ids. Grafana draws a header in wider type than the console and a bar's name in a column it caps at about 165 pixels, so the columns are wider, the tables a unit taller, and the ids of *Size of each index* are in 10 pixel type there. The console draws them full size.
 
-The two bar charts are one colour: they rank or count, and a colour per bar would change with every new index. In the Grafana form it is the dashboard's blue, as a pale fill with its edge in the full colour. The console draws its bar chart in a brighter blue of its own and takes no colour from the dashboard, and it lists bars by their value whatever the query's order. The two sections add 29 queries to a refresh, 126 in all.
+The two bar charts are one colour: they rank or count, and a colour per bar would change with every new index. In the Grafana form it is the dashboard's blue, as a pale fill with its edge in the full colour. The console draws its bar chart in a brighter blue of its own and takes no colour from the dashboard, and it lists bars by their value whatever the query's order. The two sections add 38 queries to a refresh, 135 in all.
 
 ### Index names, as metrics
 
 Optional, off by default (`monitoring.indexInfo.enabled`). mongot's metrics name an index by its id only. With this on, a small Deployment, `<search.name>-index-info`, publishes the name of every search index, so a query can show `sample_mflix.movies / default` where mongot says `6ab4bc25d292ce5f25d1b708`.
 
-**How it works.** When Prometheus scrapes it, it asks the source deployment for its databases, their collections, and `$listSearchIndexes` of each collection, and keeps the answer for `cacheSeconds`. It reads no document. It runs on the stock MongoDB Community Server image, which has `python3` and `mongosh`; nothing is built for it. It reaches the source with the hosts and the CA the `MongoDBSearch` uses (`source.hostAndPorts`, `tls.trustBundleConfigMap`), and with a database user of its own.
+**How it works.** When Prometheus scrapes it, it asks the source deployment for its databases, their collections, and `$listSearchIndexes` of each collection, and keeps the answer for `cacheSeconds`. It reads no document. It runs on the stock MongoDB Community Server image, which has `python3` and `mongosh`; nothing is built for it. The image is named by its digest in `monitoring.indexInfo.image`, about 1 GB; on a cluster that pulls only from a registry of its own, mirror it there and set that value to the mirror. It reaches the source with the hosts and the CA the `MongoDBSearch` uses (`source.hostAndPorts`, `tls.trustBundleConfigMap`), and with a database user of its own.
 
 **What it needs: one more prerequisite, made by hand.** A user on the source deployment that may list and nothing else, and its password in a Secret. Not the sync user: that one may read every collection and write mongot's catalog.
 
@@ -366,10 +371,22 @@ What to know:
 - **The names are readable by whoever can read the namespace's metrics.** It publishes index, collection and database names, and nothing of their content. Its Service is ClusterIP only.
 - **One question per collection.** The cost grows with the number of collections, not of indexes. Measured with 3; not measured on a deployment with thousands, where `cacheSeconds` and `interval` should be raised.
 - **`interval` is at least `25s`.** The exporter gives the source 20 seconds and its scrape times out at 25. Prometheus refuses a scrape timeout longer than the interval, and the Prometheus operator then leaves the ServiceMonitor out without telling Helm, so the chart refuses a shorter interval when it renders.
-- **mongosh's telemetry is off.** mongosh has it on by default (`enableTelemetry` was `true` in the pod's own mongosh configuration on the lab). The pod mounts a global configuration file, `/etc/mongosh.conf`, with `forceDisableTelemetry: true`, the one place mongosh reads that setting from.
+- **mongosh's telemetry is forbidden.** mongosh has it on by default: `enableTelemetry` was `true` in the configuration mongosh wrote for itself in the lab's pod. The pod mounts a global configuration file, `/etc/mongosh.conf`, with `forceDisableTelemetry: true`, the one place mongosh reads that setting from. On the lab mongosh 2.6.0 logged that it found the file, and `config.get("forceDisableTelemetry")` answered `true`. Whether mongosh sent anything before, run with a script as it is here, was not established: its documentation says it sends during interactive sessions.
 - **Any name is served as it is.** A quote, a backslash, a newline, a letter outside ASCII, or one of the characters Python takes for a line break and JSON does not (U+2028, U+2029, U+0085): tested with a stand-in `mongosh`.
 - **Views and time series collections are not asked**, nor the databases `admin`, `local`, `config` and mongot's own `__mdb_internal_search`.
-- **The dashboard does not use it yet**: its panels still name an index by id.
+- **The dashboard uses it when it is there.** The index panels show the name, what the index stores and what that adds; with the exporter off they show ids. How the two are joined, why it is built this way and what it leaves undone are in [Design: index names on the MongoDB Search dashboard](../../docs/index-names-exporter-design.md).
+
+<!-- markdownlint-disable MD033 -->
+<img alt="The section What does each index hold, in the OpenShift console, light theme, with the index info exporter on. Eleven numbers in green, among them 8 indexes, 8 indexes with a name, 3 indexes with stored source and 0 with no host listed. Three tables with one row per index, each by its name, from search_demo.movies / default to sample_mflix.movies / ss_all: the first also shows the id, the type, what the index stores (none, some fields, all fields) and its vector memory; the second pods STEADY, Lucene documents, size, bytes per document and growth in 24 hours; the third the searches, failed searches, batch time and sync errors of the last hour, and the lag now. A bar chart of the size of each index by name, biggest first, 8 bars. A state history with one green row per index, by name." src="../../docs/screenshots/dashboard-console-index-names.light.png">
+<!-- markdownlint-enable MD033 -->
+
+*With the exporter on: an index by its name, in the tables and on the charts.*
+
+<!-- markdownlint-disable MD033 -->
+<img alt="The section Is stored source used, in the OpenShift console, light theme, with the index info exporter on. Four numbers, then the table What stored source adds with three rows: sample_mflix.movies / ss_include stores some fields, 4.04 MiB against 3.35 MiB without it, adds 704.73 KiB, 36 bytes a document; sample_mflix.movies / ss_vector stores some fields, 1.67 MiB against 1.2 MiB, adds 482.73 KiB, 24.7 bytes a document; sample_mflix.movies / ss_all stores all fields, 5.63 MiB against 3.35 MiB, adds 2.28 MiB, 119 bytes a document. Below it the rate of the searches that ask for stored source and the query features used in the last hour." src="../../docs/screenshots/dashboard-console-stored-source-adds.light.png">
+<!-- markdownlint-enable MD033 -->
+
+*What stored source adds: each index that stores fields beside the one of its collection that stores nothing.*
 
 ### Envoy counters without `_total`
 

@@ -33,7 +33,7 @@ scripts/perses-dashboard.sh
 Expected:
 
 ```text
-wrote chart/mongodb-search-helm/files/mongodb-search.perses.json (47 panels)
+wrote chart/mongodb-search-helm/files/mongodb-search.perses.json (52 panels)
 ```
 
 It takes `perses-dashboard` from `PERSES_DASHBOARD`, from your `PATH`, or from `.venv/bin`, and the command runs `percli` from the Perses image named by `PERSES_IMAGE` (default `docker.io/persesdev/perses:v0.54.0`) with podman or docker. Then run the chart tests, which fail if the two files disagree:
@@ -162,6 +162,8 @@ Since chart 0.3.6 it has 45 panels in 7 sections (13 stat, 22 time series, a pie
 
 Since chart 0.3.7 it has 47 panels in 7 sections (17 stat, 22 time series, a pie, 3 tables, 2 status histories and 2 bar gauges) and 126 queries. Chart 0.3.8 changed how the Grafana form draws its tables and bars (column widths, table height, the type of a bar's name) after it was drawn in a Grafana 12.3.1 on Oct 9, 2026: 47 panels in 7 rows listed, and 126 of 126 queries answered through its Thanos Querier data source.
 
+Since chart 0.3.9 it has 52 panels in 7 sections (20 stat, 22 time series, a pie, 5 tables, 2 status histories and 2 bar gauges) and 135 queries: the index panels name an index when the index info exporter is on.
+
 | Section | Panels |
 | --- | --- |
 | Is search up? | mongot pods up; Envoy pods up; mongot pods in Envoy; searches per second; largest share on one pod |
@@ -172,7 +174,7 @@ Since chart 0.3.7 it has 47 panels in 7 sections (17 stat, 22 time series, a pie
 
 | Way | Ran here | Result |
 | --- | --- | --- |
-| 1. Container, with podman | Yes; it is what produced the committed file | 47 panels, no placeholders (16 before chart 0.3.0, 27 in it, 29 from 0.3.2, 45 in 0.3.6) |
+| 1. Container, with podman | Yes; it is what produced the committed file | 52 panels, no placeholders (16 before chart 0.3.0, 27 in it, 29 from 0.3.2, 45 in 0.3.6, 47 from 0.3.7) |
 | 2. `percli` binary | No: no `percli` is installed on this workstation | Same command as Way 1 without the container |
 | 3. Server `/api/migrate` on the lab | Yes | Same 16 panels, queries, units and sections as Way 1 |
 
