@@ -18,7 +18,7 @@ You create one ConfigMap, three TLS secrets and one password secret, all before 
 | `ent-mongot-search-cert` | TLS secret | `mongot-search-0-svc.dvh-gp6-rnd.svc.cluster.local.pem` | mongot (`mongot-search-0`) |
 | `ent-mongot-search-lb-0-client-cert` | TLS secret | `mongot-search-0-proxy-svc.dvh-gp6-rnd.svc.cluster.local.pem` | Envoy, as the client to mongot |
 | `ent-mongot-search-lb-0-cert` | TLS secret | Company PEM for the public load balancer FQDN | Envoy, serving the public endpoint |
-| `search-sync-source-password` | Secret, key `password` | mongotUser's password, from the source mongod owners | mongot, to sign in to the source mongod |
+| `search-sync-source-password` | Secret, key `password` | mongotuser's password, from the source mongod owners | mongot, to sign in to the source mongod |
 
 **Secret names must follow the operator's convention.** The MongoDBSearch resource uses `certsSecretPrefix: ent` to find the TLS secrets by name; it never lists them. The operator builds each name from the prefix and the resource name (`mongot`), so the TLS secrets must be named exactly:
 
@@ -50,7 +50,7 @@ NAMESPACE dvh-gp6-rnd
 ③ Envoy  --mTLS on 27028, one mongot pod per query--> mongot x3 (mongot-search-0)
      Envoy presents ent-mongot-search-lb-0-client-cert; mongot presents ent-mongot-search-cert
 ④ mongot --sync, not through the Route or Envoy--> mongod
-     mongod presents its own cert; mongot checks it with ent-trust-bundle and signs in as mongotUser
+     mongod presents its own cert; mongot checks it with ent-trust-bundle and signs in as mongotuser
 ```
 
 The mongod box stands for every upstream mongod listed in `hostAndPorts`; only `abc234.uat.company.net:26018` is set today. On every hop the caller checks the other side's cert against the company CA, so mongod, Envoy and mongot all have to trust it.
@@ -298,12 +298,12 @@ done
 
 **Sync user password secret**
 
-mongot signs in to the source mongod as `mongotUser`, using the password in `search-sync-source-password` under the key `password`. Get the password from whoever manages the source mongod; that user must already exist there with the role needed for search sync.
+mongot signs in to the source mongod as `mongotuser`, using the password in `search-sync-source-password` under the key `password`. Get the password from whoever manages the source mongod; that user must already exist there with the role needed for search sync.
 
 This prompts for the password without echoing it and keeps it out of shell history and the process list:
 
 ```bash
-printf 'mongotUser password: '; stty -echo; IFS= read -r SYNC_PW; stty echo; echo
+printf 'mongotuser password: '; stty -echo; IFS= read -r SYNC_PW; stty echo; echo
 printf '%s' "$SYNC_PW" | oc create secret generic $SYNC_PW_SECRET \
   --from-file=password=/dev/stdin -n $NS
 unset SYNC_PW
@@ -387,7 +387,7 @@ spec:
     passwordSecretRef:
       key: password                       # key inside the secret
       name: search-sync-source-password   # created in Step 5
-    username: mongotUser                  # sync user on the source mongod
+    username: mongotuser                  # sync user on the source mongod
 ```
 
 **Note on `hostAndPorts`:** it can list several upstream mongod servers, for example every member of the source replica set. List them all so mongot keeps syncing when one member is down. Every host listed must present a cert that `ent-trust-bundle` trusts; repeat the Step 4 source check for each one.

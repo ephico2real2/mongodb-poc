@@ -13,7 +13,7 @@
 #   bash $P --mongot  <pem>                       --dry-run | --apply
 #   bash $P --envoy   <pem>                       --dry-run | --apply
 #   bash $P --route   <pem> [--hostname <fqdn>]   --dry-run | --apply
-#   bash $P --dbcred  [--username mongotUser]     --dry-run | --apply
+#   bash $P --dbcred  [--username mongotuser]     --dry-run | --apply
 #   bash $P --clean
 #
 # --dry-run writes the file and contacts no cluster. --apply writes it and creates the object with `oc create`;
@@ -47,7 +47,7 @@ say()  { printf '%s\n' "$*"; }
 usage() { sed -n '2,/^set +x/p' "$0" | sed -e '$d' -e 's/^# \{0,1\}//'; }
 
 # ---------------------------------------------------------------------------------------------------- arguments
-ACTION="" MODE="" NS_FLAG="" PEM="" HOSTNAME_WANTED="" USERNAME=mongotUser PASSIN_FILE="" PASSWORD_FILE=""
+ACTION="" MODE="" NS_FLAG="" PEM="" HOSTNAME_WANTED="" USERNAME=mongotuser PASSIN_FILE="" PASSWORD_FILE=""
 SOURCE_HOST="" REPLACE=no YES=no CHECK=no CHECK_MONGOT="" CHECK_ENVOY="" CHECK_ROUTE=""
 TRUST_PEMS=()
 action() { [[ -z "${ACTION}" || "${ACTION}" == "$1" ]] || die "one action a run: --${ACTION} and --$1 were both given"; ACTION="$1"; }
@@ -572,7 +572,7 @@ check() {
   say "  loadBalancer:"
   say "    externalHostname: ${host:-<made known by --route>}"
   say "  source:"
-  [[ -n "${dbuser}" ]] || dbuser="<made known by --dbcred; the default of the chart is mongotUser>"
+  [[ -n "${dbuser}" ]] || dbuser="<made known by --dbcred; the default of the chart is mongotuser>"
   say "    username: ${dbuser}"
   say "    hostAndPorts: []        # yours to fill: the members of the source mongod"
   say; say "${PROBLEMS} problem(s)"
