@@ -171,7 +171,7 @@ for x in g["panels"]:
         cols = chart["columnSettings"]
         ok &= cols[0] == {"name": "timestamp", "hide": True} and (cols[1]["name"], cols[1]["header"]) == ("indexId_logString", "Index id")
         ok &= [c["header"] for c in cols[2:]] == {
-            "Each index, now": ["Type", "Pods STEADY", "Documents", "Size", "Bytes per document", "Growth, 24 hours"],
+            "Each index, now": ["Type", "Pods STEADY", "Lucene docs", "Size", "Bytes per Lucene doc", "Growth, 24 hours"],
             "Each index, in use": ["Searches, last hour", "Failed searches, last hour", "Sync errors, last hour", "Replication lag"]}[x["title"]]
         # The whole id, 24 characters, drew 165 pixels wide in the console. On a page 1,280 wide the console drew 876
         # pixels of table: wider than that, the last header was cut.
@@ -179,6 +179,9 @@ for x in g["panels"]:
         if x["title"] == "Each index, now":
             ok &= [(c["condition"]["spec"]["value"], c["text"]) for c in cols[2]["cellSettings"]] == [("0", "search"), ("1", "vector")]
         ok &= all(" by (indexId_logString) " in t["expr"] and " by (pod" not in t["expr"] for t in x["targets"])
+        # The type of an index is read from a counter that exists from its creation: the lag gauge is NaN while it is built.
+        if x["title"] == "Each index, now":
+            ok &= "indexing_insert_total" in x["targets"][0]["expr"] and "replicationLagMs" not in x["targets"][0]["expr"]
     elif x["type"] == "bargauge":
         # Bars rank or count: one colour, since a colour per bar would change with every new index and mean nothing.
         ok &= x["fieldConfig"]["defaults"]["color"] == {"mode": "fixed", "fixedColor": BLUE} and x["fieldConfig"]["defaults"]["min"] == 0
@@ -193,6 +196,14 @@ for x in g["panels"]:
         ok &= [c["condition"]["kind"] for c in cols[1]["cellSettings"]] == ["Value", "Value", "Value", "Regex"]
     elif x["type"] == "stat":
         ok &= {s["color"] for s in x["fieldConfig"]["defaults"]["thresholds"]["steps"]} <= {GREEN, ORANGE, RED}
+        e = x["targets"][0]["expr"]
+        # Pods are counted by who reports an index, never through `up` (a pod being replaced has none), and one reading
+        # per index and pod, so that two generations of an index are not two pods. An index being built is counted by
+        # its state: the initial sync gauges count syncs on a pod, not indexes.
+        if x["title"] == "Indexes that differ by pod":
+            ok &= "up{" not in e and "max by (indexId_logString, pod)" in e and "count(count by (pod) (" in e
+        if x["title"] == "Indexes being built":
+            ok &= "status=~\"INITIAL_SYNC|NOT_STARTED\"" in e and "initialsync" not in e
     # A legend is below its chart, never beside it. A panel narrower than half the page needs two legend lines for
     # three pods, and Perses draws the second only from 11 units of height (measured in the console).
     if "legend" in x.get("options", {}):
