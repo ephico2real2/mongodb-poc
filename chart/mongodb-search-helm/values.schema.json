@@ -41,6 +41,8 @@
                  "description": "At most 44 characters: the operator appends suffixes such as -search-0-proxy-svc"},
         "version": {"type": "string", "pattern": "^$|^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$"},
         "replicas": {"type": "integer", "minimum": 0},
+        "allowVolumeLoss": {"type": "boolean",
+                            "description": "true for one upgrade that lowers replicas: the volumes of the pods that go are deleted"},
         "resources": {"type": "object"},
         "persistence": {
           "type": "object", "additionalProperties": false, "required": ["storage"],

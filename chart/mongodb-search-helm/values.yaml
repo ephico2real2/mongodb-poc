@@ -56,11 +56,22 @@ search:
   # 1.13.0), so mongot moves only when operator.version does. Set it to keep mongot on one version across operator
   # upgrades.
   version: ""
+  # The number of mongot pods. LOWERING IT DELETES VOLUMES: the operator sets the StatefulSet to delete the volume
+  # claim of every pod that is scaled away, and every claim at 0. A pod that comes back builds every index again
+  # from the collection: hours on a large deployment. An upgrade to fewer pods is refused by the preflight unless
+  # allowVolumeLoss is true for that upgrade. Never scale the StatefulSet by hand. See volumes.md and scaling.md.
   replicas: 3
+  allowVolumeLoss: false
+  # CPU and memory of each mongot pod. A change restarts the pods one at a time, each on its volume. Without
+  # -Xms or -Xmx among the JVM flags the operator sets the heap to half of the memory request.
   resources:
     requests: {cpu: "1", memory: 3Gi}
     limits: {cpu: "3", memory: 5Gi}
   persistence:
+    # The size of each pod's volume. Raising it here does not grow a volume that exists: Kubernetes forbids a
+    # change of a StatefulSet's volume claim template, the MongoDBSearch goes Failed (the pods keep running and
+    # answering), and the upgrade's gate stops and says so. The volumes are then grown by hand:
+    # volume-expansion-runbook.md, with expand-mongot-volumes.sh, both beside this file. It cannot be lowered.
     storage: 10Gi
     # Empty: the cluster's default storage class.
     storageClass: thin-csi
