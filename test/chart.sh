@@ -104,7 +104,7 @@ p="$(render -s templates/00-preflight.yaml)"
 for n in ent-mongot-search-cert ent-mongot-search-lb-0-cert ent-mongot-search-lb-0-client-cert search-sync-source-password ent-trust-bundle; do
   grep -q "\"${n}\"" <<<"$p" || bad "preflight Role does not name ${n}"
 done
-[[ "$(grep -c 'resourceNames' <<<"$p")" == 2 ]] && ok "the preflight reads Secrets and the ConfigMap by name only" || bad "preflight resourceNames"
+[[ "$(grep -c 'resourceNames' <<<"$p")" == 3 ]] && ok "the preflight reads Secrets, the ConfigMap and the MongoDBSearch by name only" || bad "preflight resourceNames"
 [[ "$(grep -c 'helm.sh/hook: pre-install,pre-upgrade' <<<"$p")" == 4 ]] && ok "preflight: four pre-install hooks" || bad "preflight hooks"
 
 # Monitoring: the ServiceMonitors and the alerts are on by default; all named after search.name.
@@ -426,6 +426,70 @@ done
 for s in scripts/refresh-mongodbsearch-crd.sh scripts/perses-dashboard.sh; do
   bash -n "$s" && ok "bash -n $s" || bad "bash -n $s"
 done
+
+# ------------------------------------------------------------------------------------------------ volumes
+# The two hooks are shell scripts in Jobs. Each is taken out of the render and run here against a stand-in `oc`, so
+# that what they say and how they end is tested without a cluster.
+hook_script() {  # <template>: the script of the Job's container, as rendered
+  render -s "templates/$1" | python3 -c '
+import re, sys
+doc = sys.stdin.read()
+m = re.search(r"^          args:\n            - \|\n((?:(?:              .*)?\n)+)", doc, re.M)
+sys.stdout.write("\n".join(l[14:] for l in m.group(1).split("\n")))'; }
+hooks="$(mktemp -d)"; mkdir "${hooks}/bin"
+hook_script 00-preflight.yaml > "${hooks}/preflight.sh"; hook_script 40-wait.yaml > "${hooks}/wait.sh"
+cat > "${hooks}/bin/oc" <<'OC'
+#!/usr/bin/env bash
+# A cluster in which every hand-made object is there, the operator is installed, and the MongoDBSearch is what the
+# FAKE_ variables say.
+case "$*" in
+  *mongodbsearch*"{.spec.clusters[0].replicas}"*) [ -n "${FAKE_REPLICAS:-}" ] || exit 1; printf '%s' "$FAKE_REPLICAS" ;;
+  *mongodbsearch*"{.spec.clusters[0].persistence.single.storage}"*) printf '%s' "${FAKE_WANT_SIZE:-}" ;;
+  *statefulsets.apps*volumeClaimTemplates*) printf '%s' "${FAKE_HAVE_SIZE:-}" ;;
+  *mongodbsearch*"{.status.phase}"*) printf '%s' "${FAKE_PHASE:-Running}" ;;
+  *mongodbsearch*"{.status.message}"*) printf '%s' "${FAKE_MESSAGE:-}" ;;
+  *"{.metadata.generation}"*|*"{.status.observedGeneration}"*) printf 7 ;;
+  *subscriptions*installedCSV*) printf 'mongodb-kubernetes.v1.13.0' ;;
+  *clusterserviceversions*"{.status.phase}"*) printf Succeeded ;;
+  *go-template*) printf 'tls.crt\ntls.key\nca.crt\npassword\n' ;;
+  *"{.type}"*) printf kubernetes.io/tls ;;
+  *) exit 0 ;;
+esac
+OC
+chmod +x "${hooks}/bin/oc"
+pre() { env PATH="${hooks}/bin:${PATH}" NAMESPACE=x TLS_SECRETS="a b c" PASSWORD_SECRET=p PASSWORD_KEY=password TRUST_CM=t OPERATOR_INSTALL=true \
+          OPERATORGROUP= PACKAGE=mongodb-kubernetes SEARCH=mongot "$@" bash "${hooks}/preflight.sh" 2>&1; }
+# Fewer mongot pods means their volumes are deleted by the operator: refused unless it is asked for by name.
+out="$(pre FAKE_REPLICAS=3 WANT_REPLICAS=2 ALLOW_VOLUME_LOSS=false)"; rc=$?
+[[ $rc == 1 && "$out" == *"REFUSED: search.replicas would go from 3 to 2."*"search.allowVolumeLoss=true"*"Nothing was changed."* ]] \
+  && ok "the preflight refuses an upgrade to fewer mongot pods, and says what it would delete" || bad "preflight and fewer replicas (exit ${rc}): ${out##*$'\n'}"
+out="$(pre FAKE_REPLICAS=3 WANT_REPLICAS=0 ALLOW_VOLUME_LOSS=false)"; rc=$?
+[[ $rc == 1 && "$out" == *"would go from 3 to 0"* ]] && ok "and one to no pod at all" || bad "preflight and 0 replicas (exit ${rc})"
+out="$(pre FAKE_REPLICAS=3 WANT_REPLICAS=2 ALLOW_VOLUME_LOSS=true)"; rc=$?
+[[ $rc == 0 && "$out" == *"with search.allowVolumeLoss=true: the volumes of the pods that go are deleted"* && "$out" == *"all hand-made objects are present"* ]] \
+  && ok "with search.allowVolumeLoss=true it lets it through, and says what goes" || bad "preflight with allowVolumeLoss (exit ${rc})"
+for case in "FAKE_REPLICAS=3 WANT_REPLICAS=3" "FAKE_REPLICAS=3 WANT_REPLICAS=5" "WANT_REPLICAS=3"; do
+  out="$(pre ${case} ALLOW_VOLUME_LOSS=false)"; rc=$?
+  [[ $rc == 0 && "$out" != *REFUSED* ]] || bad "the preflight stopped ${case} (exit ${rc}): ${out##*$'\n'}"
+done
+ok "the same, more or a first install pass the preflight"
+
+gate() { env PATH="${hooks}/bin:${PATH}" NAMESPACE=x OPERATOR_INSTALL=true SUBSCRIPTION=mongodb-kubernetes PACKAGE=mongodb-kubernetes \
+           TARGET=mongodb-kubernetes.v1.13.0 SEARCH=mongot MONGOT_STS=mongot-search-0 MONGOT_REPLICAS=3 ENVOY_DEPLOY=mongot-search-lb-0 ENVOY_REPLICAS=2 \
+           LB_CERT_SECRET=a LB_CLIENT_CERT_SECRET=b TRUST_CM=t ROUTE= INTERVAL=1 "$@" bash "${hooks}/wait.sh" 2>&1; }
+FORBIDDEN="1 error occurred: * error creating/updating search statefulset x/mongot-search-0: StatefulSet.apps \"mongot-search-0\" is invalid: spec: Forbidden: updates to statefulset spec for fields other than 'replicas', 'ordinals', 'template', 'updateStrategy', 'revisionHistoryLimit', 'persistentVolumeClaimRetentionPolicy' and 'minReadySeconds' are forbidden"
+# A changed volume size: the resource is Failed and stays so. The gate does not wait out its budget (60 s here): it
+# says what changed and where the steps are.
+started=$SECONDS
+out="$(gate WAIT_SECONDS=60 FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi)"; rc=$?
+[[ $rc == 1 && $((SECONDS - started)) -lt 20 && "$out" == *"STOPPED: search.persistence.storage is now 300Gi and the StatefulSet mongot-search-0 still has 250Gi."*"volume-expansion-runbook.md"* ]] \
+  && ok "the gate names a changed volume size at once, and points to the runbook" || bad "the gate and a changed volume size (exit ${rc}, $((SECONDS - started)) s): ${out##*$'\n'}"
+# Failed for another reason, or with the sizes equal: the gate waits and fails as before, and does not blame the volumes.
+out="$(gate WAIT_SECONDS=3 FAKE_PHASE=Failed FAKE_MESSAGE="something else" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi)"; rc=$?
+out2="$(gate WAIT_SECONDS=3 FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=250Gi FAKE_HAVE_SIZE=250Gi)"; rc2=$?
+[[ $rc == 1 && $rc2 == 1 && "$out$out2" != *STOPPED* && "$out" == *"MongoDBSearch mongot Running: not within 3s"* && "$out2" == *"not within 3s"* ]] \
+  && ok "any other failure is waited for and reported as before" || bad "the gate and another failure (exit ${rc}, ${rc2})"
+rm -rf "${hooks}"
 
 # ------------------------------------------------------------------------------------------------ index names
 # monitoring.indexInfo: off by default, and when on a Deployment, its scripts, a Service and a ServiceMonitor of its

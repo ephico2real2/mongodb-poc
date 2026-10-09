@@ -176,7 +176,26 @@ spec:
                 [ -n "$g" ] && [ "$g" = "$(field "$MDBS" "$SEARCH" .status.observedGeneration)" ]
               }
               until_ok "MongoDBSearch ${SEARCH} reconciled at its current generation" "$INSPECT_MDBS" observed_ok
-              phase_ok() { [ "$(field "$MDBS" "$SEARCH" .status.phase)" = "Running" ]; }
+              # A changed volume size cannot reach the StatefulSet: Kubernetes forbids a change of its volume claim
+              # template, the operator says so, and the resource stays Failed until the volumes are grown and the
+              # StatefulSet is made again by hand. Waiting does not help: say what it is and where the steps are.
+              volume_size_changed() {
+                [ "$(field "$MDBS" "$SEARCH" .status.phase)" = "Failed" ] || return 1
+                case "$(field "$MDBS" "$SEARCH" .status.message)" in *"updates to statefulset spec for fields other than"*) ;; *) return 1 ;; esac
+                WANT_SIZE="$(field "$MDBS" "$SEARCH" '.spec.clusters[0].persistence.single.storage')"
+                HAVE_SIZE="$(field statefulsets.apps "$MONGOT_STS" '.spec.volumeClaimTemplates[0].spec.resources.requests.storage')"
+                [ -n "$WANT_SIZE" ] && [ -n "$HAVE_SIZE" ] && [ "$WANT_SIZE" != "$HAVE_SIZE" ]
+              }
+              phase_ok() {
+                [ "$(field "$MDBS" "$SEARCH" .status.phase)" = "Running" ] && return 0
+                if volume_size_changed; then
+                  printf '[wait] STOPPED: search.persistence.storage is now %s and the StatefulSet %s still has %s.\n' "$WANT_SIZE" "$MONGOT_STS" "$HAVE_SIZE" >&2
+                  printf '[wait] Nothing is broken: the mongot pods run and answer as before. The operator cannot change the size of a running StatefulSet.\n' >&2
+                  printf '[wait] Next: volume-expansion-runbook.md in the chart, from "After the sync". Then sync or upgrade again, and this gate passes.\n' >&2
+                  exit 1
+                fi
+                return 1
+              }
               until_ok "MongoDBSearch ${SEARCH} Running" "${INSPECT_MDBS}  (status.message: $(field "$MDBS" "$SEARCH" .status.message))" phase_ok
               lb_ok() { [ "$(field "$MDBS" "$SEARCH" .status.loadBalancer.phase)" = "Running" ]; }
               until_ok "the managed load balancer Running" "$INSPECT_MDBS" lb_ok
