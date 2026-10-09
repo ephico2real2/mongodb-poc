@@ -49,7 +49,7 @@ NS=$TargetNamespace                       # Part 2 uses $NS
 # The script is a file of the chart. From a checkout of this repository, at its root:
 PREREQ=chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
 # From the published chart, with no clone (chart 0.3.3 and later):
-#   helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.6/mongodb-search-helm-0.3.6.tgz --untar
+#   helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.7/mongodb-search-helm-0.3.7.tgz --untar
 #   PREREQ=mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
 
 mkdir -m 700 $TargetNamespace             # the script never creates it
@@ -164,7 +164,7 @@ From the published package, with no clone of the repository:
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.6/mongodb-search-helm-0.3.6.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.7/mongodb-search-helm-0.3.7.tgz \
   -n $NS -f my-values.yaml --timeout 20m
 ```
 
@@ -290,6 +290,7 @@ Then delete the decrypted key files (runbook Step 7d).
 | `wait` log stops at `mongot …: N ready` | mongot pods are not Ready | `oc get pods -n $NS`; `oc describe pod`; check storage class and memory |
 | `wait` log stops at `Envoy mounts …` | The operator did not find the TLS secrets | Check `tls.certsSecretPrefix` and `search.name` against the secret names |
 | Helm reports a timeout while the Jobs are still running | `--timeout` too short | Rerun with `--timeout 20m` |
+| `$listSearchIndexes` reports every index `PENDING` and not queryable, while searches return results | The mongot pods were all paused for over 2 hours (a suspended lab, for example). Their heartbeat rows were removed, and mongot 1.70.1 does not write them again while it runs: each pod logs `Failed to update server state entry` every 30 seconds | Restart the mongot pods one at a time, each Ready before the next: `oc delete pod <name>-search-0-0 -n $NS`, and so on. Measured on the lab on Oct 9, 2026: every index `READY` and queryable on 3 hosts afterwards. mongot's own state of an index, on the dashboard, was right throughout |
 
 To read any Job's log:
 
