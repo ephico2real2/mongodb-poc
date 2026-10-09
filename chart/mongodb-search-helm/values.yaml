@@ -149,6 +149,29 @@ monitoring:
   # The same dashboard for Grafana: a ConfigMap labelled grafana_dashboard: "1", which a Grafana dashboard
   # sidecar loads. Without such a Grafana the ConfigMap is simply unused. Off by default.
   grafanaDashboard: false
+  # The names of the search indexes, as metrics: mongot's own metrics name an index by its id only. A small
+  # Deployment asks the source deployment for its search indexes when Prometheus scrapes it and serves
+  # mongodb_search_index_info{indexId_logString, database, collection, index_name, stored_source}. Off by default:
+  # it needs a database user of its own on the source, and that user's password in a Secret made by hand.
+  # The user needs listDatabases on the cluster, and listCollections and listSearchIndexes on every database; give
+  # it no right to read a document. Do not use the sync user (source.username).
+  indexInfo:
+    enabled: false
+    # The stock MongoDB Community Server image: it has python3 and mongosh, and nothing is built for this.
+    image: quay.io/mongodb/mongodb-community-server:8.3.4-ubi9
+    username: search-index-info
+    passwordSecret:
+      name: search-index-info-password
+      key: password
+    # Added to the connection string, for example "replicaSet=rs0". TLS, the CA and the hosts come from the values
+    # the MongoDBSearch uses: source.hostAndPorts and tls.trustBundleConfigMap.
+    uriOptions: ""
+    # How long an answer of the source is served before it is asked again, and how often Prometheus scrapes.
+    cacheSeconds: 60
+    interval: 60s
+    resources:
+      requests: {cpu: 10m, memory: 96Mi}
+      limits: {memory: 384Mi}
 
 # The post-install gate: returns when the operator's CSV is Succeeded, the MongoDBSearch has observed its current
 # generation and is Running, mongot and Envoy are rolled out to the requested replicas, Envoy mounts the expected

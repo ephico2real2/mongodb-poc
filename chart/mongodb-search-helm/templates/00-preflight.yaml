@@ -3,7 +3,8 @@ The preflight: fails the install, before anything is created, when a hand-made o
 missing or lacks a key. The operator finds the three TLS secrets by name and does not report a wrong name, so
 without this a typo shows up later as pods that never start.
 
-It reads five objects by name (the Role names them; Kubernetes has no metadata-only read for Secrets) and prints
+It reads five objects by name, six with monitoring.indexInfo (the Role names them; Kubernetes has no
+metadata-only read for Secrets), and prints
 types and key names, never contents. A pre-install/pre-upgrade hook, so its RBAC are hooks too, created first
 (weight -10) and removed once the hooks have succeeded; a failed Job is kept for its log. Argo CD: PreSync.
 */ -}}
@@ -46,6 +47,9 @@ rules:
       - {{ include "mongodb-search-helm.lbCertSecret" . | quote }}
       - {{ include "mongodb-search-helm.lbClientCertSecret" . | quote }}
       - {{ .Values.source.passwordSecret.name | quote }}
+      {{- if .Values.monitoring.indexInfo.enabled }}
+      - {{ .Values.monitoring.indexInfo.passwordSecret.name | quote }}
+      {{- end }}
     verbs: ["get"]
   - apiGroups: [""]
     resources: ["configmaps"]
@@ -129,6 +133,13 @@ spec:
               value: {{ .Values.source.passwordSecret.key | default "password" | quote }}
             - name: TRUST_CM
               value: {{ .Values.tls.trustBundleConfigMap | quote }}
+            {{- if .Values.monitoring.indexInfo.enabled }}
+            # monitoring.indexInfo: the password of its own database user, made by hand like the others.
+            - name: INDEX_INFO_SECRET
+              value: {{ .Values.monitoring.indexInfo.passwordSecret.name | quote }}
+            - name: INDEX_INFO_KEY
+              value: {{ .Values.monitoring.indexInfo.passwordSecret.key | quote }}
+            {{- end }}
             - name: OPERATOR_INSTALL
               value: {{ .Values.operator.install | quote }}
             - name: OPERATORGROUP
@@ -168,6 +179,7 @@ spec:
                 [ -z "$t" ] || [ "$t" = "kubernetes.io/tls" ] || log "note: secret ${s} has type ${t}; the runbook creates kubernetes.io/tls"
               done
               need_keys secret "$PASSWORD_SECRET" "$PASSWORD_KEY"
+              [ -z "${INDEX_INFO_SECRET:-}" ] || need_keys secret "$INDEX_INFO_SECRET" "$INDEX_INFO_KEY"
               need_keys configmap "$TRUST_CM" ca.crt
 
               if [ "$OPERATOR_INSTALL" = "true" ]; then
