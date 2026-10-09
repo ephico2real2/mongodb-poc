@@ -160,7 +160,7 @@ Chart 0.3.1 kept those 27 panels and gave every line a query of its own: 90 quer
 
 Since chart 0.3.6 it has 45 panels in 7 sections (13 stat, 22 time series, a pie, 3 tables, 2 status histories and 4 bar gauges) and 128 queries, produced the same way on Oct 8, 2026. A Grafana bar gauge becomes a Perses bar chart; the 29 earlier panels came out identical to before.
 
-Since chart 0.3.7 it has 47 panels in 7 sections (17 stat, 22 time series, a pie, 3 tables, 2 status histories and 2 bar gauges) and 126 queries.
+Since chart 0.3.7 it has 47 panels in 7 sections (17 stat, 22 time series, a pie, 3 tables, 2 status histories and 2 bar gauges) and 126 queries. Chart 0.3.8 changed how the Grafana form draws its tables and bars (column widths, table height, the type of a bar's name) after it was drawn in a Grafana 12.3.1 on Oct 9, 2026: 47 panels in 7 rows listed, and 126 of 126 queries answered through its Thanos Querier data source.
 
 | Section | Panels |
 | --- | --- |
