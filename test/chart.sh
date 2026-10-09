@@ -436,14 +436,29 @@ grep -q 'name: INDEX_INFO_SECRET' <<<"$pre" && [[ "$(grep -c '"search-index-info
   && ok "the preflight checks the exporter's password Secret, only when the exporter is on" || bad "preflight and index info"
 refused "a question mark in indexInfo.uriOptions" --set monitoring.indexInfo.uriOptions='?x=1'
 refused "an unknown key under indexInfo" --set monitoring.indexInfo.user=x
+# Prometheus refuses a scrape timeout (25s here) longer than the interval, and the operator would then drop the
+# ServiceMonitor in silence: the render fails instead, whatever the unit, and says why.
+short="$(render --set monitoring.indexInfo.enabled=true --set monitoring.indexInfo.interval=15s)"
+{ grep -q 'monitoring.indexInfo.interval is 15s: it must be at least 25s' <<<"$short" \
+  && ! render --set monitoring.indexInfo.enabled=true --set monitoring.indexInfo.interval=0m >/dev/null 2>&1 \
+  && render --set monitoring.indexInfo.enabled=true --set monitoring.indexInfo.interval=25s | grep -q '^      interval: 25s$' \
+  && render --set monitoring.indexInfo.enabled=true --set monitoring.indexInfo.interval=2m | grep -q '^      interval: 2m$' \
+  && render --set monitoring.indexInfo.interval=15s >/dev/null 2>&1; } \
+  && ok "an indexInfo.interval shorter than the 25s scrape timeout is refused, and only when the exporter is on" || bad "indexInfo.interval and the scrape timeout"
+# mongosh's telemetry is forbidden by its global configuration file, the one place it reads that from.
+{ grep -q -A3 '^  mongosh.conf: |$' <<<"$i" && grep -q '^      forceDisableTelemetry: true$' <<<"$i" \
+  && grep -q 'mountPath: /etc/mongosh.conf, subPath: mongosh.conf, readOnly: true' <<<"$i"; } \
+  && ok "mongosh's telemetry is forbidden in its global configuration file" || bad "mongosh.conf of the index info exporter"
 
-# The exporter itself, with a stand-in mongosh: the page it serves, a failure answered 503 and never old names, one
-# listing for several scrapes, and the password in no argument list.
+# The exporter itself, with a stand-in mongosh: the page it serves (for a name with a quote, a backslash, a newline,
+# a letter outside ASCII and U+2028, a line separator to Python and not to JSON), a failure answered 503 and never old
+# names, a mongosh that hangs answered 503 at its timeout, one listing for several scrapes, and the password in no
+# argument list.
 python3 - "${CHART}/files/index-info-exporter.py" <<'EXPORTER' && ok "the exporter serves the index names, fails the scrape when the source cannot be asked, and keeps the password out of arguments" || bad "the index info exporter"
 import json, os, pathlib, socket, stat, subprocess, sys, tempfile, time, urllib.error, urllib.request
 work = pathlib.Path(tempfile.mkdtemp()); (work / "bin").mkdir()
 answer = {"collections": 2, "indexes": [
-    {"id": "aaaaaaaaaaaaaaaaaaaaaaaa", "database": "shop", "collection": "items", "name": 'a "quoted" \\ name', "storedSource": "include", "storedSourcePaths": 3, "hosts": 3},
+    {"id": "aaaaaaaaaaaaaaaaaaaaaaaa", "database": "shop", "collection": "items", "name": 'a "quoted" \\ name\nline two \u2028 \u00e9', "storedSource": "include", "storedSourcePaths": 3, "hosts": 3},
     {"id": "bbbbbbbbbbbbbbbbbbbbbbbb", "database": "shop", "collection": "orders", "name": "default", "storedSource": "none", "storedSourcePaths": 0, "hosts": 0}]}
 fake = work / "bin" / "mongosh"
 fake.write_text(f"""#!{sys.executable}
@@ -451,7 +466,10 @@ import json, os, sys
 open({str(work / 'calls')!r}, "a").write(json.dumps({{"argv": sys.argv[1:], "uri": os.environ.get("SOURCE_URI", "")}}) + "\\n")
 if os.path.exists({str(work / 'fail')!r}):
     sys.stderr.write("MongoServerError: Authentication failed.\\n"); sys.exit(1)
-print("a line mongosh may print first"); print("RESULT " + {json.dumps(json.dumps(answer))})
+if os.path.exists({str(work / 'hang')!r}):
+    import time; time.sleep(30)
+# As mongosh writes it: UTF-8, and U+2028 as itself (JSON.stringify does not escape it).
+sys.stdout.buffer.write(("a line mongosh may print first\\nRESULT " + {json.dumps(json.dumps(answer, ensure_ascii=False))} + "\\n").encode("utf-8"))
 """)
 fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
 (work / "password").write_text("p@ss/w:rd\n")
@@ -459,7 +477,7 @@ with socket.socket() as s:
     s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]
 env = dict(os.environ, PATH=f"{work}/bin:{os.environ['PATH']}", SOURCE_HOSTS="h1:27017,h2:27017", SOURCE_USERNAME="search-index-info",
            SOURCE_PASSWORD_FILE=str(work / "password"), SOURCE_CA_FILE="/etc/source-ca/ca.crt", SOURCE_URI_OPTIONS="replicaSet=rs0",
-           LIST_SCRIPT="/app/index-info-list.js", CACHE_SECONDS="1", PORT=str(port))
+           LIST_SCRIPT="/app/index-info-list.js", CACHE_SECONDS="1", TIMEOUT_SECONDS="2", PORT=str(port))
 server = subprocess.Popen([sys.executable, sys.argv[1]], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 def get(path):
     try:
@@ -477,7 +495,7 @@ try:
     status, text = get("/metrics"); get("/metrics")
     calls = [json.loads(l) for l in (work / "calls").read_text().splitlines()]
     ok &= status == 200 and len(calls) == 1                                   # the second scrape was answered from the first
-    ok &= 'mongodb_search_index_info{indexId_logString="aaaaaaaaaaaaaaaaaaaaaaaa",database="shop",collection="items",index_name="a \\"quoted\\" \\\\ name",stored_source="include"} 1' in text
+    ok &= 'mongodb_search_index_info{indexId_logString="aaaaaaaaaaaaaaaaaaaaaaaa",database="shop",collection="items",index_name="a \\"quoted\\" \\\\ name\\nline two \u2028 \u00e9",stored_source="include"} 1' in text
     ok &= 'mongodb_search_index_stored_source_paths{indexId_logString="aaaaaaaaaaaaaaaaaaaaaaaa"} 3' in text
     ok &= 'mongodb_search_index_listed_hosts{indexId_logString="bbbbbbbbbbbbbbbbbbbbbbbb"} 0' in text and "mongodb_search_index_info_collections 2" in text
     ok &= "mongodb_search_index_info_collect_timestamp_seconds " in text and text.endswith("\n")
@@ -492,6 +510,11 @@ try:
     ok &= get("/healthz")[0] == 200 and get("/other")[0] == 404
     (work / "fail").unlink()
     ok &= get("/metrics")[0] == 200                                           # and it recovers by itself
+    # A mongosh that hangs is ended at TIMEOUT_SECONDS (2 here, 20 in the pod, under the 25 of the scrape) and answered 503.
+    (work / "hang").write_text(""); time.sleep(1.2); started = time.time()
+    ok &= get("/metrics")[0] == 503 and 1.5 < time.time() - started < 8
+    (work / "hang").unlink()
+    ok &= get("/metrics")[0] == 200
 finally:
     server.kill()
 sys.exit(0 if ok else 1)

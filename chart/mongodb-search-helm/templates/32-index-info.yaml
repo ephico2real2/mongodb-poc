@@ -12,6 +12,15 @@ document. Not the sync user: that one may read every collection and write mongot
 */ -}}
 {{- if .Values.monitoring.indexInfo.enabled }}
 {{- $name := printf "%s-index-info" .Values.search.name }}
+{{- /* The scrape timeout below is 25s. Prometheus refuses a timeout longer than its interval, and the Prometheus
+       operator then drops the ServiceMonitor without a word to helm: refused here instead. */ -}}
+{{- $interval := .Values.monitoring.indexInfo.interval }}
+{{- $seconds := mul (int (regexFind "^[0-9]+" $interval)) (get (dict "s" 1 "m" 60 "h" 3600) (regexFind "[smh]$" $interval)) }}
+{{- if lt $seconds 25 }}
+{{- fail (printf "monitoring.indexInfo.interval is %s: it must be at least 25s, the exporter's scrape timeout" $interval) }}
+{{- end }}
+{{- /* mongosh's telemetry is on unless it is told otherwise, and only its global file can forbid it. */ -}}
+{{- $mongoshConf := "mongosh:\n  enableTelemetry: false\n  forceDisableTelemetry: true\n" }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -25,6 +34,8 @@ data:
     {{- .Files.Get "files/index-info-exporter.py" | nindent 4 }}
   index-info-list.js: |
     {{- .Files.Get "files/index-info-list.js" | nindent 4 }}
+  mongosh.conf: |
+    {{- $mongoshConf | trim | nindent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -46,7 +57,7 @@ spec:
         app: {{ $name }}
       annotations:
         # The scripts are read at start: a changed script is a new pod.
-        checksum/scripts: {{ printf "%s%s" (.Files.Get "files/index-info-exporter.py") (.Files.Get "files/index-info-list.js") | sha256sum }}
+        checksum/scripts: {{ printf "%s%s%s" (.Files.Get "files/index-info-exporter.py") (.Files.Get "files/index-info-list.js") $mongoshConf | sha256sum }}
     spec:
       securityContext:
         runAsNonRoot: true
@@ -86,6 +97,8 @@ spec:
               drop: [ALL]
           volumeMounts:
             - {name: scripts, mountPath: /app, readOnly: true}
+            # mongosh's global configuration file: the one place it reads forceDisableTelemetry from.
+            - {name: scripts, mountPath: /etc/mongosh.conf, subPath: mongosh.conf, readOnly: true}
             - {name: password, mountPath: /etc/index-info, readOnly: true}
             - {name: source-ca, mountPath: /etc/source-ca, readOnly: true}
             - {name: tmp, mountPath: /tmp}

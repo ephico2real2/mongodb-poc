@@ -169,6 +169,7 @@ monitoring:
     # the MongoDBSearch uses: source.hostAndPorts and tls.trustBundleConfigMap.
     uriOptions: ""
     # How long an answer of the source is served before it is asked again, and how often Prometheus scrapes.
+    # The interval is at least 25s, the scrape timeout: Prometheus refuses a timeout longer than its interval.
     cacheSeconds: 60
     interval: 60s
     resources:

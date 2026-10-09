@@ -48,8 +48,9 @@ def collect():
     # The connection string goes in the environment of the one child process, not in an argument list.
     env = dict(os.environ, SOURCE_URI=source_uri(), HOME=os.environ.get("HOME", "/tmp"))
     done = subprocess.run(["mongosh", "--nodb", "--quiet", "--norc", "--file", LIST_SCRIPT], env=env, capture_output=True,
-                          text=True, timeout=TIMEOUT_SECONDS)
-    for line in done.stdout.splitlines():
+                          encoding="utf-8", timeout=TIMEOUT_SECONDS)
+    # split("\n"), not splitlines(): a name may hold U+2028, U+2029 or U+0085, where splitlines() would cut the line.
+    for line in done.stdout.split("\n"):
         if line.startswith("RESULT "):
             return json.loads(line[len("RESULT "):])
     # mongosh's own words say why (a refused login, an unknown host), and never hold the password.
