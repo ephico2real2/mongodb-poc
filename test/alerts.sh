@@ -18,8 +18,16 @@ helm template mongot chart/mongodb-search-helm -n dvh-gp6-rnd -f chart/mongodb-s
   | awk '/^---/ {doc = 0; spec = 0} /^kind: PrometheusRule$/ {doc = 1} doc && /^spec:$/ {spec = 1; next} spec {sub(/^  /, ""); print}' \
   > "${work}/rules.yaml"
 [[ -s "${work}/rules.yaml" ]] || { echo "the chart rendered no PrometheusRule" >&2; exit 1; }
-cp test/alerts.test.yaml "${work}/"
+# The same rules with three values changed: the levels of MongotDataPathFillingUp are values of the chart.
+helm template mongot chart/mongodb-search-helm -n dvh-gp6-rnd -f chart/mongodb-search-helm/examples/values-dvh-gp6-rnd.yaml \
+    --set monitoring.alerts.dataPathUsed.info=null --set monitoring.alerts.dataPathUsed.warning=60 --set monitoring.alerts.dataPathUsed.critical=75 \
+    -s templates/30-monitoring.yaml \
+  | awk '/^---/ {doc = 0; spec = 0} /^kind: PrometheusRule$/ {doc = 1} doc && /^spec:$/ {spec = 1; next} spec {sub(/^  /, ""); print}' \
+  > "${work}/rules-other-levels.yaml"
+[[ -s "${work}/rules-other-levels.yaml" ]] || { echo "the chart rendered no PrometheusRule with other levels" >&2; exit 1; }
+cp test/alerts.test.yaml test/alerts.other-levels.test.yaml "${work}/"
 chmod -R a+rX "${work}"
 
 "${ENGINE}" run --rm -v "${work}:/w:ro" --workdir /w --entrypoint promtool "${IMAGE}" check rules rules.yaml
 "${ENGINE}" run --rm -v "${work}:/w:ro" --workdir /w --entrypoint promtool "${IMAGE}" test rules alerts.test.yaml
+"${ENGINE}" run --rm -v "${work}:/w:ro" --workdir /w --entrypoint promtool "${IMAGE}" test rules alerts.other-levels.test.yaml

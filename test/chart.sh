@@ -365,7 +365,31 @@ o="$(objects --set monitoring.serviceMonitors.enabled=true --set monitoring.aler
   && ok "monitoring objects follow search.name" || bad "monitoring object names: ${o//$'\n'/ }"
 m="$(render --set monitoring.alerts.enabled=true --set search.name=srch -s templates/30-monitoring.yaml)"
 grep -q 'job=~"srch-search-0-svc|srch-envoy-stats"' <<<"$m" && ok "the no-traffic alert's job pattern follows search.name" || bad "alert job pattern"
-[[ "$(grep -c -- '- alert:' <<<"$m")" == 9 && "$(grep -c -- '- record:' <<<"$m")" == 3 ]] && ok "nine alerts and three recording rules" || bad "alert or rule count changed"
+[[ "$(grep -c -- '- alert:' <<<"$m")" == 12 && "$(grep -c -- '- record:' <<<"$m")" == 4 ]] && ok "twelve alerts and four recording rules" || bad "alert or rule count changed"
+# The volume alert's three levels are values. As shipped: 70, 80 and 90, each level up to the next one's.
+vol() { render -s templates/30-monitoring.yaml "$@" 2>&1 | grep -A12 -- '- alert: MongotDataPathFillingUp' | grep -E 'ratio >=|ratio <|severity:|for:' | tr -s ' ' | tr '\n' '|'; }
+[[ "$(vol)" == ' mongot:data_path_used:ratio >= 0.7| and (mongot:data_path_used:ratio < 0.8 or mongot:data_path_used:ratio offset 15m < 0.8)| for: 30m| severity: info| mongot:data_path_used:ratio >= 0.8| and (mongot:data_path_used:ratio < 0.9 or mongot:data_path_used:ratio offset 5m < 0.9)| for: 15m| severity: warning| expr: mongot:data_path_used:ratio >= 0.9| for: 5m| severity: critical|' ]] \
+  && ok "the volume alert has three levels, at 70, 80 and 90, each up to the next" || bad "the volume alert's levels: $(vol)"
+# A changed level moves both the level and the end of the one below it.
+[[ "$(vol --set monitoring.alerts.dataPathUsed.warning=77)" == *'ratio >= 0.7| and (mongot:data_path_used:ratio < 0.77 or mongot:data_path_used:ratio offset 15m < 0.77)|'*'ratio >= 0.77|'* ]] \
+  && ok "a level set in the values moves the level and the end of the one below" || bad "a changed level: $(vol --set monitoring.alerts.dataPathUsed.warning=77)"
+# null leaves a level out, and the level below it runs up to the next one that is left; all three null, no group.
+[[ "$(vol --set monitoring.alerts.dataPathUsed.warning=null)" == ' mongot:data_path_used:ratio >= 0.7| and (mongot:data_path_used:ratio < 0.9 or mongot:data_path_used:ratio offset 5m < 0.9)| for: 30m| severity: info| expr: mongot:data_path_used:ratio >= 0.9| for: 5m| severity: critical|' ]] \
+  && ok "a level set to null is left out, and the one below runs up to the next" || bad "a null level: $(vol --set monitoring.alerts.dataPathUsed.warning=null)"
+off="$(render -s templates/30-monitoring.yaml --set monitoring.alerts.dataPathUsed.info=null --set monitoring.alerts.dataPathUsed.warning=null --set monitoring.alerts.dataPathUsed.critical=null)"
+{ ! grep -q 'mongot.volume\|MongotDataPathFillingUp\|data_path_used' <<<"$off" && [[ "$(grep -c -- '- alert:' <<<"$off")" == 9 ]]; } \
+  && ok "all three levels null leaves the volume alert out and the nine others in" || bad "the volume alert with every level null"
+# The levels must rise (the template says which does not), and be numbers from 0 to 100 (the schema).
+grep -q 'monitoring.alerts.dataPathUsed.critical is 90: it must be above warning (95)' <<<"$(render --set monitoring.alerts.dataPathUsed.warning=95)" \
+  && grep -q 'monitoring.alerts.dataPathUsed.warning is 80: it must be above info (80)' <<<"$(render --set monitoring.alerts.dataPathUsed.info=80)" \
+  && ok "levels that do not rise are refused, by name" || bad "levels out of order are rendered"
+refused "a volume level above 100" --set monitoring.alerts.dataPathUsed.critical=120
+refused "a volume level that is not a whole number" --set monitoring.alerts.dataPathUsed.info=72.5
+refused "a volume level of 0, which would always fire" --set monitoring.alerts.dataPathUsed.info=0
+refused "an unknown volume level" --set monitoring.alerts.dataPathUsed.page=95
+# The whole map absent (a release's values from before 0.3.11 kept by --reuse-values): refused by name.
+grep -q 'monitoring.alerts.dataPathUsed is missing' <<<"$(render --set monitoring.alerts.dataPathUsed=null)" \
+  && ok "values without dataPathUsed at all (--reuse-values from 0.3.10) are refused by name" || bad "values without dataPathUsed: $(render --set monitoring.alerts.dataPathUsed=null 2>&1 | grep -m1 -i error)"
 # The five index alerts name the index by the label mongot's metrics carry. What they do is tested with promtool,
 # by test/alerts.sh.
 [[ "$(grep -c 'indexId_logString }}' <<<"$m")" == 5 ]] && grep -q 'name: mongot.indexes' <<<"$m" && ok "the five index alerts name their index" || bad "index alerts"
