@@ -243,6 +243,14 @@ tests:
         values: '1x30'
       - series: 'mongot_index_stats_indexStatusCode{indexId_logString="r", generationId_logString="r-2", pod="mongot-search-0-2", status="INITIAL_SYNC"}'
         values: '1x30'
+      # mongot reports every state of a generation, 1 for the one it is in and 0 for the others: a STEADY series at 0
+      # is a pod that is NOT steady, and must not be counted as one.
+      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="r", generationId_logString="r-2", pod="mongot-search-0-0", status="STEADY"}'
+        values: '0x30'
+      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="r", generationId_logString="r-2", pod="mongot-search-0-1", status="STEADY"}'
+        values: '0x30'
+      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="r", generationId_logString="r-2", pod="mongot-search-0-2", status="STEADY"}'
+        values: '0x30'
     alert_rule_test:
       - eval_time: 12m
         alertname: MongotIndexesDifferByPod
@@ -253,7 +261,8 @@ tests:
 
   # Index w is written to for 25 minutes: read at its own instant, each pod has another count at every reading,
   # and that is no alert. Index q was written to for 5 minutes and then left one document short on one pod: it is
-  # compared once it has been quiet for 10 minutes, and the alert fires 10 minutes after that.
+  # compared once it has been quiet for 10 minutes, and the alert fires 10 minutes after that. Its series carry the
+  # generation label, as every series of mongot's does: the alert names the index, not the generation.
   - interval: 1m
     input_series:
       - series: 'mongot_index_stats_numLuceneDocs{indexId_logString="w", pod="mongot-search-0-0"}'
@@ -274,23 +283,23 @@ tests:
         values: '1x30'
       - series: 'mongot_index_stats_indexStatusCode{indexId_logString="w", pod="mongot-search-0-2", status="STEADY"}'
         values: '1x30'
-      - series: 'mongot_index_stats_numLuceneDocs{indexId_logString="q", pod="mongot-search-0-0"}'
+      - series: 'mongot_index_stats_numLuceneDocs{indexId_logString="q", generationId_logString="q-f6-u0-a0", pod="mongot-search-0-0"}'
         values: '0+100x5 500x25'
-      - series: 'mongot_index_stats_numLuceneDocs{indexId_logString="q", pod="mongot-search-0-1"}'
+      - series: 'mongot_index_stats_numLuceneDocs{indexId_logString="q", generationId_logString="q-f6-u0-a0", pod="mongot-search-0-1"}'
         values: '0+100x5 500x25'
-      - series: 'mongot_index_stats_numLuceneDocs{indexId_logString="q", pod="mongot-search-0-2"}'
+      - series: 'mongot_index_stats_numLuceneDocs{indexId_logString="q", generationId_logString="q-f6-u0-a0", pod="mongot-search-0-2"}'
         values: '0+90x5 499x25'
-      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="q", pod="mongot-search-0-0"}'
+      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="q", generationId_logString="q-f6-u0-a0", pod="mongot-search-0-0"}'
         values: '700x30'
-      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="q", pod="mongot-search-0-1"}'
+      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="q", generationId_logString="q-f6-u0-a0", pod="mongot-search-0-1"}'
         values: '700x30'
-      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="q", pod="mongot-search-0-2"}'
+      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="q", generationId_logString="q-f6-u0-a0", pod="mongot-search-0-2"}'
         values: '700x30'
-      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="q", pod="mongot-search-0-0", status="STEADY"}'
+      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="q", generationId_logString="q-f6-u0-a0", pod="mongot-search-0-0", status="STEADY"}'
         values: '1x30'
-      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="q", pod="mongot-search-0-1", status="STEADY"}'
+      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="q", generationId_logString="q-f6-u0-a0", pod="mongot-search-0-1", status="STEADY"}'
         values: '1x30'
-      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="q", pod="mongot-search-0-2", status="STEADY"}'
+      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="q", generationId_logString="q-f6-u0-a0", pod="mongot-search-0-2", status="STEADY"}'
         values: '1x30'
     alert_rule_test:
       - eval_time: 12m
@@ -307,7 +316,8 @@ tests:
               summary: "Search index q is not the same on every mongot pod"
               description: "Every mongot pod holds every index, so the same search can return different results depending on the pod that answers. The dashboard's table \"Each mongot pod, now\" shows which pod differs."
 
-  # Two pods, not three: an index both hold, with the same documents, is no alert. The pods are counted, not assumed.
+  # Two pods, not three: an index both hold, with the same documents, is no alert; one a document short on a pod is.
+  # The pods are counted, not assumed, in both branches.
   - interval: 1m
     input_series:
       - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="t", pod="mongot-search-0-0"}'
@@ -322,10 +332,29 @@ tests:
         values: '10x20'
       - series: 'mongot_index_stats_indexStatusCode{indexId_logString="t", pod="mongot-search-0-1", status="STEADY"}'
         values: '1x20'
+      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="u", pod="mongot-search-0-0"}'
+        values: '100x20'
+      - series: 'mongot_index_stats_numLuceneDocs{indexId_logString="u", pod="mongot-search-0-0"}'
+        values: '10x20'
+      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="u", pod="mongot-search-0-0", status="STEADY"}'
+        values: '1x20'
+      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="u", pod="mongot-search-0-1"}'
+        values: '100x20'
+      - series: 'mongot_index_stats_numLuceneDocs{indexId_logString="u", pod="mongot-search-0-1"}'
+        values: '9x20'
+      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="u", pod="mongot-search-0-1", status="STEADY"}'
+        values: '1x20'
     alert_rule_test:
-      - eval_time: 12m
+      - eval_time: 9m
         alertname: MongotIndexesDifferByPod
         exp_alerts: []
+      - eval_time: 12m
+        alertname: MongotIndexesDifferByPod
+        exp_alerts:
+          - exp_labels: {severity: warning, indexId_logString: u}
+            exp_annotations:
+              summary: "Search index u is not the same on every mongot pod"
+              description: "Every mongot pod holds every index, so the same search can return different results depending on the pod that answers. The dashboard's table \"Each mongot pod, now\" shows which pod differs."
 
   # Failed searches on index a for long enough; none on b.
   - interval: 1m

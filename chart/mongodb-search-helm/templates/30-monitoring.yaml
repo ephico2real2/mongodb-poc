@@ -204,8 +204,8 @@ spec:
           # An index some pod does not report; or one whose document count is not the same on every pod, when it can
           # be compared: STEADY on every pod, and not written to for 10 minutes.
           # - Not written to: each pod is read at its own instant, so the counts of an index that is being written
-          #   to never agree. On the lab, two inserts a second kept three pods 17 to 24 documents apart at every
-          #   one of 53 readings, and the alert without this condition fired after its 10 minutes.
+          #   to never agree. On the lab, at two inserts a second, the readings of the three pods were 17 to 24
+          #   documents apart at each of 53, and the alert without this condition fired after its 10 minutes.
           # - STEADY: every pod builds an index at its own pace, and a rebuild or a recovery that is not transient
           #   keeps the old generation beside the new one (the label generationId_logString), so a generation is
           #   compared with itself.
