@@ -32,6 +32,15 @@ helm package "${pkg}/chart" -d "${pkg}" >/dev/null 2>&1
 packed="$(tar -tzf "${pkg}"/mongodb-search-helm-*.tgz 2>/dev/null)"
 grep -qx 'mongodb-search-helm/generate-mongodbsearch-prerequisites.sh' <<<"${packed}" \
   && ok "the package holds generate-mongodbsearch-prerequisites.sh" || bad "the package lacks the prerequisites script"
+# The volume script and the three documents on volumes and scaling travel with the chart too: they are what an
+# operator of the chart reads beside its values.
+for f in expand-mongot-volumes.sh volumes.md scaling.md volume-expansion-runbook.md; do
+  grep -qx "mongodb-search-helm/${f}" <<<"${packed}" || bad "the package lacks ${f}"
+done
+ok "the package holds the volume script, volumes.md, scaling.md and the expansion runbook"
+# The hooks send their reader to two of those documents by name.
+grep -q 'volume-expansion-runbook.md' "${CHART}/templates/40-wait.yaml" && grep -q 'volumes.md' "${CHART}/templates/00-preflight.yaml" \
+  && ok "the gate names the expansion runbook and the preflight names volumes.md" || bad "a hook no longer names its document"
 grep -qE '\.secret\.yaml$|\.configmap\.yaml$|\.pem$|\.key$|\.pass$|left\.crt$' <<<"${packed}" \
   && bad "the package holds a key, a certificate or a passphrase file: $(grep -E 'secret|configmap|left|pass' <<<"${packed}" | tr '\n' ' ')" \
   || ok ".helmignore keeps keys, certificates and passphrase files out of the package"
