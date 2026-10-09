@@ -118,7 +118,14 @@ cluster() {
   done
   : > "${FAKE}/calls"
 }
-run() { env PATH="${work}/bin:${PATH}" TargetNamespace="${NS}" EXPAND_INTERVAL=1 EXPAND_PENDING_GRACE=2 "${SH}" "${SCRIPT}" "$@" 2>&1; }
+# --wait 20 unless the test names its own: a script that waited for what never comes would otherwise hold a test
+# for the 15 minutes of its default.
+run() {
+  local limit="--wait 20" a
+  for a in "$@"; do [[ "$a" != --wait ]] || limit=""; done
+  # shellcheck disable=SC2086
+  env PATH="${work}/bin:${PATH}" TargetNamespace="${NS}" EXPAND_INTERVAL=1 EXPAND_PENDING_GRACE=2 "${SH}" "${SCRIPT}" "$@" ${limit} 2>&1
+}
 writes() { grep -c -E '^(patch|delete|scale|apply|create|replace|edit|annotate|label) ' "${FAKE}/calls"; }
 patched() { grep '^patch ' "${FAKE}/calls" | awk '{print $3}' | sed 's/.*-//' | tr '\n' ' '; }
 never_harmful() {  # no call that would change the number of pods, a resource, or delete anything but a pod or, orphaned, the StatefulSet
