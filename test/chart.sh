@@ -182,13 +182,13 @@ for x in g["panels"]:
             "Each index": ["Type", "Stored source", "Vector memory"],
             "Each index, now": ["Pods STEADY", "Lucene docs", "Size", "Bytes per doc", "Growth, 24 h"],
             "Each index, in the last hour": ["Searches", "Failed searches", "Batch time", "Sync errors", "Lag, now"],
-            "What stored source adds": ["Stored source", "Size", "Without it", "It adds", "Added per doc"]}[x["title"]]
+            "What stored source adds": ["Stored source", "Size", "Compared with", "Without it", "It adds", "Added per doc"]}[x["title"]]
         # Widths that hold every header in Grafana, whose header type is wider than the console's, and that add up to
         # no more than the 876 pixels of table the console drew on a page 1,280 wide. The name's column is 290.
         ok &= [c["width"] for c in cols[1:]] == {"Each index": [290, 215, 70, 125, 135],
                                                  "Each index, now": [290, 125, 115, 80, 125, 125],
                                                  "Each index, in the last hour": [290, 95, 130, 110, 105, 90],
-                                                 "What stored source adds": [290, 125, 80, 110, 100, 130]}[x["title"]]
+                                                 "What stored source adds": [290, 110, 75, 120, 80, 80, 115]}[x["title"]]
         # The same widths in the Grafana source: the Perses file is generated from it, and a width changed there
         # without regenerating would otherwise pass.
         grafana_widths = {o["matcher"]["options"]: {q["id"]: q["value"] for q in o["properties"]}.get("custom.width")
@@ -201,6 +201,18 @@ for x in g["panels"]:
             e = x["targets"][0]["expr"]
             ok &= e.endswith(' or on () label_replace(vector(0), "index", "no index is known to store fields", "", "")')
             ok &= all("min by (database, collection, indexType)" in t["expr"] for t in x["targets"][2:])
+            # The index a row is compared with is named in a column of its own, between its size and that index's. Its
+            # name is a label, compared_with, that every query joins to its rows with the names, from one and the same
+            # expression: Perses joins the rows of a table by all their labels. bottomk keeps one candidate of a
+            # collection and type whatever the sizes: `== min by` keeps two of the same size, and the join then fails.
+            ok &= (cols[4]["name"], cols[4].get("header")) == ("compared_with", "Compared with")
+            named = {t["expr"].partition(" group_left (database, collection, index_name, compared_with) ")[2]
+                     .partition(', "ns", ".", "database", "collection")')[0] for t in x["targets"]}
+            ok &= len(named) == 1 and "".join(named).count("bottomk by (database, collection, indexType) (1, ") == 1
+            ok &= all(t["expr"].count("bottomk by (") == 1 and " == on (" not in t["expr"] for t in x["targets"])
+            # Grafana lists a table's labels in the order its first series has them: the order is set, in both forms.
+            order = [o for o in x["transformations"] if o["id"] == "organize"][0]["options"].get("indexByName", {})
+            ok &= sorted(order, key=order.get) == ["Time", "index", "Value #A", "Value #B", "compared_with", "Value #C", "Value #D", "Value #E"]
             # That row's value is 0, which is "none" in the other table: here a dash, in both forms. Not an empty
             # text: the console drew the 0 for it.
             stored = {q["id"]: q["value"] for o in x["fieldConfig"]["overrides"] if o["matcher"]["options"] == "Stored source"
@@ -208,7 +220,8 @@ for x in g["panels"]:
             ok &= [stored[k]["text"] for k in "0123"] == ["-", "some fields", "all but some", "all fields"]
             ok &= [(c["condition"]["spec"]["value"], c["text"]) for c in cols[2]["cellSettings"]] == [
                 ("0", "-"), ("1", "some fields"), ("2", "all but some"), ("3", "all fields")]
-        by = "max by (index, indexId_logString) (" if x["title"] == "Each index" else "max by (index) ("
+        by = {"Each index": "max by (index, indexId_logString) (",
+              "What stored source adds": "max by (index, compared_with) ("}.get(x["title"], "max by (index) (")
         for t in x["targets"]:
             e = t["expr"]
             # The name where there is one, the id where there is none, each index once; and never a row per pod.
@@ -248,6 +261,10 @@ for x in g["panels"]:
         # Pods are counted by who reports an index, never through `up` (a pod being replaced has none), and one reading
         # per index and pod, so that two generations of an index are not two pods. An index being built is counted by
         # its state: the initial sync gauges count syncs on a pod, not indexes.
+        if x["title"] == "Indexes missing a host":
+            # An index the source lists on fewer hosts than there are mongot pods: one pod that lost its heartbeat row
+            # is left out of the listing while the index still reads READY on the others (lab, 2 hosts of 3).
+            ok &= "mongodb_search_index_listed_hosts{" in e and " < scalar(count(count by (pod) (" in e and "== 0" not in e and "up{" not in e
         if x["title"] == "Indexes that differ by pod":
             ok &= "up{" not in e and "max by (indexId_logString, pod)" in e and "count(count by (pod) (" in e
             # Documents are compared, a generation with itself, and sizes are not: each pod writes its own index files,
@@ -287,7 +304,7 @@ STATS = {"mongot pods up": [RED, GREEN], "Envoy pods up": [RED, GREEN], "mongot 
          "Indexes": [GREEN], "Indexes being built": [GREEN], "Indexes that differ by pod": [GREEN, RED],
          "Size of all indexes, on one pod": [GREEN], "Search indexes": [GREEN], "Vector indexes": [GREEN],
          "Memory for vector indexes": [GREEN], "Index builds waiting": [GREEN], "Indexes with a name": [GREEN],
-         "Indexes with stored source": [GREEN], "Indexes with no host listed": [GREEN, RED], "Stored source searches, 1 hour": [GREEN],
+         "Indexes with stored source": [GREEN], "Indexes missing a host": [GREEN, RED], "Stored source searches, 1 hour": [GREEN],
          "Stored source share, searches": [GREEN], "Stored source vector, 1 hour": [GREEN],
          "Stored source share, vector": [GREEN]}
 def own(m):                                        # the searches per second of the pods a matcher selects, at the end of the range

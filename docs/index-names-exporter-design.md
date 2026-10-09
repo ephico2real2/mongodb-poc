@@ -116,8 +116,8 @@ The panels show `index`:
 | *Each index*, *Each index, now*, *Each index, in the last hour* | A row per index, by name; *Each index* also shows the id and what the index stores | A row per index, by id; *Stored source* is empty |
 | *Size of each index* | A bar per index, by name | A bar per index, by id |
 | *Indexes not STEADY, per index* | A row per index, by name | A row per index, by id |
-| *Indexes with a name*, *Indexes with stored source*, *Indexes with no host listed* | 8, 3 and 0 on the lab | 0, 0 and 0 |
-| *What stored source adds* | A row per index that stores fields: its size, the smallest index of its collection and type that stores nothing, and the difference | One row that says no index is known to store fields |
+| *Indexes with a name*, *Indexes with stored source*, *Indexes missing a host* | 8, 3 and 0 on the lab | 0, 0 and 0 |
+| *What stored source adds* | A row per index that stores fields: its size, the smallest index of its collection and type that stores nothing, by name (*Compared with*) and by size, and the difference | One row that says no index is known to store fields |
 
 ## Why it is built this way
 
@@ -144,7 +144,7 @@ The panels show `index`:
 | An index was a 24 character id on every panel | `sample_mflix.movies / ss_all` in the three tables, on the size chart and in the state history |
 | Nothing said which index defines stored source | A *Stored source* column (none, some fields, all but some, all fields) and a count; 3 of 8 on the lab |
 | The cost of stored source showed only to someone who knew which ids were alike | *What stored source adds* compares each index that stores fields with the one of its collection and type that stores nothing: 721,648 and 2,385,902 bytes on the lab's `movies` |
-| The source could report every index `PENDING` for days, and nothing showed it | *Indexes with no host listed* goes above 0 |
+| The source could report every index `PENDING` for days, or leave one pod out of its listing, and nothing showed it | *Indexes missing a host* goes above 0 |
 | Names could only be had by giving a tool the right to read data | A user that may list and may not read |
 | A names service would be one more image to build and patch | Two scripts in a ConfigMap, on an image MongoDB publishes |
 | A stopped names service would leave old names in place | The scrape fails, and the panels fall back to ids |
@@ -161,7 +161,7 @@ The panels show `index`:
 - **The image is large, about 1 GB.** It is referenced by digest. Where outside registries are closed it must be mirrored and `monitoring.indexInfo.image` set.
 - **A source that cannot be reached was tested with a stand-in `mongosh`**, not on the lab.
 - **A source that hangs costs each Prometheus replica its scrape, one after the other.** The exporter asks once at a time and gives the source 20 s. With two replicas, as user workload monitoring has outside OpenShift Local, a scrape that arrives during another's 20 s waits for it and then asks again: up to 40 s, past its own 25 s timeout. Both fail, which is the signal. Seen in the review with a stand-in `mongosh` and a timeout of 2 s: two scrapes at once were answered 503 after 2 s and after 4 s.
-- **A sharded source was not tried.** What `$listSearchIndexes` returns through `mongos`, and so what *Indexes with no host listed* counts there, was not looked at.
+- **A sharded source was not tried.** What `$listSearchIndexes` returns through `mongos`, and so what *Indexes missing a host* counts there, was not looked at.
 
 ## Measured on the lab
 
