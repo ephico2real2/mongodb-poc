@@ -455,6 +455,21 @@ So lag is reduced by giving mongot and mongod room, and by indexing less. **Noth
 > - Size the source's oplog for the longest time a pod may be away plus the time a sync takes: MongoDB names the oplog that "rolled over before `mongot` could catch up" as the first cause of a pod that keeps re-syncing.
 > - Keep room on the volume for a rebuild. MongoDB: "Plan for roughly 125% of the expected steady-state footprint during a rebuild."
 
+### Recommendations: keeping lag small
+
+MongoDB's remedies, in its order, with where each is said and how it is done with this chart. Nothing here makes a pod catch up at once; each makes it fall behind less.
+
+| Recommendation | MongoDB's words | Its page | With this chart |
+| --- | --- | --- | --- |
+| 1. Give mongot CPU and memory first | "Scale `mongot` CPU and memory first if the nodes run out of memory or are memory-constrained." And: "Monitor the `mongot` process's CPU utilization and disk I/O queue length. If these metrics are consistently high and replication lag is growing, you need to scale up your hardware." | [Troubleshoot](https://www.mongodb.com/docs/search/self-managed/current/troubleshooting/), *Large Replication Lag*; [Resource Allocation Considerations](https://www.mongodb.com/docs/search/self-managed/current/resource-planning-sizing/resource-allocation/) | `search.resources`, then `helm upgrade` (see *Scaling mongot*, below). Watch *CPU used* and *JVM heap used, percent of limit* per pod |
+| 2. Fewer indexes | "Reduce the total number of indexes. At very high index counts, adding more search nodes can worsen the load pattern unless you first bring the change-stream load under control." And: "Avoid defining multiple, separate search indexes on a single collection. Each index adds overhead." | Troubleshoot, the same section; Resource Allocation Considerations | The tables *Each index* show every index, its size and its searches in the last hour: an index nobody searches is the first to go |
+| 3. No dynamic mapping where it is not needed | "Turn off dynamic schema mapping where it isn't required. Prefer `dynamic: false` and explicitly map only the subfields needed for queries." | Troubleshoot, the same section | In each index's definition, on the source deployment |
+| 4. Fewer indexed fields | "Reduce the number of indexed fields, especially high-cardinality fields such as timestamps or user IDs, and remove deep facet mappings that aren't used for faceting." | The same section | The same |
+| 5. Scale the source if it is the bottleneck | "If `mongod` secondaries are the bottleneck, scale the core database to improve change-stream throughput." | The same section | Outside this chart |
+| 6. A larger oplog, if pods keep rebuilding | "If the oplog is too small for the `mongot` apply rate, increase the `mongod` oplog size, or close the gap with more `mongot` capacity or fewer concurrent indexes." | Troubleshoot, *mongot Keeps Re-Syncing* | Outside this chart |
+
+**More mongot pods are not a remedy for lag.** They add capacity for searches, and they add work for the source: "Horizontal scaling adds additional load to a replica set because each `mongot` needs to replicate index data from a source collection. Each search or vector search index creates a new change stream per `mongot`" ([Hardware Considerations](https://www.mongodb.com/docs/search/self-managed/current/resource-planning-sizing/hardware/)). More CPU and memory for each pod is what MongoDB names first. The same page gives the signals for it: "Consistently seeing CPU usage above 80% suggests a need to scale up (add CPU cores), while consistently below 20% may indicate an opportunity to scale down", and for the heap, "allocate 50% of the total available system memory, without exceeding a maximum of approximately 30GB". The operator does the second by itself: without `-Xms` or `-Xmx` in `jvmFlags` it sets both "to half of `spec.clusters[].resourceRequirements.requests.memory`" ([MongoDBSearch settings](https://www.mongodb.com/docs/kubernetes/current/reference/k8s-operator-search-specification/)), so raising the memory request raises the heap.
+
 **Where this chart shows it:**
 
 | Where | What it shows |
