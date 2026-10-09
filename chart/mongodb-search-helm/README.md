@@ -15,7 +15,7 @@ Steps 1 to 5 of the runbook stay manual: the chart never creates a certificate, 
 | 1 | MongoDBSearch | The resource of runbook Step 6a |
 | 1 | Route | The passthrough Route of runbook Step 6d, with `balance: roundrobin` |
 | 1 | ServiceMonitors | Per-pod scraping of mongot and Envoy; on by default |
-| 1 | Alerts | Nine alerts: four on traffic distribution and retries, five on the indexes; on by default |
+| 1 | Alerts | Twelve alerts: four on traffic distribution and retries, five on the indexes, and the volume under the indexes at three levels; on by default |
 | 1 | Dashboard | "MongoDB Search" for Perses in the OpenShift console, on by default; the Grafana copy is off by default |
 | 2 | csv-reclaim Job | Clears an operator CSV left behind by an earlier uninstall |
 | 3 | approver Job | Approves the InstallPlan for `operator.version`, and no other |
@@ -58,7 +58,7 @@ bash $P --clean                                       # removes the key files on
 From the package alone, with no clone:
 
 ```bash
-helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.10/mongodb-search-helm-0.3.10.tgz --untar
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.11/mongodb-search-helm-0.3.11.tgz --untar
 bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
 ```
 
@@ -66,7 +66,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.10/mongodb-search-helm-0.3.10.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.11/mongodb-search-helm-0.3.11.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -109,7 +109,8 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 | `route.targetPort` | `mongot-grpc` | Step 6d |
 | `route.balance` | `roundrobin` | Step 6d; see the [rationale](../../docs/mongot-route-balance-rationale.md) |
 | `monitoring.serviceMonitors.enabled` | `true` | Per-pod scraping of mongot and Envoy; needs user workload monitoring |
-| `monitoring.alerts.enabled` | `true` | The nine [alerts](#alerts): traffic that concentrates on one mongot pod, and an index in trouble |
+| `monitoring.alerts.enabled` | `true` | The twelve [alerts](#alerts): traffic that concentrates on one mongot pod, an index in trouble, and the volume under the indexes filling up |
+| `monitoring.alerts.dataPathUsed.info`, `.warning`, `.critical` | `70`, `80`, `90` | The three levels of [the volume alert](#the-volume-alert), in per cent used of the file system under mongot's data path. `null` leaves a level out |
 | `monitoring.persesDashboard.enabled`, `.thanosURL` | `true`, Thanos Querier port 9091 | The "MongoDB Search" dashboard in the console; set it to `false` on a cluster without the Cluster Observability Operator |
 | `monitoring.grafanaDashboard` | `false` | The same dashboard as a ConfigMap for a Grafana dashboard sidecar |
 | `preflight.enabled` | `true` | |
@@ -401,7 +402,7 @@ Measured on the lab on 2026-10-06, through Thanos Querier: before, each of the t
 
 ## Alerts
 
-On by default (`monitoring.alerts.enabled`): one PrometheusRule, `<search.name>-distribution`, with two groups. They need the ServiceMonitors, and user workload monitoring on the cluster.
+On by default (`monitoring.alerts.enabled`): one PrometheusRule, `<search.name>-distribution`, with three groups: traffic, indexes, and the volume. They need the ServiceMonitors, and user workload monitoring on the cluster.
 
 | Alert | Fires when | For | Severity |
 | --- | --- | --- | --- |
@@ -414,6 +415,9 @@ On by default (`monitoring.alerts.enabled`): one PrometheusRule, `<search.name>-
 | `MongotIndexBuildRetrying` | The build of an index has failed and started again, on a pod | 15 m | warning |
 | `MongotIndexesDifferByPod` | An index is missing on a pod; or it is `STEADY` on every pod, has not been written to for 10 minutes, and its document count differs between pods | 10 m | warning |
 | `MongotIndexSearchesFailing` | mongot keeps failing searches on an index: failures less than 5 minutes apart | 5 m | warning |
+| `MongotDataPathFillingUp` | The file system under mongot's data path is 70% used or more, on a pod | 30 m | info |
+| `MongotDataPathFillingUp` | The same, 80% used or more | 15 m | warning |
+| `MongotDataPathFillingUp` | The same, 90% used or more | 5 m | critical |
 
 About the five index alerts:
 
@@ -427,6 +431,67 @@ About the five index alerts:
   - *A build or a rebuild is not a difference.* Every pod builds at its own pace, and a rebuild keeps the old generation beside the new one; a generation is compared with itself, and only when it is `STEADY` everywhere. From mongot's source and a promtool test, not seen on the lab.
 - **One failed search does not fire `MongotIndexSearchesFailing`.** Its 5 minute rate is above 0 for under 5 minutes. Two failures less than 5 minutes apart do, 5 minutes after the first. The alert prints the rate with three decimals: one failure in 5 minutes is 0.003 a second.
 - **Tested with promtool, and one of them on the lab.** [`test/alerts.sh`](../../test/alerts.sh) renders the rules and runs [`test/alerts.test.yaml`](../../test/alerts.test.yaml): each alert fires for its index and only for it, after its time and not before; an index being built is not "not following"; an index that is written to, one being built on three pods at their own pace, a rebuild beside its old generation, and one whose size alone differs do not "differ by pod"; one that stays a document short on a pod does, 20 minutes after its last write. On the lab, 2026-10-09: the rule as first written fired on an index that was only being written to; with this one loaded, the same writes for 14 minutes (1,668 documents, the pods 17 to 24 apart at every reading) left it inactive at each of the 30 readings taken of it. None of the five has been seen to fire for its real cause there.
+
+### The volume alert
+
+`MongotDataPathFillingUp` reads the used share of the file system under mongot's data path, per pod: `1 - mongot_system_disk_space_data_path_free_bytes / mongot_system_disk_space_data_path_total_bytes`. It is the number mongot itself acts on. In its source at v1.70.1 a disk monitor computes `(total - usable) / total` of that file system every 5 seconds, and the same panel of the dashboard draws it (*Data volume used, per mongot pod*).
+
+**What mongot does by itself as the disk fills**, whoever is watching:
+
+| Used | What mongot does | In MongoDB's words |
+| --- | --- | --- |
+| Above 85% | Stops building indexes: a new or rebuilt index waits. Resumes below 80% | "`mongot` disables initial sync. New index builds remain in PENDING. Existing indexes keep operating." |
+| Above 90% | Stops following the source, for every index. Resumes below 85% | "`mongot` disables steady-state replication. Existing indexes stop receiving change events from `mongod`. Search results grow increasingly stale." |
+| 95% | Exits, and exits again on a restart until space is freed | "`mongot` crashes. Recovery requires freeing disk before `mongot` can restart cleanly." |
+
+The words are from MongoDB's [Recommended Alerts for mongot](https://www.mongodb.com/docs/search/self-managed/current/monitoring/recommended-alerts/), *Disk Fill and mongot Self-Protection Cascade*; the numbers and the two "resumes" are mongot's defaults in `DiskMonitorConfig.java` (0.85 and 0.80, 0.90 and 0.85, 0.95). They can be changed in mongot's own configuration (`advancedConfigs.diskMonitor`); this chart does not set them, and the alert's text assumes the defaults.
+
+**The three levels, and where each number comes from.** The owner set them on 2026-10-09: a first level from 70 to 75%, 80%, and critical at 90%.
+
+| Level | Used | Holds | Why this number |
+| --- | --- | --- | --- |
+| `info` | 70% | 30 m | MongoDB: "If this metric drops below 30% free, consider having a planning conversation to increase storage." It is also about where a rebuild stops fitting, below |
+| `warning` | 80% | 15 m | MongoDB: "Having less than 20% free on the `mongot` dataPath volume can cause availability issues." It is the last level before mongot acts by itself |
+| `critical` | 90% | 5 m | mongot stops following the source above it |
+
+MongoDB's own recommended alert is one level later at each step, at 85, 90 and 95%, the three points where mongot acts. These are earlier on purpose: at 190 GB a pod, a sync from scratch takes hours (see *Replication lag*), so the time to act is before mongot does. The hold times are this chart's choice, shorter as the level rises; no published rule for mongot gives one.
+
+- **A pod is in one level at a time.** A level runs from its number up to the next one's, so a pod at 92% is `critical` and not also `warning` and `info`: the console lists one alert for it, not three.
+- **Rising into the next level leaves no minute without an alert.** The lower level stays on while the higher one holds, and stops when that one fires. Without that, a notice that the warning is *resolved* would go out at the moment the disk passes 90%. Falling back, the higher alert stops at once and the lower one holds its own time again.
+- **A restarted pod is the same alert**: the alert names the namespace and the pod only.
+- **Room for a rebuild.** MongoDB: "Plan for roughly 125% of the expected steady-state footprint during a rebuild." mongot keeps the old index beside the new one until the new one can answer, and builds nothing above 85%. So a volume that is more than about 68% used (0.85 / 1.25) cannot take a rebuild of everything on it; that figure is derived here, not MongoDB's. In bytes: 190 GB of indexes are 70% of a 271 GB volume, 75% of 253 GB and 80% of 238 GB.
+- **On a shared disk the number is the disk's.** With a hostpath provisioner the data path is on the node's disk: the lab's three pods all read the same 61.6% of a 149 GiB disk on 2026-10-09, of which mongot's indexes are 16 MiB, and would raise three alerts that say the same thing. The alert's text says so. With a volume of its own per pod, the number is that volume's.
+
+**Changing the levels.** They are values of the chart, whole numbers, and must rise. With the release's own values file, as for every upgrade of this chart (`--reuse-values` does not bring a newer chart's new defaults, these three among them):
+
+```bash
+# the first level at 75 instead of 70
+helm upgrade mongot <chart> -n $NS -f my-values.yaml --timeout 20m --set monitoring.alerts.dataPathUsed.info=75
+
+# MongoDB's own three points
+helm upgrade mongot <chart> -n $NS -f my-values.yaml --timeout 20m \
+  --set monitoring.alerts.dataPathUsed.info=85 --set monitoring.alerts.dataPathUsed.warning=90 --set monitoring.alerts.dataPathUsed.critical=95
+
+# no info level: only warning and critical
+helm upgrade mongot <chart> -n $NS -f my-values.yaml --timeout 20m --set monitoring.alerts.dataPathUsed.info=null
+```
+
+Or in a values file:
+
+```yaml
+monitoring:
+  alerts:
+    dataPathUsed:
+      info: 75
+      warning: 80
+      critical: 90
+```
+
+A level set to `null` is left out, and the level below it then runs up to the next one that is left; all three `null` leaves the alert out and the other nine in. Levels that do not rise are refused when the chart renders, by name: `monitoring.alerts.dataPathUsed.critical is 90: it must be above warning (95)`. The hold times are not values.
+
+**Where it shows in OpenShift.** In the console under **Observe**, **Alerting**. That page opens on the platform's own alerts that are firing: set the *Source* filter to **User** to see this one, as for every alert of this chart. It needs user workload monitoring on the cluster.
+
+**Not in it: a "full in N days" rule.** The mixins that ship with Kubernetes also alert on a volume predicted to fill. It was looked at and left out: an index store grows in steps (a merge, a rebuild that keeps two copies for a time, then drops one), on the lab the slope of 6 hours was that of the node's other writers, and a restarted pod left a second series whose prediction alone would have fired.
 
 ## Maintaining the chart
 

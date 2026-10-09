@@ -246,4 +246,77 @@ spec:
               mongot failed searches on this index for 5 minutes, {{`{{ $value | printf "%.3f" }}`}} a second (one failure in
               five minutes is 0.003). A search the index refuses counts too, such as an operator on a field the index
               does not define: mongot_index_stats_query_invalidQueries_total, per pod and not per index, counts those alone.
+{{- /*
+The file system under mongot's data path filling up: one alert, MongotDataPathFillingUp, at up to three severities.
+A pod is in one level at a time: a level runs from its threshold to the next one's. The levels that are not null, in
+rising order; a level that is not above the one before it is refused here, since JSON Schema cannot compare two fields.
+*/}}
+{{- $dp := .Values.monitoring.alerts.dataPathUsed }}
+{{- /* How long each level holds before it fires: this chart's choice. The quantity moves slowly, and the hold
+       shrinks as the level rises. mongot itself reads the disk every 5 seconds. */}}
+{{- $hold := dict "info" "30m" "warning" "15m" "critical" "5m" }}
+{{- $levels := list }}
+{{- range $name := list "info" "warning" "critical" }}
+{{- $pct := index $dp $name }}
+{{- if not (kindIs "invalid" $pct) }}
+{{- $levels = append $levels (dict "severity" $name "pct" (float64 $pct)) }}
+{{- end }}
+{{- end }}
+{{- range $i, $l := $levels }}
+{{- if gt $i 0 }}
+{{- $below := index $levels (sub $i 1) }}
+{{- if le $l.pct $below.pct }}
+{{- fail (printf "monitoring.alerts.dataPathUsed.%s is %v: it must be above %s (%v)" $l.severity $l.pct $below.severity $below.pct) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if $levels }}
+
+    # The volume under mongot's indexes. mongot acts on this number by itself, whoever watches: above 85% used it
+    # stops building indexes, above 90% it stops following the source, and at 95% it exits.
+    - name: mongot.volume
+      rules:
+        # Used share of the file system under mongot's data path, per pod: what mongot's own disk monitor computes
+        # ((total - usable) / total) and what the dashboard draws. By pod only: a restarted pod comes back with
+        # another instance label, and an alert that carried it would start its hold again. A pod with no total, or
+        # a total of 0, has no value: nothing fires for it.
+        - record: mongot:data_path_used:ratio
+          expr: max by (namespace, pod) (1 - mongot_system_disk_space_data_path_free_bytes / mongot_system_disk_space_data_path_total_bytes)
+{{- range $i, $l := $levels }}
+{{- $at := divf $l.pct 100 }}
+
+        - alert: MongotDataPathFillingUp
+{{- if lt (add1 $i | int) (len $levels) }}
+{{- $next := index $levels (add1 $i | int) }}
+          # Up to the next level, and on while that level is still holding: without the second half this level
+          # would resolve, and say so, at the moment the disk passes the next threshold.
+          expr: >-
+            mongot:data_path_used:ratio >= {{ $at }}
+            and (mongot:data_path_used:ratio < {{ divf $next.pct 100 }} or mongot:data_path_used:ratio offset {{ get $hold $next.severity }} < {{ divf $next.pct 100 }})
+{{- else }}
+          expr: mongot:data_path_used:ratio >= {{ $at }}
+{{- end }}
+          for: {{ get $hold $l.severity }}
+          labels:
+            severity: {{ $l.severity }}
+          annotations:
+            summary: {{`"The file system under mongot's data path on {{ $labels.pod }} is {{ $value | humanizePercentage }} used"`}}
+            description: >-
+{{- if eq $l.severity "critical" }}
+              At or above {{ $l.pct }}% used. With its own defaults mongot stops following the source above 90% used,
+              so search results grow stale, and resumes below 85%; at 95% it exits and does not start again until
+              space is freed. Grow the volume or drop indexes that are not needed; never delete files under the data
+              path by hand.
+{{- else if eq $l.severity "warning" }}
+              At or above {{ $l.pct }}% used. MongoDB: less than 20% free on the data path's volume can cause
+              availability issues. With its own defaults mongot stops building new and rebuilt indexes above 85%
+              used, and stops following the source above 90%.
+{{- else }}
+              At or above {{ $l.pct }}% used: time to plan for more room. A rebuilt index is kept beside the old one
+              until it can answer, and mongot stops building indexes above 85% used.
+{{- end }}
+              Where the data path is on a shared disk (a hostpath provisioner), this is the node's disk and not a
+              volume of mongot's own.
+{{- end }}
+{{- end }}
 {{- end }}

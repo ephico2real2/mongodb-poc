@@ -1,0 +1,36 @@
+# MongotDataPathFillingUp with values of the owner's: no info level, warning at 60% and critical at 75%. test/alerts.sh
+# renders the chart a second time with those values and runs this file: a changed threshold changes when the alert
+# fires, and a level set to null is gone.
+rule_files:
+  - rules-other-levels.yaml
+evaluation_interval: 1m
+
+tests:
+  # a at 55%: under the first level that is left. b at 65%: warning. c at 80%: critical, though 80% is a warning
+  # with the chart's own values.
+  - interval: 1m
+    input_series:
+      - series: 'mongot_system_disk_space_data_path_total_bytes{pod="a", namespace="mongodb-poc"}'
+        values: '1000x60'
+      - series: 'mongot_system_disk_space_data_path_free_bytes{pod="a", namespace="mongodb-poc"}'
+        values: '450x60'
+      - series: 'mongot_system_disk_space_data_path_total_bytes{pod="b", namespace="mongodb-poc"}'
+        values: '1000x60'
+      - series: 'mongot_system_disk_space_data_path_free_bytes{pod="b", namespace="mongodb-poc"}'
+        values: '350x60'
+      - series: 'mongot_system_disk_space_data_path_total_bytes{pod="c", namespace="mongodb-poc"}'
+        values: '1000x60'
+      - series: 'mongot_system_disk_space_data_path_free_bytes{pod="c", namespace="mongodb-poc"}'
+        values: '200x60'
+    alert_rule_test:
+      - eval_time: 31m
+        alertname: MongotDataPathFillingUp
+        exp_alerts:
+          - exp_labels: {severity: warning, pod: b, namespace: mongodb-poc}
+            exp_annotations:
+              summary: "The file system under mongot's data path on b is 65% used"
+              description: "At or above 60% used. MongoDB: less than 20% free on the data path's volume can cause availability issues. With its own defaults mongot stops building new and rebuilt indexes above 85% used, and stops following the source above 90%. Where the data path is on a shared disk (a hostpath provisioner), this is the node's disk and not a volume of mongot's own."
+          - exp_labels: {severity: critical, pod: c, namespace: mongodb-poc}
+            exp_annotations:
+              summary: "The file system under mongot's data path on c is 80% used"
+              description: "At or above 75% used. With its own defaults mongot stops following the source above 90% used, so search results grow stale, and resumes below 85%; at 95% it exits and does not start again until space is freed. Grow the volume or drop indexes that are not needed; never delete files under the data path by hand. Where the data path is on a shared disk (a hostpath provisioner), this is the node's disk and not a volume of mongot's own."
