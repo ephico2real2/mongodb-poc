@@ -175,8 +175,14 @@ for x in g["panels"]:
             "Each index, in the last hour": ["Searches", "Failed searches", "Batch time", "Sync errors", "Lag, now", "Growth, 24 h"]}[x["title"]]
         # Grafana's header type is wider than the console's: at 90 pixels it cut "Lucene docs", and at nine units
         # high it showed seven rows of eight.
-        ok &= [c["width"] for c in cols[1:]] == {"Each index, now": [215, 70, 125, 115, 80, 125, 135],
-                                                 "Each index, in the last hour": [215, 95, 130, 110, 105, 90, 125]}[x["title"]]
+        widths = {"Each index, now": [215, 70, 125, 115, 80, 125, 135],
+                  "Each index, in the last hour": [215, 95, 130, 110, 105, 90, 125]}[x["title"]]
+        ok &= [c["width"] for c in cols[1:]] == widths
+        # The same widths in the Grafana source: the Perses file is generated from it, and a width changed there
+        # without regenerating would otherwise pass.
+        grafana_widths = {o["matcher"]["options"]: {q["id"]: q["value"] for q in o["properties"]}.get("custom.width")
+                          for o in x["fieldConfig"]["overrides"] if o["matcher"]["id"] == "byName"}
+        ok &= [grafana_widths.get(c["header"]) for c in cols[1:]] == widths
         ok &= x["gridPos"]["h"] >= 10
         # The whole id, 24 characters, drew 165 pixels wide in the console. On a page 1,280 wide the console drew 876
         # pixels of table: wider than that, the last header was cut.
