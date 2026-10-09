@@ -91,7 +91,7 @@ tls:
 source:
   # REQUIRED. One "host:port" per member, so mongot keeps syncing when one member is down.
   hostAndPorts: []
-  username: mongotUser
+  username: mongotuser
   passwordSecret:
     name: search-sync-source-password
     # Empty: passwordSecretRef.key is left out and the operator uses its default.

@@ -340,8 +340,8 @@ run --dbcred --username syncUser --dry-run --password-file "${work}/pw" || bad "
   && grep -q "source.username: syncUser" "${work}/out" \
   && ok "--dbcred keeps the password byte for byte (backslash, quotes, spaces at both ends, non-ASCII), adds no newline, and holds only 'password'" \
   || bad "--dbcred content: $(field "${f}" password | od -c | head -2)"
-run --dbcred --dry-run --password-file "${work}/pw" && grep -q "source.username: mongotUser" "${work}/out" \
-  && ok "--username defaults to mongotUser" || bad "the default user name"
+run --dbcred --dry-run --password-file "${work}/pw" && grep -q "source.username: mongotuser" "${work}/out" \
+  && ok "--username defaults to mongotuser" || bad "the default user name"
 printf '\xe3\x8d\xb4\xe3\x8d\xb4\n' > "${work}/pw-digits"              # two of U+3374: their base64 is 44204420
 run --dbcred --dry-run --password-file "${work}/pw-digits" && grep -qx '  password: "44204420"' "${f}" \
   && ok "a password whose base64 reads as a number is written as text (quoted)" || bad "a number-like base64: $(grep '^  password' "${f}")"
@@ -440,7 +440,7 @@ run --mongot "${pki}/mongot.pem" --dry-run "${P[@]}"
 run --check --mongot "${pki}/mongot.pem" --envoy "${pki}/envoy.pem" --route "${pki}/lb.pem" \
   && grep -q "fits     --mongot for ${NS}" "${work}/out" && grep -q "fits     --envoy" "${work}/out" && grep -q "fits     --route" "${work}/out" \
   && grep -q "externalHostname: search-b.example.test\|externalHostname: console.apps.example.test\|externalHostname: search-qa.example.test" "${work}/out" \
-  && grep -q "namespace: ${NS}" "${work}/out" && grep -q "username: mongotUser" "${work}/out" && grep -q "^0 problem" "${work}/out" \
+  && grep -q "namespace: ${NS}" "${work}/out" && grep -q "username: mongotuser" "${work}/out" && grep -q "^0 problem" "${work}/out" \
   && ok "--check reads the three PEMs without their passphrase, lists the files made and prints the chart's values" \
   || bad "--check: $(said | tr '\n' '|' | cut -c1-600)"
 run --check --mongot "${pki}/elsewhere.pem"; [[ $? -ne 0 ]] && grep -q "PROBLEM: not the mongot certificate for ${NS}" "${work}/out" \

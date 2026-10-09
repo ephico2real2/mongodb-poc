@@ -108,11 +108,11 @@ source:
   passwordSecretRef:
     key: password
     name: search-sync-source-password
-  username: mongotUser
+  username: mongotuser
 ```
 
 It already provides what the GUI needs in that namespace: the CA (`ent-trust-bundle`,
-key `ca.crt`), a user (`mongotUser`, password in `search-sync-source-password`) and the
+key `ca.crt`), a user (`mongotuser`, password in `search-sync-source-password`) and the
 seed. The index names may not be known yet — run text mode first and leave `VECTOR_*`
 unset.
 
@@ -129,12 +129,12 @@ percent-encoded inside the command, never typed or printed:
 PW=$(oc get secret search-sync-source-password -n $NS -o jsonpath='{.data.password}' | base64 -d \
      | python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(), safe=""))')
 
-export MONGO_URI="mongodb://mongotUser:${PW}@<mongod-host>:<port>/admin?replicaSet=<rsName>&tls=true&tlsCAFile=/etc/mongo-ca/ca.crt"
+export MONGO_URI="mongodb://mongotuser:${PW}@<mongod-host>:<port>/admin?replicaSet=<rsName>&tls=true&tlsCAFile=/etc/mongo-ca/ca.crt"
 unset PW
 ```
 
 Use the host name that is on mongod's certificate — the same one as in `hostAndPorts` —
-not an IP. Change `/admin` if `mongotUser` lives in another database.
+not an IP. Change `/admin` if `mongotuser` lives in another database.
 
 **3. Deploy, text mode only**
 
@@ -197,7 +197,7 @@ across the pods.
 `mongosh` also prints `EACCES: permission denied, mkdir '/data/db/.mongodb'` — it cannot
 save its history as the non-root pod user; queries are unaffected.
 
-**Before relying on it:** `mongotUser` is mongot's replication identity. Beyond a smoke
+**Before relying on it:** `mongotuser` is mongot's replication identity. Beyond a smoke
 test, use a dedicated user with `read` on the searched database only — sharing it means a
 GUI leak exposes mongot's credentials, and rotating one breaks the other.
 

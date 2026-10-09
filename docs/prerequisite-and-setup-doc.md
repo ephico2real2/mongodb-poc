@@ -107,8 +107,8 @@ What `--apply` does, each time:
 It asks for the password twice, without showing it. The secret holds the key `password` only; the user name goes in the values file as `source.username`.
 
 ```bash
-bash $PREREQ --dbcred --username mongotUser --dry-run
-bash $PREREQ --dbcred --username mongotUser --apply
+bash $PREREQ --dbcred --username mongotuser --dry-run
+bash $PREREQ --dbcred --username mongotuser --apply
 ```
 
 ### Step 5: Check all five, then remove the key files
@@ -266,7 +266,7 @@ oc create secret generic ent-mongot-search-lb-0-cert --type=kubernetes.io/tls \
 
 # The password: not shown, and kept out of shell history. "IFS= read -r" keeps a backslash and the spaces at
 # either end, which are part of a password; printf '%s' adds no newline.
-printf 'mongotUser password: '; stty -echo; IFS= read -r SYNC_PW; stty echo; echo
+printf 'mongotuser password: '; stty -echo; IFS= read -r SYNC_PW; stty echo; echo
 printf '%s' "$SYNC_PW" | oc create secret generic search-sync-source-password --from-file=password=/dev/stdin -n $NS
 unset SYNC_PW
 ```

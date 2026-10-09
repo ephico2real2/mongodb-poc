@@ -42,7 +42,7 @@ bash $P --trustca <mongot PEM>          --dry-run     # then the same with --app
 bash $P --mongot  <mongot PEM>          --dry-run
 bash $P --envoy   <Envoy client PEM>    --dry-run
 bash $P --route   <public hostname PEM> --dry-run
-bash $P --dbcred  --username mongotUser --dry-run
+bash $P --dbcred  --username mongotuser --dry-run
 bash $P --check                                       # the five objects, and the lines for the values file
 bash $P --clean                                       # removes the key files once the objects are in the cluster
 ```
@@ -101,7 +101,7 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 | `tls.certsSecretPrefix` | `ent` | Overview, the secret naming rule |
 | `tls.trustBundleConfigMap` | `ent-trust-bundle` | Step 4 |
 | `source.hostAndPorts` | required | Step 6a |
-| `source.username` | `mongotUser` | Step 6a |
+| `source.username` | `mongotuser` | Step 6a |
 | `source.passwordSecret.name`, `.key` | `search-sync-source-password`, `password` | Step 5 |
 | `observability.*` | Prometheus on 9946, forwarder `auto` | Step 6a |
 | `route.enabled`, `.name` | `true`, `mongot-search` | Step 6d |
