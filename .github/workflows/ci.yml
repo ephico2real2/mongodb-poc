@@ -25,6 +25,9 @@ jobs:
           helm version --short
       - name: Chart tests
         run: test/chart.sh
+      # The alert rules as the chart renders them, checked and unit-tested with promtool from its image.
+      - name: Alert rule tests
+        run: CONTAINER_ENGINE=docker test/alerts.sh
       - name: The tests left the tree as it was
         run: git status --porcelain && git diff --exit-code
   # test/prerequisites.sh: the script that makes the chart's five prerequisites from password-protected PEMs. It

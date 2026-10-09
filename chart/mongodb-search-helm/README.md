@@ -15,7 +15,7 @@ Steps 1 to 5 of the runbook stay manual: the chart never creates a certificate, 
 | 1 | MongoDBSearch | The resource of runbook Step 6a |
 | 1 | Route | The passthrough Route of runbook Step 6d, with `balance: roundrobin` |
 | 1 | ServiceMonitors | Per-pod scraping of mongot and Envoy; on by default |
-| 1 | Alerts | Four alerts on traffic distribution and retries; on by default |
+| 1 | Alerts | Nine alerts: four on traffic distribution and retries, five on the indexes; on by default |
 | 1 | Dashboard | "MongoDB Search" for Perses in the OpenShift console, on by default; the Grafana copy is off by default |
 | 2 | csv-reclaim Job | Clears an operator CSV left behind by an earlier uninstall |
 | 3 | approver Job | Approves the InstallPlan for `operator.version`, and no other |
@@ -109,7 +109,7 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 | `route.targetPort` | `mongot-grpc` | Step 6d |
 | `route.balance` | `roundrobin` | Step 6d; see the [rationale](../../docs/mongot-route-balance-rationale.md) |
 | `monitoring.serviceMonitors.enabled` | `true` | Per-pod scraping of mongot and Envoy; needs user workload monitoring |
-| `monitoring.alerts.enabled` | `true` | Alerts when traffic concentrates on one mongot pod |
+| `monitoring.alerts.enabled` | `true` | The nine [alerts](#alerts): traffic that concentrates on one mongot pod, and an index in trouble |
 | `monitoring.persesDashboard.enabled`, `.thanosURL` | `true`, Thanos Querier port 9091 | The "MongoDB Search" dashboard in the console; set it to `false` on a cluster without the Cluster Observability Operator |
 | `monitoring.grafanaDashboard` | `false` | The same dashboard as a ConfigMap for a Grafana dashboard sidecar |
 | `preflight.enabled` | `true` | |
@@ -324,6 +324,30 @@ The chart's Envoy ServiceMonitor therefore renames the two at the scrape, to `en
 - on an upgrade from a release without the rename, those two panels start again from the upgrade: the earlier samples stay under the old names.
 
 Measured on the lab on 2026-10-06, through Thanos Querier: before, each of the two queries came back with one warning; after, every query of the dashboard came back with none (16 queries then, 27 in chart 0.3.0, 90 in 0.3.1, 97 since 0.3.2).
+
+## Alerts
+
+On by default (`monitoring.alerts.enabled`): one PrometheusRule, `<search.name>-distribution`, with two groups. They need the ServiceMonitors, and user workload monitoring on the cluster.
+
+| Alert | Fires when | For | Severity |
+| --- | --- | --- | --- |
+| `MongotTrafficNotDistributed` | One mongot pod serves over 90% of the searches | 10 m | warning |
+| `MongotPodReceivingNoTraffic` | A mongot pod serves nothing while the others are busy | 15 m | info |
+| `MongotEnvoyRetriesElevated` | Envoy retries more than one request a second | 10 m | warning |
+| `MongotNoSearchTraffic` | Envoy has forwarded nothing to mongot | 30 m | info |
+| `MongotIndexFailed` | An index is `FAILED` on a pod | 1 m | critical |
+| `MongotIndexNotFollowing` | An index is `STALE`, or recovering from an error that is not transient, on a pod | 10 m | warning |
+| `MongotIndexBuildRetrying` | The build of an index has failed and started again, on a pod | 15 m | warning |
+| `MongotIndexesDifferByPod` | An index is missing on a pod, or its size or document count is not the same on every pod | 10 m | warning |
+| `MongotIndexSearchesFailing` | mongot fails searches on an index | 5 m | warning |
+
+About the five index alerts:
+
+- **They name the index by its id**, the label `indexId_logString` of mongot's metrics; three also name the pod. The dashboard's section *What does each index hold?* shows the same id.
+- **Which states they watch.** mongot answers searches from an index that is `STEADY`, `STALE` or `RECOVERING`, and not from one that is `FAILED` or being built. So `FAILED` is critical after a minute; `STALE` and `RECOVERING_NON_TRANSIENT` are a warning, because results fall behind while searches still answer; `INITIAL_SYNC` and `RECOVERING_TRANSIENT` are no alert, a build and a hiccup being normal.
+- **Where the times come from.** `MongotIndexBuildRetrying` uses the 15 minutes of MongoDB's metrics reference for initial sync errors. `MongotIndexesDifferByPod` waits 10 minutes because mongot reads the size of an index from disk every 3 minutes, so a new index differs between pods for that long. The 10 minutes of `MongotIndexNotFollowing` and the 5 of `MongotIndexSearchesFailing` are this chart's choice, with no published figure behind them: change them if they are wrong for you.
+- **What a failed search is.** One the index ran and failed. A query mongot refuses as invalid is not counted.
+- **Tested with promtool, not on a cluster.** [`test/alerts.sh`](../../test/alerts.sh) renders the rules and runs [`test/alerts.test.yaml`](../../test/alerts.test.yaml): each alert fires for its index and only for it, after its time and not before; an index being built is not "not following"; a new index whose size reads 0 on one pod for three minutes does not differ. None of the five conditions has occurred on the lab, so none of these alerts has been seen to fire there.
 
 ## Maintaining the chart
 

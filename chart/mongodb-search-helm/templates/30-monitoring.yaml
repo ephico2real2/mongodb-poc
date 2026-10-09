@@ -159,4 +159,73 @@ spec:
             description: >-
               Either genuinely idle, or mongod has stopped reaching the load balancer. Check
               mongotHost on the external mongod and that the Route still resolves.
+
+    # An index in trouble. mongot's metrics name an index by its id (the label indexId_logString): the dashboard's
+    # section "What does each index hold?" shows the same id, and its name with monitoring.indexInfo. Searches go on
+    # being answered while an index is STALE or RECOVERING, and stop for it only when it is FAILED or being built.
+    - name: mongot.indexes
+      rules:
+        - alert: MongotIndexFailed
+          expr: max by (indexId_logString, pod) (mongot_index_stats_indexStatusCode{status="FAILED"}) == 1
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: {{`"Search index {{ $labels.indexId_logString }} has failed on {{ $labels.pod }}"`}}
+            description: >-
+              mongot reports this index FAILED on this pod: it answers no search from it there. The pod's log says
+              why. The index's name is in the source deployment: $listSearchIndexes lists it by this id.
+            runbook: {{ .Values.monitoring.alerts.runbookUrl | quote }}
+
+        - alert: MongotIndexNotFollowing
+          expr: max by (indexId_logString, pod) (mongot_index_stats_indexStatusCode{status=~"STALE|RECOVERING_NON_TRANSIENT"}) == 1
+          # Ten minutes is this chart's choice: long enough for a restart of the source to pass.
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: {{`"Search index {{ $labels.indexId_logString }} has stopped following the source on {{ $labels.pod }}"`}}
+            description: >-
+              The index is STALE or recovering from an error that is not transient on this pod. Searches are still
+              answered from it, with what it held when it stopped: results fall behind the collection.
+
+        - alert: MongotIndexBuildRetrying
+          expr: max by (indexId_logString, pod) (mongot_index_stats_indexing_consecutiveInitialSyncResyncExceptions) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: {{`"The build of search index {{ $labels.indexId_logString }} keeps failing on {{ $labels.pod }}"`}}
+            description: >-
+              The initial sync of this index has failed and started again, {{`{{ $value }}`}} times in a row, for 15
+              minutes. Until it completes the index is not served from this pod.
+
+        - alert: MongotIndexesDifferByPod
+          # An index some pod does not report, or whose size or document count is not the same on every pod. mongot
+          # reads the size of an index from disk every 3 minutes, so a new index differs for that long: hence 10m.
+          expr: |
+            (count by (indexId_logString) (max by (indexId_logString, pod) (mongot_index_stats_indexSizeBytes))
+                != scalar(count(count by (pod) (mongot_index_stats_indexSizeBytes))))
+              or (max by (indexId_logString) (mongot_index_stats_indexSizeBytes) != min by (indexId_logString) (mongot_index_stats_indexSizeBytes))
+              or (max by (indexId_logString) (mongot_index_stats_numLuceneDocs) != min by (indexId_logString) (mongot_index_stats_numLuceneDocs))
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: {{`"Search index {{ $labels.indexId_logString }} is not the same on every mongot pod"`}}
+            description: >-
+              Every mongot pod holds every index, so the same search can return different results depending on the
+              pod that answers. The dashboard's table "Each mongot pod, now" shows which pod differs.
+
+        - alert: MongotIndexSearchesFailing
+          expr: sum by (indexId_logString) (rate(mongot_index_stats_query_failedQueries_total[5m])) > 0
+          # Five minutes is this chart's choice.
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: {{`"Searches on index {{ $labels.indexId_logString }} are failing"`}}
+            description: >-
+              mongot failed searches on this index for 5 minutes, {{`{{ $value | printf "%.2f" }}`}} a second. A query
+              mongot refuses as invalid is not counted here: these failed while the index ran them.
 {{- end }}

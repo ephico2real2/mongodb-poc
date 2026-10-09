@@ -1,0 +1,152 @@
+# Unit tests of the chart's index alerts, run by test/alerts.sh with promtool. Every alert must fire for its index
+# and only for it, after its "for", and not before. Index ids are shortened here: a, b, c.
+rule_files:
+  - rules.yaml
+evaluation_interval: 1m
+
+tests:
+  # An index that fails on one pod: critical after a minute, for that index and that pod only.
+  - interval: 1m
+    input_series:
+      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="a", pod="mongot-search-0-0", status="FAILED"}'
+        values: '0 0 1x10'
+      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="a", pod="mongot-search-0-1", status="FAILED"}'
+        values: '0x12'
+      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="b", pod="mongot-search-0-0", status="FAILED"}'
+        values: '0x12'
+    alert_rule_test:
+      - eval_time: 2m            # failed this minute: pending, not firing
+        alertname: MongotIndexFailed
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: MongotIndexFailed
+        exp_alerts:
+          - exp_labels: {severity: critical, indexId_logString: a, pod: mongot-search-0-0}
+            exp_annotations:
+              summary: "Search index a has failed on mongot-search-0-0"
+              description: "mongot reports this index FAILED on this pod: it answers no search from it there. The pod's log says why. The index's name is in the source deployment: $listSearchIndexes lists it by this id."
+              runbook: "https://github.com/ephico2real2/mongodb-poc/blob/main/README.md#the-failure-that-produces-no-error"
+
+  # STALE, or recovering from an error that is not transient: a warning after ten minutes. An index that is
+  # INITIAL_SYNC is being built, and is no alert of this kind.
+  - interval: 1m
+    input_series:
+      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="a", pod="mongot-search-0-0", status="STALE"}'
+        values: '1x20'
+      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="b", pod="mongot-search-0-1", status="RECOVERING_NON_TRANSIENT"}'
+        values: '0x5 1x15'
+      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="c", pod="mongot-search-0-0", status="INITIAL_SYNC"}'
+        values: '1x20'
+      - series: 'mongot_index_stats_indexStatusCode{indexId_logString="c", pod="mongot-search-0-0", status="RECOVERING_TRANSIENT"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: MongotIndexNotFollowing
+        exp_alerts: []
+      - eval_time: 11m
+        alertname: MongotIndexNotFollowing
+        exp_alerts:
+          - exp_labels: {severity: warning, indexId_logString: a, pod: mongot-search-0-0}
+            exp_annotations:
+              summary: "Search index a has stopped following the source on mongot-search-0-0"
+              description: "The index is STALE or recovering from an error that is not transient on this pod. Searches are still answered from it, with what it held when it stopped: results fall behind the collection."
+      - eval_time: 17m           # b joined at 6m: both by now, and never c
+        alertname: MongotIndexNotFollowing
+        exp_alerts:
+          - exp_labels: {severity: warning, indexId_logString: a, pod: mongot-search-0-0}
+            exp_annotations:
+              summary: "Search index a has stopped following the source on mongot-search-0-0"
+              description: "The index is STALE or recovering from an error that is not transient on this pod. Searches are still answered from it, with what it held when it stopped: results fall behind the collection."
+          - exp_labels: {severity: warning, indexId_logString: b, pod: mongot-search-0-1}
+            exp_annotations:
+              summary: "Search index b has stopped following the source on mongot-search-0-1"
+              description: "The index is STALE or recovering from an error that is not transient on this pod. Searches are still answered from it, with what it held when it stopped: results fall behind the collection."
+
+  # A build that keeps starting again: a warning after fifteen minutes; one that failed once and then went through
+  # is none.
+  - interval: 1m
+    input_series:
+      - series: 'mongot_index_stats_indexing_consecutiveInitialSyncResyncExceptions{indexId_logString="a", pod="mongot-search-0-2"}'
+        values: '1 2 3 3 4x20'
+      - series: 'mongot_index_stats_indexing_consecutiveInitialSyncResyncExceptions{indexId_logString="b", pod="mongot-search-0-2"}'
+        values: '1 1 0x22'
+    alert_rule_test:
+      - eval_time: 14m
+        alertname: MongotIndexBuildRetrying
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: MongotIndexBuildRetrying
+        exp_alerts:
+          - exp_labels: {severity: warning, indexId_logString: a, pod: mongot-search-0-2}
+            exp_annotations:
+              summary: "The build of search index a keeps failing on mongot-search-0-2"
+              description: "The initial sync of this index has failed and started again, 4 times in a row, for 15 minutes. Until it completes the index is not served from this pod."
+
+  # Three pods. Index a is the same on all three. Index b has another size on one pod. Index c is missing on one
+  # pod. Index d is new: its size reads 0 on one pod for three minutes, which is no alert.
+  - interval: 1m
+    input_series:
+      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="a", pod="mongot-search-0-0"}'
+        values: '100x20'
+      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="a", pod="mongot-search-0-1"}'
+        values: '100x20'
+      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="a", pod="mongot-search-0-2"}'
+        values: '100x20'
+      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="b", pod="mongot-search-0-0"}'
+        values: '200x20'
+      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="b", pod="mongot-search-0-1"}'
+        values: '200x20'
+      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="b", pod="mongot-search-0-2"}'
+        values: '150x20'
+      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="c", pod="mongot-search-0-0"}'
+        values: '300x20'
+      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="c", pod="mongot-search-0-1"}'
+        values: '300x20'
+      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="d", pod="mongot-search-0-0"}'
+        values: '400x20'
+      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="d", pod="mongot-search-0-1"}'
+        values: '400x20'
+      - series: 'mongot_index_stats_indexSizeBytes{indexId_logString="d", pod="mongot-search-0-2"}'
+        values: '0 0 0 400x17'
+      - series: 'mongot_index_stats_numLuceneDocs{indexId_logString="a", pod="mongot-search-0-0"}'
+        values: '10x20'
+      - series: 'mongot_index_stats_numLuceneDocs{indexId_logString="a", pod="mongot-search-0-1"}'
+        values: '10x20'
+      - series: 'mongot_index_stats_numLuceneDocs{indexId_logString="a", pod="mongot-search-0-2"}'
+        values: '10x20'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: MongotIndexesDifferByPod
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: MongotIndexesDifferByPod
+        exp_alerts:
+          - exp_labels: {severity: warning, indexId_logString: b}
+            exp_annotations:
+              summary: "Search index b is not the same on every mongot pod"
+              description: "Every mongot pod holds every index, so the same search can return different results depending on the pod that answers. The dashboard's table \"Each mongot pod, now\" shows which pod differs."
+          - exp_labels: {severity: warning, indexId_logString: c}
+            exp_annotations:
+              summary: "Search index c is not the same on every mongot pod"
+              description: "Every mongot pod holds every index, so the same search can return different results depending on the pod that answers. The dashboard's table \"Each mongot pod, now\" shows which pod differs."
+
+  # Failed searches on index a for long enough; none on b.
+  - interval: 1m
+    input_series:
+      - series: 'mongot_index_stats_query_failedQueries_total{indexId_logString="a", pod="mongot-search-0-0"}'
+        values: '0+6x20'
+      - series: 'mongot_index_stats_query_failedQueries_total{indexId_logString="a", pod="mongot-search-0-1"}'
+        values: '0x20'
+      - series: 'mongot_index_stats_query_failedQueries_total{indexId_logString="b", pod="mongot-search-0-0"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: MongotIndexSearchesFailing
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: MongotIndexSearchesFailing
+        exp_alerts:
+          - exp_labels: {severity: warning, indexId_logString: a}
+            exp_annotations:
+              summary: "Searches on index a are failing"
+              description: "mongot failed searches on this index for 5 minutes, 0.10 a second. A query mongot refuses as invalid is not counted here: these failed while the index ran them."
