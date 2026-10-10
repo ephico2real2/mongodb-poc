@@ -25,7 +25,8 @@ installs, MongoDB Controllers for Kubernetes 1.13.0, and was measured on the lab
 | `search.replicas` set to 0 | **Deleted**, every one | Not run. MongoDB: at 0 "the Kubernetes Operator scales the StatefulSet to zero pods" |
 | The StatefulSet deleted, without `--cascade=orphan` | **Deleted**, every one | Not run |
 | The StatefulSet deleted **with** `--cascade=orphan` | Kept | The operator made the StatefulSet again within a second; the three pods were adopted without a restart and the three claims kept their uids |
-| The MongoDBSearch deleted, or `helm uninstall` | **Deleted**, every one | Not run today. `search.keepOnUninstall: true` makes `helm uninstall` leave the resource, and so the volumes, in place |
+| The MongoDBSearch deleted, or `helm uninstall` with the chart's default | **Deleted**, every one | Not run today |
+| `helm uninstall` with `search.keepOnUninstall: true` | Kept | 2026-10-10: Helm answered "These resources were kept due to the resource policy: [MongoDBSearch] mongot". The resource, the StatefulSet, the three mongot pods, the two Envoy pods and the three claims kept their uids, with no restart. `helm install` under the same name then adopted them, with no flag, in 42 s |
 
 ## Why
 
@@ -89,8 +90,14 @@ So this chart has no value that keeps a volume through a scale-down: there is no
 2. **Never scale the StatefulSet by hand**, and never delete it without `--cascade=orphan`. It is the operator's:
    see [scaling.md](scaling.md) for how mongot is scaled.
 3. **`search.keepOnUninstall: true`** if an uninstall must not take the indexes with it. `helm uninstall` then
-   leaves the MongoDBSearch, its pods and its volumes, and removes the rest of the release, the Route included:
-   mongod cannot reach search until the chart is installed again. Under Argo CD the value also sets `Prune=false`
+   leaves the MongoDBSearch, its pods and its volumes, and removes the rest of the release: the Route, the
+   OperatorGroup and the Subscription, the monitoring objects. On the lab (2026-10-10, chart 0.3.14) a new TLS
+   connection to the Route's host then got no answer, while the connection mongod already had open went on
+   answering searches, each time it was tried up to 2 min 41 s after the uninstall; how long such a connection
+   lasts was not measured. The operator's pod kept running, and its ClusterServiceVersion went `Failed` with
+   `NoOperatorGroup` within 2 minutes. `helm install` under the same release name adopted the resource with no
+   flag, in 42 s: the same pods and claims, no restart, the Route made again and the operator replaced. Under
+   Argo CD the value also sets `Prune=false`
    and `Delete=false` in the resource's sync options, since Argo CD takes Helm's annotation as `Delete=false` only
    ("Supported as equivalent to `argocd.argoproj.io/sync-options: Delete=false`",
    [Argo CD, Helm](https://argo-cd.readthedocs.io/en/stable/user-guide/helm/)): the resource is then kept when the
@@ -100,8 +107,8 @@ So this chart has no value that keeps a volume through a scale-down: there is no
    "ignored (no prune)". The two options on the resource override the Application's own `Prune` and `Delete`
    options. It does not stop `oc delete mongodbsearch`, nor a sync with `Force`: Argo CD then deletes the resource
    and creates it again when its apply is refused, and always when `Replace=true` is set as well ("the 'kubectl
-   delete/create' command"). This is from Helm's and Argo CD 3.5.3's documentation and source: no uninstall and no
-   Argo CD sync was run with the value set. When the search is meant to go:
+   delete/create' command"). The Argo CD part is from Argo CD 3.5.3's documentation and source: no Application
+   was run against this chart. When the search is meant to go:
    `oc delete mongodbsearch <search.name> -n <namespace>`.
 4. **Change the resource through the values only.** A field of the MongoDBSearch that was patched by hand stays
    owned by that patch: on the lab, Helm 4 then refused the next upgrade that changed it ("conflict with
