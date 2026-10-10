@@ -95,10 +95,14 @@ So this chart has no value that keeps a volume through a scale-down: there is no
    ("Supported as equivalent to `argocd.argoproj.io/sync-options: Delete=false`",
    [Argo CD, Helm](https://argo-cd.readthedocs.io/en/stable/user-guide/helm/)): the resource is then kept when the
    Application is deleted and when a sync would prune it
-   ([Sync Options](https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/)). It does not stop
-   `oc delete mongodbsearch`, nor a sync with `Force`, which Argo CD carries out with "the 'kubectl delete/create'
-   command". This is from Helm's and Argo CD 3.5.3's documentation and source: no uninstall and no Argo CD sync was
-   run with the value set. When the search is meant to go: `oc delete mongodbsearch <search.name> -n <namespace>`.
+   ([Sync Options](https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/)). While the resource is
+   live and no longer in the manifests, the Application stays OutOfSync and a sync with prune reports it as
+   "ignored (no prune)". The two options on the resource override the Application's own `Prune` and `Delete`
+   options. It does not stop `oc delete mongodbsearch`, nor a sync with `Force`: Argo CD then deletes the resource
+   and creates it again when its apply is refused, and always when `Replace=true` is set as well ("the 'kubectl
+   delete/create' command"). This is from Helm's and Argo CD 3.5.3's documentation and source: no uninstall and no
+   Argo CD sync was run with the value set. When the search is meant to go:
+   `oc delete mongodbsearch <search.name> -n <namespace>`.
 4. **Change the resource through the values only.** A field of the MongoDBSearch that was patched by hand stays
    owned by that patch: on the lab, Helm 4 then refused the next upgrade that changed it ("conflict with
    \"kubectl-patch\"") until it was run with `--force-conflicts`.

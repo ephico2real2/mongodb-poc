@@ -90,9 +90,16 @@ render -s templates/10-mongodbsearch.yaml --set search.version=1.70.1 | grep -q 
 ! render -s templates/10-mongodbsearch.yaml --set loadBalancer.image= | grep -q 'deployment:' && ok "no Envoy override without loadBalancer.image" || bad "Envoy override rendered without an image"
 render -s templates/10-mongodbsearch.yaml | grep -q 'name: ent-trust-bundle' && ok "the source CA is always rendered" || bad "source.external.tls.ca missing"
 render -s templates/10-mongodbsearch.yaml --set search.keepOnUninstall=true | grep -q 'helm.sh/resource-policy: keep' && ok "keepOnUninstall keeps the resource" || bad "keepOnUninstall"
-render -s templates/10-mongodbsearch.yaml --set search.keepOnUninstall=true | grep -q '^    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true,Prune=false,Delete=false$' && ok "keepOnUninstall also stops an Argo CD prune and delete" || bad "keepOnUninstall under Argo CD"
-[ "$(render -s templates/10-mongodbsearch.yaml | grep -c 'sync-options')" = 1 ] && render -s templates/10-mongodbsearch.yaml | grep -q '^    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true$' \
-  && ! render -s templates/10-mongodbsearch.yaml | grep -q 'resource-policy' && ok "without keepOnUninstall the resource can be pruned and is not kept" || bad "Prune=false or keep rendered by default"
+# The MongoDBSearch's annotations as one sorted block, so a key that landed under labels, a duplicated key, a lost
+# sync-wave, a mis-indented line or a whitespace-only line each make a different block.
+ms_annotations() { render -s templates/10-mongodbsearch.yaml "$@" | awk '/^  annotations:$/{f=1;next} f&&!/^    /{exit} f{print}' | LC_ALL=C sort; }
+[ "$(ms_annotations --set search.keepOnUninstall=true)" = "$(printf '%s\n' '    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true,Prune=false,Delete=false' '    argocd.argoproj.io/sync-wave: "1"' '    helm.sh/resource-policy: keep')" ] \
+  && ok "keepOnUninstall also stops an Argo CD prune and delete, and changes nothing else in the annotations" || bad "keepOnUninstall under Argo CD: $(ms_annotations --set search.keepOnUninstall=true | tr '\n' ';')"
+[ "$(ms_annotations)" = "$(printf '%s\n' '    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true' '    argocd.argoproj.io/sync-wave: "1"')" ] \
+  && ok "without keepOnUninstall the resource can be pruned and is not kept" || bad "Prune=false or keep rendered by default: $(ms_annotations | tr '\n' ';')"
+# Only the MongoDBSearch is kept: the Route and the rest of the release go with an uninstall or a prune (volumes.md).
+[ "$(render --set search.keepOnUninstall=true | grep -c 'resource-policy: keep\|Prune=false')" = 2 ] \
+  && ok "only the MongoDBSearch carries keep and Prune=false" || bad "keep or Prune=false on another object: $(render --set search.keepOnUninstall=true | grep -n 'resource-policy: keep\|Prune=false' | tr '\n' ';')"
 render -s templates/20-route.yaml | grep -q '^  host: mongot-search-rnd.company.net$' && ok "the Route host is externalHostname" || bad "Route host"
 render -s templates/20-route.yaml | grep -A1 'kind: Service' | grep -q 'name: mongot-search-0-proxy-svc$' \
   && ok "the Route targets the operator's proxy Service by default" || bad "Route default target"

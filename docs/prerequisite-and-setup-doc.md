@@ -237,7 +237,7 @@ helm upgrade mongot chart/mongodb-search-helm -n $NS -f my-values.yaml --timeout
 helm uninstall mongot -n $NS
 ```
 
-- **The search index is deleted.** The operator deletes the mongot volumes with the resource, so a reinstall syncs from the source again. Set `search.keepOnUninstall=true` to keep the resource.
+- **The search index is deleted.** The operator deletes the mongot volumes with the resource, so a reinstall syncs from the source again. Set `search.keepOnUninstall=true` to keep the resource, its pods and its volumes; the Route still goes ([volumes.md](../chart/mongodb-search-helm/volumes.md)).
 - **The operator keeps running.** OLM leaves it when its Subscription goes. The next `helm install` removes it and installs it again. To remove it now: `oc delete csv mongodb-kubernetes.v1.13.0 -n $NS`.
 - **The five prerequisites stay**, along with the CRDs.
 
