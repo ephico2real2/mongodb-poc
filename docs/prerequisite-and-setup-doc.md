@@ -49,7 +49,7 @@ NS=$TargetNamespace                       # Part 2 uses $NS
 # The script is a file of the chart. From a checkout of this repository, at its root:
 PREREQ=chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
 # From the published chart, with no clone (chart 0.3.3 and later):
-#   helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.14/mongodb-search-helm-0.3.14.tgz --untar
+#   helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.15/mongodb-search-helm-0.3.15.tgz --untar
 #   PREREQ=mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
 
 mkdir -m 700 $TargetNamespace             # the script never creates it
@@ -164,7 +164,7 @@ From the published package, with no clone of the repository:
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.14/mongodb-search-helm-0.3.14.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.15/mongodb-search-helm-0.3.15.tgz \
   -n $NS -f my-values.yaml --timeout 20m
 ```
 
@@ -305,7 +305,7 @@ oc logs -n $NS job/mongot-mongodb-search-helm-wait -c wait
 
 ## Tested on CRC
 
-Oct 6, 2026, namespace `mongodb-poc`, OpenShift 4.22.7, Helm 4.3.0, with [`examples/values-crc.yaml`](../chart/mongodb-search-helm/examples/values-crc.yaml). The five prerequisites were the ones already in the lab, used as they were.
+Oct 6, 2026, namespace `mongodb-poc`, OpenShift 4.22.7, Helm 4.3.0, with [`examples/values-crc.yaml`](../chart/mongodb-search-helm/examples/values-crc.yaml) as it then was (2Gi, 1Gi requested, no monitoring values). The five prerequisites were the ones already in the lab, used as they were.
 
 | Run | Result | Helm time |
 | --- | --- | --- |

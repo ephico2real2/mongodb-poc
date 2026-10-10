@@ -58,7 +58,7 @@ bash $P --clean                                       # removes the key files on
 From the package alone, with no clone:
 
 ```bash
-helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.14/mongodb-search-helm-0.3.14.tgz --untar
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.15/mongodb-search-helm-0.3.15.tgz --untar
 bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
 ```
 
@@ -66,7 +66,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.14/mongodb-search-helm-0.3.14.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.15/mongodb-search-helm-0.3.15.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -492,7 +492,7 @@ A level set to `null` is left out, and the level below it then runs up to the ne
 
 **Where it shows in OpenShift.** In the console under **Observe**, **Alerting**, and on the project's **Observe** page, tab **Alerts**. On the lab (console 4.22.7) both pages list the alerts of the project chosen at their top: with `mongodb-poc` chosen they listed this alert and no other, with no filter set. An alert of this chart has the source **User** in the console, as the picture below shows for this one. It needs user workload monitoring on the cluster. A user who is not a cluster administrator also needs the role `monitoring-rules-view` in the namespace (`oc adm policy add-role-to-user monitoring-rules-view <user> -n $NS`): without it the console answers "You don't have access to this section", as it did to the lab's viewer until the role was given. That account also holds `view` in the namespace and, through the cluster role binding `openshift-coo-cluster-monitoring-view`, which names every signed-in user of the lab, `cluster-monitoring-view`; the role was not tried without those two.
 
-**Seen on the lab**, 2026-10-09, with the levels lowered to 50, 55 and 60 so that the lab's 61.3% would count. The critical level went pending for the three pods at 13:21:56Z and was firing 5 minutes later; the two lower levels stayed inactive, as they should for a pod above the top level. The Alertmanager of user workload monitoring held three active alerts, one a pod: "The file system under mongot's data path on mongot-search-0-1 is 61.34% used". The rule and its three alerts were listed by Thanos Querier's rules API, which is what the console's Alerting page reads. Not seen there: the alert rising from one level into the next on a real disk, which is tested with promtool only.
+**Seen on the lab**, 2026-10-09, with the levels lowered to 50, 55 and 60 so that the lab's 61.3% would count. The lab's values, [`examples/values-crc.yaml`](examples/values-crc.yaml), keep them lowered, so the alert goes on firing there; the chart's own levels are the three above. The critical level went pending for the three pods at 13:21:56Z and was firing 5 minutes later; the two lower levels stayed inactive, as they should for a pod above the top level. The Alertmanager of user workload monitoring held three active alerts, one a pod: "The file system under mongot's data path on mongot-search-0-1 is 61.34% used". The rule and its three alerts were listed by Thanos Querier's rules API, which is what the console's Alerting page reads. Not seen there: the alert rising from one level into the next on a real disk, which is tested with promtool only.
 
 The same day the lab's viewer was given the role, and the console showed the alert to that account on two pages, with no filter changed: **Observe**, **Alerting**, and the project's **Observe** page, tab **Alerts**. Both list the rule as Critical, Total 3, Firing. On the second, the row was opened: three alerts, namespace `mongodb-poc`, Source User. The rules API, read four minutes later: the critical level firing for `mongot-search-0-0` and `mongot-search-0-1` since 13:21:56Z and for `mongot-search-0-2` since 14:02:41Z, each pod at 62.6% used, and the two lower levels inactive.
 
