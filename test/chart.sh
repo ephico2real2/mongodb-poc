@@ -551,7 +551,7 @@ mon="$(render -s templates/30-monitoring.yaml)" && sel="$(render -s templates/11
 kept="$(render --set search.keepOnUninstall=true -s templates/11-poddisruptionbudgets.yaml)" && grep -q 'kind: PodDisruptionBudget' <<<"${kept}" && ! grep -q 'resource-policy\|Prune=false' <<<"${kept}" \
   && ok "the budgets are not kept by keepOnUninstall: they go with the release, like the Route" || bad "the budgets do not render with keepOnUninstall, or one carries keep or Prune=false"
 
-# The load test's three files parse (it needs a cluster to run: docs/testing-envoy-under-load.md).
+# The load test's three files parse (it needs a cluster to run: docs/envoy-performance-testing.md).
 bash -n test/load/run.sh 2>/dev/null && python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read())' test/load/analyze.py 2>/dev/null \
   && ok "the load test's driver and its analysis parse" || bad "test/load/run.sh or test/load/analyze.py does not parse"
 if command -v node >/dev/null; then

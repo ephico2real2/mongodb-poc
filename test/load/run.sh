@@ -9,7 +9,7 @@
 #   test/load/run.sh first 1,2,4,8,16,32,64 60 15
 #
 # It runs a Job (search-load) that sends concurrent $search queries through mongod, in steps of concurrency, and
-# about every 10 s reads from each Envoy pod, each mongot pod and the load pod their cgroup's CPU counters and
+# about every 6 s reads from each Envoy pod, each mongot pod and the load pod their cgroup's CPU counters and
 # memory: a plain cat inside the pod. It changes nothing but that Job and its ConfigMap, which stay for an hour.
 # It writes <out dir>/<tag>.load (one JSON line a step), <tag>.samples and <tag>.log; analyze.py makes one row a
 # step of them.
@@ -17,7 +17,8 @@
 # Other settings, all from the environment: URI_KEY (uri), CA_CONFIGMAP (ent-trust-bundle, mounted at
 # /etc/mongo-ca for a connection string that names /etc/mongo-ca/ca.crt), SEARCH_NAME (mongot), IMAGE (the stock
 # MongoDB Community Server image, for its mongosh), OUT (the current directory), and for the queries DB
-# (sample_mflix), COLL (movies), INDEX (default), TERMS (eight words), LIMIT (10).
+# (sample_mflix), COLL (movies), INDEX (default), TERMS (eight words of the lab's collection: give words yours holds,
+# or the searches return nothing; the generator prints docs_per_search), LIMIT (10).
 # The connection string is read by the Job from the Secret; this script never sees it.
 #
 # Needs oc, logged in, with the right to create a Job and a ConfigMap and to exec into the pods.
@@ -36,6 +37,8 @@ IMAGE="${IMAGE:-quay.io/mongodb/mongodb-community-server:8.3.4-ubi9}"
 command -v oc >/dev/null 2>&1 || die "oc is not on the PATH"
 oc whoami >/dev/null 2>&1 || die "oc is not logged in to a cluster"
 oc get secret "${URI_SECRET}" -n "${NS}" -o name >/dev/null 2>&1 || die "no Secret ${URI_SECRET} in ${NS}"
+CA="${CA_CONFIGMAP:-ent-trust-bundle}"
+oc get configmap "${CA}" -n "${NS}" -o name >/dev/null 2>&1 || die "no ConfigMap ${CA} in ${NS}: export CA_CONFIGMAP=<the CA bundle the connection string names>"
 
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 cg() {  # <pod> <container>: the cgroup's counters on one line
@@ -53,7 +56,8 @@ cg() {  # <pod> <container>: the cgroup's counters on one line
 } | tee "${OUT}/${tag}.log"
 
 oc create configmap search-load -n "${NS}" --from-file=load.js="${HERE}/search-load.js" --dry-run=client -o yaml | oc apply -f - >/dev/null
-oc delete job search-load -n "${NS}" --ignore-not-found --wait=true >/dev/null 2>&1
+# Only a Job this script made: by its name and its label.
+oc delete job -n "${NS}" -l app=search-load --field-selector metadata.name=search-load --ignore-not-found --wait=true >/dev/null 2>&1
 oc apply -f - >/dev/null <<EOF
 apiVersion: batch/v1
 kind: Job
@@ -78,7 +82,7 @@ spec:
             - {name: DB, value: "${DB:-sample_mflix}"}
             - {name: COLL, value: "${COLL:-movies}"}
             - {name: INDEX, value: "${INDEX:-default}"}
-            - {name: TERMS, value: "${TERMS:-detective,love,war,space,family,murder,king,night}"}
+            - {name: TERMS, value: "${TERMS:-detective,creature,astronaut,boxer,pitcher,shark,pilot,fixer}"}
             - {name: LIMIT, value: "${LIMIT:-10}"}
             - {name: HOME, value: /tmp}
           resources: {requests: {cpu: 200m, memory: 192Mi}, limits: {cpu: "2", memory: 768Mi}}
@@ -86,7 +90,7 @@ spec:
           volumeMounts: [{name: load, mountPath: /load}, {name: mongo-ca, mountPath: /etc/mongo-ca}]
       volumes:
         - {name: load, configMap: {name: search-load}}
-        - {name: mongo-ca, configMap: {name: "${CA_CONFIGMAP:-ent-trust-bundle}"}}
+        - {name: mongo-ca, configMap: {name: "${CA}"}}
 EOF
 
 envoys="$(oc get pods -n "${NS}" -l "app=${SEARCH}-search-lb-0" -o jsonpath='{range .items[*]}{.metadata.name} {end}')"

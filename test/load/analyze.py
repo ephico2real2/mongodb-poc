@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """analyze.py <path>/<tag>: one row a step of a load run, from <tag>.load (the generator's JSON lines) and
-<tag>.samples (cgroup counters read from the pods about every 10 s), both written by test/load/run.sh.
+<tag>.samples (cgroup counters read from the pods about every 6 s), both written by test/load/run.sh.
 
 CPU is the growth of usage_usec between the first sample at or after a step's start and the last at or before its
 end, over the time between those two samples. Throttled periods are the growth of nr_throttled over nr_periods in
