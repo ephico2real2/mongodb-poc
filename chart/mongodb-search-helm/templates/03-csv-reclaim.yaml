@@ -269,7 +269,9 @@ spec:
                 fi
               done
 
-              if [ -n "$RECLAIMED" ]; then
+              if [ -n "$RECLAIMED" ] && [ "$VERDICT" = "no-subscription" ]; then
+                log "reclaimed:${RECLAIMED} — nothing of ${PACKAGE} is left in the way of the Subscription"
+              elif [ -n "$RECLAIMED" ]; then
                 log "reclaimed:${RECLAIMED} — OLM will re-resolve the Subscription on its own"
               elif [ -n "$UNSETTLED" ]; then
                 # A candidate was found but never settled inside the budget. That is the orphan case with

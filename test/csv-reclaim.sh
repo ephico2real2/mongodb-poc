@@ -128,7 +128,7 @@ new referenced; csv "${OLD}" Succeeded; sub "${PKG}" "${PKG}" "${OLD}" "-"; run
   && ok "a ClusterServiceVersion its Subscription has installed is left alone" || bad "referenced CSV: rc=$rc deleted=$(deleted): $out"
 
 new orphan; csv "${OLD}" Succeeded; sub "${PKG}" "${PKG}" "-" "-\n-\nTrue"; run 20
-[[ $rc == 0 && "$(deleted)" == 1 && "$out" == *"ResolutionFailed"*"ORPHANED"*"reclaimed: ${OLD}"* ]] && ! there "${OLD}" \
+[[ $rc == 0 && "$(deleted)" == 1 && "$out" == *"ResolutionFailed"*"ORPHANED"*"reclaimed: ${OLD} — OLM will re-resolve the Subscription on its own"* ]] && ! there "${OLD}" \
   && grep -q "^delete clusterserviceversion.operators.coreos.com/${OLD} -n ${NS} --wait=false\$" "${FAKE}/calls" \
   && ok "an orphan is deleted once OLM reports ResolutionFailed, by its full name and without waiting" || bad "orphan with ResolutionFailed: rc=$rc deleted=$(deleted): $out"
 
@@ -165,7 +165,7 @@ echo 'Error from server (Forbidden): clusterserviceversions.operators.coreos.com
 
 # ------------------------------------------ no Subscription of this package: the verdict Argo CD's wave -3 runs on
 new nosub; csv "${OLD}" Succeeded; run 60
-[[ $rc == 0 && "$(deleted)" == 1 && $took -le 5 && "$out" == *"no Subscription of ${PKG} in ${NS}"*"ORPHANED"*"${OLD}: gone"*"reclaimed: ${OLD}"* ]] && ! there "${OLD}" \
+[[ $rc == 0 && "$(deleted)" == 1 && $took -le 5 && "$out" == *"no Subscription of ${PKG} in ${NS}"*"ORPHANED"*"${OLD}: gone"*"reclaimed: ${OLD} — nothing of ${PKG} is left in the way of the Subscription"* ]] && ! there "${OLD}" \
   && [[ "$out" != *"waiting for OLM to report"* ]] \
   && ok "with no Subscription, an orphan is deleted at once and seen to be gone" || bad "no Subscription: rc=$rc deleted=$(deleted) took=${took}s: $out"
 
