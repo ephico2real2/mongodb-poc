@@ -589,8 +589,10 @@ When you change `operator.version`, change `appVersion` in `Chart.yaml` to match
 Every hook also carries Argo CD annotations, and [`examples/argocd-application.yaml`](examples/argocd-application.yaml)
 shows an Application. It sets `skipCrds: true`, so Argo CD never owns a CRD that OLM manages, and `releaseName`,
 because the names of the chart's objects start with the release name: an Application that takes over from a Helm
-release, or hands back to one, must use that release's name. Without it Argo CD uses the Application's name, and
-the example's OperatorGroup would be `mongodb-search-mongodb-search-helm` where Helm made `mongot-mongodb-search-helm`.
+release, or hands back to one, needs that release's name for its OperatorGroup and its hooks' objects to be the
+same ones (the MongoDBSearch and the Route are named from the values). Without it Argo CD uses the Application's
+name, and the example's OperatorGroup would be `mongodb-search-mongodb-search-helm` where Helm made
+`mongot-mongodb-search-helm`.
 
 **Run on the lab**, 2026-10-10, with OpenShift GitOps 1.22.0 (Argo CD 3.5.3) and chart 0.3.15: the example's
 Application with `examples/values-crc.yaml`, `search.keepOnUninstall=true` and manual sync. The Helm release was
@@ -598,20 +600,28 @@ uninstalled first, with the MongoDBSearch kept ([volumes.md](volumes.md)).
 
 | Step | Result |
 | --- | --- |
-| The Application is created | 28 resources compared. The MongoDBSearch read `Synced` at once: the live object is what the chart renders. The rest read `Missing` |
-| First sync | `Failed` after 525 s. The operator was installed (InstallPlan `Complete`, ClusterServiceVersion `Succeeded`), and Argo CD failed the Subscription's task on its health: `ResolutionFailed \| True`, the condition the csv-reclaim hook waits for before it removes the ClusterServiceVersion an uninstall leaves. The later waves were not applied. [Issue #101](https://github.com/ephico2real2/mongodb-poc/issues/101) |
+| The Application is created | 28 resources compared. The MongoDBSearch read `Synced` at once: the live object is what the chart renders. 23 read `Missing`; the four Jobs the Helm run had left read as requiring pruning |
+| First sync | `Failed` after 521 s. The operator was installed (InstallPlan `Complete`, ClusterServiceVersion `Succeeded`), and Argo CD failed the Subscription's task on its health: `ResolutionFailed \| True`, the condition the csv-reclaim hook waits for before it removes the ClusterServiceVersion an uninstall leaves. The later waves were not applied. [Issue #101](https://github.com/ephico2real2/mongodb-poc/issues/101) |
 | Second sync, nothing changed | `Succeeded`: the preflight, csv-reclaim, approver and wait hooks, and the waves in order. The Application `Synced` and `Healthy`; the MongoDBSearch, its three mongot pods and their three claims the same objects, with no restart |
-| Prune: the Application pointed at a revision of the chart without the MongoDBSearch template, and that one resource synced with prune | Argo CD showed the resource `OutOfSync`, requiring pruning. The result: `PruneSkipped`, "ignored (no prune)". The resource stayed, and the Application stayed `OutOfSync` |
-| The Application deleted with the finalizer `resources-finalizer.argocd.argoproj.io` | Gone after 36 s. Deleted: the Route, the OperatorGroup, the Subscription, the monitoring objects. Kept: the MongoDBSearch, its pods and its claims, and searches went on being answered, as after a `helm uninstall` |
-| `helm install` afterwards, the same release name, no flag | 45 s; the resource adopted, the same pods and claims. Argo CD's `tracking-id` and `last-applied-configuration` annotations stay on it |
+| Prune: the Application pointed at a revision of the chart without the MongoDBSearch template, and that one resource alone synced with prune | Argo CD showed the resource `OutOfSync`, requiring pruning. The result: `PruneSkipped`, "ignored (no prune)". The resource stayed, and the Application stayed `OutOfSync` |
+| The Application deleted with the finalizer `resources-finalizer.argocd.argoproj.io` | Gone after 36 s. Deleted: the Route, the OperatorGroup, the Subscription, the monitoring objects. Kept: the MongoDBSearch, its three mongot pods and its claims, and searches went on being answered, as after a `helm uninstall` |
+| `helm install` afterwards, the same release name, no flag | 45 s; the resource adopted, the same mongot pods and claims. Argo CD's `tracking-id` and `last-applied-configuration` annotations stay on it |
 
-The hook objects that stay after a sync (the Jobs, and the preflight's ServiceAccount, Role and RoleBinding) are
-listed by Argo CD as requiring pruning; the Application read `Synced` with them.
+The hook objects that stay after a sync are listed by Argo CD as requiring pruning, and the Application read
+`Synced` with them. They are the preflight Job, whose delete policy is `BeforeHookCreation` alone, and the
+preflight's ServiceAccount, Role and RoleBinding; the approver, csv-reclaim and wait Jobs stay only after a sync
+that failed before they succeeded. By Argo CD's source (read, not run) a sync with prune never prunes a live hook
+object: the leftovers go at the next sync, by the Jobs' `ttlSecondsAfterFinished` (600 s), or with the Application
+when it is deleted with its resources finalizer.
 
-Not run: a sync of the whole Application with prune past its first waves (two attempts ended when the lab's
-control plane restarted), a first install into a namespace with no ClusterServiceVersion, and automated sync. The
-times are those of a lab whose controller manager was restarting that night, during which no Job is recorded as
-finished: they are not the chart's.
+Not run: a sync of the whole Application with prune past wave 1 (the first attempt failed in wave -1 on the
+csv-reclaim Job's deadline while the lab's controller manager was down, the second in wave 1 when its API server
+restarted); a first install under Argo CD into a namespace with none of the chart's objects, no
+ClusterServiceVersion and no MongoDBSearch (here Helm had made the resource, Argo CD adopted it, and the gate ran
+against a search that was already serving); automated sync and `syncPolicy.retry`. The times are those of a lab
+whose controller manager was restarting that night, during which no Job is recorded as finished: they are not the
+chart's. The two Envoy pods restarted once between 03:57Z and 04:03Z, while the API server restarted, and not
+during any step above.
 
 ## Tests
 

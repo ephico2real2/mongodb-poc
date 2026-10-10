@@ -352,5 +352,5 @@ The script's own tests ([`test/prerequisites.sh`](../test/prerequisites.sh), 105
 Not tested:
 
 - A cluster where the operator is installed by someone else (`operator.install=false`).
-- Argo CD beyond the run of 2026-10-10 in the chart README, "Argo CD": a first install into an empty namespace, and automated sync.
+- Argo CD beyond the run of 2026-10-10 in the chart README, "Argo CD": a first install into a namespace with none of the chart's objects, automated sync, and `syncPolicy.retry`.
 - Anything in `dvh-gp6-rnd`.

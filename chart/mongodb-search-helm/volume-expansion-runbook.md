@@ -88,7 +88,7 @@ helm upgrade <release> <chart> -n $TargetNamespace -f my-values.yaml --timeout 2
 ```
 
 **The sync or the upgrade ends as failed, within about a minute, and that is expected.** The chart's gate (a
-PostSync hook in Argo CD, a post-upgrade hook in Helm) stops with:
+Sync hook in the last wave in Argo CD, a post-upgrade hook in Helm) stops with:
 
 ```text
 [wait] STOPPED: search.persistence.storage is now 300Gi and the StatefulSet mongot-search-0 still has 250Gi.
@@ -250,7 +250,7 @@ bash $X --expand --statefulset $STS --size 300Gi --apply     # the resource stil
 | The script | `test/expand-volumes.sh`, 53 checks against a stand-in `oc`, under bash 5 and bash 3.2, in CI on Linux and macOS | Every refusal changes nothing; one claim at a time; a pending or failed resize stops before the next pod; the one delete always has `--cascade=orphan` |
 | The script's `--check` and `--dry-run` | The lab | Read the three sizes, the class, the volumes and the pods' file systems |
 | **Step 3 on a real volume: a claim that grows** | **Nowhere by this repository.** No storage class of the lab allows it; the API refuses there with "only dynamically provisioned pvc can be resized and the storageclass that provisions the pvc must support resize" | Rests on Kubernetes', OpenShift's and VMware's documents below, and on MongoDB's own test of the same steps on another storage class (pull request 1621, open) |
-| Argo CD | Not run. The hooks carry Argo CD's annotations (PreSync, PostSync) | |
+| Argo CD | Not run for an expansion. The chart under Argo CD, without an expansion: the chart README, "Argo CD" (2026-10-10). The hooks carry Argo CD's annotations (PreSync, and Sync at waves -1 and 3) | |
 
 Run step 3 first on a cluster where losing time costs nothing, and `--pod 0` before the rest.
 
