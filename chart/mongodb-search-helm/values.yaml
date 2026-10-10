@@ -101,9 +101,10 @@ loadBalancer:
     perTryTimeout: 60s
   # CPU and memory of each Envoy pod. These are the operator's own defaults, written out. What is given here
   # replaces the operator's defaults whole: MongoDB, "If you specify this setting, the Kubernetes Operator replaces
-  # the defaults entirely", so requests alone (limits: null in a values file) run Envoy without limits. null for
-  # the whole block: the field is left out and the operator's defaults apply. A change restarts the Envoy pods one
-  # at a time.
+  # the defaults entirely", so requests alone (limits: null in a values file) run Envoy without limits. Helm
+  # merges what a values file gives with these four numbers key by key: leaving limits out keeps them, limits: null
+  # removes them. null for the whole block: the field is left out and the operator's defaults apply. A change
+  # restarts the Envoy pods one at a time.
   resources:
     requests: {cpu: 100m, memory: 128Mi}
     limits: {cpu: 500m, memory: 512Mi}

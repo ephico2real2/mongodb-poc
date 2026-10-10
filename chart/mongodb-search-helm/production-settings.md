@@ -137,14 +137,17 @@ are taken from what the projects that ship Envoy on Kubernetes set, and from two
   that number; a generous limit is what is left.
 - **The CPU request, 250m**, is above Istio's measured cost of a proxy. At "1000 http requests per second
   containing 1 KB of payload each", "a single sidecar proxy with 2 worker threads consumes about 0.20 vCPU and 60
-  MB of memory." That is HTTP/1.1 with small payloads, not searches streamed over gRPC with TLS on both sides: a
-  guide, not a measurement of this load.
-- **Memory, 256Mi requested and 1Gi at most.** On the lab each Envoy pod used 17 to 24 MiB, idle. 1Gi is Istio's
-  limit; Emissary's rule is to "keep ... memory usage below 50% of the pod's limit".
+  MB of memory." That is Istio 1.24, and by the same page's test set-up HTTP/1.1 with small payloads and mutual
+  TLS between sidecars, not searches streamed over gRPC: a guide, not a measurement of this load.
+- **Memory, 256Mi requested and 1Gi at most.** On the lab no Envoy pod used more than 32 MiB over a day, near
+  idle. 1Gi is Istio's limit; Emissary's documentation says to "keep ... memory usage below 50% of the pod's
+  limit". The limit is the only guard: the operator's Envoy has no overload manager, so a pod that reaches it is
+  killed, not slowed.
 - **What decides it is QA**, on the dashboard's Envoy section and these two: the share of periods in which the
   pod was throttled, `rate(container_cpu_cfs_throttled_periods_total[5m]) / rate(container_cpu_cfs_periods_total[5m])`
   for the Envoy container, which should stay near zero; and `container_memory_working_set_bytes` against the
-  limit. On the lab, idle, no period was throttled.
+  limit. On the lab, near idle, one period in about 2,500 was throttled on one of two pods, at its start, and
+  the share read 0 after.
 
 Where the table and the quotes are from: the operator's `controllers/operator/mongodbsearchenvoy_controller.go`
 at tag 1.13.0; Istio's [gateway chart](https://github.com/istio/istio/blob/1.31.1/manifests/charts/gateway/values.yaml),
@@ -153,7 +156,7 @@ its `pilot/cmd/pilot-agent/config/config.go` and its
 Envoy Gateway's [`api/v1alpha1/shared_types.go`](https://github.com/envoyproxy/gateway/blob/v1.9.2/api/v1alpha1/shared_types.go);
 Kuma's [`pkg/config/plugins/runtime/k8s/config.go`](https://github.com/kumahq/kuma/blob/v2.14.5/pkg/config/plugins/runtime/k8s/config.go);
 Emissary-ingress's [chart values](https://github.com/emissary-ingress/emissary/blob/v4.1.0/charts/emissary-ingress/values.yaml)
-and scaling page; Envoy's documentation at v1.37.0, `operations/cli`, `faq/performance/how_fast_is_envoy` and
+and its documentation's [scaling page](https://github.com/datawire/ambassador-docs/blob/master/docs/emissary/latest/topics/running/scaling.md); Envoy's documentation at v1.37.0, `operations/cli`, `faq/performance/how_fast_is_envoy` and
 `faq/performance/how_to_benchmark_envoy`. All read on 2026-10-10.
 
 What is given in `loadBalancer.resources` replaces the operator's defaults whole. A change restarts the Envoy
@@ -253,5 +256,6 @@ None of these can be shown on the lab, whose indexes are 16 MiB a pod on one nod
 - **A node drained**, with the two disruption budgets: that one mongot pod and one Envoy pod go at a time, how long a
   mongot pod with its vSphere disk takes to be Ready on another node, and so how long a node update takes.
 - **Envoy under a real load**: its CPU against its limit and the share of throttled periods, with one worker thread
-  for every CPU of a production node.
+  for every CPU of a production node; its memory against its limit. Where the namespace has a ResourceQuota or a
+  LimitRange, the Envoy pods' requests and limits count against it.
 - **A change of `operator.version`** under Argo CD.
