@@ -14,7 +14,7 @@ StatefulSet was deleted by a command typed by hand.
 - **The same three claims and volumes**, before and after.
 - **Searches were answered throughout**: 42 searches through mongod, one every 5 to 6 s from the push to the end,
   each with its 8 results.
-- From the push of the new size to the sync passing: 3 min 36 s, the pictures included.
+- From the push of the new size (15:57:06Z) to the sync passing (16:00:42Z): 3 min 36 s, the pictures included.
 
 ## The setup
 
@@ -308,7 +308,8 @@ The dry run and the real run together took 3 seconds. The StatefulSet is a new o
 
 ## 5. The sync passes
 
-Argo CD's second retry was running when step 4 ended. It reached the gate, which passed. No sync by hand:
+Argo CD's second retry was due when step 4 ended, and began 19 s later. It reached the gate, which passed. No sync
+by hand:
 
 ```console
 $ oc get application mongodb-search -n openshift-gitops -o jsonpath='{.status.sync.status} {.status.health.status} | {.status.operationState.phase}: {.status.operationState.message} | {.status.operationState.startedAt} to {.status.operationState.finishedAt}, retries {.status.operationState.retryCount}'
@@ -341,13 +342,14 @@ $ bash test/run.sh search | tail -1
   15 passed   0 failed   0 skipped
 ```
 
-The pods' uids and start times are those of the first install on this class, 40 minutes before.
+The pods' uids and start times are those of the first install on this class, over 40 minutes before.
 
 <!-- markdownlint-disable MD033 -->
 <img alt="The OpenShift console: the details of the pod mongot-search-0-0 after the resize. Running, created Oct 10, 2026, 10:18 AM, owner the StatefulSet mongot-search-0. Its container mongot is Running and Ready with 0 restarts, started 10:18 AM." src="screenshots/storage-resize-12-pod-after.png">
 <!-- markdownlint-enable MD033 -->
 
-*Pod 0 after: still created 10:18 AM, still 0 restarts.*
+*Pod 0 after: still created 10:18 AM, still 0 restarts. This picture is the same, byte for byte, as the one taken
+before: nothing on the pod's page changed.*
 
 ## What this test does not show
 
