@@ -83,6 +83,12 @@ search:
   # `oc delete mongodbsearch`: see volumes.md. false: an uninstall removes the resource, and every mongot volume
   # and its index go with it.
   keepOnUninstall: false
+  # A PodDisruptionBudget for the mongot pods: a node drain may take down at most maxUnavailable of them at a
+  # time, and waits for a pod to be Ready again before it takes the next. The operator creates none. It does not
+  # hold back a rolling restart, a scale-down or a deleted pod: only evictions. See disruption-budgets.md.
+  podDisruptionBudget:
+    enabled: true
+    maxUnavailable: 1
 
 # The operator-managed Envoy in front of mongot.
 loadBalancer:
@@ -95,6 +101,10 @@ loadBalancer:
     perTryTimeout: 60s
   # Envoy image override, as a full reference (name:tag or name@digest). Empty: the operator's own Envoy image.
   image: ""
+  # The same for the Envoy pods. With two Envoy pods and 1 here, one always stays to carry the searches.
+  podDisruptionBudget:
+    enabled: true
+    maxUnavailable: 1
 
 tls:
   # The operator finds the three TLS secrets by name: <prefix>-<search.name>-search-cert and the two

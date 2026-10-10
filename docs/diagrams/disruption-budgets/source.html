@@ -1,0 +1,193 @@
+<!-- SPDX-License-Identifier: MIT-0. Started from the diagram-kit template, https://github.com/ephico2real2/diagram-kit -->
+<title>Disruption Budgets On Drains</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --ground: #f5f6f8; --surface: #ffffff; --ink: #18212c; --muted: #58636f; --rule: #d7dce3;
+  --host: #a55a0b; --host-wash: #fbf1e4; --remote: #0e6f68; --remote-wash: #e3f3f1;
+  --gap: #b3261e; --gap-wash: #fbe9e7; --none: #5f6a77; --none-wash: #eef0f3;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+    --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+    --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+  --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+  --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55; margin: 0; }
+.page { max-width: 1060px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 72px; display: grid; gap: 44px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0 0 6px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+.lede { font-size: 17px; max-width: 70ch; }
+.muted { color: var(--muted); }
+code { font-family: var(--font-mono); font-size: .9em; }
+section { display: grid; gap: 14px; }
+figure { margin: 0; display: grid; gap: 10px; }
+.fig-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px; }
+.fig-scroll svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--ink); }
+figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
+.tbl { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+th { font-size: 12px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); background: var(--ground); }
+tr:last-child td { border-bottom: 0; }
+.yes { color: var(--remote); font-weight: 600; } .no { color: var(--gap); font-weight: 600; }
+.cell-gap { background: var(--gap-wash); }
+.decisions { display: grid; gap: 12px; }
+.decision { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 20px; display: grid; gap: 8px; }
+.decision .id { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.decision .q { font-weight: 600; }
+.decision .rec { font-size: 14px; border-left: 3px solid var(--remote); padding-left: 10px; }
+.decision .rec.warn { border-left-color: var(--host); }
+a { color: var(--remote); }
+:focus-visible { outline: 2px solid var(--remote); outline-offset: 2px; }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow">mongodb-poc · disruption budgets · 2026-10-10</div>
+    <h1>What a disruption budget does when nodes are drained</h1>
+    <p class="lede">The operator spreads the mongot pods and the Envoy pods over nodes by preference only, and creates no PodDisruptionBudget. The chart adds one for each kind, with at most one pod away at a time. These two figures show what that changes during a rolling node update.</p>
+  </header>
+
+  <section>
+    <h2>A rolling node update on three nodes</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 566" role="img" aria-label="A rolling node update on a cluster of three nodes. Before, each node has one mongot pod. When node 1 is drained its pod is made again on node 2, which then has two. When node 2 is drained next, without a budget both of its mongot pods are evicted in the same second and one of three is left answering; with a budget of one the second eviction is refused with a 429 until the first pod is Ready again, and two of three answer throughout.">
+          <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+            <text x="30" y="26" font-weight="600">① Before the update: one mongot pod a node</text>
+            <rect x="30" y="38" width="250" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="42" y="57" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">node 1</text>
+            <rect x="42" y="66" width="108" height="24" rx="5" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="96" y="82.5" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--remote)">mongot-0</text>
+            <rect x="365" y="38" width="250" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="377" y="57" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">node 2</text>
+            <rect x="377" y="66" width="108" height="24" rx="5" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="431" y="82.5" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--remote)">mongot-1</text>
+            <rect x="700" y="38" width="250" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="712" y="57" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">node 3</text>
+            <rect x="712" y="66" width="108" height="24" rx="5" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="766" y="82.5" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--remote)">mongot-2</text>
+
+            <text x="30" y="136" font-weight="600">② Node 1 is drained and updated: mongot-0 is made again on another node</text>
+            <rect x="30" y="148" width="250" height="62" rx="6" fill="var(--none-wash)" stroke="currentColor" stroke-width="1.2"/>
+            <text x="42" y="167" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">node 1 · drained, back, empty</text>
+            <rect x="365" y="148" width="250" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="377" y="167" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">node 2</text>
+            <rect x="377" y="176" width="108" height="24" rx="5" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="431" y="192.5" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--remote)">mongot-1</text>
+            <rect x="495" y="176" width="108" height="24" rx="5" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.3"/>
+            <text x="549" y="192.5" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--host)">mongot-0</text>
+            <rect x="700" y="148" width="250" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="712" y="167" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">node 3</text>
+            <rect x="712" y="176" width="108" height="24" rx="5" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="766" y="192.5" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--remote)">mongot-2</text>
+            <line x1="280" y1="188" x2="361" y2="188" stroke="var(--host)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="320" y="180" text-anchor="middle" fill="var(--host)">moves</text>
+            <text x="30" y="232" fill="var(--muted)">Three pods and two nodes left: one node gets two. The operator spreads the pods by preference only, and nothing moves back to node 1.</text>
+
+            <text x="30" y="270" font-weight="600">③ Node 2 is drained next: the drain asks the API to evict mongot-0 and mongot-1</text>
+
+            <rect x="30" y="284" width="445" height="30" rx="6" fill="var(--gap-wash)" stroke="var(--gap)"/>
+            <text x="252" y="304" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600" fill="var(--gap)">WITHOUT A BUDGET</text>
+            <rect x="505" y="284" width="445" height="30" rx="6" fill="var(--remote-wash)" stroke="var(--remote)"/>
+            <text x="727" y="304" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600" fill="var(--remote)">WITH A BUDGET OF 1</text>
+            <line x1="490" y1="284" x2="490" y2="506" stroke="var(--rule)" stroke-width="1.5"/>
+
+            <text x="44" y="340">evict <tspan font-family="IBM Plex Mono, monospace" font-size="12">mongot-0</tspan></text>
+            <line x1="150" y1="336" x2="200" y2="336" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah)"/>
+            <text x="210" y="340">accepted</text>
+            <text x="44" y="366">evict <tspan font-family="IBM Plex Mono, monospace" font-size="12">mongot-1</tspan></text>
+            <line x1="150" y1="362" x2="200" y2="362" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah)"/>
+            <text x="210" y="366">accepted, in the same second</text>
+            <rect x="44" y="430" width="417" height="62" rx="8" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.5"/>
+            <text x="60" y="452" font-weight="600" fill="var(--gap)">1 of 3 mongot pods is left to answer</text>
+            <text x="60" y="469">until one of the two is Ready again on another node.</text>
+            <text x="60" y="485" fill="var(--muted)">If that one pod is also restarting: no pod at all.</text>
+
+            <text x="519" y="340">evict <tspan font-family="IBM Plex Mono, monospace" font-size="12">mongot-0</tspan></text>
+            <line x1="625" y1="336" x2="675" y2="336" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah)"/>
+            <text x="685" y="340">accepted</text>
+            <text x="519" y="366">evict <tspan font-family="IBM Plex Mono, monospace" font-size="12">mongot-1</tspan></text>
+            <line x1="625" y1="362" x2="675" y2="362" stroke="var(--gap)" stroke-width="1.2" marker-end="url(#ah)"/>
+            <text x="685" y="366" fill="var(--gap)">429: refused by the budget</text>
+            <text x="519" y="392" fill="var(--muted)">The drain waits and asks again, until mongot-0 is Ready on node 1.</text>
+            <text x="519" y="416">evict <tspan font-family="IBM Plex Mono, monospace" font-size="12">mongot-1</tspan></text>
+            <line x1="625" y1="412" x2="675" y2="412" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah)"/>
+            <text x="685" y="416">accepted</text>
+            <rect x="519" y="430" width="417" height="62" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="535" y="452" font-weight="600" fill="var(--remote)">2 of 3 mongot pods answer throughout</text>
+            <text x="535" y="469">One pod is away at a time, and the next waits for it.</text>
+            <text x="535" y="485" fill="var(--muted)">The drain takes longer by the time a pod needs to be Ready.</text>
+
+            <text x="30" y="530" fill="var(--muted)">Steps ① and ② follow from Kubernetes' rules and were not run: the lab has one node. The evictions of step ③ were run there: the next figure.</text>
+            <text x="30" y="550" fill="var(--muted)">The same holds for the two Envoy pods, with their own budget of 1.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>After the first node of a rolling update is drained, one of the other two holds two mongot pods. Draining that node evicts both in the same second without a budget; with a budget of 1 the second eviction is refused until the first pod is Ready again. Drawn from Kubernetes' rules for a cluster of three nodes; not run on one by this repository.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>The same evictions, measured</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 340" role="img" aria-label="Measured on the lab: the three mongot pods evicted the way a drain evicts them, a search tried every second. Without a budget all three evictions were accepted within a second of each other, no search was answered for 37 seconds and 37 of 195 failed. With a budget of one, the second and third evictions were each refused seven times and accepted only when the pod before was Ready again, at 36 and 72 seconds; every one of 191 searches was answered.">
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+            <text x="30" y="26" font-weight="600">The three mongot pods, evicted the way a drain evicts them. A search through mongod every second.</text>
+
+            <text x="30" y="78" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--gap)">WITHOUT</text>
+            <text x="30" y="94" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--gap)">A BUDGET</text>
+            <rect x="160.0" y="62" width="266.0" height="40" rx="5" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.4"/>
+            <text x="170.0" y="80" font-weight="600" fill="var(--gap)">no search answered</text>
+            <text x="170.0" y="95" fill="var(--gap)">37 of 195 failed</text>
+            <rect x="426.0" y="62" width="504.0" height="40" rx="5" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.2"/>
+            <text x="438.0" y="87" fill="var(--remote)">answered again, by the pods as they return</text>
+            <text x="160.0" y="52" fill="var(--gap)">three evictions accepted at once</text>
+            <line x1="412.0" y1="102" x2="412.0" y2="124" stroke="var(--remote)" stroke-width="2"/><text x="412.0" y="136" text-anchor="middle" fill="var(--remote)">pod 0 Ready</text>
+            <line x1="594.0" y1="102" x2="594.0" y2="124" stroke="var(--remote)" stroke-width="2"/><text x="594.0" y="136" text-anchor="middle" fill="var(--remote)">pod 1 Ready</text>
+            <line x1="762.0" y1="102" x2="762.0" y2="124" stroke="var(--remote)" stroke-width="2"/><text x="762.0" y="136" text-anchor="middle" fill="var(--remote)">pod 2 Ready</text>
+
+            <text x="30" y="194" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--remote)">WITH A</text>
+            <text x="30" y="210" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--remote)">BUDGET OF 1</text>
+            <rect x="160.0" y="178" width="770.0" height="30" rx="5" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.4"/>
+            <text x="545.0" y="198" text-anchor="middle" font-weight="600" fill="var(--remote)">every search answered · 0 of 191 failed</text>
+            <text x="160.0" y="170">evict 0</text>
+            <text x="412.0" y="170" text-anchor="middle">evict 1</text>
+            <text x="664.0" y="170" text-anchor="middle">evict 2</text>
+            <line x1="160.0" y1="174" x2="160.0" y2="208" stroke="currentColor" stroke-width="2"/>
+            <line x1="412.0" y1="174" x2="412.0" y2="208" stroke="currentColor" stroke-width="2"/>
+            <line x1="664.0" y1="174" x2="664.0" y2="208" stroke="currentColor" stroke-width="2"/>
+            <line x1="167.0" y1="212" x2="167.0" y2="222" stroke="var(--gap)" stroke-width="1.6"/><line x1="202.0" y1="212" x2="202.0" y2="222" stroke="var(--gap)" stroke-width="1.6"/><line x1="237.0" y1="212" x2="237.0" y2="222" stroke="var(--gap)" stroke-width="1.6"/><line x1="272.0" y1="212" x2="272.0" y2="222" stroke="var(--gap)" stroke-width="1.6"/><line x1="307.0" y1="212" x2="307.0" y2="222" stroke="var(--gap)" stroke-width="1.6"/><line x1="342.0" y1="212" x2="342.0" y2="222" stroke="var(--gap)" stroke-width="1.6"/><line x1="377.0" y1="212" x2="377.0" y2="222" stroke="var(--gap)" stroke-width="1.6"/><line x1="412.0" y1="212" x2="412.0" y2="222" stroke="var(--gap)" stroke-width="1.6"/><line x1="447.0" y1="212" x2="447.0" y2="222" stroke="var(--gap)" stroke-width="1.6"/><line x1="489.0" y1="212" x2="489.0" y2="222" stroke="var(--gap)" stroke-width="1.6"/><line x1="524.0" y1="212" x2="524.0" y2="222" stroke="var(--gap)" stroke-width="1.6"/><line x1="559.0" y1="212" x2="559.0" y2="222" stroke="var(--gap)" stroke-width="1.6"/><line x1="594.0" y1="212" x2="594.0" y2="222" stroke="var(--gap)" stroke-width="1.6"/><line x1="629.0" y1="212" x2="629.0" y2="222" stroke="var(--gap)" stroke-width="1.6"/>
+            <text x="272.0" y="238" text-anchor="middle" fill="var(--gap)">evict 1 refused 7 times</text>
+            <text x="524.0" y="238" text-anchor="middle" fill="var(--gap)">evict 2 refused 7 times</text>
+            <text x="895.0" y="238" text-anchor="end" fill="var(--remote)">all three Ready at 105 s</text>
+
+            <line x1="160.0" y1="262" x2="930.0" y2="262" stroke="currentColor" stroke-width="1"/>
+            <line x1="160.0" y1="262" x2="160.0" y2="268" stroke="currentColor" stroke-width="1"/><text x="160.0" y="284" text-anchor="middle" fill="var(--muted)">0 s</text><line x1="300.0" y1="262" x2="300.0" y2="268" stroke="currentColor" stroke-width="1"/><text x="300.0" y="284" text-anchor="middle" fill="var(--muted)">20 s</text><line x1="440.0" y1="262" x2="440.0" y2="268" stroke="currentColor" stroke-width="1"/><text x="440.0" y="284" text-anchor="middle" fill="var(--muted)">40 s</text><line x1="580.0" y1="262" x2="580.0" y2="268" stroke="currentColor" stroke-width="1"/><text x="580.0" y="284" text-anchor="middle" fill="var(--muted)">60 s</text><line x1="720.0" y1="262" x2="720.0" y2="268" stroke="currentColor" stroke-width="1"/><text x="720.0" y="284" text-anchor="middle" fill="var(--muted)">80 s</text><line x1="860.0" y1="262" x2="860.0" y2="268" stroke="currentColor" stroke-width="1"/><text x="860.0" y="284" text-anchor="middle" fill="var(--muted)">100 s</text>
+            <text x="30" y="316" fill="var(--muted)">The lab, 2026-10-10: one node, three mongot pods of 16 MiB of indexes each. On a larger deployment a pod takes longer to be Ready, and so does each step.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>Measured on the lab on 2026-10-10 by asking the API to evict the pods as a drain does. Without a budget the three mongot pods went at once, and 37 of 195 searches failed over 37 seconds. With a budget of 1 they went one at a time, each waiting for the one before to be Ready, and all 191 searches were answered.</figcaption>
+    </figure>
+  </section>
+</div>

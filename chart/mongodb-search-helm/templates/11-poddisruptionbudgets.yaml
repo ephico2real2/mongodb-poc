@@ -1,0 +1,48 @@
+{{- /*
+One PodDisruptionBudget for the mongot pods and one for the Envoy pods. The operator creates none, and spreads the
+pods over nodes by preference only, so without these a node drain takes every pod of a kind that sits on the
+drained nodes at the same moment. A drain evicts through the API, and the API refuses an eviction that would
+leave more pods of the budget down than maxUnavailable; the drain then waits and tries again.
+
+maxUnavailable, not minAvailable: no number of pods makes it refuse every eviction (with one pod, that pod may
+go). The selectors are the labels the operator gives the pods. unhealthyPodEvictionPolicy AlwaysAllow is what
+Kubernetes recommends: a pod that is running and not Ready may always be evicted, so a pod that runs and never
+becomes Ready does not hold a drain for ever.
+
+They are objects of the release like the Route: an uninstall removes them, with search.keepOnUninstall too.
+*/ -}}
+{{- if .Values.search.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "mongodb-search-helm.mongotStatefulSet" . }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  maxUnavailable: {{ .Values.search.podDisruptionBudget.maxUnavailable }}
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      app: {{ include "mongodb-search-helm.mongotService" . }}
+{{- end }}
+{{- if .Values.loadBalancer.podDisruptionBudget.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "mongodb-search-helm.lbDeployment" . }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  maxUnavailable: {{ .Values.loadBalancer.podDisruptionBudget.maxUnavailable }}
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      app: {{ include "mongodb-search-helm.lbDeployment" . }}
+{{- end }}
