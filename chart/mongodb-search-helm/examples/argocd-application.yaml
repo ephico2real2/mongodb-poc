@@ -25,5 +25,6 @@ spec:
     - group: route.openshift.io
       kind: Route
       jsonPointers: [/status]
-  # No automated prune or self-heal: pruning the MongoDBSearch makes the operator delete the mongot volumes.
+  # No automated prune or self-heal: pruning the MongoDBSearch deletes the mongot volumes, unless
+  # search.keepOnUninstall is true (volumes.md).
   syncPolicy: {}

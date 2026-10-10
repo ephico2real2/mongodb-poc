@@ -75,8 +75,11 @@ search:
     storage: 10Gi
     # Empty: the cluster's default storage class.
     storageClass: thin-csi
-  # true: `helm uninstall` leaves the MongoDBSearch in place (helm.sh/resource-policy: keep). Removing the
-  # resource makes the operator delete the mongot volumes, and the index with them.
+  # true: `helm uninstall` leaves the MongoDBSearch, its pods and its volumes in place (helm.sh/resource-policy:
+  # keep) and removes the rest of the release, the Route included. Under Argo CD the resource is also kept when the
+  # Application is deleted and when a sync would prune it (Delete=false, Prune=false). It does not stop
+  # `oc delete mongodbsearch`: see volumes.md. false: an uninstall removes the resource, and every mongot volume
+  # and its index go with it.
   keepOnUninstall: false
 
 # The operator-managed Envoy in front of mongot.
