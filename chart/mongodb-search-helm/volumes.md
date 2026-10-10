@@ -89,7 +89,16 @@ So this chart has no value that keeps a volume through a scale-down: there is no
 2. **Never scale the StatefulSet by hand**, and never delete it without `--cascade=orphan`. It is the operator's:
    see [scaling.md](scaling.md) for how mongot is scaled.
 3. **`search.keepOnUninstall: true`** if an uninstall must not take the indexes with it. `helm uninstall` then
-   leaves the MongoDBSearch, its pods and its volumes; they are removed by hand when that is meant.
+   leaves the MongoDBSearch, its pods and its volumes, and removes the rest of the release, the Route included:
+   mongod cannot reach search until the chart is installed again. Under Argo CD the value also sets `Prune=false`
+   and `Delete=false` in the resource's sync options, since Argo CD takes Helm's annotation as `Delete=false` only
+   ("Supported as equivalent to `argocd.argoproj.io/sync-options: Delete=false`",
+   [Argo CD, Helm](https://argo-cd.readthedocs.io/en/stable/user-guide/helm/)): the resource is then kept when the
+   Application is deleted and when a sync would prune it
+   ([Sync Options](https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/)). It does not stop
+   `oc delete mongodbsearch`, nor a sync with `Force`, which Argo CD carries out with "the 'kubectl delete/create'
+   command". This is from Helm's and Argo CD 3.5.3's documentation and source: no uninstall and no Argo CD sync was
+   run with the value set. When the search is meant to go: `oc delete mongodbsearch <search.name> -n <namespace>`.
 4. **Change the resource through the values only.** A field of the MongoDBSearch that was patched by hand stays
    owned by that patch: on the lab, Helm 4 then refused the next upgrade that changed it ("conflict with
    \"kubectl-patch\"") until it was run with `--force-conflicts`.

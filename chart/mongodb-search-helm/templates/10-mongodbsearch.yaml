@@ -15,9 +15,12 @@ metadata:
     {{- include "mongodb-search-helm.labels" . | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "1"
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     {{- if .Values.search.keepOnUninstall }}
+    {{- /* Argo CD reads Helm's keep only when the Application is deleted; a prune needs Prune=false of its own. */}}
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true,Prune=false,Delete=false
     helm.sh/resource-policy: keep
+    {{- else }}
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     {{- end }}
 spec:
   {{- with .Values.search.version }}

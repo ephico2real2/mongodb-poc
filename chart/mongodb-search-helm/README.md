@@ -58,7 +58,7 @@ bash $P --clean                                       # removes the key files on
 From the package alone, with no clone:
 
 ```bash
-helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.13/mongodb-search-helm-0.3.13.tgz --untar
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.14/mongodb-search-helm-0.3.14.tgz --untar
 bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
 ```
 
@@ -66,7 +66,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.13/mongodb-search-helm-0.3.13.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.14/mongodb-search-helm-0.3.14.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -94,7 +94,7 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 | `search.allowVolumeLoss` | `false` | `true` for the one upgrade that lowers `search.replicas` on purpose; otherwise the preflight refuses it |
 | `search.resources` | 1 CPU / 3Gi to 3 CPU / 5Gi | Step 6a |
 | `search.persistence.storage`, `.storageClass` | `10Gi`, `thin-csi` | Step 6a. Raising the size later takes the [expansion runbook](volume-expansion-runbook.md) |
-| `search.keepOnUninstall` | `false` | Keeps the resource, and so the index, on `helm uninstall` |
+| `search.keepOnUninstall` | `false` | `true` keeps the resource, and so the index, on `helm uninstall`, and under Argo CD when the Application is deleted or a sync would prune it. The Route still goes: [volumes.md](volumes.md) |
 | `loadBalancer.externalHostname` | required | Step 6a; also the Route's host |
 | `loadBalancer.replicas` | `2` | Step 6a |
 | `loadBalancer.retryPolicy` | 2 retries, `60s` per try | Step 6a |

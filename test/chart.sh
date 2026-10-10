@@ -90,6 +90,9 @@ render -s templates/10-mongodbsearch.yaml --set search.version=1.70.1 | grep -q 
 ! render -s templates/10-mongodbsearch.yaml --set loadBalancer.image= | grep -q 'deployment:' && ok "no Envoy override without loadBalancer.image" || bad "Envoy override rendered without an image"
 render -s templates/10-mongodbsearch.yaml | grep -q 'name: ent-trust-bundle' && ok "the source CA is always rendered" || bad "source.external.tls.ca missing"
 render -s templates/10-mongodbsearch.yaml --set search.keepOnUninstall=true | grep -q 'helm.sh/resource-policy: keep' && ok "keepOnUninstall keeps the resource" || bad "keepOnUninstall"
+render -s templates/10-mongodbsearch.yaml --set search.keepOnUninstall=true | grep -q '^    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true,Prune=false,Delete=false$' && ok "keepOnUninstall also stops an Argo CD prune and delete" || bad "keepOnUninstall under Argo CD"
+[ "$(render -s templates/10-mongodbsearch.yaml | grep -c 'sync-options')" = 1 ] && render -s templates/10-mongodbsearch.yaml | grep -q '^    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true$' \
+  && ! render -s templates/10-mongodbsearch.yaml | grep -q 'resource-policy' && ok "without keepOnUninstall the resource can be pruned and is not kept" || bad "Prune=false or keep rendered by default"
 render -s templates/20-route.yaml | grep -q '^  host: mongot-search-rnd.company.net$' && ok "the Route host is externalHostname" || bad "Route host"
 render -s templates/20-route.yaml | grep -A1 'kind: Service' | grep -q 'name: mongot-search-0-proxy-svc$' \
   && ok "the Route targets the operator's proxy Service by default" || bad "Route default target"
