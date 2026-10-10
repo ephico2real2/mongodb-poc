@@ -105,7 +105,7 @@ repository.
 
 | Value | Production | Why | From |
 | --- | --- | --- | --- |
-| `loadBalancer.replicas` | `2` or more; `3` to keep two through a drain | MongoDB: "If you deploy multiple `mongot` replicas behind the load balancer and also run more than one Envoy replica, queries continue to run while the `mongot` or Envoy deployments undergo rolling restarts. With a single replica, queries see a brief gap until the pod is ready again." Its default is 1, and it names no number beyond "more than one". Two against three, measured: [disruption-budgets.md](disruption-budgets.md) | MongoDB; lab |
+| `loadBalancer.replicas` | `2` or more; `3` to keep two through a drain | MongoDB: "If you deploy multiple `mongot` replicas behind the load balancer and also run more than one Envoy replica, queries continue to run while the `mongot` or Envoy deployments undergo rolling restarts. With a single replica, queries see a brief gap until the pod is ready again." Its default is 1, and it names no number beyond "more than one". Two against three, measured: [disruption-budgets.md](disruption-budgets.md). One mongod sends every search over one connection, through one Envoy pod: under load on the lab the other Envoy pod carried nothing, so more pods are standby for a mongod and not capacity | MongoDB; lab |
 | `loadBalancer.podDisruptionBudget` | `enabled: true`, `maxUnavailable: 1`, the chart's | A node drain takes one Envoy pod at a time. Without it both went at once on the lab, and no Envoy pod was Ready for about 10 s | lab; Kubernetes |
 | `loadBalancer.externalHostname` | **To decide**: the public name mongod connects to | It is the Route's host and must be a name in the `...-search-lb-0-cert` certificate. A hostname, never an address | The chart |
 | `loadBalancer.resources` | Requests `250m` and `256Mi`; limits `2` CPUs and `1Gi`. **A starting point**, to be read against QA | Below | What the projects that ship Envoy use; Envoy's documentation; lab |
@@ -131,6 +131,10 @@ are taken from what the projects that ship Envoy on Kubernetes set, and from two
   "Envoy will allocate all streams for a given connection to a single worker thread." mongod holds a few
   long-lived connections, so one busy connection is one busy thread, and a limit of half a core lets it run half
   of every tenth of a second. The operator's 500m is the only limit under a core in the table. 2 is Istio's.
+  **Measured on the lab**: with the default limit the Envoy pod that carried the searches reached it at about
+  1,100 searches a second and was throttled in 26 to 32% of periods from there on; with 2 CPUs it was never
+  throttled, used up to 0.63 CPUs, and the 95th percentile at 32 searches at once fell from 38 to 39 ms to 20 ms
+  ([testing-envoy-under-load.md](../../docs/testing-envoy-under-load.md)).
 - **The limit also has to carry the idle workers**: one for every CPU of the node, above. Istio, which sets the
   number of workers from the CPU limit, says why: "If we are running on a 100 core machine, but with only 2 CPUs
   allocated, we want to have 2 threads, not 100, or we will get excessively throttled." This chart cannot set
@@ -138,9 +142,11 @@ are taken from what the projects that ship Envoy on Kubernetes set, and from two
 - **The CPU request, 250m**, is above Istio's measured cost of a proxy. At "1000 http requests per second
   containing 1 KB of payload each", "a single sidecar proxy with 2 worker threads consumes about 0.20 vCPU and 60
   MB of memory." That is Istio 1.24, and by the same page's test set-up HTTP/1.1 with small payloads and mutual
-  TLS between sidecars, not searches streamed over gRPC: a guide, not a measurement of this load.
+  TLS between sidecars, not searches streamed over gRPC: a guide, not a measurement of this load. On the lab,
+  with small searches, Envoy used about 0.4 CPUs at 1,100 searches a second: 0.6 thousandths of a CPU for each
+  search a second at low rates, 0.2 at the highest.
 - **Memory, 256Mi requested and 1Gi at most.** On the lab no Envoy pod used more than 32 MiB over a day, near
-  idle. 1Gi is Istio's limit; Emissary's documentation says to "keep ... memory usage below 50% of the pod's
+  idle, and 38 MiB under 3,000 searches a second. 1Gi is Istio's limit; Emissary's documentation says to "keep ... memory usage below 50% of the pod's
   limit". The limit is the only guard: the operator's Envoy has no overload manager, so a pod that reaches it is
   killed, not slowed.
 - **What decides it is QA**, on the dashboard's Envoy section and these two: the share of periods in which the
@@ -256,6 +262,7 @@ None of these can be shown on the lab, whose indexes are 16 MiB a pod on one nod
 - **A node drained**, with the two disruption budgets: that one mongot pod and one Envoy pod go at a time, how long a
   mongot pod with its vSphere disk takes to be Ready on another node, and so how long a node update takes.
 - **Envoy under a real load**: its CPU against its limit and the share of throttled periods, with one worker thread
-  for every CPU of a production node; its memory against its limit. Where the namespace has a ResourceQuota or a
+  for every CPU of a production node; its memory against its limit. `test/load/run.sh` in the repository is the
+  test that was run on the lab. Where the namespace has a ResourceQuota or a
   LimitRange, the Envoy pods' requests and limits count against it.
 - **A change of `operator.version`** under Argo CD.

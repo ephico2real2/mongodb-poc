@@ -136,12 +136,13 @@ the pod is ready again." It names no number beyond that, and gives no rule for w
 | | Two Envoy pods | Three Envoy pods |
 | --- | --- | --- |
 | During a drain, with the budget of 1 | One Envoy pod carries everything, with no second behind it (measured: 1 Ready at the lowest) | Two stay (measured: 2) |
-| A node that fails | About half of mongod's open connections are cut, the Route spreading them evenly (expected, not measured) | About a third |
+| A node that fails | The connection of a mongod is cut if the node held the Envoy pod it was on; mongod opens it again on a pod that is left (not run) | The same; a given connection is on that node less often |
 | How searches spread over the mongot pods | The same: each Envoy pod balances every search over all mongot pods, round robin | The same |
+| How much one mongod can send | One mongod sends every search over one connection, through one Envoy pod. Under load on the lab the other pod carried nothing ([testing-envoy-under-load.md](../../docs/testing-envoy-under-load.md)) | The same: the third pod is one more standby, not capacity |
 | Failed searches in the drain test | 0 of 99 | 0 of 107 |
 | Cost a pod | 100m CPU and 128Mi requested, by the operator's defaults | The same, once more |
 
-So a third Envoy pod buys redundancy during maintenance and a smaller cut when a node fails. It does not make
+So a third Envoy pod buys redundancy during maintenance. It does not make
 searches faster, and it did not change the count of failed searches on the lab. Whether Envoy is ever short of CPU
 at a real load is a reading from the dashboard, section *Is Envoy healthy?*: MongoDB gives no sizing for it.
 
