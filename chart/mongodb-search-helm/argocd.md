@@ -6,7 +6,8 @@ Argo CD operation did to the search and its volumes when it was run. Helm by han
 possible; it is not the subject here.
 
 Everything under "run" below was run on the lab on 2026-10-10: OpenShift Local 4.22.7, OpenShift GitOps 1.22.0
-(Argo CD 3.5.3), the published chart 0.3.17, mongot 1.70.1 x3, operator 1.13.0. The lab's indexes are 16 MiB a
+(Argo CD 3.5.3), the published chart 0.3.17 (0.3.18 for "Changing, scaling and growing"), mongot 1.70.1 x3,
+operator 1.13.0. The lab's indexes are 16 MiB a
 pod: its times are the chart's and the operator's, not those of building large indexes.
 
 ## In short
@@ -99,29 +100,44 @@ Each of these starts in git and ends with a check.
 | Install | The Application, the values file | Sync | The Application `Synced` and `Healthy`. `oc logs -n <namespace> job/mongot-mongodb-search-helm-wait` reads the gate only while it runs or after it failed: Argo CD deletes the Job when it succeeds |
 | Change a value | The values file | Sync | The same. A change to the MongoDBSearch's resources restarts the mongot pods one at a time, each on its volume |
 | Take a newer chart | `targetRevision` to the newer tag | Sync | The same |
-| More mongot pods | `search.replicas` up | Sync | The new pod builds every index from the collection: [scaling.md](scaling.md) |
-| Fewer mongot pods | `search.replicas` down and `search.allowVolumeLoss: true` for that sync | Sync | The preflight refuses it without the second value: each pod that goes loses its volume. [volumes.md](volumes.md) |
+| More mongot pods | `search.replicas` up | Sync | The new pod comes on a new volume claim and builds every index from the collection ([scaling.md](scaling.md), measured with `helm upgrade`; under Argo CD, Ready within 32 s on the lab's indexes) |
+| Fewer mongot pods | `search.replicas` down and `search.allowVolumeLoss: true` for that sync | Sync | The preflight refuses it without the second value: each pod that goes loses its volume. [volumes.md](volumes.md). Take `search.allowVolumeLoss` out with the next commit: left in git it lets every later scale-down through |
 | Bigger volumes | `search.persistence.storage` up | Sync, which stops at the gate by design, then the steps by hand | [volume-expansion-runbook.md](volume-expansion-runbook.md) |
 | Remove the Application and keep the search | Nothing | Delete the Application | The MongoDBSearch, its pods and its volumes stay. The Route, the Subscription and the monitoring go: below |
 | Bring it back | The Application again | Sync | One sync adopts the search that was kept: 63 to 72 s on the lab |
 | Remove the search for good | Take the Application out | Delete the Application, then `oc delete mongodbsearch <search.name> -n <namespace>` | Every mongot volume goes with it. Then `oc delete csv mongodb-kubernetes.v<version> -n <namespace>` removes the operator |
 
-Every row was run under Argo CD (below), the bigger volumes one up to the gate and its back-out: the lab's storage
-classes cannot grow a volume.
+Every row was run under Argo CD (below), except the last row's `oc delete csv`; the bigger volumes one up to the
+gate and its back-out, since the lab's storage classes cannot grow a volume.
 
-**When a sync fails at a hook**, three things are worth knowing; all three were seen on the lab.
+**When a sync fails at a hook**, these were seen on the lab.
 
 - **The reason is in the Job's log, not in Argo CD's message.** Argo CD says "Job has reached the specified backoff
-  limit". A Job that failed is kept: `oc logs -n <namespace> job/mongot-mongodb-search-helm-preflight`, or
-  `...-wait` for the gate.
+  limit". A Job that failed is kept until the next attempt replaces it, and for `jobs.ttlSecondsAfterFinished`
+  (600 s) after the last one ended: `oc logs -n <namespace> job/mongot-mongodb-search-helm-preflight`, or
+  `...-wait` for the gate. After that only Argo CD's message is left; the hooks run again on a new commit or a
+  sync by hand.
 - **Automated sync tries a failed sync again, five times.** With `automated: {}` and no `retry` of its own, Argo CD
-  retried the refused scale-down at 08:16, 08:17, 08:18, 08:19 and 08:21, and the stopped volume change five times
-  in 8 minutes, each attempt running the hooks again. A commit that corrects it is synced once those end: 49 s
-  after its push, on the lab.
+  gives the sync a retry limit of 5 with a back-off of 5 s doubling to 3 minutes (its source, not its
+  documentation; a sync by hand retries only with `--retry-limit`). Each attempt runs every hook again and begins
+  later than the time in Argo CD's message, up to 1.5 minutes on the lab: the refused scale-down was retried at
+  08:16:52, 08:17:30, 08:18:30, 08:20:07 and 08:23:02, the stopped volume change at 08:30:32, 08:31:57, 08:33:41,
+  08:35:59 and about 08:39:45. The operation reads `Running` the whole time, 7 and 11 minutes on the lab, with the
+  message "one or more synchronization tasks completed unsuccessfully. Retrying attempt #N at ..."; it reads
+  `Failed` only once the five are spent, and that revision is not synced again by itself (Argo CD's source; not
+  run): a new commit, or a sync by hand.
+- **A commit that corrects it waits for those attempts to end.** Argo CD starts no sync while an operation is in
+  progress, and the retries keep the revision that failed. On the lab the corrected scale-down was synced 49 s
+  after its push and the back-out 7 s after its, both pushed near the end of the fifth attempt; a push right after
+  the first failure waits for all five.
 - **`Synced` and `Healthy` do not mean the sync passed.** While the gate was failing on a changed volume size the
   Application read `Synced` and `Healthy`, and the MongoDBSearch read `Failed`: Argo CD has no health check for a
-  MongoDBSearch. Read the operation's phase, `oc get application <name> -n <argo cd's namespace> -o
-  jsonpath='{.status.operationState.phase}'`, and the resource's own, `oc get mongodbsearch -n <namespace>`.
+  MongoDBSearch. While the preflight was refusing a scale-down it read `OutOfSync` and `Healthy`. Read the
+  operation's phase and message, `oc get application <name> -n <argo cd's namespace> -o
+  jsonpath='{.status.operationState.phase}: {.status.operationState.message}'`, and the resource's own, `oc get
+  mongodbsearch -n <namespace>`, with `-o jsonpath='{.status.message}'` for the reason when it reads `Failed`.
+  `Pending` is its phase while a change is in progress, through every rolling restart and scale below. The first
+  40 s of a sync are the hooks; the MongoDBSearch changes after them.
 
 While the MongoDBSearch is live and no longer in the manifests, the Application stays `OutOfSync` and a sync with
 prune reports it as "ignored (no prune)".
@@ -157,8 +173,9 @@ In every one of these the Subscription and the ClusterServiceVersion were read e
 ### Changing, scaling and growing
 
 Each as a commit to the values file on the branch the lab's Application followed, synced by Argo CD itself
-(`automated: {}`), chart 0.3.18. A search through mongod was tried every 5 s throughout: none failed in any of
-these steps.
+(`automated: {}`), chart 0.3.18. A search through mongod was tried every 6 to 7 s throughout, 252 in all, and
+every one was answered with its 8 results; each search goes to one mongot pod, so this says the search kept
+answering, not that every pod did.
 
 | Operation | Result |
 | --- | --- |
@@ -167,7 +184,7 @@ these steps.
 | **Fewer mongot pods**, with `search.allowVolumeLoss: true` | One sync, `Succeeded` in 65 s. The third pod and its volume claim were gone 13 s after the pod began to go. The preflight's log: "the volumes of the pods that go are deleted". 24 searches tried |
 | **More mongot pods**: back to 3 | One sync, `Succeeded` in 71 s. The third pod came back on a new volume claim and was Ready within 32 s of appearing. 17 searches tried |
 | **Bigger volumes**: `search.persistence.storage` 4Gi to 5Gi | The sync failed at the gate, as it is meant to. Its log: "STOPPED: search.persistence.storage is now 5Gi and the StatefulSet mongot-search-0 still has 4Gi. Nothing is broken: the mongot pods run and answer as before ... Next: volume-expansion-runbook.md in the chart". The MongoDBSearch read `Failed`; the same pods and claims. 92 searches tried in the 10 minutes it was left that way |
-| **The back-out**: the old size in git | One sync, `Succeeded` in 60 s; the MongoDBSearch `Running` again 53 s after the push; no pod restarted. 17 searches tried |
+| **The back-out**: the old size in git | One sync, `Succeeded` in 60 s; the MongoDBSearch `Running` again 54 s after the push; no pod restarted. 17 searches tried |
 
 ### Charts before 0.3.17
 
