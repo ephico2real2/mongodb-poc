@@ -9,3 +9,9 @@
 *.csr
 *.pass
 .DS_Store
+# Pictures: a chart with the documents' pictures in it (2.7 MB) is refused by `helm install`, "Request entity too
+# large": Helm stores the whole chart in the release's record. The documents in docs/ link their pictures instead.
+*.png
+*.jpg
+*.jpeg
+*.gif

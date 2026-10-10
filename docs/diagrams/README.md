@@ -24,6 +24,7 @@ python3 -m venv .venv
 | --- | --- | --- |
 | [`disruption-budgets/`](disruption-budgets/source.html) | A rolling node update on three nodes without and with a disruption budget; the same evictions measured on the lab | `rolling-update,measured` |
 | [`envoy-flow/`](envoy-flow/source.html) | A request through Envoy's listener and filters; the same Envoy cluster against a headless and a ClusterIP Service | `request-lifecycle,headless-vs-clusterip` |
+| [`envoy-load/`](envoy-load/source.html) | The CPU of the busy Envoy pod against its limit at seven steps of concurrency, with the default limit and with 2 CPUs, from the performance test | `cpu-against-limit` |
 | [`grpc-through-envoy/`](grpc-through-envoy/source.html) | The path of a search over gRPC through Envoy | `request-path,movement` |
 | [`mongot-openshift/`](mongot-openshift/source.html) | mongot on OpenShift, ten figures: the network layout, the gRPC path, failure domains, and the architecture as built, bypassed at L4, proposed, and behind a Route with F5 | `network-layout,grpc-path,failure-domains,end-to-end,architecture,l4-bypass,before-route-single,after-metallb-three,architecture-proposed,architecture-route-f5` |
 | [`mongot-runbooks/`](mongot-runbooks/source.html) | The fresh install path and the TLS parties of the two runbooks | `fresh-install-path,cert-parties` |

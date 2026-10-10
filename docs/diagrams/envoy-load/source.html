@@ -1,0 +1,162 @@
+<!-- SPDX-License-Identifier: MIT-0. Started from the diagram-kit template, https://github.com/ephico2real2/diagram-kit -->
+<title>Envoy Under Load</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --ground: #f5f6f8; --surface: #ffffff; --ink: #18212c; --muted: #58636f; --rule: #d7dce3;
+  --host: #a55a0b; --host-wash: #fbf1e4; --remote: #0e6f68; --remote-wash: #e3f3f1;
+  --gap: #b3261e; --gap-wash: #fbe9e7; --none: #5f6a77; --none-wash: #eef0f3;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+    --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+    --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+  --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+  --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55; margin: 0; }
+.page { max-width: 1060px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 72px; display: grid; gap: 44px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0 0 6px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+.lede { font-size: 17px; max-width: 70ch; }
+.muted { color: var(--muted); }
+code { font-family: var(--font-mono); font-size: .9em; }
+section { display: grid; gap: 14px; }
+figure { margin: 0; display: grid; gap: 10px; }
+.fig-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px; }
+.fig-scroll svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--ink); }
+figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
+.tbl { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+th { font-size: 12px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); background: var(--ground); }
+tr:last-child td { border-bottom: 0; }
+.yes { color: var(--remote); font-weight: 600; } .no { color: var(--gap); font-weight: 600; }
+.cell-gap { background: var(--gap-wash); }
+.decisions { display: grid; gap: 12px; }
+.decision { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 20px; display: grid; gap: 8px; }
+.decision .id { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.decision .q { font-weight: 600; }
+.decision .rec { font-size: 14px; border-left: 3px solid var(--remote); padding-left: 10px; }
+.decision .rec.warn { border-left-color: var(--host); }
+a { color: var(--remote); }
+:focus-visible { outline: 2px solid var(--remote); outline-offset: 2px; }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow">mongodb-poc · performance test · 2026-10-10</div>
+    <h1>The managed Envoy under concurrent searches</h1>
+    <p class="lede">The operator gives each Envoy pod a limit of half a CPU. Under concurrent searches on the lab the pod that carried them reached that limit and was throttled; with a limit of 2 CPUs it was not.</p>
+  </header>
+  <section>
+    <h2>Envoy's CPU against its limit</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 470" role="img" aria-label="The CPU of the Envoy pod that carried the searches, at seven steps of concurrency from 1 to 64, in two runs on the lab. With the default limit of half a CPU it rose to the limit and was throttled in 3 per cent of periods at 8 searches at once and in 28 to 34 per cent from 16 on. With a limit of 2 CPUs it was never throttled and used up to 0.60 CPUs; the 95th percentile of the search time at 32 at once was 24 ms where it was 37, and at 64 at once 72 ms where it was 52.">
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+            <text x="30" y="26" font-weight="600">CPU of the Envoy pod that carried the searches, in CPUs, at each step</text>
+            <rect x="30" y="38" width="14" height="12" rx="2" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.4"/>
+            <text x="50" y="49" fill="var(--host)">limit of half a CPU</text>
+            <rect x="200" y="38" width="14" height="12" rx="2" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.4"/>
+            <text x="220" y="49" fill="var(--remote)">limit of 2 CPUs</text>
+            <text x="350" y="49" fill="var(--gap)" font-weight="600">%: periods in which Envoy was throttled</text>
+            <line x1="96" y1="300.0" x2="950" y2="300.0" stroke="var(--rule)" stroke-width="1"/>
+            <text x="88" y="304.0" text-anchor="end" fill="var(--muted)">0.0</text>
+            <line x1="96" y1="265.7" x2="950" y2="265.7" stroke="var(--rule)" stroke-width="1"/>
+            <text x="88" y="269.7" text-anchor="end" fill="var(--muted)">0.1</text>
+            <line x1="96" y1="231.4" x2="950" y2="231.4" stroke="var(--rule)" stroke-width="1"/>
+            <text x="88" y="235.4" text-anchor="end" fill="var(--muted)">0.2</text>
+            <line x1="96" y1="197.1" x2="950" y2="197.1" stroke="var(--rule)" stroke-width="1"/>
+            <text x="88" y="201.1" text-anchor="end" fill="var(--muted)">0.3</text>
+            <line x1="96" y1="162.9" x2="950" y2="162.9" stroke="var(--rule)" stroke-width="1"/>
+            <text x="88" y="166.9" text-anchor="end" fill="var(--muted)">0.4</text>
+            <line x1="96" y1="128.6" x2="950" y2="128.6" stroke="var(--rule)" stroke-width="1"/>
+            <text x="88" y="132.6" text-anchor="end" fill="var(--muted)">0.5</text>
+            <line x1="96" y1="94.3" x2="950" y2="94.3" stroke="var(--rule)" stroke-width="1"/>
+            <text x="88" y="98.3" text-anchor="end" fill="var(--muted)">0.6</text>
+            <line x1="96" y1="60.0" x2="950" y2="60.0" stroke="var(--rule)" stroke-width="1"/>
+            <text x="88" y="64.0" text-anchor="end" fill="var(--muted)">0.7</text>
+            <line x1="96" y1="128.6" x2="950" y2="128.6" stroke="var(--gap)" stroke-width="1.6"/>
+            <text x="102" y="122.6" fill="var(--gap)" font-weight="600">the default limit: half a CPU</text>
+            <rect x="140" y="251.3" width="26" height="48.7" rx="2" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.4"/>
+            <rect x="170" y="255.8" width="26" height="44.2" rx="2" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.4"/>
+            <text x="168" y="318" text-anchor="middle" font-weight="600">1</text>
+            <text x="168" y="338" text-anchor="middle" fill="var(--host)">168</text>
+            <text x="168" y="355" text-anchor="middle" fill="var(--remote)">191</text>
+            <text x="168" y="378" text-anchor="middle" fill="var(--host)">9 ms</text>
+            <text x="168" y="395" text-anchor="middle" fill="var(--remote)">8 ms</text>
+            <rect x="258" y="236.6" width="26" height="63.4" rx="2" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.4"/>
+            <rect x="288" y="233.8" width="26" height="66.2" rx="2" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.4"/>
+            <text x="286" y="318" text-anchor="middle" font-weight="600">2</text>
+            <text x="286" y="338" text-anchor="middle" fill="var(--host)">319</text>
+            <text x="286" y="355" text-anchor="middle" fill="var(--remote)">326</text>
+            <text x="286" y="378" text-anchor="middle" fill="var(--host)">10 ms</text>
+            <text x="286" y="395" text-anchor="middle" fill="var(--remote)">9 ms</text>
+            <rect x="376" y="207.8" width="26" height="92.2" rx="2" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.4"/>
+            <rect x="406" y="209.5" width="26" height="90.5" rx="2" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.4"/>
+            <text x="404" y="318" text-anchor="middle" font-weight="600">4</text>
+            <text x="404" y="338" text-anchor="middle" fill="var(--host)">590</text>
+            <text x="404" y="355" text-anchor="middle" fill="var(--remote)">577</text>
+            <text x="404" y="378" text-anchor="middle" fill="var(--host)">10 ms</text>
+            <text x="404" y="395" text-anchor="middle" fill="var(--remote)">10 ms</text>
+            <rect x="494" y="166.3" width="26" height="133.7" rx="2" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.4"/>
+            <rect x="524" y="169.0" width="26" height="131.0" rx="2" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.4"/>
+            <text x="507" y="158.3" text-anchor="middle" fill="var(--gap)" font-weight="600">3%</text>
+            <text x="522" y="318" text-anchor="middle" font-weight="600">8</text>
+            <text x="522" y="338" text-anchor="middle" fill="var(--host)">1,000</text>
+            <text x="522" y="355" text-anchor="middle" fill="var(--remote)">916</text>
+            <text x="522" y="378" text-anchor="middle" fill="var(--host)">12 ms</text>
+            <text x="522" y="395" text-anchor="middle" fill="var(--remote)">15 ms</text>
+            <rect x="612" y="140.6" width="26" height="159.4" rx="2" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.4"/>
+            <rect x="642" y="137.1" width="26" height="162.9" rx="2" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.4"/>
+            <text x="625" y="120.6" text-anchor="middle" fill="var(--gap)" font-weight="600">28%</text>
+            <text x="640" y="318" text-anchor="middle" font-weight="600">16</text>
+            <text x="640" y="338" text-anchor="middle" fill="var(--host)">1,325</text>
+            <text x="640" y="355" text-anchor="middle" fill="var(--remote)">1,436</text>
+            <text x="640" y="378" text-anchor="middle" fill="var(--host)">24 ms</text>
+            <text x="640" y="395" text-anchor="middle" fill="var(--remote)">21 ms</text>
+            <rect x="730" y="136.5" width="26" height="163.5" rx="2" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.4"/>
+            <rect x="760" y="95.0" width="26" height="205.0" rx="2" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.4"/>
+            <text x="743" y="120.6" text-anchor="middle" fill="var(--gap)" font-weight="600">32%</text>
+            <text x="758" y="318" text-anchor="middle" font-weight="600">32</text>
+            <text x="758" y="338" text-anchor="middle" fill="var(--host)">1,879</text>
+            <text x="758" y="355" text-anchor="middle" fill="var(--remote)">2,250</text>
+            <text x="758" y="378" text-anchor="middle" fill="var(--host)">37 ms</text>
+            <text x="758" y="395" text-anchor="middle" fill="var(--remote)">24 ms</text>
+            <rect x="848" y="133.4" width="26" height="166.6" rx="2" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.4"/>
+            <rect x="878" y="140.6" width="26" height="159.4" rx="2" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.4"/>
+            <text x="861" y="120.6" text-anchor="middle" fill="var(--gap)" font-weight="600">34%</text>
+            <text x="876" y="318" text-anchor="middle" font-weight="600">64</text>
+            <text x="876" y="338" text-anchor="middle" fill="var(--host)">2,452</text>
+            <text x="876" y="355" text-anchor="middle" fill="var(--remote)">2,032</text>
+            <text x="876" y="378" text-anchor="middle" fill="var(--host)">52 ms</text>
+            <text x="876" y="395" text-anchor="middle" fill="var(--remote)">72 ms</text>
+            <text x="30" y="318" fill="var(--muted)">at once</text>
+            <text x="30" y="346" fill="var(--muted)">searches</text>
+            <text x="30" y="361" fill="var(--muted)">a second</text>
+            <text x="30" y="386" fill="var(--muted)">95th pct</text>
+            <text x="30" y="426" fill="var(--muted)">The lab, 2026-10-10: one mongod connection, so one Envoy pod carried every search. Ten results a search; no search failed.</text>
+            <text x="30" y="446" fill="var(--muted)">At 64 at once with 2 CPUs, mongot was throttled at its own limit of 1 CPU in 22% of periods, and the lab was slowing.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>With the operator's default limit the busy Envoy pod was held at half a CPU from 16 searches at once and throttled in up to 34% of periods. With 2 CPUs it was never throttled and used up to 0.60 CPUs: searches were faster at 16 and 32 at once, and slower at 64, where mongot was throttled in 22% of periods and the lab was slowing. Measured on the lab, where one mongod connection carries every search.</figcaption>
+    </figure>
+  </section>
+</div>

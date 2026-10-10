@@ -258,7 +258,7 @@ bash $X --expand --statefulset $STS --size 300Gi --apply     # the resource stil
 ## What was run, and where
 
 One run from start to finish, with every command's output and the OpenShift console at each stage:
-[testing-mongot-storage-resize.md](../../docs/testing-mongot-storage-resize.md).
+[docs/testing-mongot-storage-resize.md](docs/testing-mongot-storage-resize.md).
 
 | What | Where | Result |
 | --- | --- | --- |
@@ -275,7 +275,7 @@ One run from start to finish, with every command's output and the OpenShift cons
 | `--recreate-statefulset` before every claim has grown | The lab, in that run | Refused: "claim data-mongot-search-0-1 has 4Gi, less than 5Gi: grow the claims first (--expand)" |
 | **The other order**, 5Gi to 6Gi: `--expand --size 6Gi` one pod at a time, then the values | The lab, 15:29Z to 15:50Z, the same class | The three claims had 6Gi within 5 s in all; the resource stayed `Running` at 5Gi and the Application `Synced`. `--size 4Gi` was refused: "a volume cannot be made smaller". Then the size in git: the sync stopped at the gate |
 | **The steps by hand outlasting Argo CD's retries** | The lab, in that run: step 4 was held back on purpose | Five retries, each stopped at the gate; the operation `Failed` 10 min 59 s after it began, the Application `Synced` and `Healthy` throughout. No new operation in the 200 s after a refresh. Step 4, 2 s, the resource `Running`: still no operation in 210 s. A sync by hand: `Succeeded` in 63 s. 225 searches tried in the 21 minutes, all answered; the same pods, not restarted, and the same claims from the first install to the end |
-| **The same again, recorded**, 6Gi to 7Gi, values first | The lab, 15:56Z to 16:01Z, the same class | [testing-mongot-storage-resize.md](../../docs/testing-mongot-storage-resize.md). Argo CD's second retry passed the gate, 3 min 36 s after the push; 42 searches tried, all answered; the same pods and claims |
+| **The same again, recorded**, 6Gi to 7Gi, values first | The lab, 15:56Z to 16:01Z, the same class | [docs/testing-mongot-storage-resize.md](docs/testing-mongot-storage-resize.md). Argo CD's second retry passed the gate, 3 min 36 s after the push; 42 searches tried, all answered; the same pods and claims |
 | **What that class cannot show** | | An NFS volume is a directory of an export. The driver's answer to a resize is the size it was asked for and nothing else (its `ControllerExpandVolume`; its node part has no expansion), so only the claim's number changed: the pods read "9.8G at /mongot/data, 20% used" before and after, and *Data volume used* did not fall. A disk that takes time to grow, `FileSystemResizePending`, `--restart-if-pending` and a failed resize were **run nowhere by this repository**: they rest on Kubernetes', OpenShift's and VMware's documents below, on MongoDB's own test of the same steps (pull request 1621, open), and on the script's tests against a stand-in |
 | Argo CD | Everything above. The back-out of step 2 was run under Argo CD earlier that day: [argocd.md](argocd.md). The hooks carry Argo CD's annotations (PreSync, and Sync at waves -3, -1 and 3) | |
 

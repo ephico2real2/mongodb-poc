@@ -2,10 +2,13 @@
 
 One resize of mongot's volumes, from 6Gi to 7Gi, run on the lab on 2026-10-10 from start to finish: every command
 with what it printed, and the OpenShift console at each stage. It follows
-[volume-expansion-runbook.md](../chart/mongodb-search-helm/volume-expansion-runbook.md) in the order of that
+[volume-expansion-runbook.md](../volume-expansion-runbook.md) in the order of that
 runbook, and every step by hand was done with the chart's script,
-[expand-mongot-volumes.sh](../chart/mongodb-search-helm/expand-mongot-volumes.sh). No claim was patched and no
+[expand-mongot-volumes.sh](../expand-mongot-volumes.sh). No claim was patched and no
 StatefulSet was deleted by a command typed by hand.
+
+This page is packaged with the chart; its pictures are not (a chart has to stay small), and are linked from the
+repository.
 
 ## The result
 
@@ -80,25 +83,25 @@ Every line of the check holds what the runbook asks for: three of three pods rea
 class expands, no resize under way.
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The OpenShift console, project mongodb-poc: the details of the PersistentVolumeClaim data-mongot-search-0-0, Bound. Requested capacity 6 GiB, capacity 6 GiB, used 1.91 GiB, access mode ReadWriteOnce, storage class ipsec-nas-csi, owner the StatefulSet mongot-search-0, created Oct 10, 2026, 10:18 AM. No conditions." src="screenshots/storage-resize-01-claim-before.png">
+<img alt="The OpenShift console, project mongodb-poc: the details of the PersistentVolumeClaim data-mongot-search-0-0, Bound. Requested capacity 6 GiB, capacity 6 GiB, used 1.91 GiB, access mode ReadWriteOnce, storage class ipsec-nas-csi, owner the StatefulSet mongot-search-0, created Oct 10, 2026, 10:18 AM. No conditions." src="https://raw.githubusercontent.com/ephico2real2/mongodb-poc/main/docs/screenshots/storage-resize-01-claim-before.png">
 <!-- markdownlint-enable MD033 -->
 
 *The claim of pod 0 before: requested 6 GiB, capacity 6 GiB.*
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The OpenShift console: the details of the pod mongot-search-0-0, Running, created Oct 10, 2026, 10:18 AM, owner the StatefulSet mongot-search-0. Its container mongot is Running and Ready with 0 restarts, started 10:18 AM." src="screenshots/storage-resize-02-pod-before.png">
+<img alt="The OpenShift console: the details of the pod mongot-search-0-0, Running, created Oct 10, 2026, 10:18 AM, owner the StatefulSet mongot-search-0. Its container mongot is Running and Ready with 0 restarts, started 10:18 AM." src="https://raw.githubusercontent.com/ephico2real2/mongodb-poc/main/docs/screenshots/storage-resize-02-pod-before.png">
 <!-- markdownlint-enable MD033 -->
 
 *Pod 0 before: created 10:18 AM, 0 restarts.*
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The OpenShift console: the list of PersistentVolumeClaims of mongodb-poc. Three claims, data-mongot-search-0-0, 0-1 and 0-2, each Bound, capacity 6 GiB, storage class ipsec-nas-csi." src="screenshots/storage-resize-03-claims-before.png">
+<img alt="The OpenShift console: the list of PersistentVolumeClaims of mongodb-poc. Three claims, data-mongot-search-0-0, 0-1 and 0-2, each Bound, capacity 6 GiB, storage class ipsec-nas-csi." src="https://raw.githubusercontent.com/ephico2real2/mongodb-poc/main/docs/screenshots/storage-resize-03-claims-before.png">
 <!-- markdownlint-enable MD033 -->
 
 *The three claims before: 6 GiB each.*
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The OpenShift console: the details of the StatefulSet mongot-search-0, managed by the MongoDBSearch mongot. 3 pods. Created Oct 10, 2026, 10:44 AM." src="screenshots/storage-resize-04-statefulset-before.png">
+<img alt="The OpenShift console: the details of the StatefulSet mongot-search-0, managed by the MongoDBSearch mongot. 3 pods. Created Oct 10, 2026, 10:44 AM." src="https://raw.githubusercontent.com/ephico2real2/mongodb-poc/main/docs/screenshots/storage-resize-04-statefulset-before.png">
 <!-- markdownlint-enable MD033 -->
 
 *The StatefulSet before: created 10:44 AM.*
@@ -158,7 +161,7 @@ The Application reads `Synced` and `Healthy` here while its sync is failing: rea
 automated sync Argo CD tries the failed sync again by itself, five times over about 11 minutes.
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The OpenShift console: the Pods tab of the StatefulSet mongot-search-0 while the MongoDBSearch reads Failed. Three pods, mongot-search-0-0, 0-1 and 0-2, each Running, ready 1 of 1, 0 restarts, created Oct 10, 2026, 10:18 AM or 10:19 AM." src="screenshots/storage-resize-05-pods-at-the-gate.png">
+<img alt="The OpenShift console: the Pods tab of the StatefulSet mongot-search-0 while the MongoDBSearch reads Failed. Three pods, mongot-search-0-0, 0-1 and 0-2, each Running, ready 1 of 1, 0 restarts, created Oct 10, 2026, 10:18 AM or 10:19 AM." src="https://raw.githubusercontent.com/ephico2real2/mongodb-poc/main/docs/screenshots/storage-resize-05-pods-at-the-gate.png">
 <!-- markdownlint-enable MD033 -->
 
 *The pods while the resource reads Failed: all three running, 0 restarts.*
@@ -208,19 +211,19 @@ The claim had 7Gi at the script's first look after asking, with the events `Resi
 in the same second. Their count of 3 is this claim's three resizes that hour; this one is the third.
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The OpenShift console: the details of the PersistentVolumeClaim data-mongot-search-0-0 after the script grew it. Requested capacity 7 GiB, capacity 7 GiB, used 1.91 GiB, Bound, storage class ipsec-nas-csi, created Oct 10, 2026, 10:18 AM. No conditions." src="screenshots/storage-resize-06-claim-grown.png">
+<img alt="The OpenShift console: the details of the PersistentVolumeClaim data-mongot-search-0-0 after the script grew it. Requested capacity 7 GiB, capacity 7 GiB, used 1.91 GiB, Bound, storage class ipsec-nas-csi, created Oct 10, 2026, 10:18 AM. No conditions." src="https://raw.githubusercontent.com/ephico2real2/mongodb-poc/main/docs/screenshots/storage-resize-06-claim-grown.png">
 <!-- markdownlint-enable MD033 -->
 
 *The claim of pod 0 after `--expand --pod 0`: requested 7 GiB, capacity 7 GiB, the same claim.*
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The OpenShift console: the Events tab of the claim data-mongot-search-0-0. At Oct 10, 2026, 10:58 AM: waiting for an external controller to expand this PVC; External resizer is resizing volume pvc-af5b3979-724c-4cac-9f22-a7af2194ff27, from external-resizer nfs.csi.k8s.io; Resize volume succeeded. Below them, the provisioning of the volume at 10:18 AM." src="screenshots/storage-resize-07-claim-events.png">
+<img alt="The OpenShift console: the Events tab of the claim data-mongot-search-0-0. At Oct 10, 2026, 10:58 AM: waiting for an external controller to expand this PVC; External resizer is resizing volume pvc-af5b3979-724c-4cac-9f22-a7af2194ff27, from external-resizer nfs.csi.k8s.io; Resize volume succeeded. Below them, the provisioning of the volume at 10:18 AM." src="https://raw.githubusercontent.com/ephico2real2/mongodb-poc/main/docs/screenshots/storage-resize-07-claim-events.png">
 <!-- markdownlint-enable MD033 -->
 
 *The claim's events: the resizer took the request and reported success at 10:58 AM.*
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The OpenShift console: the list of PersistentVolumeClaims mid-way. data-mongot-search-0-0 has capacity 7 GiB; data-mongot-search-0-1 and 0-2 still have 6 GiB. All Bound, storage class ipsec-nas-csi." src="screenshots/storage-resize-08-claims-one-grown.png">
+<img alt="The OpenShift console: the list of PersistentVolumeClaims mid-way. data-mongot-search-0-0 has capacity 7 GiB; data-mongot-search-0-1 and 0-2 still have 6 GiB. All Bound, storage class ipsec-nas-csi." src="https://raw.githubusercontent.com/ephico2real2/mongodb-poc/main/docs/screenshots/storage-resize-08-claims-one-grown.png">
 <!-- markdownlint-enable MD033 -->
 
 *Mid-way: one claim at 7 GiB, two still at 6 GiB. One volume at a time.*
@@ -249,7 +252,7 @@ data-mongot-search-0-2   Bound    pvc-6b8d2f2d-0ec4-40f1-9f2d-ec2664779c2b   7Gi
 ```
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The OpenShift console: the list of PersistentVolumeClaims after the script. All three claims have capacity 7 GiB, Bound, storage class ipsec-nas-csi, on the same three volumes as before." src="screenshots/storage-resize-09-claims-all-grown.png">
+<img alt="The OpenShift console: the list of PersistentVolumeClaims after the script. All three claims have capacity 7 GiB, Bound, storage class ipsec-nas-csi, on the same three volumes as before." src="https://raw.githubusercontent.com/ephico2real2/mongodb-poc/main/docs/screenshots/storage-resize-09-claims-all-grown.png">
 <!-- markdownlint-enable MD033 -->
 
 *All three claims at 7 GiB, on the same volumes.*
@@ -295,13 +298,13 @@ The dry run and the real run together took 3 seconds. The StatefulSet is a new o
 15:59:20Z); the pods are not.
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The OpenShift console: the details of the StatefulSet mongot-search-0 after it was made again, managed by the MongoDBSearch mongot. 3 pods. Created Oct 10, 2026, 10:59 AM." src="screenshots/storage-resize-10-statefulset-made-again.png">
+<img alt="The OpenShift console: the details of the StatefulSet mongot-search-0 after it was made again, managed by the MongoDBSearch mongot. 3 pods. Created Oct 10, 2026, 10:59 AM." src="https://raw.githubusercontent.com/ephico2real2/mongodb-poc/main/docs/screenshots/storage-resize-10-statefulset-made-again.png">
 <!-- markdownlint-enable MD033 -->
 
 *The StatefulSet after: created 10:59 AM, where it read 10:44 AM before. 3 pods.*
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The OpenShift console: the Pods tab of the new StatefulSet mongot-search-0. The same three pods, each Running, ready 1 of 1, 0 restarts, created Oct 10, 2026, 10:18 AM or 10:19 AM: 40 minutes before the StatefulSet that now owns them." src="screenshots/storage-resize-11-pods-after.png">
+<img alt="The OpenShift console: the Pods tab of the new StatefulSet mongot-search-0. The same three pods, each Running, ready 1 of 1, 0 restarts, created Oct 10, 2026, 10:18 AM or 10:19 AM: 40 minutes before the StatefulSet that now owns them." src="https://raw.githubusercontent.com/ephico2real2/mongodb-poc/main/docs/screenshots/storage-resize-11-pods-after.png">
 <!-- markdownlint-enable MD033 -->
 
 *Its pods: the same three, created 10:18 and 10:19 AM, 0 restarts. They are older than the StatefulSet that owns them.*
@@ -318,7 +321,7 @@ Synced Healthy | Succeeded: successfully synced (no more tasks) | 2026-10-10T15:
 
 When the steps by hand take longer than Argo CD's five retries, the operation ends as `Failed` and Argo CD does
 not try again by itself: step 5 is then one sync by hand. That was run earlier the same day, and passed in 63 s
-([argocd.md](../chart/mongodb-search-helm/argocd.md), "Growing the volumes to the end").
+([argocd.md](../argocd.md), "Growing the volumes to the end").
 
 ## 6. After
 
@@ -345,7 +348,7 @@ $ bash test/run.sh search | tail -1
 The pods' uids and start times are those of the first install on this class, over 40 minutes before.
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The OpenShift console: the details of the pod mongot-search-0-0 after the resize. Running, created Oct 10, 2026, 10:18 AM, owner the StatefulSet mongot-search-0. Its container mongot is Running and Ready with 0 restarts, started 10:18 AM." src="screenshots/storage-resize-12-pod-after.png">
+<img alt="The OpenShift console: the details of the pod mongot-search-0-0 after the resize. Running, created Oct 10, 2026, 10:18 AM, owner the StatefulSet mongot-search-0. Its container mongot is Running and Ready with 0 restarts, started 10:18 AM." src="https://raw.githubusercontent.com/ephico2real2/mongodb-poc/main/docs/screenshots/storage-resize-12-pod-after.png">
 <!-- markdownlint-enable MD033 -->
 
 *Pod 0 after: still created 10:18 AM, still 0 restarts. This picture is the same, byte for byte, as the one taken
@@ -371,4 +374,4 @@ running, and Argo CD passing the same sync afterwards.
 
 Two more resizes were run on the same search before this one, 4Gi to 5Gi and 5Gi to 6Gi, the second with the
 claims grown before the values and with Argo CD's retries left to run out. They are in the runbook's last table,
-[What was run, and where](../chart/mongodb-search-helm/volume-expansion-runbook.md#what-was-run-and-where).
+[What was run, and where](../volume-expansion-runbook.md#what-was-run-and-where).
