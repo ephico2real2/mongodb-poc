@@ -32,12 +32,12 @@ helm package "${pkg}/chart" -d "${pkg}" >/dev/null 2>&1
 packed="$(tar -tzf "${pkg}"/mongodb-search-helm-*.tgz 2>/dev/null)"
 grep -qx 'mongodb-search-helm/generate-mongodbsearch-prerequisites.sh' <<<"${packed}" \
   && ok "the package holds generate-mongodbsearch-prerequisites.sh" || bad "the package lacks the prerequisites script"
-# The volume script and the three documents on volumes and scaling travel with the chart too: they are what an
+# The volume script and the documents on volumes, scaling and production settings travel with the chart too: they are what an
 # operator of the chart reads beside its values.
-for f in expand-mongot-volumes.sh volumes.md scaling.md volume-expansion-runbook.md; do
+for f in expand-mongot-volumes.sh volumes.md scaling.md volume-expansion-runbook.md production-settings.md; do
   grep -qx "mongodb-search-helm/${f}" <<<"${packed}" || bad "the package lacks ${f}"
 done
-ok "the package holds the volume script, volumes.md, scaling.md and the expansion runbook"
+ok "the package holds the volume script, volumes.md, scaling.md, the expansion runbook and the production settings"
 # The hooks send their reader to two of those documents by name.
 grep -q 'volume-expansion-runbook.md' "${CHART}/templates/40-wait.yaml" && grep -q 'volumes.md' "${CHART}/templates/00-preflight.yaml" \
   && ok "the gate names the expansion runbook and the preflight names volumes.md" || bad "a hook no longer names its document"
@@ -475,6 +475,33 @@ done
 [[ "$(yq '.spec.syncPolicy.automated.prune // "unset"' ${CHART}/examples/argocd-application-crc.yaml)" == unset && "$(yq '.spec.source.helm.valueFiles[0]' ${CHART}/examples/argocd-application-crc.yaml)" == examples/values-crc.yaml ]] \
   && ok "the lab's Application syncs by itself with the lab values, without prune" || bad "lab application: values file or prune"
 fi
+
+refused "a memory request that is not a Kubernetes quantity (8GB)" --set-string search.resources.requests.memory=8GB
+for q in 2 500m 1.5 8Gi 1100Mi 1e3; do
+  render --set-string search.resources.requests.cpu="$q" >/dev/null 2>&1 || bad "the schema refuses the quantity $q"
+done; ok "the schema takes quantities as Kubernetes writes them"
+
+# The production example: it renders, and holds what production-settings.md says a production install starts with.
+PROD=${CHART}/examples/values-production.yaml
+# search.resources is the word TO-DECIDE in the file, which the schema refuses: the tests give it numbers.
+SIZED=(--set-string search.resources.requests.cpu=2,search.resources.requests.memory=8Gi,search.resources.limits.cpu=4,search.resources.limits.memory=8Gi)
+out="$(helm template mongot "${CHART}" -n some-namespace -f "${PROD}" 2>&1)" \
+  && bad "the production example installs as it is, on resources nobody decided" \
+  || { grep -q 'search/resources/requests/cpu\|search.resources.requests.cpu' <<<"$out" && ok "the production example is refused until search.resources is decided" || bad "the production example is refused, but not for search.resources: $(tail -3 <<<"$out" | tr '\n' ' ')"; }
+p="$(helm template mongot "${CHART}" -n some-namespace -f "${PROD}" "${SIZED[@]}" -s templates/10-mongodbsearch.yaml 2>&1)"
+grep -q 'helm.sh/resource-policy: keep' <<<"$p" && grep -q 'sync-options: SkipDryRunOnMissingResource=true,Prune=false,Delete=false' <<<"$p" \
+  && ok "the production example keeps the search through an uninstall, a prune and an Application delete" || bad "production example: keepOnUninstall"
+grep -q '^  version: "1.70.1"$' <<<"$p" && grep -q '^      replicas: 3$' <<<"$p" && grep -q '^          replicas: 2$' <<<"$p" \
+  && ok "the production example names mongot's version, three mongot pods and two Envoy pods" || bad "production example: version or replicas"
+grep -q '^          storage: 300Gi$' <<<"$p" && grep -q '^          storageClass: thin-csi$' <<<"$p" \
+  && ok "the production example asks for the page's volume size on a class that expands" || bad "production example: persistence"
+[[ "$(grep -c '^        - "mongod-[123].company.net:27017"$' <<<"$p")" == 3 ]] && ok "the production example lists every member of the source" || bad "production example: source members"
+# allowVolumeLoss is read from what the preflight would receive, not from the file's text: YAML's yes and True
+# render as "true" too.
+avl="$(helm template mongot "${CHART}" -n some-namespace -f "${PROD}" "${SIZED[@]}" -s templates/00-preflight.yaml 2>/dev/null \
+  | grep -A1 '^            - name: ALLOW_VOLUME_LOSS$' | grep -c '^              value: "false"$')"
+helm template mongot "${CHART}" -n some-namespace -f "${PROD}" "${SIZED[@]}" >/dev/null 2>&1 && [[ "${avl}" == 1 ]] \
+  && ok "the production example renders whole and never allows volume loss" || bad "production example: render or allowVolumeLoss"
 
 # The Jobs' scripts: bash syntax, and shellcheck when available.
 tmp="$(mktemp -d)"; trap 'rm -rf "${tmp}"' EXIT
