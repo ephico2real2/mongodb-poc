@@ -40,6 +40,10 @@ spec:
           {{- end }}
           externalHostname: {{ .Values.loadBalancer.externalHostname }}
           replicas: {{ .Values.loadBalancer.replicas }}
+          {{- with .Values.loadBalancer.resources }}
+          resourceRequirements:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- with .Values.loadBalancer.retryPolicy }}
           retryPolicy:
             {{- toYaml . | nindent 12 }}

@@ -497,6 +497,10 @@ grep -q '^  version: "1.70.1"$' <<<"$p" && grep -q '^      replicas: 3$' <<<"$p"
   && ok "the production example names mongot's version, three mongot pods and two Envoy pods" || bad "production example: version or replicas"
 grep -q '^          storage: 300Gi$' <<<"$p" && grep -q '^          storageClass: thin-csi$' <<<"$p" \
   && ok "the production example asks for the page's volume size on a class that expands" || bad "production example: persistence"
+# Read from the rendered text like the checks around it, so that it runs where yq is not installed too (the Envoy
+# block below is skipped there).
+[[ "$(sed -n '/^          resourceRequirements:$/,/^          retryPolicy:$/p' <<<"$p" | tr -d ' ' | tr '\n' '|')" == 'resourceRequirements:|limits:|cpu:"2"|memory:1Gi|requests:|cpu:250m|memory:256Mi|retryPolicy:|' ]] \
+  && ok "the production example gives Envoy the page's resources, with a CPU limit of a core or more" || bad "production example: Envoy's resources"
 [[ "$(grep -c '^        - "mongod-[123].company.net:27017"$' <<<"$p")" == 3 ]] && ok "the production example lists every member of the source" || bad "production example: source members"
 # allowVolumeLoss is read from what the preflight would receive, not from the file's text: YAML's yes and True
 # render as "true" too.
@@ -504,6 +508,23 @@ avl="$(helm template mongot "${CHART}" -n some-namespace -f "${PROD}" "${SIZED[@
   | grep -A1 '^            - name: ALLOW_VOLUME_LOSS$' | grep -c '^              value: "false"$')"
 helm template mongot "${CHART}" -n some-namespace -f "${PROD}" "${SIZED[@]}" >/dev/null 2>&1 && [[ "${avl}" == 1 ]] \
   && ok "the production example renders whole and never allows volume loss" || bad "production example: render or allowVolumeLoss"
+
+# Envoy's CPU and memory: the operator's own defaults written out by default, replaced whole by what is given, and
+# left to the operator when the block is null.
+lbres() { render -s templates/10-mongodbsearch.yaml "$@" | yq -o=json -I=0 '.spec.clusters[0].loadBalancer.managed.resourceRequirements // "absent"'; }
+# yq's // reads an explicit null (resourceRequirements: null) as absent too: the null check asks whether the key is there.
+lbhas() { render -s templates/10-mongodbsearch.yaml "$@" | yq '.spec.clusters[0].loadBalancer.managed | has("resourceRequirements")'; }
+if command -v yq >/dev/null; then
+[ "$(lbres)" = '{"limits":{"cpu":"500m","memory":"512Mi"},"requests":{"cpu":"100m","memory":"128Mi"}}' ] \
+  && ok "Envoy's resources default to the operator's own: 100m and 128Mi requested, 500m and 512Mi at most" || bad "Envoy's default resources: $(lbres)"
+[ "$(lbres --set-string loadBalancer.resources.requests.cpu=250m,loadBalancer.resources.requests.memory=256Mi,loadBalancer.resources.limits.cpu=1,loadBalancer.resources.limits.memory=256Mi)" = '{"limits":{"cpu":"1","memory":"256Mi"},"requests":{"cpu":"250m","memory":"256Mi"}}' ] \
+  && ok "loadBalancer.resources sets Envoy's requests and limits" || bad "loadBalancer.resources given: $(lbres --set-string loadBalancer.resources.requests.cpu=250m,loadBalancer.resources.requests.memory=256Mi,loadBalancer.resources.limits.cpu=1,loadBalancer.resources.limits.memory=256Mi)"
+[ "$(lbhas --set loadBalancer.resources=null)" = false ] && ok "loadBalancer.resources null leaves the field out, for the operator's defaults" || bad "loadBalancer.resources null: the key is still rendered (has=$(lbhas --set loadBalancer.resources=null))"
+[ "$(lbres --set loadBalancer.resources.limits=null)" = '{"requests":{"cpu":"100m","memory":"128Mi"}}' ] && ok "limits null gives Envoy requests and no limits" || bad "limits null: $(lbres --set loadBalancer.resources.limits=null)"
+[ "$(render -s templates/10-mongodbsearch.yaml | yq -o=json -I=0 '.spec.clusters[0].resourceRequirements.requests.memory')" = '"3Gi"' ] && ok "mongot's resources are not Envoy's" || bad "mongot's resources changed with Envoy's"
+fi
+refused "an Envoy memory limit that is not a Kubernetes quantity (512MB)" --set-string loadBalancer.resources.limits.memory=512MB
+refused "an unknown key under loadBalancer.resources" --set loadBalancer.resources.request.cpu=100m
 
 # The disruption budgets: one for the mongot pods and one for the Envoy pods, selecting the pods by the labels the
 # operator gives them (the same labels the ServiceMonitor and the Envoy stats Service select by).

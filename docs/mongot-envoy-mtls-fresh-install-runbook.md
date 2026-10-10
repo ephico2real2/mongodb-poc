@@ -345,6 +345,13 @@ spec:
                       name: envoy
           externalHostname: mongot-search-rnd.company.net   # must be in the LB cert SAN
           replicas: 2
+          resourceRequirements:              # the operator's own defaults, written out
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
           retryPolicy:
             numRetries: 2
             perTryTimeout: 60s
