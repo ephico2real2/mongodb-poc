@@ -293,7 +293,7 @@ recreate() {
 
   if [[ "${MODE}" == dry-run ]]; then
     say "would delete StatefulSet ${STS} and leave its pods and claims (the operator makes it again at ${WANTED}):"
-    say "    oc delete statefulset ${STS} -n ${NS} --cascade=orphan"
+    say "    oc delete statefulset ${STS} -n ${NS} --cascade=orphan --wait=false"
     say "dry run: nothing was changed"
     return 0
   fi
@@ -308,7 +308,11 @@ recreate() {
   old_uid="$(get statefulset "${STS}" '{.metadata.uid}')"
   # The one delete of this script. Without --cascade=orphan it would take every pod and, by the operator's policy
   # for this StatefulSet, every volume claim with it.
-  oc delete statefulset "${STS}" -n "${NS}" --cascade=orphan >/dev/null
+  # --wait=false: oc would otherwise wait for the object to be gone by watching its name, and the operator makes a
+  # StatefulSet of the same name again within a second. A watch that starts after that (or is not allowed, as for
+  # a service account without list and watch) waits for a delete that has already happened, for up to a week. The
+  # loop below waits instead, for the new StatefulSet, and no longer than --wait.
+  oc delete statefulset "${STS}" -n "${NS}" --cascade=orphan --wait=false >/dev/null
   until new_uid="$(get statefulset "${STS}" '{.metadata.uid}')"; [[ -n "${new_uid}" && "${new_uid}" != "${old_uid}" ]]; do
     (( waited < WAIT )) || { say "the operator has not made StatefulSet ${STS} again within ${WAIT} s. The pods run on without it and nothing is lost: see the operator's log, and do NOT delete the pods" >&2; exit 2; }
     sleep "${INTERVAL}"; waited=$(( waited + INTERVAL ))

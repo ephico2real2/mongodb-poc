@@ -1,35 +1,38 @@
 # Investigation: growing mongot's volumes from the values alone
 
 Growing mongot's volumes takes steps by hand today: the size in the values, the sync, and then two runs of
-[expand-mongot-volumes.sh](../expand-mongot-volumes.sh), as
-[volume-expansion-runbook.md](../volume-expansion-runbook.md) describes. This page asks whether those two runs can be
+[expand-mongot-volumes.sh](../chart/mongodb-search-helm/expand-mongot-volumes.sh), as
+[volume-expansion-runbook.md](../chart/mongodb-search-helm/volume-expansion-runbook.md) describes. This page asks whether those two runs can be
 taken away, so that a larger `search.persistence.storage` and a flag are all it takes, and compares two ways of doing
 it: a Job in the chart, and a controller of our own with a custom resource.
 
-It is an investigation (issue 118 of the repository), on a branch. The Job described here exists on that branch as
-`search.persistence.autoExpand`, off unless asked for. Nothing here is released.
+It is the investigation behind `search.persistence.autoExpand` (issue 118 of the repository): why it is a Job, what
+was read, and what the lab showed. It is development and test material and stays in the repository. How to use the
+flag is in the chart, in the runbook, under "Letting the chart take steps 3 to 5".
 
 ## In short
 
 - **Kubernetes still cannot do it, and will not soon.** A StatefulSet's volume claim template cannot be changed.
   The proposal to allow it has been open since 2024; both of its pull requests were closed without being merged in
   2026, and it is not in Kubernetes 1.35, which OpenShift 4.22 runs.
-- **MongoDB's operator already does exactly this, for its database resources and not for search.** Its code grows
-  the claims, deletes the StatefulSet with the pods left in place, and makes it again: the three steps of our
-  runbook. The search part of the operator does not call that code. The lasting fix is a small one, and it is
-  MongoDB's.
+- **MongoDB does not support growing a search volume, and says so.** Its own open pull request for a test of the
+  steps by hand: "the Search controller has no native PVC resize". The operator does grow volumes for its database
+  resources, with the three steps of our runbook (grow the claims, delete the StatefulSet with the pods left in
+  place, make it again); the search part of the operator does not call that code. The lasting fix is a small one,
+  and it is MongoDB's.
 - **A Job in the chart does it with what we already have.** It runs between the MongoDBSearch and the gate of a sync
   or an upgrade, mounts the runbook's script from the chart, and acts only when the operator has refused the new
   size. On the lab it grew the volumes from 8Gi to 9Gi with its own rights, with the same pods and every search
-  answered, and then hung on a right it lacked; that is corrected, and the corrected Job is not yet run. It is one template of 178 lines, changes no line of the script, and needs no image and no cluster-wide
+  answered, and then never ended, waiting inside `oc delete` for a delete that had already happened; the script no
+  longer waits there, and the corrected Job is not yet run. It is one template of 178 lines, changes one flag of the script, and needs no image and no cluster-wide
   install.
 - **A controller of our own would do the same three steps, at a much higher cost.** A custom resource is not
   needed at all (the size already has a place, the MongoDBSearch); what a controller adds is that it acts without
   a sync. It needs an image of ours to build, scan and keep patched, a pod that runs all year for something done a
   few times a year, and, for a custom resource, a cluster administrator to install its definition.
-- **Recommended:** the Job, off by default, and proven on QA's real disks before it is turned on anywhere that
-  matters; no controller and no custom resource of our own; and the report to MongoDB, because the day their
-  operator does it, the Job has nothing left to do and can be removed.
+- **Decided (the owner, 2026-10-10):** the Job, with the flag off in production's values and set only for the
+  change that grows the volumes; no controller and no custom resource of our own; a smaller volume is not
+  supported, and the preflight refuses it.
 
 ## What happens today
 
@@ -44,7 +47,7 @@ values: search.persistence.storage 300Gi -> 400Gi
   sync or upgrade again  the gate passes
 ```
 
-Run to the end four times on the lab on 2026-10-10 ([testing-mongot-storage-resize.md](testing-mongot-storage-resize.md)).
+Run to the end four times on the lab on 2026-10-10 ([testing-mongot-storage-resize.md](../chart/mongodb-search-helm/docs/testing-mongot-storage-resize.md)).
 
 ## What Kubernetes, MongoDB and others do
 
@@ -54,6 +57,7 @@ Run to the end four times on the lab on 2026-10-10 ([testing-mongot-storage-resi
 | Kubernetes 1.35.6 on the lab | The API server lists no feature gate for it | `oc get --raw /metrics`, the `kubernetes_feature_enabled` lines |
 | MongoDB's operator 1.13.0, database resources | Grows the claims, waits, deletes the StatefulSet with the orphan policy, makes it again: `HandlePVCResize`, called for a standalone, a replica set, a sharded cluster, a multi-cluster replica set and the application database | `controllers/operator/create/create.go`, line 119, at tag 1.13.0 |
 | MongoDB's operator 1.13.0, search | Writes the StatefulSet with a plain create-or-update, and so meets Kubernetes' refusal | `controllers/searchcontroller/mongodbsearch_reconcile_helper.go`, line 1258 |
+| MongoDB, on search | "Customers need to grow mongot index storage, and the Search controller has no native PVC resize. Changing `persistence.single.storage` on the MongoDBSearch CR hits the immutable `volumeClaimTemplates` error, and the CR goes `Failed`." The pull request adds a test of the steps by hand, and is open, not merged | mongodb/mongodb-kubernetes pull request 1621, "Search: e2e verifying manual mongot PVC resize workaround", read 2026-10-10 |
 | MongoDB's documentation | Describes the operator's "easy expansion" for its database resources: "The easy expansion mechanism requires the default RBAC included with the Kubernetes Operator. Specifically, it requires get, list, watch, patch and update permissions for persistantVolumeClaims." The page names neither MongoDBSearch nor mongot | "Increase Storage for Persistent Volumes" |
 | Elastic's operator | The same three steps, by itself: "ECK will update the existing PersistentVolumeClaims accordingly, and recreate the StatefulSet automatically." Where the driver cannot grow a file system in use: "Pods must be manually deleted after the resize" | Elastic, "Volume claim templates" |
 | VSHN's statefulset-resize-controller | Something else: for storage that cannot grow a volume, it scales the StatefulSet down, makes new claims and copies the data. Last release 2023 | its README |
@@ -99,7 +103,8 @@ values: search.persistence.storage 300Gi -> 400Gi          (autoExpand.enabled: 
   `templates/_helpers.tpl`). The Job never decides by itself that a volume should grow: it acts where the gate would
   have stopped and sent a person to the runbook.
 - **The same script, not a copy.** The chart's tests compare the mounted script with the chart's file, byte for
-  byte. What the script refuses by hand it refuses here: a class that cannot grow a volume, a pod that is not
+  byte. (One flag of the script changed because of what the lab showed, below; by hand and in the Job it is the
+  same file.) What the script refuses by hand it refuses here: a class that cannot grow a volume, a pod that is not
   Ready, a smaller size, a claim that belongs to another StatefulSet.
 - **It retires itself.** When MongoDB's operator grows search volumes itself, the resource is never Failed for this
   reason, and the Job only ever says "nothing to grow".
@@ -113,7 +118,7 @@ Its role, in the release's namespace only:
 | On | It may | Why |
 | --- | --- | --- |
 | The MongoDBSearch | read | the size asked for, the phase, the operator's message |
-| StatefulSets | read, list, watch | the size the StatefulSet has; `oc delete` waits for the deleted one to be gone by listing and watching |
+| StatefulSets | read | the size the StatefulSet has, its pods |
 | The mongot StatefulSet, by name | delete | the one delete of the runbook, always with `--cascade=orphan` |
 | Pods | read, list | each pod Ready before and after its claim grows; the same pods afterwards |
 | Volume claims | read, list, ask for more | Kubernetes lets a claim's size only grow, and nothing else of a claim be changed |
@@ -123,7 +128,7 @@ OpenShift gives every signed-in identity (the `basic-user` cluster role, bound t
 
 The right that deserves thought is the delete of the StatefulSet: the script only ever sends it with the orphan
 policy, but the role cannot say so, and the same delete without that policy takes the pods and, by the operator's
-retention policy, the volumes with them ([volumes.md](../volumes.md)). The chart renders the role only while the
+retention policy, the volumes with them ([volumes.md](../chart/mongodb-search-helm/volumes.md)). The chart renders the role only while the
 flag is on; with the flag off again Helm removes it at the next upgrade, and Argo CD when it prunes (an Application
 without automated pruning, as the lab's, keeps it until a sync with pruning).
 Anyone who may create a pod in the namespace can use any of its service accounts, so the role gives nothing to a
@@ -151,7 +156,7 @@ StatefulSet.
 
 | The values asked for | What the Job did | Pods and claims | Searches through mongod |
 | --- | --- | --- | --- |
-| 4Gi, less than the volumes' 8Gi | Refused, with the script's words, and failed the sync. Nothing was changed | The same three pods and three claims | Answered |
+| 4Gi, less than the volumes' 8Gi | Refused, with the script's words, and failed the sync. Nothing was changed. (The preflight now refuses this earlier, before the MongoDBSearch is touched; that was added after this run) | The same three pods and three claims | Answered |
 | 8Gi again, what the volumes have | Passed with the rest of the sync, which took 67 s. Its log was not kept | The same | Answered |
 | 9Gi | Grew the three claims one pod at a time and deleted the StatefulSet with the orphan policy; the operator made it again at 9Gi, 11 s after the Job had started. **The Job then never ended** | The same three pods (no restart) and the same three claims, now 9Gi | 136 tried in the 30 minutes watched, 0 failed |
 
@@ -181,16 +186,27 @@ W1010 22:25:26 reflector.go:535] failed to list *unstructured.Unstructured: stat
 [the same every 30 to 50 s, for as long as it was watched]
 ```
 
-**What went wrong, and what was changed.** `oc delete` waits for the object to be gone by listing and watching
-it. The Job's role allowed a read and the delete of the StatefulSet, and neither a list nor a watch: the delete was
-done at once (the StatefulSet's new creation time is 22:25:26Z, the second of the first refused list), and the command
-never returned. Run by hand the script has always been run by someone who may list StatefulSets, so four runs by
-hand never showed it. The role now also allows `list` and `watch` on StatefulSets.
+**What went wrong.** `oc delete` waits for the object to be gone, and the script let it. It first reads the
+object; if it is still there it then lists and watches that name and waits for a "deleted" event, for up to a week
+(`effectiveTimeout = 168 * time.Hour` in kubectl's `delete.go`; the wait is `IsDeleted` in `wait/delete.go`, at
+v1.35.0). The Job's role allowed a read and the delete of the StatefulSet, and neither a list nor a watch, so the
+watch never began. The delete itself was done at once: the StatefulSet's new creation time is 22:25:26Z, the second
+of the first refused list.
 
-**Not yet shown.** The Job with the corrected role has not run on the lab: Argo CD's sync was still waiting for the
-hung Job when this was written, and ending that operation is the lab owner's to do. So the lab shows that the steps
-work with the Job's own rights, and that searches are answered throughout; it does not yet show a sync that passes
-from the new size to the gate with nobody touching it.
+**A first correction that was not enough.** `list` and `watch` were added to the role in the cluster at 23:04Z.
+The refusals stopped, and the command still did not return: its watch began 39 minutes after the old StatefulSet
+had gone, saw the new one of the same name, and waited for that to be deleted. The same can happen to anyone, with
+every right, if the operator makes the StatefulSet again between the command's read and its list; on the lab the
+operator did so within a second. Run by hand it had not happened in the earlier runs.
+
+**What was changed.** The script now sends the delete with `--wait=false` and does the waiting itself, as it
+already did for the next thing it needs: the new StatefulSet, for no longer than `--wait` (15 minutes). The role is
+as it was: it needs neither `list` nor `watch` on StatefulSets.
+
+**Not yet shown.** The Job with the corrected script has not run on the lab: Argo CD's sync was still waiting for
+the hung Job when this was written. So the lab shows that the steps work with the Job's own rights, and that
+searches are answered throughout; it does not yet show a sync that passes from the new size to the gate with nobody
+touching it.
 
 **The lab that day.** The first sync ran while the node was out of memory (about 2 GiB available, the
 controller-manager restarting); the machine was then given 4 GiB and 2 CPUs more and restarted. The growth to 9Gi
@@ -252,7 +268,7 @@ part that does what three lines of the Job's script do.
 | | By hand (today) | The Job | A controller (shell-operator) | A controller with our own resource (Go, Python) | MongoDB's operator does it |
 | --- | --- | --- | --- | --- | --- |
 | Steps after the values change | 3 (two runs of the script, one more sync) | 0 | 0 | 0, and a second object to write | 0 |
-| New code | none | one template of 178 lines; the script unchanged | a Deployment, an image with our script, hook bindings | a controller, its tests, its image, its release | none of ours |
+| New code | none | one template of 178 lines; one flag changed in the script | a Deployment, an image with our script, hook bindings | a controller, its tests, its image, its release | none of ours |
 | New image to own | no | no (the Jobs' `ose-cli`) | yes | yes | no |
 | Runs | when a person runs it | inside a sync or an upgrade | all year | all year | all year, already |
 | Cluster administrator needed to install | no | no | no | yes, for the definition | no |
@@ -260,33 +276,35 @@ part that does what three lines of the Job's script do.
 | Works without a sync | yes | no | yes | yes | yes |
 | Who keeps it working | us | us, in the chart | us, a second thing | us, a product | MongoDB |
 
-## Recommendation
+## What was decided
 
-1. **The Job, as built on the branch, off by default, once one sync has passed with it from the new size to the
-   gate on the lab.** It is the smallest thing that removes the steps by hand, it reuses what four lab runs have
-   proven, and it can be removed without trace.
-2. **No controller and no custom resource of our own.** The need is three steps, a few times a year, always begun by
-   a sync. A controller would be the larger part of what we own for the smallest part of what we do.
-3. **Report it to MongoDB.** Their operator has the code and the rights; the search reconciler does not call it.
-   That is the fix that lasts, and it is theirs to make.
-4. **Before the flag is on for production:** one growth on QA, on `thin-csi`, with the flag on, to learn how long a
-   real disk takes and whether its file system grows under a running mongot. Until then the runbook stays the
-   way, and stays the way back whenever the Job stops.
+The owner, 2026-10-10:
 
-## To decide
+1. **The Job goes into the chart**, as `search.persistence.autoExpand.enabled`.
+2. **The flag is `false` in production's values** and is set only when the volumes are to be grown: the larger
+   `search.persistence.storage` first or with it, then the flag, which starts the Job in that sync. `false` again
+   afterwards.
+3. **A smaller volume is not supported.** The preflight refuses it before anything is changed.
+4. **No controller and no custom resource of our own.**
 
-- Whether to take the Job into the chart at all, and whether the flag is on in the production values or set for
-  the one change that grows the volumes and off again after.
+Still open:
+
+- One growth on QA, on `thin-csi`, with the flag on, before production relies on it: how long a real disk takes, and
+  whether its file system grows under a running mongot. Until then the steps by hand remain the proven way, and they
+  remain the way on whenever the Job stops.
 - Whether the Job may restart a pod whose file system waits for it (`--restart-if-pending`): today it stops and
   says so.
-- Whether to send the report to MongoDB.
+- Whether to tell MongoDB that their search reconciler does not call their own resize code.
 
 ## Sources
 
 - Kubernetes: [enhancement issue 4650](https://github.com/kubernetes/enhancements/issues/4650),
   [its design pull request](https://github.com/kubernetes/enhancements/pull/4651),
   [its code pull request](https://github.com/kubernetes/kubernetes/pull/126530), read 2026-10-10.
+- kubectl: [`pkg/cmd/wait/delete.go`](https://github.com/kubernetes/kubernetes/blob/v1.35.0/staging/src/k8s.io/kubectl/pkg/cmd/wait/delete.go)
+  and [`pkg/cmd/delete/delete.go`](https://github.com/kubernetes/kubernetes/blob/v1.35.0/staging/src/k8s.io/kubectl/pkg/cmd/delete/delete.go) at v1.35.0.
 - MongoDB: [mongodb/mongodb-kubernetes at tag 1.13.0](https://github.com/mongodb/mongodb-kubernetes/tree/1.13.0);
+  [pull request 1621](https://github.com/mongodb/mongodb-kubernetes/pull/1621);
   [Increase Storage for Persistent Volumes](https://www.mongodb.com/docs/kubernetes/current/tutorial/resize-pv-storage/).
 - Elastic: [Volume claim templates](https://www.elastic.co/docs/deploy-manage/deploy/cloud-on-k8s/volume-claim-templates).
 - VSHN: [statefulset-resize-controller](https://github.com/vshn/statefulset-resize-controller).

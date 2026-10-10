@@ -52,11 +52,9 @@ rules:
   - apiGroups: ["mongodb.com"]
     resources: ["mongodbsearch"]
     verbs: ["get"]
-  # list and watch: `oc delete` waits for the StatefulSet to be gone by listing and watching it. Without them the
-  # delete is done and the command never returns (seen on the lab: the Job hung after the StatefulSet was made again).
   - apiGroups: ["apps"]
     resources: ["statefulsets"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get"]
   - apiGroups: ["apps"]
     resources: ["statefulsets"]
     resourceNames: [{{ include "mongodb-search-helm.mongotStatefulSet" . | quote }}]

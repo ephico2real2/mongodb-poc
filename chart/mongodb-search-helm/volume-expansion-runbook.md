@@ -39,6 +39,54 @@ X=<the chart>/expand-mongot-volumes.sh       # helm pull <chart> --untar, or a c
 STS=<search name>-search-0                   # mongot-search-0 with the chart's default name
 ```
 
+## Letting the chart take steps 3 to 5: `search.persistence.autoExpand`
+
+With `search.persistence.autoExpand.enabled: true` a Job of the chart takes steps 3 and 4 itself, with the same
+script, and the gate passes in that same sync or upgrade: step 5 is not needed. The flag is `false` in the chart and
+is meant to stay `false` in git: it is set for the change that grows the volumes, and taken out after.
+
+| # | Step | Changes |
+| --- | --- | --- |
+| 0 | Check before starting: step 0 below, all of it | Nothing |
+| 1 | In the values: the larger `search.persistence.storage` | The values |
+| 2 | In the values: `search.persistence.autoExpand.enabled: true`. In the same change as the size, or in a later one | The values |
+| 3 | Sync, or `helm upgrade`. The Job runs after the MongoDBSearch and before the gate | Each claim, one pod at a time; then the StatefulSet object |
+| 4 | Verify: step 6 below | Nothing |
+| 5 | `autoExpand.enabled: false` again, and sync or upgrade | The Job's service account, role and script are removed (under Argo CD without automated pruning: by a sync with pruning) |
+
+```yaml
+search:
+  persistence:
+    storage: 400Gi        # was 300Gi
+    autoExpand:
+      enabled: true       # for this change only
+```
+
+**Either order works.** With the size and the flag in one change, one sync does everything. With the size first, that
+sync stops at the gate as in step 2 below, the resource is `Failed`, and the sync that carries the flag finds it so
+and goes on from there.
+
+**What the Job acts on.** One state only: the MongoDBSearch is `Failed`, the operator names Kubernetes' refusal of
+the StatefulSet update, and the two sizes differ. On a first install, on a sync that changes no size and on any
+other failure it prints "nothing to grow" and ends well; the script is not run.
+
+**What the Job may do.** In the release's namespace: read the MongoDBSearch, the StatefulSet, the pods and the
+claims; ask a claim for more; and delete the mongot StatefulSet, by name. It may not delete a pod or a claim. The
+delete of the StatefulSet is the one the script sends with `--cascade=orphan`; a role cannot say "with that flag
+only", which is why the flag is on for one change and not always.
+
+**When the Job fails**, the sync or upgrade fails with it, nothing has been deleted unless its log says the
+StatefulSet was, and the pods run as before. Its log holds the script's own words: the tables of steps 3 and 4 below
+say what each means. Put right what it names and sync again, or go on by hand from step 3: the script does not
+repeat what is done.
+
+```bash
+oc logs job/<release>-mongodb-search-helm-expand-volumes -n $TargetNamespace
+```
+
+It does not restart a pod: a claim that waits for its pod (`FileSystemResizePending`, step 3) stops the Job, and
+that pod is deleted by hand as step 3 says, before the next sync.
+
 ## 0. Before starting
 
 All of these must hold. Stop if one does not.
@@ -49,7 +97,7 @@ All of these must hold. Stop if one does not.
 | Every index is `STEADY` on every pod | The dashboard: *Indexes not STEADY* is green; *Indexes being built* is 0 | No build or recovery under way |
 | The operator runs | `oc get pods -n <the operator's namespace> \| grep mongodb-kubernetes-operator` | `1/1 Running`. It is what makes the StatefulSet again in step 4 |
 | The storage class can grow a volume | The same `--check`: "(expands: true)" on every line | `true`. OpenShift's `thin-csi` for vSphere ships with `allowVolumeExpansion: true`; a cluster may have changed it. `true` says the class permits it, not that its driver can: step 3's table has what a driver without a resizer does |
-| The new size is larger than what every claim has | The same `--check`: "has ..." | A volume cannot be made smaller, ever |
+| The new size is larger than what every claim has | The same `--check`: "has ..." | A volume cannot be made smaller, ever, and the chart does not support it: the preflight refuses a size under the one the StatefulSet's volumes were made at, before anything is changed |
 | No claim is being resized | The same `--check`: "conditions []" | Empty |
 | No snapshot of the disks | Ask the vSphere administrator | VMware: "Expanding volume is not supported when volume snapshot is present, and when a Node VM snapshot is present with the volume attached to it" |
 | The datastore has room for the growth of every pod's volume | Ask the vSphere administrator: it cannot be seen from the cluster | Pods times (new size less old size) |
@@ -187,8 +235,10 @@ bash $X --recreate-statefulset --statefulset $STS --apply
 ```
 
 It refuses unless every pod is Ready and every claim has the size the resource asks for. Then it runs one command,
-`oc delete statefulset <name> -n <namespace> --cascade=orphan`, waits for the operator to make the StatefulSet again,
-and compares the pods and the claims with what they were:
+`oc delete statefulset <name> -n <namespace> --cascade=orphan --wait=false`, waits itself for the operator to make
+the StatefulSet again (no longer than `--wait`), and compares the pods and the claims with what they were. It does
+not let `oc` do the waiting: `oc` waits for a StatefulSet of that name to be gone, and the operator makes one of the
+same name within a second.
 
 ```text
 StatefulSet mongot-search-0 was made again at 300Gi; MongoDBSearch mongot is Running

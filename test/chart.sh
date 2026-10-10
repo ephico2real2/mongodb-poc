@@ -131,7 +131,7 @@ p="$(render -s templates/00-preflight.yaml)"
 for n in ent-mongot-search-cert ent-mongot-search-lb-0-cert ent-mongot-search-lb-0-client-cert search-sync-source-password ent-trust-bundle; do
   grep -q "\"${n}\"" <<<"$p" || bad "preflight Role does not name ${n}"
 done
-[[ "$(grep -c 'resourceNames' <<<"$p")" == 3 ]] && ok "the preflight reads Secrets, the ConfigMap and the MongoDBSearch by name only" || bad "preflight resourceNames"
+[[ "$(grep -c 'resourceNames' <<<"$p")" == 4 ]] && ok "the preflight reads Secrets, the ConfigMap, the MongoDBSearch and the mongot StatefulSet by name only" || bad "preflight resourceNames"
 [[ "$(grep -c 'helm.sh/hook: pre-install,pre-upgrade' <<<"$p")" == 4 ]] && ok "preflight: four pre-install hooks" || bad "preflight hooks"
 
 # Monitoring: the ServiceMonitors and the alerts are on by default; all named after search.name.
@@ -606,7 +606,7 @@ case "$*" in
   *mongodbsearch*"{.spec.clusters[0].replicas}"*) [ -z "${FAKE_REPLICAS_ERR:-}" ] || { echo "$FAKE_REPLICAS_ERR" >&2; exit 1; }
     [ -n "${FAKE_REPLICAS:-}" ] || { echo 'Error from server (NotFound): mongodbsearch.mongodb.com "mongot" not found' >&2; exit 1; }; printf '%s' "$FAKE_REPLICAS" ;;
   *mongodbsearch*"{.spec.clusters[0].persistence.single.storage}"*) printf '%s' "${FAKE_WANT_SIZE:-}" ;;
-  *statefulsets.apps*volumeClaimTemplates*) printf '%s' "${FAKE_HAVE_SIZE:-}" ;;
+  *statefulsets.apps*volumeClaimTemplates*) [ -z "${FAKE_STS_ERR:-}" ] || { echo "$FAKE_STS_ERR" >&2; exit 1; }; printf '%s' "${FAKE_HAVE_SIZE:-}" ;;
   *mongodbsearch*"{.status.phase}"*) printf '%s' "${FAKE_PHASE:-Running}" ;;
   *mongodbsearch*"{.status.message}"*) printf '%s' "${FAKE_MESSAGE:-}" ;;
   *"{.status.observedGeneration}"*) printf '%s' "${FAKE_OBSERVED:-7}" ;;
@@ -620,7 +620,7 @@ esac
 OC
 chmod +x "${hooks}/bin/oc"
 pre() { env PATH="${hooks}/bin:${PATH}" NAMESPACE=x TLS_SECRETS="a b c" PASSWORD_SECRET=p PASSWORD_KEY=password TRUST_CM=t OPERATOR_INSTALL=true \
-          OPERATORGROUP= PACKAGE=mongodb-kubernetes SEARCH=mongot "$@" bash "${hooks}/preflight.sh" 2>&1; }
+          OPERATORGROUP= PACKAGE=mongodb-kubernetes SEARCH=mongot MONGOT_STS=mongot-search-0 WANT_STORAGE=300Gi "$@" bash "${hooks}/preflight.sh" 2>&1; }
 # Fewer mongot pods means their volumes are deleted by the operator: refused unless it is asked for by name.
 out="$(pre FAKE_REPLICAS=3 WANT_REPLICAS=2 ALLOW_VOLUME_LOSS=false)"; rc=$?
 [[ $rc == 1 && "$out" == *"REFUSED: search.replicas would go from 3 to 2."*"search.allowVolumeLoss=true"*"Nothing was changed."* ]] \
@@ -645,6 +645,25 @@ out="$(pre FAKE_REPLICAS_ERR="error: the server doesn't have a resource type \"m
 [[ $rc == 0 && "$out" != *REFUSED* ]] && ok "no CRD yet is a first install" || bad "preflight before the CRD exists (exit ${rc}): ${out##*$'\n'}"
 out="$(pre FAKE_REPLICAS=abc WANT_REPLICAS=2 ALLOW_VOLUME_LOSS=false)"; rc=$?
 [[ $rc == 1 && "$out" == *"not a number: abc"* ]] && ok "a replica count that is not a number is refused, not compared" || bad "preflight and a replica count of abc (exit ${rc}): ${out##*$'\n'}"
+
+# A smaller volume is not supported: refused before the resource is touched, against the size the StatefulSet's
+# volumes were made at, whatever the notation.
+out="$(pre FAKE_REPLICAS=3 WANT_REPLICAS=3 FAKE_HAVE_SIZE=300Gi WANT_STORAGE=250Gi)"; rc=$?
+out2="$(pre FAKE_REPLICAS=3 WANT_REPLICAS=3 FAKE_HAVE_SIZE=1Ti WANT_STORAGE=1000Gi)"; rc2=$?
+[[ $rc == 1 && $rc2 == 1 && "$out" == *"REFUSED: search.persistence.storage would go from 300Gi to 250Gi. A volume cannot be made smaller, and the chart does not support it"*"Set search.persistence.storage to 300Gi or more"*"Nothing was changed."* && "$out2" == *"would go from 1Ti to 1000Gi"* ]] \
+  && ok "the preflight refuses a smaller search.persistence.storage than the volumes were made at, and says the size to keep" || bad "preflight and a smaller volume (exit ${rc}, ${rc2}): ${out##*$'\n'}"
+for case in "FAKE_HAVE_SIZE=300Gi WANT_STORAGE=300Gi" "FAKE_HAVE_SIZE=300Gi WANT_STORAGE=400Gi" "FAKE_HAVE_SIZE=1Ti WANT_STORAGE=1024Gi" "FAKE_HAVE_SIZE=322122547200 WANT_STORAGE=300Gi" "WANT_STORAGE=300Gi" \
+            "FAKE_STS_ERR=Error_from_server_(NotFound):_statefulsets.apps_not_found WANT_STORAGE=10Gi"; do
+  out="$(pre FAKE_REPLICAS=3 WANT_REPLICAS=3 ${case})"; rc=$?
+  [[ $rc == 0 && "$out" != *REFUSED* && "$out" != *"not compared"* ]] || bad "the preflight stopped, or did not compare, ${case} (exit ${rc}): ${out##*$'\n'}"
+done
+ok "the same size (in any notation), a larger one, and no StatefulSet yet pass the preflight"
+out="$(pre FAKE_REPLICAS=3 WANT_REPLICAS=3 FAKE_STS_ERR='Error from server (Forbidden): statefulsets.apps "mongot-search-0" is forbidden' WANT_STORAGE=250Gi)"; rc=$?
+[[ $rc == 1 && "$out" == *"REFUSED: cannot read StatefulSet mongot-search-0 for the size of its volumes"*"is forbidden"* ]] \
+  && ok "the preflight refuses when it cannot read the StatefulSet, instead of taking that for a first install" || bad "preflight and an unreadable StatefulSet (exit ${rc}): ${out##*$'\n'}"
+out="$(pre FAKE_REPLICAS=3 WANT_REPLICAS=3 FAKE_HAVE_SIZE=300Gi WANT_STORAGE=1e12)"; rc=$?
+[[ $rc == 0 && "$out" == *"note: search.persistence.storage 1e12 and the StatefulSet's 300Gi were not compared"* ]] \
+  && ok "a size written in a way the check does not read is let through with a note, not guessed at" || bad "preflight and a size it cannot read (exit ${rc}): ${out##*$'\n'}"
 
 gate() { env PATH="${hooks}/bin:${PATH}" NAMESPACE=x OPERATOR_INSTALL=true SUBSCRIPTION=mongodb-kubernetes PACKAGE=mongodb-kubernetes \
            TARGET=mongodb-kubernetes.v1.13.0 SEARCH=mongot MONGOT_STS=mongot-search-0 MONGOT_REPLICAS=3 ENVOY_DEPLOY=mongot-search-lb-0 ENVOY_REPLICAS=2 \
@@ -688,8 +707,8 @@ for doc in sys.stdin.read().split("\n---"):
   && ok "the gate is still Helm's last hook" || bad "the gate's hook weight"
 if command -v yq >/dev/null; then
   rules="$(render "${AE[@]}" | yq -o=json -I=0 "select(.kind==\"Role\" and .metadata.name==\"${EXPAND}\") | .rules")"
-  [[ "${rules}" == '[{"apiGroups":["mongodb.com"],"resources":["mongodbsearch"],"verbs":["get"]},{"apiGroups":["apps"],"resources":["statefulsets"],"verbs":["get","list","watch"]},{"apiGroups":["apps"],"resources":["statefulsets"],"resourceNames":["mongot-search-0"],"verbs":["delete"]},{"apiGroups":[""],"resources":["pods"],"verbs":["get","list"]},{"apiGroups":[""],"resources":["persistentvolumeclaims"],"verbs":["get","list","patch"]}]' ]] \
-    && ok "its role: read (and watch the StatefulSet, which oc delete waits by), ask a claim for more, and delete the one StatefulSet by name; no pod and no claim can be deleted" || bad "the role of the Job that grows the volumes: ${rules}"
+  [[ "${rules}" == '[{"apiGroups":["mongodb.com"],"resources":["mongodbsearch"],"verbs":["get"]},{"apiGroups":["apps"],"resources":["statefulsets"],"verbs":["get"]},{"apiGroups":["apps"],"resources":["statefulsets"],"resourceNames":["mongot-search-0"],"verbs":["delete"]},{"apiGroups":[""],"resources":["pods"],"verbs":["get","list"]},{"apiGroups":[""],"resources":["persistentvolumeclaims"],"verbs":["get","list","patch"]}]' ]] \
+    && ok "its role: read, ask a claim for more, and delete the one StatefulSet by name; it can list no StatefulSet and delete no pod and no claim" || bad "the role of the Job that grows the volumes: ${rules}"
   rules="$(render "${AE[@]}" --set search.name=srch | yq -o=json -I=0 "select(.kind==\"Role\" and .metadata.name==\"${EXPAND}\") | .rules[2].resourceNames")"
   [[ "${rules}" == '["srch-search-0"]' ]] && ok "the StatefulSet it may delete follows search.name" || bad "the StatefulSet's name in the role: ${rules}"
   # Both are read without their last newline: yq prints one more after a value.

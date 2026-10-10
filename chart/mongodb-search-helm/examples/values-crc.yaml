@@ -10,7 +10,7 @@ search:
     # The lab's NFS class (driver nfs.csi.k8s.io, csi-driver-nfs 4.13.4 with its resizer), since 2026-10-10: a
     # class whose claims can grow, which the lab's default hostpath class cannot. It was 4Gi when installed and
     # was grown to 5Gi, 6Gi, 7Gi and 8Gi with volume-expansion-runbook.md, and to 9Gi by the chart's own Job
-    # (autoExpand, below; docs/investigating-automatic-volume-expansion.md). A volume cannot be made smaller: do not
+    # (autoExpand, below; the repository's docs/investigating-automatic-volume-expansion.md). A volume cannot be made smaller: do not
     # lower this number. Each claim is a directory of one NAS export: a pod sees the export's size, not this.
     storage: 9Gi
     storageClass: ipsec-nas-csi

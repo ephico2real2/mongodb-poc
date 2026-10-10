@@ -73,7 +73,9 @@ search:
     # The size of each pod's volume. Raising it here does not grow a volume that exists: Kubernetes forbids a
     # change of a StatefulSet's volume claim template, the MongoDBSearch goes Failed (the pods keep running and
     # answering), and the upgrade's gate stops and says so. The volumes are then grown by hand:
-    # volume-expansion-runbook.md, with expand-mongot-volumes.sh, both beside this file. It cannot be lowered.
+    # volume-expansion-runbook.md, with expand-mongot-volumes.sh, both beside this file. It cannot be lowered: a
+    # smaller size than the volumes were made at is not supported, and the preflight refuses it before anything is
+    # changed.
     storage: 10Gi
     # Empty: the cluster's default storage class.
     storageClass: thin-csi
