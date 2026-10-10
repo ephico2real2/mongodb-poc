@@ -7,8 +7,12 @@ search:
     requests: {cpu: 200m, memory: 1100Mi}
     limits: {cpu: "1", memory: 2Gi}
   persistence:
-    storage: 4Gi
-    storageClass: crc-csi-hostpath-provisioner
+    # The lab's NFS class (driver nfs.csi.k8s.io, csi-driver-nfs 4.13.4 with its resizer), since 2026-10-10: a
+    # class whose claims can grow, which the lab's default hostpath class cannot. It was 4Gi when installed and
+    # was grown to 5Gi, 6Gi and 7Gi with volume-expansion-runbook.md. A volume cannot be made smaller: do not
+    # lower this number. Each claim is a directory of one NAS export: a pod sees the export's size, not this.
+    storage: 7Gi
+    storageClass: ipsec-nas-csi
 loadBalancer:
   externalHostname: grpc-search.apps-crc.testing
 source:
@@ -31,6 +35,8 @@ monitoring:
     enabled: true
     uriOptions: replicaSet=rs0
   alerts:
-    # Lab only: lowered so that MongotDataPathFillingUp fires on the lab's disk, which is about 63% used, and can
-    # be seen in the console. The chart's own levels are 70, 80 and 90 (values.yaml).
+    # Lab only: lowered so that MongotDataPathFillingUp fired on the node's disk, about 63% used, while the lab's
+    # volumes were on the hostpath class. On the NFS class above the pods read the NAS export, 20% used on
+    # 2026-10-10, so at these levels the alert does not fire. The chart's own levels are 70, 80 and 90
+    # (values.yaml).
     dataPathUsed: {info: 50, warning: 55, critical: 60}

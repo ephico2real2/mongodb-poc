@@ -25,7 +25,7 @@ installs, MongoDB Controllers for Kubernetes 1.13.0, and was measured on the lab
 | `search.replicas` set to 0 | **Deleted**, every one | Not run. MongoDB: at 0 "the Kubernetes Operator scales the StatefulSet to zero pods" |
 | The StatefulSet deleted, without `--cascade=orphan` | **Deleted**, every one | Not run |
 | The StatefulSet deleted **with** `--cascade=orphan` | Kept | The operator made the StatefulSet again within a second; the three pods were adopted without a restart and the three claims kept their uids |
-| The MongoDBSearch deleted, or `helm uninstall` with the chart's default | **Deleted**, every one | 2026-10-10. `oc delete mongodbsearch`: the StatefulSet gone after 1 s, the three mongot pods and their three claims after 12 s. `helm uninstall` with the default: the same after 11 s. The volumes read `Released`, the lab's class retaining them; a search through mongod then ended in a 504 |
+| The MongoDBSearch deleted, or `helm uninstall` with the chart's default | **Deleted**, every one | 2026-10-10. `oc delete mongodbsearch`: the StatefulSet gone after 1 s, the three mongot pods and their three claims after 12 s. `helm uninstall` with the default: the same after 11 s. The volumes read `Released`, the lab's class then (a hostpath provisioner, `Retain`) retaining them; a search through mongod then ended in a 504 |
 | `helm uninstall` with `search.keepOnUninstall: true` | Kept | 2026-10-10: Helm answered "These resources were kept due to the resource policy: [MongoDBSearch] mongot". The resource, the StatefulSet, the three mongot pods, the two Envoy pods and the three claims kept their uids, with no restart. `helm install` under the same name then adopted the resource in 42 s, without `--take-ownership`; the same pods and claims |
 
 ## Why
@@ -135,9 +135,16 @@ So this chart has no value that keeps a volume through a scale-down: there is no
    ```
 
    A volume added later (a new pod) starts with the class's policy again. A retained volume is not removed when it
-   is no longer wanted: that is then done by hand. On the lab, whose class is `Retain`, every claim deleted in the
-   tests above left its volume `Released`, with its files. Binding a released volume to a returning pod, so that it
-   goes on without a rebuild, is a procedure by hand that this repository has not run yet.
+   is no longer wanted: that is then done by hand. On the lab's hostpath class, which is `Retain`, every claim
+   deleted in the tests above left its volume `Released`, with its files. Binding a released volume to a returning
+   pod, so that it goes on without a rebuild, is a procedure by hand that this repository has not run yet.
+
+   A class can keep the files and still delete the volume object. The lab's mongot volumes have been on an NFS
+   class since 2026-10-10 (driver `nfs.csi.k8s.io`, reclaim policy `Delete`, the driver's own `onDelete: retain`,
+   one directory a claim named after the namespace and the claim). A throwaway claim deleted there took its
+   volume object with it and left its directory on the NAS, and a new claim of the same name was given that
+   directory with the file the first had written. That was not run with mongot: whether a pod that comes back to
+   its old index files goes on without a rebuild is not known here.
 
 ## Growing a volume
 

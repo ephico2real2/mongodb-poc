@@ -102,13 +102,12 @@ Each of these starts in git and ends with a check.
 | Take a newer chart | `targetRevision` to the newer tag | Sync | The same |
 | More mongot pods | `search.replicas` up | Sync | The new pod comes on a new volume claim and builds every index from the collection ([scaling.md](scaling.md), measured with `helm upgrade`; under Argo CD, Ready within 32 s on the lab's indexes) |
 | Fewer mongot pods | `search.replicas` down and `search.allowVolumeLoss: true` for that sync | Sync | The preflight refuses it without the second value: each pod that goes loses its volume. [volumes.md](volumes.md). Take `search.allowVolumeLoss` out with the next commit: left in git it lets every later scale-down through |
-| Bigger volumes | `search.persistence.storage` up | Sync, which stops at the gate by design, then the steps by hand | [volume-expansion-runbook.md](volume-expansion-runbook.md) |
+| Bigger volumes | `search.persistence.storage` up | Sync, which stops at the gate by design, then the steps by hand. A retry of that sync passes if one is still to come; once the retries are spent, a sync by hand | [volume-expansion-runbook.md](volume-expansion-runbook.md) |
 | Remove the Application and keep the search | Nothing | Delete the Application | The MongoDBSearch, its pods and its volumes stay. The Route, the Subscription and the monitoring go: below |
 | Bring it back | The Application again | Sync | One sync adopts the search that was kept: 63 to 72 s on the lab |
 | Remove the search for good | Take the Application out | Delete the Application, then `oc delete mongodbsearch <search.name> -n <namespace>` | Every mongot volume goes with it. Then `oc delete csv mongodb-kubernetes.v<version> -n <namespace>` removes the operator |
 
-Every row was run under Argo CD (below), except the last row's `oc delete csv`; the bigger volumes one up to the
-gate and its back-out, since the lab's storage classes cannot grow a volume.
+Every row was run under Argo CD (below), except the last row's `oc delete csv`.
 
 **When a sync fails at a hook**, these were seen on the lab.
 
@@ -124,8 +123,11 @@ gate and its back-out, since the lab's storage classes cannot grow a volume.
   08:16:52, 08:17:30, 08:18:30, 08:20:07 and 08:23:02, the stopped volume change at 08:30:32, 08:31:57, 08:33:41,
   08:35:59 and about 08:39:45. The operation reads `Running` the whole time, 7 and 11 minutes on the lab, with the
   message "one or more synchronization tasks completed unsuccessfully. Retrying attempt #N at ..."; it reads
-  `Failed` only once the five are spent, and that revision is not synced again by itself (Argo CD's source; not
-  run): a new commit, or a sync by hand.
+  `Failed` only once the five are spent, and that revision is not synced again by itself: a new commit, or a sync
+  by hand. Run on the lab with a volume change whose five retries were left to run out (15:29:35Z to 15:40:34Z,
+  the retries beginning about 15:30:46, 15:32:08, 15:33:45, 15:36:03 and 15:39:37): no new operation in the
+  200 s after a refresh, nor in the 210 s after the cause had been cleared and the MongoDBSearch read `Running`.
+  The Application read `Synced` all the while, so automated sync had nothing to do.
 - **A commit that corrects it waits for those attempts to end.** Argo CD starts no sync while an operation is in
   progress, and the retries keep the revision that failed. On the lab the corrected scale-down was synced 49 s
   after its push and the back-out 7 s after its, both pushed near the end of the fifth attempt; a push right after
@@ -147,7 +149,9 @@ prune reports it as "ignored (no prune)".
 All with `search.keepOnUninstall=true` and `examples/values-crc.yaml`, on the published chart 0.3.17 except where
 a commit is named. The control plane's restart counts were read before and after every step of the two tables
 below and did not move; the 0.3.15 row further down is from the earlier run that night, whose counts were not
-read. Times are UTC, 2026-10-10.
+read. Times are UTC, 2026-10-10. Until 15:16Z that day the lab's mongot volumes were on its hostpath class, which
+retains a volume and cannot grow one; after it, on an NFS class (driver `nfs.csi.k8s.io`), where the last table's
+rows were run.
 
 ### Installing and syncing
 
@@ -157,6 +161,7 @@ read. Times are UTC, 2026-10-10.
 | **Taking over from a Helm release**: `helm uninstall` with the value set, then the Application and one sync | `Succeeded` in 68 to 72 s, three times (one of them, 71 s, from the chart's commit `954968f` before its release). The MongoDBSearch read `Synced` before the first sync: the live object is what the chart renders. The same pods and volumes, no restart |
 | **A sync with nothing to change** | `Succeeded` in 55 s, from the chart's commit `71e6fc8` before its release: the hooks run each time. A sync that moved the chart from 0.3.16 to 0.3.17: 49 s |
 | **Automated sync** (`automated: {}`), the Application created over a search that was kept | Argo CD started one sync by itself: `Succeeded` in 63 s |
+| **Another storage class**: the MongoDBSearch deleted by hand (the row under *Pruning and deleting*), then `search.persistence.storageClass` changed in git, chart 0.3.19 | Argo CD started one sync by itself 2 s after it was shown the commit: `Succeeded` in 118 s (15:17:56Z to 15:19:54Z). A new MongoDBSearch, three new claims `Bound` on the new class. A search through mongod answered at the reading 74 s after the sync began, the three before it did not; the resource read `Running` after 107 s. `test/run.sh search` passed 15 of 15, and at 15:21Z each pod read all 8 indexes `STEADY` |
 
 In every one of these the Subscription and the ClusterServiceVersion were read every 3 to 4 s, and
 `ResolutionFailed` was `True` in none of the readings.
@@ -168,7 +173,7 @@ In every one of these the Subscription and the ClusterServiceVersion were read e
 | **Automated sync with prune** (`automated: {prune: true}`), the Application pointed at a revision of the chart without the MongoDBSearch template | Argo CD started one sync by itself: `Succeeded` in 52 s. The MongoDBSearch: `PruneSkipped`, "ignored (no prune)". Watched for 330 s: no second sync. The Application stayed `OutOfSync` |
 | **A sync of the whole Application with prune, by hand**, at that revision | `Succeeded` in 53 s. The MongoDBSearch: `PruneSkipped`, "ignored (no prune)" |
 | **The Application deleted** with the finalizer `resources-finalizer.argocd.argoproj.io` | Gone after 36 s, each of five times. Deleted: the Route, the OperatorGroup, the Subscription, the monitoring objects. Kept: the MongoDBSearch, its three mongot pods and its volumes. The operator's pod kept running and its ClusterServiceVersion read `Failed`, `NoOperatorGroup`, within 2 minutes. Searches through mongod went on being answered each time they were tried; after a `helm uninstall`, which removes the same Route, a new connection to the Route's host got no answer ([volumes.md](volumes.md)) |
-| **The MongoDBSearch deleted by hand**, `oc delete mongodbsearch` | The StatefulSet gone after 1 s; the three mongot pods and their three volume claims after 12 s; the two Envoy pods after 62 s. The volumes read `Released`: the lab's storage class retains them. On a class whose reclaim policy is `Delete`, `thin-csi` among them, the disks go with the claims (not run: the lab's class retains) |
+| **The MongoDBSearch deleted by hand**, `oc delete mongodbsearch` | The StatefulSet gone after 1 s; the three mongot pods and their three volume claims after 12 s; the two Envoy pods after 62 s. The volumes read `Released`: the lab's storage class retains them. On a class whose reclaim policy is `Delete`, `thin-csi` among them, the disks go with the claims (not run: the lab's class retains). Run again at 15:16Z with `automated: {}` and no `selfHeal`: Argo CD did not make the resource again. The Application read `OutOfSync` and started no operation in the 107 s until it was shown a new commit |
 
 ### Changing, scaling and growing
 
@@ -185,6 +190,23 @@ answering, not that every pod did.
 | **More mongot pods**: back to 3 | One sync, `Succeeded` in 71 s. The third pod came back on a new volume claim and was Ready within 32 s of appearing. 17 searches tried |
 | **Bigger volumes**: `search.persistence.storage` 4Gi to 5Gi | The sync failed at the gate, as it is meant to. Its log: "STOPPED: search.persistence.storage is now 5Gi and the StatefulSet mongot-search-0 still has 4Gi. Nothing is broken: the mongot pods run and answer as before ... Next: volume-expansion-runbook.md in the chart". The MongoDBSearch read `Failed`; the same pods and claims. 92 searches tried in the 10 minutes it was left that way |
 | **The back-out**: the old size in git | One sync, `Succeeded` in 60 s; the MongoDBSearch `Running` again 54 s after the push; no pod restarted. 17 searches tried |
+
+### Growing the volumes to the end
+
+[volume-expansion-runbook.md](volume-expansion-runbook.md), steps 0 to 6, with the chart's script for every step
+by hand. Chart 0.3.19 and the lab's values on a branch, `automated: {}`; the mongot volumes on an NFS class
+(`nfs.csi.k8s.io`, csi-driver-nfs 4.13.4) that allows expansion. A search through mongod was tried every 5 to
+6 s, 252 in all, and every one was answered with its 8 results. The three mongot pods were the same pods from the
+install to the end, with no restart, on the same three claims.
+
+| Operation | Result |
+| --- | --- |
+| **Values first**, 4Gi to 5Gi: the size in git, pushed at 15:25:53Z | The sync began 1 s later, after a refresh, and stopped at the gate at 15:26:44Z, the MongoDBSearch `Failed`. The claims were grown from 15:27:00Z, each within a second of being asked; the StatefulSet was made again from 15:27:24Z to 15:27:31Z and the resource read `Running`. Argo CD's first retry, already running, passed the gate: `Succeeded` at 15:27:58Z, retry count 1, with no sync by hand |
+| **Volumes first**, 5Gi to 6Gi: the claims grown before anything in git | The resource stayed `Running` at 5Gi and the Application `Synced`: Argo CD does not track the claims. Then the size in git, pushed at 15:29:33Z: the sync stopped at the gate as before |
+| **The retries left to run out**, the StatefulSet step held back | `Failed` at 15:40:34Z, 10 min 59 s after it began. The StatefulSet made again at 15:44:40Z, 2 s, the resource `Running`. Argo CD started nothing. One sync by hand at 15:48:29Z: `Succeeded` in 63 s |
+
+On that class a claim's size is a number: [the runbook's last table](volume-expansion-runbook.md#what-was-run-and-where)
+says what it could not show.
 
 ### Charts before 0.3.17
 
@@ -216,8 +238,12 @@ A cluster run by Argo CD does not need this. It is here for a cluster that was i
 ## Not run
 
 - A change of `operator.version` under Argo CD.
-- Growing a volume to the end: the lab's storage classes cannot. The sync stopping at the gate and the back-out
-  were run; the steps in between are [volume-expansion-runbook.md](volume-expansion-runbook.md)'s.
+- A volume with a file system of its own growing, as a vSphere disk does. The runbook was run to the end on an
+  NFS class, where a claim's size is a number: the driver answers a resize within a second and the pods see the
+  NAS export, the same before and after. So the wait for a disk to grow, `FileSystemResizePending`, a pod started
+  again for it and *Data volume used* falling were not seen.
+- A change of `search.persistence.storageClass` on a search that exists. The class is in the StatefulSet's volume
+  claim template, which Kubernetes does not let change, so it was changed only after the search had been deleted.
 - A namespace that also holds Subscriptions of other operators: the chart's hooks are tested for it against a
   stand-in only ([`test/csv-reclaim.sh`](../../test/csv-reclaim.sh)).
 - `selfHeal`, and a sync with `Force` or `Replace`: what [volumes.md](volumes.md) says of those is from Argo CD's
