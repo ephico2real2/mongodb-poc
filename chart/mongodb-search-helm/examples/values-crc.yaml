@@ -15,7 +15,7 @@ search:
     storage: 10Gi
     storageClass: ipsec-nas-csi
     autoExpand:
-      enabled: false
+      enabled: true
 loadBalancer:
   externalHostname: grpc-search.apps-crc.testing
 source:
