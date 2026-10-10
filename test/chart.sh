@@ -34,7 +34,7 @@ grep -qx 'mongodb-search-helm/generate-mongodbsearch-prerequisites.sh' <<<"${pac
   && ok "the package holds generate-mongodbsearch-prerequisites.sh" || bad "the package lacks the prerequisites script"
 # The volume script and the documents on volumes, scaling and production settings travel with the chart too: they are what an
 # operator of the chart reads beside its values.
-for f in expand-mongot-volumes.sh volumes.md scaling.md volume-expansion-runbook.md production-settings.md; do
+for f in expand-mongot-volumes.sh volumes.md scaling.md volume-expansion-runbook.md production-settings.md disruption-budgets.md; do
   grep -qx "mongodb-search-helm/${f}" <<<"${packed}" || bad "the package lacks ${f}"
 done
 ok "the package holds the volume script, volumes.md, scaling.md, the expansion runbook and the production settings"
@@ -502,6 +502,29 @@ avl="$(helm template mongot "${CHART}" -n some-namespace -f "${PROD}" "${SIZED[@
   | grep -A1 '^            - name: ALLOW_VOLUME_LOSS$' | grep -c '^              value: "false"$')"
 helm template mongot "${CHART}" -n some-namespace -f "${PROD}" "${SIZED[@]}" >/dev/null 2>&1 && [[ "${avl}" == 1 ]] \
   && ok "the production example renders whole and never allows volume loss" || bad "production example: render or allowVolumeLoss"
+
+# The disruption budgets: one for the mongot pods and one for the Envoy pods, selecting the pods by the labels the
+# operator gives them (the same labels the ServiceMonitor and the Envoy stats Service select by).
+pdb() { render -s templates/11-poddisruptionbudgets.yaml "$@" | python3 -c '
+import sys, re
+for doc in sys.stdin.read().split("\n---"):
+    n = re.search(r"^  name: (\S+)", doc, re.M)
+    if not n or "kind: PodDisruptionBudget" not in doc: continue
+    f = lambda k: (re.search(r"^ +" + k + r": (\S+)", doc, re.M) or [None, "-"])[1]
+    print(n.group(1), f("maxUnavailable"), f("app"), f("unhealthyPodEvictionPolicy"), "minAvailable" in doc, f("namespace"))'; }
+[ "$(pdb)" = "$(printf '%s\n' 'mongot-search-0 1 mongot-search-0-svc AlwaysAllow False dvh-gp6-rnd' 'mongot-search-lb-0 1 mongot-search-lb-0 AlwaysAllow False dvh-gp6-rnd')" ] \
+  && ok "two disruption budgets by default: one mongot pod and one Envoy pod at a time, by the operator's pod labels" || bad "the disruption budgets: $(pdb | tr '\n' ';')"
+[ "$(pdb --set search.name=vec --set search.podDisruptionBudget.maxUnavailable=2 --set loadBalancer.podDisruptionBudget.enabled=false)" = 'vec-search-0 2 vec-search-0-svc AlwaysAllow False dvh-gp6-rnd' ] \
+  && ok "each budget has its own switch and its own number, and follows search.name" || bad "the budgets' values: $(pdb --set search.name=vec --set search.podDisruptionBudget.maxUnavailable=2 --set loadBalancer.podDisruptionBudget.enabled=false | tr '\n' ';')"
+[ -z "$(render --set search.podDisruptionBudget.enabled=false --set loadBalancer.podDisruptionBudget.enabled=false | grep 'kind: PodDisruptionBudget')" ] \
+  && ok "both switched off: no PodDisruptionBudget is rendered" || bad "a PodDisruptionBudget is rendered with both switched off"
+refused "a mongot budget of 0, which would block every node drain" --set search.podDisruptionBudget.maxUnavailable=0
+refused "an Envoy budget of 0" --set loadBalancer.podDisruptionBudget.maxUnavailable=0
+refused "a budget given as a percentage" --set-string loadBalancer.podDisruptionBudget.maxUnavailable=50%
+[ "$(render | grep -A3 'app: mongot-search-0-svc' | grep -c 'app: mongot-search-0-svc')" -ge 2 ] && [ "$(render -s templates/30-monitoring.yaml | grep -c 'app: mongot-search-lb-0$')" -ge 1 ] \
+  && ok "the budgets select by the labels the monitoring objects select by" || bad "the budgets' selectors and the monitoring selectors differ"
+[ "$(render --set search.keepOnUninstall=true -s templates/11-poddisruptionbudgets.yaml | grep -c 'resource-policy\|Prune=false')" = 0 ] \
+  && ok "the budgets are not kept by keepOnUninstall: they go with the release, like the Route" || bad "a budget carries keep or Prune=false"
 
 # The Jobs' scripts: bash syntax, and shellcheck when available.
 tmp="$(mktemp -d)"; trap 'rm -rf "${tmp}"' EXIT

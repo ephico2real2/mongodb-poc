@@ -66,7 +66,7 @@ for the ClusterServiceVersion an uninstall leaves.
 | Sync, wave -2 | The OperatorGroup; the access of the approver and of the gate | |
 | Sync, wave -1 | The Subscription; the approver Job | The Subscription is on Manual approval; the approver approves the InstallPlan of `operator.version`, and no other |
 | Sync, wave 0 | ServiceMonitors, the alert rules, the index info exporter, the Grafana ConfigMap | |
-| Sync, wave 1 | The MongoDBSearch; the Perses dashboard and datasource | The operator makes the mongot StatefulSet, the Envoy Deployment and their Services |
+| Sync, wave 1 | The MongoDBSearch; the two PodDisruptionBudgets; the Perses dashboard and datasource | The operator makes the mongot StatefulSet, the Envoy Deployment and their Services. Argo CD reads a budget `Healthy` once it has a status, also before its pods exist |
 | Sync, wave 2 | The Route | |
 | Sync, wave 3 | The gate Job | Ends only when the operator, the mongot pods, Envoy and the Route are ready. It does not wait for the indexes to be built |
 

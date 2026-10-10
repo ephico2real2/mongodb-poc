@@ -16,6 +16,8 @@ it is: `search.resources` holds the word `TO-DECIDE`, which the chart refuses, u
 - **Keep the search through an uninstall**: `search.keepOnUninstall: true`. Without it an uninstall, a prune or
   the deletion of the Application deletes every index.
 - **Never lower `search.replicas` in passing.** The volume of every pod that goes is deleted.
+- **Keep the two disruption budgets on.** They are what makes a node drain take one mongot pod and one Envoy pod
+  at a time.
 - **Name every version**: the operator's, mongot's, Envoy's image and the Jobs' image.
 - **Sync by hand, from a release tag.**
 - **Keep the production values where the real names may be written**: not in this repository, which is public.
@@ -32,7 +34,7 @@ it is: `search.resources` holds the word `TO-DECIDE`, which the chart refuses, u
 | **The heap is half of the memory request**, unless JVM flags say otherwise; this chart does not pass JVM flags | MongoDB; lab: a request of 1100Mi gave `-Xmx550m -Xms550m` | Size the heap through `search.resources.requests.memory` |
 | **Argo CD cannot tell a failing search from a healthy one.** It has no health check for the resource: the Application read `Synced` and `Healthy` while the MongoDBSearch read `Failed` | lab: [argocd.md](argocd.md) | The chart's gate fails the sync; read the operation and the resource, not the Application's two words |
 | **mongot's version follows the operator's** when the resource names none | The chart; MongoDB | `search.version` named |
-| **Pods are spread over nodes by preference only**, and there is no PodDisruptionBudget. The operator gives the mongot pods and the Envoy pods a preferred anti-affinity on the node's name, weight 100; nothing requires it | lab, read from the StatefulSet and the Deployment. What a node drain then does was not run: the lab has one node | Nothing in the chart today. See "Not settable through the chart" |
+| **Pods are spread over nodes by preference only, and the operator creates no PodDisruptionBudget.** It gives the mongot pods and the Envoy pods a preferred anti-affinity on the node's name, weight 100; nothing requires it. MongoDB's documents say nothing on node drains | lab, read from the StatefulSet and the Deployment; MongoDB: the operator's source at 1.13.0 | The chart's two budgets, `search.podDisruptionBudget` and `loadBalancer.podDisruptionBudget`: [disruption-budgets.md](disruption-budgets.md). A required spread is not settable through the chart |
 | **Envoy's defaults are small and its image is a moving tag**: requests 100m and 128Mi, limits 500m and 512Mi, image `envoyproxy/envoy:v1.37-latest` | lab, read from the Deployment | `loadBalancer.image` named by digest. Its resources: not settable through the chart today |
 
 ## The values
@@ -44,6 +46,7 @@ it is: `search.resources` holds the word `TO-DECIDE`, which the chart refuses, u
 | `search.name` | `mongot`, chosen before the certificates are made | The names of the three TLS secrets and of every object the operator makes derive from it, and the preflight looks the secrets up by those names. It is not changed on a search that exists | The chart |
 | `search.replicas` | `3` | Each pod holds every index; three leave two answering while one restarts or rebuilds. More pods add searches a second, and add one change stream an index a pod to the source | MongoDB; lab |
 | `search.allowVolumeLoss` | `false`, always in git | It is the switch that lets a scale-down delete volumes. Set it for the one sync that needs it and take it out with the next commit | lab |
+| `search.podDisruptionBudget` | `enabled: true`, `maxUnavailable: 1`, the chart's | A node drain takes one mongot pod at a time and waits for it to be Ready again. On the lab the same evictions failed 37 of 195 searches without it and none of 191 with it | lab; Kubernetes |
 | `search.keepOnUninstall` | `true` | Keeps the MongoDBSearch, its pods and its volumes through `helm uninstall`, an Argo CD prune and the deletion of the Application | lab |
 | `search.version` | The mongot version, named: `"1.70.1"` with operator 1.13.0 | An operator upgrade then does not move mongot by itself | The chart |
 | `search.persistence.storageClass` | `thin-csi` | It allows expansion as it ships, so the runbook can be used. Its reclaim policy is `Delete`: see the volumes below | OpenShift; to confirm on the cluster: `oc get storageclass thin-csi -o jsonpath='{.allowVolumeExpansion} {.reclaimPolicy}'` |
@@ -101,7 +104,8 @@ repository.
 
 | Value | Production | Why | From |
 | --- | --- | --- | --- |
-| `loadBalancer.replicas` | `2` or more | The CRD: "Defaults to 1 if not specified." With one Envoy pod there is no other to carry the searches when it is evicted or fails | MongoDB (the default); the reasoning is the chart's |
+| `loadBalancer.replicas` | `2` or more; `3` to keep two through a drain | MongoDB: "If you deploy multiple `mongot` replicas behind the load balancer and also run more than one Envoy replica, queries continue to run while the `mongot` or Envoy deployments undergo rolling restarts. With a single replica, queries see a brief gap until the pod is ready again." Its default is 1, and it names no number beyond "more than one". Two against three, measured: [disruption-budgets.md](disruption-budgets.md) | MongoDB; lab |
+| `loadBalancer.podDisruptionBudget` | `enabled: true`, `maxUnavailable: 1`, the chart's | A node drain takes one Envoy pod at a time. Without it both went at once on the lab, and no Envoy pod was Ready for about 10 s | lab; Kubernetes |
 | `loadBalancer.externalHostname` | **To decide**: the public name mongod connects to | It is the Route's host and must be a name in the `...-search-lb-0-cert` certificate. A hostname, never an address | The chart |
 | `loadBalancer.image` | A named Envoy image **by digest**, from a registry the cluster may pull from | The operator's own default is the moving tag `envoyproxy/envoy:v1.37-latest` | lab |
 | `loadBalancer.retryPolicy` | The chart's: 2 retries, 60 s a try | Unchanged from the install runbook | The chart |
@@ -170,11 +174,10 @@ setting.
 | Wanted | The resource's field | Today |
 | --- | --- | --- |
 | mongot pods on different nodes, as a rule | `clusters[].nodeAffinity` places pods on kinds of node; a required pod anti-affinity would go through `clusters[].statefulSet` | The operator's preferred anti-affinity only. An override through `statefulSet` restarted every mongot pod on the lab when one was tried |
-| A PodDisruptionBudget for mongot and for Envoy | None: it is an object of its own | None exists. A node drain is not held back |
 | Envoy's CPU and memory | `clusters[].loadBalancer.managed.resourceRequirements` | The operator's defaults: 100m and 128Mi requested, 500m and 512Mi at most |
 | JVM flags, a heap that is not half the request | `clusters[].jvmFlags` | Half the request |
 | mongot's log level | `logLevel` | The operator's default |
-| How many mongot pods must be Ready before Envoy sends to them | `clusters[].loadBalancer.managed.minMongotReadyReplicas` | Not set. The CRD: "Defaults to 1 if not specified" |
+| How many mongot pods must be Ready before Envoy sends to them | `clusters[].loadBalancer.managed.minMongotReadyReplicas` | Not set. The CRD: "Defaults to 1 if not specified". The operator's source at 1.13.0 applies it to the shards of a sharded source only |
 
 ## To decide
 
@@ -186,7 +189,8 @@ setting.
 | 4 | Where the production values live | A repository of your own; then one run of that on the lab or on QA |
 | 5 | The images by digest: Envoy, the Jobs, the index names exporter | Your registry |
 | 6 | The first volume alert at 70 or 75 | 70 is this page's |
-| 7 | Whether the chart should gain the values of "Not settable" before production | Mostly the disruption budget and Envoy's resources |
+| 7 | Whether the chart should gain the values of "Not settable" before production | Mostly Envoy's resources. MongoDB gives no sizing for Envoy: its defaults are stated without a rule |
+| 8 | Two Envoy pods or three | Three keep two through a drain; the cost is 100m and 128Mi requested |
 
 ## To show on QA first
 
@@ -198,5 +202,6 @@ None of these can be shown on the lab, whose indexes are 16 MiB a pod on one nod
   number; a disk that takes time, a file system that waits for its pod, and *Data volume used* falling were not
   seen.
 - **One pod deleted**: that it comes back on its volume and goes on, with 190 GB.
-- **A node drained**, with three mongot pods and two Envoy pods and no disruption budget.
+- **A node drained**, with the two disruption budgets: that one mongot pod and one Envoy pod go at a time, how long a
+  mongot pod with its vSphere disk takes to be Ready on another node, and so how long a node update takes.
 - **A change of `operator.version`** under Argo CD.

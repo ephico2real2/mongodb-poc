@@ -55,7 +55,13 @@
           "type": "object", "additionalProperties": false, "required": ["storage"],
           "properties": {"storage": {"type": "string", "minLength": 1}, "storageClass": {"type": "string"}}
         },
-        "keepOnUninstall": {"type": "boolean"}
+        "keepOnUninstall": {"type": "boolean"},
+        "podDisruptionBudget": {
+          "type": "object", "additionalProperties": false, "required": ["enabled", "maxUnavailable"],
+          "properties": {"enabled": {"type": "boolean"},
+                         "maxUnavailable": {"type": "integer", "minimum": 1,
+                                            "description": "0 would refuse every eviction and block every node drain"}}
+        }
       }
     },
     "loadBalancer": {
@@ -69,7 +75,13 @@
           "type": "object", "additionalProperties": false,
           "properties": {"numRetries": {"type": "integer", "minimum": 1}, "perTryTimeout": {"type": "string", "minLength": 1}}
         },
-        "image": {"type": "string"}
+        "image": {"type": "string"},
+        "podDisruptionBudget": {
+          "type": "object", "additionalProperties": false, "required": ["enabled", "maxUnavailable"],
+          "properties": {"enabled": {"type": "boolean"},
+                         "maxUnavailable": {"type": "integer", "minimum": 1,
+                                            "description": "0 would refuse every eviction and block every node drain"}}
+        }
       }
     },
     "tls": {
