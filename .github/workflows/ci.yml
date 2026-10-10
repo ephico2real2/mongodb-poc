@@ -25,6 +25,10 @@ jobs:
           helm version --short
       - name: Chart tests
         run: test/chart.sh
+      # The csv-reclaim hook's script, taken from the render and run against a stand-in oc: what it deletes, what
+      # it never deletes, and where Argo CD runs it.
+      - name: csv-reclaim hook tests
+        run: test/csv-reclaim.sh
       # The alert rules as the chart renders them, checked and unit-tested with promtool from its image.
       - name: Alert rule tests
         run: CONTAINER_ENGINE=docker test/alerts.sh
