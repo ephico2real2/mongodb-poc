@@ -4,9 +4,11 @@ Which values MongoDB Search runs with in production, and why. The MongoDBSearch 
 (MongoDB Controllers for Kubernetes 1.13.0) leave several things that cannot be set, or cannot be changed once the
 search exists. So the first values an install is given decide more here than they would elsewhere.
 
-Each line says where it comes from: **lab** (measured on the lab by this repository), **MongoDB** (its documents or
-its operator's source), **Kubernetes**, or **to decide** (yours: a number or a name this repository does not have).
-[examples/values-production.yaml](examples/values-production.yaml) is the same as a file.
+Each line says where it comes from: **lab** (measured on the lab by this repository), **MongoDB** (its documents,
+its CRD or its operator's source), **Kubernetes**, **OpenShift**, **the chart** (its `values.yaml` and templates),
+**not run** (nobody has shown it), or **to decide** (yours: a number or a name this repository does not have).
+[examples/values-production.yaml](examples/values-production.yaml) is the same as a file. It does not install as
+it is: `search.resources` holds the word `TO-DECIDE`, which the chart refuses, until the numbers are yours.
 
 ## In short
 
@@ -25,9 +27,9 @@ its operator's source), **Kubernetes**, or **to decide** (yours: a number or a n
 | **A volume cannot be grown through the resource.** A new size goes into the StatefulSet's volume claim template, which Kubernetes does not let change; the MongoDBSearch reads `Failed` and the operator can change nothing on mongot until the StatefulSet is made again. The pods keep answering | lab; Kubernetes; [mongodb-kubernetes #1621](https://github.com/mongodb/mongodb-kubernetes/pull/1621) | `search.persistence.storage` sized for growth (below). The chart's gate stops the sync and names the runbook: [volume-expansion-runbook.md](volume-expansion-runbook.md) with `expand-mongot-volumes.sh` |
 | **The storage class cannot be changed** on a search that exists: it is in the same template | Kubernetes. Not run: on the lab it was changed only after the search had been deleted | `search.persistence.storageClass` chosen once: a class that allows expansion |
 | **The volume of a pod that is scaled away is deleted, and every volume when the resource is deleted.** The operator sets `whenScaled: Delete` and `whenDeleted: Delete` on the StatefulSet, and puts them back when they are changed; the resource's own override of them is ignored | lab; the operator's source: [volumes.md](volumes.md) | `search.keepOnUninstall: true`; `search.allowVolumeLoss: false`, with the preflight refusing fewer pods; the volumes set to `Retain` by a cluster administrator |
-| **One volume a pod.** `persistence.multiple` (data, journal, logs) is in the schema and ignored for search | The operator's source, read at 1.12.0: [mongodb-operator-storage.md](../../enhancement/mongodb-operator-storage.md) | `search.persistence` has the single volume only |
+| **One volume a pod.** `persistence.multiple` (data, journal, logs) is in the schema and ignored for search | MongoDB: the operator's source at tag 1.13.0, `controllers/searchcontroller/search_construction.go`, lines 135 to 141, reads the single volume only | `search.persistence` has the single volume only |
 | **No autoscaling.** The resource has no `scale` subresource, and the StatefulSet is the operator's | lab: [scaling.md](scaling.md) | `search.resources` and `search.replicas`, by hand, through git |
-| **The heap is half of the memory request**, unless JVM flags say otherwise; this chart does not pass JVM flags | MongoDB; lab: 1100Mi gave `-Xms550m -Xmx550m` | Size the heap through `search.resources.requests.memory` |
+| **The heap is half of the memory request**, unless JVM flags say otherwise; this chart does not pass JVM flags | MongoDB; lab: a request of 1100Mi gave `-Xmx550m -Xms550m` | Size the heap through `search.resources.requests.memory` |
 | **Argo CD cannot tell a failing search from a healthy one.** It has no health check for the resource: the Application read `Synced` and `Healthy` while the MongoDBSearch read `Failed` | lab: [argocd.md](argocd.md) | The chart's gate fails the sync; read the operation and the resource, not the Application's two words |
 | **mongot's version follows the operator's** when the resource names none | The chart; MongoDB | `search.version` named |
 | **Pods are spread over nodes by preference only**, and there is no PodDisruptionBudget. The operator gives the mongot pods and the Envoy pods a preferred anti-affinity on the node's name, weight 100; nothing requires it | lab, read from the StatefulSet and the Deployment. What a node drain then does was not run: the lab has one node | Nothing in the chart today. See "Not settable through the chart" |
@@ -39,6 +41,7 @@ its operator's source), **Kubernetes**, or **to decide** (yours: a number or a n
 
 | Value | Production | Why | From |
 | --- | --- | --- | --- |
+| `search.name` | `mongot`, chosen before the certificates are made | The names of the three TLS secrets and of every object the operator makes derive from it, and the preflight looks the secrets up by those names. It is not changed on a search that exists | The chart |
 | `search.replicas` | `3` | Each pod holds every index; three leave two answering while one restarts or rebuilds. More pods add searches a second, and add one change stream an index a pod to the source | MongoDB; lab |
 | `search.allowVolumeLoss` | `false`, always in git | It is the switch that lets a scale-down delete volumes. Set it for the one sync that needs it and take it out with the next commit | lab |
 | `search.keepOnUninstall` | `true` | Keeps the MongoDBSearch, its pods and its volumes through `helm uninstall`, an Argo CD prune and the deletion of the Application | lab |
@@ -68,10 +71,11 @@ cache, on which "query latency and throughput heavily depend"; and for CPU, a fi
 core", with "Consistently seeing CPU usage above 80% suggests a need to scale up". With this chart the heap is half
 of the memory request, so:
 
-- the memory request is twice the heap that is wanted, and not above 60Gi, where the heap reaches 30 GB;
-- the memory limit is the ceiling for the heap and the file system's cache together, since Linux counts a pod's
-  cache in its memory: what lies between the heap and the limit is the most cache the pod can have. A limit equal
-  to the request means the pod is promised all it runs with (Kubernetes; not measured here);
+- the memory request is twice the heap that is wanted, and not above about 56Gi, where the heap reaches 30 GB;
+- the memory limit is the ceiling for the heap, the JVM's own memory outside the heap and the file system's cache
+  together, since Linux counts a pod's cache in its memory: what the limit leaves after the first two is the most
+  cache the pod can have. A limit equal to the request means the pod is promised all it runs with. (All of this
+  bullet: Kubernetes and Linux; not measured here.);
 - take the numbers from QA's dashboard, section *How is each mongot pod doing?*: *JVM heap used, percent of
   limit*, *CPU used*, *Replication lag*, *Average search latency*.
 
@@ -97,7 +101,7 @@ repository.
 
 | Value | Production | Why | From |
 | --- | --- | --- | --- |
-| `loadBalancer.replicas` | `2` or more | The operator's default is 1, and a restart then cuts every search in flight | MongoDB |
+| `loadBalancer.replicas` | `2` or more | The CRD: "Defaults to 1 if not specified." With one Envoy pod there is no other to carry the searches when it is evicted or fails | MongoDB (the default); the reasoning is the chart's |
 | `loadBalancer.externalHostname` | **To decide**: the public name mongod connects to | It is the Route's host and must be a name in the `...-search-lb-0-cert` certificate. A hostname, never an address | The chart |
 | `loadBalancer.image` | A named Envoy image **by digest**, from a registry the cluster may pull from | The operator's own default is the moving tag `envoyproxy/envoy:v1.37-latest` | lab |
 | `loadBalancer.retryPolicy` | The chart's: 2 retries, 60 s a try | Unchanged from the install runbook | The chart |
@@ -139,6 +143,7 @@ repository.
 | Value | Production | Why | From |
 | --- | --- | --- | --- |
 | `jobs.image` | `ose-cli` at a named tag or digest, matching the cluster's version | The default tag is `latest` | The chart |
+| `jobs.resources` | The chart's, or what the namespace's quota asks for | A namespace whose ResourceQuota requires requests refuses a Job without them | The chart |
 | `jobs.ttlSecondsAfterFinished` | `600` or longer | A failed hook's reason is only in its Job's log, and the log goes with the Job | lab |
 | `wait.waitSeconds` | **To show on QA.** The chart's is 900 | The gate waits for every mongot pod to be Ready. On the lab that is under 2 minutes; whether a pod with 190 GB to build is Ready before or after its indexes are built decides this number, and was not measured | Not run |
 
@@ -150,7 +155,7 @@ repository.
 | `helm.releaseName` | `mongot` | The chart's object names start with it, and Helm can take over if it must |
 | `helm.skipCrds` | `true` | The CRD is OLM's |
 | `search.keepOnUninstall` | `true`, in the values or as a parameter | Above |
-| `syncPolicy` | `{}`: sync by hand | A change of size stops at the gate by design, and automated sync then tries it five more times over about 11 minutes before it gives up; a corrected commit waits for those. By hand there is one sync before the steps of the runbook and one after |
+| `syncPolicy` | `{}`: sync by hand | A change of size stops at the gate by design, and automated sync then tries it five more times before it gives up, over about 11 minutes on the lab (7 when it is the preflight that refuses); a corrected commit waits for those. By hand there is one sync before the steps of the runbook and one after |
 | Prune, `selfHeal` | Neither | A prune skips the MongoDBSearch only while `search.keepOnUninstall` is set. `selfHeal` was not run |
 | `ignoreDifferences` | The Route's `/status` | The router writes it |
 | The values | In a repository of your own, not in this one | This repository is public, and the values hold your host names. **Not run**: every run on the lab read its values from this repository. A second source, or `valuesObject` in the Application, are among Argo CD's ways |
@@ -166,10 +171,10 @@ setting.
 | --- | --- | --- |
 | mongot pods on different nodes, as a rule | `clusters[].nodeAffinity` places pods on kinds of node; a required pod anti-affinity would go through `clusters[].statefulSet` | The operator's preferred anti-affinity only. An override through `statefulSet` restarted every mongot pod on the lab when one was tried |
 | A PodDisruptionBudget for mongot and for Envoy | None: it is an object of its own | None exists. A node drain is not held back |
-| Envoy's CPU and memory | `loadBalancer.managed.resourceRequirements` | The operator's defaults: 100m and 128Mi requested, 500m and 512Mi at most |
+| Envoy's CPU and memory | `clusters[].loadBalancer.managed.resourceRequirements` | The operator's defaults: 100m and 128Mi requested, 500m and 512Mi at most |
 | JVM flags, a heap that is not half the request | `clusters[].jvmFlags` | Half the request |
 | mongot's log level | `logLevel` | The operator's default |
-| How many mongot pods must be Ready before Envoy sends to them | `loadBalancer.managed.minMongotReadyReplicas` | Not set |
+| How many mongot pods must be Ready before Envoy sends to them | `clusters[].loadBalancer.managed.minMongotReadyReplicas` | Not set. The CRD: "Defaults to 1 if not specified" |
 
 ## To decide
 

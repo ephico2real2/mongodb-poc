@@ -2,8 +2,10 @@
 # default, and that page says why for each. The names here are placeholders: keep the real file in a repository
 # of your own, this one is public.
 #
-# TO DECIDE marks what this file cannot know. Two of them are left out and so fall back to the chart's defaults,
-# which are too small for a large deployment: search.resources, and the images by digest.
+# TO DECIDE marks what this file cannot know.
+# - search.resources holds the word TO-DECIDE, and the chart refuses the file until each is a number: its own
+#   defaults are for a small deployment, and nothing should start on them by oversight.
+# - The images by digest are left out, and so fall back to moving tags.
 
 # Empty: the namespace given to helm with -n, or the Application's destination.
 namespace: ""
@@ -24,10 +26,10 @@ search:
     # A class that allows expansion. It cannot be changed on a search that exists.
     storageClass: thin-csi
   # TO DECIDE, from QA's dashboard. The heap is half of the memory request; MongoDB: no more than about 30 GB of
-  # heap, so no more than 60Gi requested. A memory limit equal to the request.
-  # resources:
-  #   requests: {cpu: "<cores>", memory: <twice the heap>}
-  #   limits: {cpu: "<cores>", memory: <the same>}
+  # heap, so no more than about 56Gi requested. A memory limit equal to the request.
+  resources:
+    requests: {cpu: TO-DECIDE, memory: TO-DECIDE}
+    limits: {cpu: TO-DECIDE, memory: TO-DECIDE}
 
 loadBalancer:
   # TO DECIDE. The public name mongod connects to: the Route's host, and a name in the ...-search-lb-0-cert.
