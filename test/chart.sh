@@ -688,8 +688,8 @@ for doc in sys.stdin.read().split("\n---"):
   && ok "the gate is still Helm's last hook" || bad "the gate's hook weight"
 if command -v yq >/dev/null; then
   rules="$(render "${AE[@]}" | yq -o=json -I=0 "select(.kind==\"Role\" and .metadata.name==\"${EXPAND}\") | .rules")"
-  [[ "${rules}" == '[{"apiGroups":["mongodb.com"],"resources":["mongodbsearch"],"verbs":["get"]},{"apiGroups":["apps"],"resources":["statefulsets"],"verbs":["get"]},{"apiGroups":["apps"],"resources":["statefulsets"],"resourceNames":["mongot-search-0"],"verbs":["delete"]},{"apiGroups":[""],"resources":["pods"],"verbs":["get","list"]},{"apiGroups":[""],"resources":["persistentvolumeclaims"],"verbs":["get","list","patch"]}]' ]] \
-    && ok "its role: read, ask a claim for more, and delete the one StatefulSet by name; no pod and no claim can be deleted" || bad "the role of the Job that grows the volumes: ${rules}"
+  [[ "${rules}" == '[{"apiGroups":["mongodb.com"],"resources":["mongodbsearch"],"verbs":["get"]},{"apiGroups":["apps"],"resources":["statefulsets"],"verbs":["get","list","watch"]},{"apiGroups":["apps"],"resources":["statefulsets"],"resourceNames":["mongot-search-0"],"verbs":["delete"]},{"apiGroups":[""],"resources":["pods"],"verbs":["get","list"]},{"apiGroups":[""],"resources":["persistentvolumeclaims"],"verbs":["get","list","patch"]}]' ]] \
+    && ok "its role: read (and watch the StatefulSet, which oc delete waits by), ask a claim for more, and delete the one StatefulSet by name; no pod and no claim can be deleted" || bad "the role of the Job that grows the volumes: ${rules}"
   rules="$(render "${AE[@]}" --set search.name=srch | yq -o=json -I=0 "select(.kind==\"Role\" and .metadata.name==\"${EXPAND}\") | .rules[2].resourceNames")"
   [[ "${rules}" == '["srch-search-0"]' ]] && ok "the StatefulSet it may delete follows search.name" || bad "the StatefulSet's name in the role: ${rules}"
   # Both are read without their last newline: yq prints one more after a value.
