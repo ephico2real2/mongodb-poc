@@ -4,9 +4,10 @@ pods over nodes by preference only, so without these a node drain takes every po
 drained nodes at the same moment. A drain evicts through the API, and the API refuses an eviction that would
 leave more pods of the budget down than maxUnavailable; the drain then waits and tries again.
 
-maxUnavailable, not minAvailable: it never blocks a drain for good, whatever the number of pods. The selectors are
-the labels the operator gives the pods. unhealthyPodEvictionPolicy AlwaysAllow is what Kubernetes recommends: a
-pod that is running and not Ready may always be evicted, so a pod that cannot start does not hold a drain for ever.
+maxUnavailable, not minAvailable: no number of pods makes it refuse every eviction (with one pod, that pod may
+go). The selectors are the labels the operator gives the pods. unhealthyPodEvictionPolicy AlwaysAllow is what
+Kubernetes recommends: a pod that is running and not Ready may always be evicted, so a pod that runs and never
+becomes Ready does not hold a drain for ever.
 
 They are objects of the release like the Route: an uninstall removes them, with search.keepOnUninstall too.
 */ -}}

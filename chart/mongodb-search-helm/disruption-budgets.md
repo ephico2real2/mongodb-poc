@@ -28,11 +28,11 @@ without them, and what they do not cover.
 Both carry `unhealthyPodEvictionPolicy: AlwaysAllow`, as Kubernetes recommends: "It is recommended to set
 `AlwaysAllow` Unhealthy Pod Eviction Policy to your PodDisruptionBudgets to support eviction of misbehaving
 applications during a node drain." A pod that is running and not Ready can then always be evicted, so a pod that
-cannot start does not hold a drain for ever.
+runs and never becomes Ready does not hold a drain for ever.
 
 `maxUnavailable` and not `minAvailable`, again as Kubernetes recommends: "The use of `maxUnavailable` is
 recommended as it automatically responds to changes in the number of replicas of the corresponding controller."
-It also never blocks a drain for good: with a single pod, that pod may still be evicted.
+And no number of pods makes it refuse every eviction: with a single pod, that pod may still be evicted.
 
 Under Argo CD the two budgets are in sync wave 1, with the MongoDBSearch. They are objects of the release like
 the Route: an uninstall removes them, also when `search.keepOnUninstall` keeps the search.
@@ -41,9 +41,9 @@ the Route: an uninstall removes them, also when `search.keepOnUninstall` keeps t
 
 | Fact | Source |
 | --- | --- |
-| The mongot pods and the Envoy pods each carry a *preferred* pod anti-affinity on the node's name, weight 100. Nothing requires them to be on different nodes | The lab's StatefulSet and Deployment; the operator's source at 1.13.0, `controllers/operator/mongodbsearchenvoy_controller.go`, lines 674 to 690 |
+| The mongot pods and the Envoy pods each carry a *preferred* pod anti-affinity on the node's name, weight 100. Nothing requires them to be on different nodes | The lab's StatefulSet and Deployment; the operator's source at 1.13.0: mongot in `controllers/searchcontroller/search_construction.go`, lines 173 to 176 ("preferred, not required"); Envoy in `controllers/operator/mongodbsearchenvoy_controller.go`, lines 674 to 690 |
 | The operator creates no PodDisruptionBudget | The lab: none in the namespace before this chart version. The operator's source at 1.13.0 has none for mongot or Envoy |
-| MongoDB's documents do not mention disruption budgets, node drains or node maintenance for search | 25 pages of the operator's documentation and 15 of the self-managed search documentation, read on 2026-10-10 |
+| MongoDB's documents do not mention disruption budgets, node drains or node maintenance for search | The search pages of the operator's documentation and of the self-managed search documentation, about forty in all, fetched and searched on 2026-10-10 |
 | A drain evicts through the API, and the API refuses an eviction a budget does not allow: "`429 Too Many Requests`: the eviction is not currently allowed because of the configured PodDisruptionBudget. You may be able to attempt the eviction again later." | Kubernetes, [API-initiated Eviction](https://kubernetes.io/docs/concepts/scheduling-eviction/api-eviction/) |
 | Drains that run at the same time are held to the same budget: "Multiple drain commands running concurrently will still respect the PodDisruptionBudget you specify" | Kubernetes, [Safely Drain a Node](https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/) |
 
@@ -72,11 +72,14 @@ repository.*
    1 of 3 mongot pods is left to answer       2 of 3 mongot pods answer throughout
 ```
 
-Why step 2 always happens: a drain makes its node unschedulable first, so the pod that is evicted has two nodes to
+Why step 2 happens whenever one of the other nodes has room for the pod: a drain makes its node unschedulable first, so the pod that is evicted has two nodes to
 go to, and each already holds a mongot pod. The anti-affinity is a preference, so the pod is placed on one of
-them. When the drained node returns it is empty, and Kubernetes does not move running pods back by itself.
+them. When the drained node returns it is empty, and Kubernetes does not move running pods back by itself. If
+neither has room, the pod waits, `Pending`, and is placed on node 1 when it is schedulable again; then no node
+holds two.
 
-The two Envoy pods have a free node to go to on three nodes, so they stay apart there. On two nodes, or when a
+The two Envoy pods have a free node to go to on three nodes, which the scheduler prefers, so they are likely to
+stay apart there. On two nodes, or when a
 third cannot take the pod, they share a node in the same way, and a drain of that node takes both.
 
 A pool that updates more than one node at a time, two drains started by hand, and a cluster autoscaler that
@@ -89,11 +92,11 @@ the request `oc adm drain` sends to the API, and on a refusal a wait of 5 s and 
 through mongod was tried every second.
 
 <!-- markdownlint-disable MD033 -->
-<img alt="Measured on the lab: the three mongot pods evicted the way a drain evicts them, a search tried every second. Without a budget all three evictions were accepted in the same second, no search was answered for 37 seconds and 37 of 195 failed. With a budget of one, the second and third evictions were each refused seven times and accepted only when the pod before was Ready again, at 36 and 72 seconds; every one of 191 searches was answered." src="../../docs/diagrams/disruption-budgets/measured.light.png">
+<img alt="Measured on the lab: the three mongot pods evicted the way a drain evicts them, a search tried every second. Without a budget all three evictions were accepted within a second of each other, no search was answered for 37 seconds and 37 of 195 failed. With a budget of one, the second and third evictions were each refused seven times and accepted only when the pod before was Ready again, at 36 and 72 seconds; every one of 191 searches was answered." src="../../docs/diagrams/disruption-budgets/measured.light.png">
 <!-- markdownlint-enable MD033 -->
 
-*Measured on the lab on 2026-10-10. Without a budget the three mongot pods went at once, and 37 of 195 searches
-failed over 37 seconds. With a budget of 1 they went one at a time, each waiting for the one before to be Ready,
+*Measured on the lab on 2026-10-10 by asking the API to evict the pods as a drain does. Without a budget the three
+mongot pods went at once, and 37 of 195 searches failed over 37 seconds. With a budget of 1 they went one at a time, each waiting for the one before to be Ready,
 and all 191 searches were answered.*
 
 ```text
@@ -117,7 +120,9 @@ WITH A BUDGET OF 1 0 s   evict pod 0: accepted; evict pod 1: refused 7 times
 - **The refusal**, each time: "Cannot evict pod as it would violate the pod's disruption budget."
 - **The mongot pods** came back on their own volume claims, as a deleted pod does.
 - **The Envoy pods** stop gracefully: the operator gives each 70 s in which it tells mongod to open new searches
-  elsewhere and lets the ones in flight end. That is why losing both at once failed one search and not ten.
+  elsewhere and lets the ones in flight end. That is the likely reason losing both at once failed one search and
+  not more; it was not shown.
+- **Ready**, in the last column, leaves out a pod that is stopping: it is no longer sent new searches.
 - **The times are the lab's**: three mongot pods of 16 MiB of indexes on one node. Where a pod takes longer to
   be Ready, the gap without a budget and the drain with one are both longer.
 

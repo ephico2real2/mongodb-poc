@@ -150,7 +150,7 @@ a { color: var(--remote); }
     <h2>The same evictions, measured</h2>
     <figure>
       <div class="fig-scroll">
-        <svg viewBox="0 0 980 340" role="img" aria-label="Measured on the lab: the three mongot pods evicted the way a drain evicts them, a search tried every second. Without a budget all three evictions were accepted in the same second, no search was answered for 37 seconds and 37 of 195 failed. With a budget of one, the second and third evictions were each refused seven times and accepted only when the pod before was Ready again, at 36 and 72 seconds; every one of 191 searches was answered.">
+        <svg viewBox="0 0 980 340" role="img" aria-label="Measured on the lab: the three mongot pods evicted the way a drain evicts them, a search tried every second. Without a budget all three evictions were accepted within a second of each other, no search was answered for 37 seconds and 37 of 195 failed. With a budget of one, the second and third evictions were each refused seven times and accepted only when the pod before was Ready again, at 36 and 72 seconds; every one of 191 searches was answered.">
           <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
             <text x="30" y="26" font-weight="600">The three mongot pods, evicted the way a drain evicts them. A search through mongod every second.</text>
 
