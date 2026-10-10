@@ -76,6 +76,14 @@
           "properties": {"numRetries": {"type": "integer", "minimum": 1}, "perTryTimeout": {"type": "string", "minLength": 1}}
         },
         "image": {"type": "string"},
+        "resources": {
+          "type": "object", "additionalProperties": false,
+          "description": "Envoy's CPU and memory, a Kubernetes quantity each. It replaces the operator's defaults whole",
+          "properties": {
+            "requests": {"type": "object", "additionalProperties": false, "properties": {"cpu": {"type": ["string", "integer", "number"], "pattern": "^[+-]?([0-9]+(\\.[0-9]*)?|\\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|([eE][+-]?[0-9]+))?$"}, "memory": {"type": ["string", "integer", "number"], "pattern": "^[+-]?([0-9]+(\\.[0-9]*)?|\\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|([eE][+-]?[0-9]+))?$"}}},
+            "limits": {"type": "object", "additionalProperties": false, "properties": {"cpu": {"type": ["string", "integer", "number"], "pattern": "^[+-]?([0-9]+(\\.[0-9]*)?|\\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|([eE][+-]?[0-9]+))?$"}, "memory": {"type": ["string", "integer", "number"], "pattern": "^[+-]?([0-9]+(\\.[0-9]*)?|\\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|([eE][+-]?[0-9]+))?$"}}}
+          }
+        },
         "podDisruptionBudget": {
           "type": "object", "additionalProperties": false, "required": ["enabled", "maxUnavailable"],
           "properties": {"enabled": {"type": "boolean"},

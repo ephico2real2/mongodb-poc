@@ -11,7 +11,7 @@ spec:
   source:
     repoURL: https://github.com/ephico2real2/mongodb-poc.git
     # A release tag: a sync then changes only when this line does.
-    targetRevision: mongodb-search-helm-0.3.22
+    targetRevision: mongodb-search-helm-0.3.23
     path: chart/mongodb-search-helm
     helm:
       # The chart's object names start with the release name. Argo CD would use the Application's name: give the

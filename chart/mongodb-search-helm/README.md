@@ -61,7 +61,7 @@ bash $P --clean                                       # removes the key files on
 From the package alone, with no clone:
 
 ```bash
-helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.22/mongodb-search-helm-0.3.22.tgz --untar
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.23/mongodb-search-helm-0.3.23.tgz --untar
 bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
 ```
 
@@ -69,7 +69,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.22/mongodb-search-helm-0.3.22.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.23/mongodb-search-helm-0.3.23.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -99,6 +99,7 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 | `search.persistence.storage`, `.storageClass` | `10Gi`, `thin-csi` | Step 6a. Raising the size later takes the [expansion runbook](volume-expansion-runbook.md) |
 | `search.podDisruptionBudget` | `enabled: true`, `maxUnavailable: 1` | A PodDisruptionBudget for the mongot pods: a node drain takes one at a time. The operator creates none: [disruption-budgets.md](disruption-budgets.md) |
 | `loadBalancer.podDisruptionBudget` | `enabled: true`, `maxUnavailable: 1` | The same for the Envoy pods |
+| `loadBalancer.resources` | requests `100m`, `128Mi`; limits `500m`, `512Mi` | CPU and memory of each Envoy pod: the operator's own defaults, written out. What is given replaces them whole; `null` leaves the field to the operator |
 | `search.keepOnUninstall` | `false` | `true` keeps the resource, and so the index, on `helm uninstall`, and under Argo CD when the Application is deleted or a sync would prune it. The Route still goes: [volumes.md](volumes.md) |
 | `loadBalancer.externalHostname` | required | Step 6a; also the Route's host |
 | `loadBalancer.replicas` | `2` | Step 6a |

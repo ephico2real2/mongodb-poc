@@ -35,7 +35,8 @@ it is: `search.resources` holds the word `TO-DECIDE`, which the chart refuses, u
 | **Argo CD cannot tell a failing search from a healthy one.** It has no health check for the resource: the Application read `Synced` and `Healthy` while the MongoDBSearch read `Failed` | lab: [argocd.md](argocd.md) | The chart's gate fails the sync; read the operation and the resource, not the Application's two words |
 | **mongot's version follows the operator's** when the resource names none | The chart; MongoDB | `search.version` named |
 | **Pods are spread over nodes by preference only, and the operator creates no PodDisruptionBudget.** It gives the mongot pods and the Envoy pods a preferred anti-affinity on the node's name, weight 100; nothing requires it. MongoDB's documents say nothing on node drains | lab, read from the StatefulSet and the Deployment; MongoDB: the operator's source at 1.13.0 | The chart's two budgets, `search.podDisruptionBudget` and `loadBalancer.podDisruptionBudget`: [disruption-budgets.md](disruption-budgets.md). A required spread is not settable through the chart |
-| **Envoy's defaults are small and its image is a moving tag**: requests 100m and 128Mi, limits 500m and 512Mi, image `envoyproxy/envoy:v1.37-latest` | lab, read from the Deployment | `loadBalancer.image` named by digest. Its resources: not settable through the chart today |
+| **Envoy's defaults are small and its image is a moving tag**: requests 100m and 128Mi, limits 500m and 512Mi, image `envoyproxy/envoy:v1.37-latest`. MongoDB states the defaults and gives no sizing for Envoy | lab, read from the Deployment; MongoDB | `loadBalancer.resources`, with the numbers below; `loadBalancer.image` named by digest |
+| **Each Envoy pod runs one worker thread for every CPU of its node, whatever its CPU limit.** The operator starts Envoy without `--concurrency`, and Envoy 1.37 then "defaults to the number of hardware threads on the machine". On the lab: 12 worker threads on a node of 12 CPUs, under a limit of half a core | lab; the operator's source at 1.13.0; Envoy's documentation at v1.37.0 | A CPU limit of a core or more (below). The number of workers itself is not settable through the chart |
 
 ## The values
 
@@ -107,10 +108,57 @@ repository.
 | `loadBalancer.replicas` | `2` or more; `3` to keep two through a drain | MongoDB: "If you deploy multiple `mongot` replicas behind the load balancer and also run more than one Envoy replica, queries continue to run while the `mongot` or Envoy deployments undergo rolling restarts. With a single replica, queries see a brief gap until the pod is ready again." Its default is 1, and it names no number beyond "more than one". Two against three, measured: [disruption-budgets.md](disruption-budgets.md) | MongoDB; lab |
 | `loadBalancer.podDisruptionBudget` | `enabled: true`, `maxUnavailable: 1`, the chart's | A node drain takes one Envoy pod at a time. Without it both went at once on the lab, and no Envoy pod was Ready for about 10 s | lab; Kubernetes |
 | `loadBalancer.externalHostname` | **To decide**: the public name mongod connects to | It is the Route's host and must be a name in the `...-search-lb-0-cert` certificate. A hostname, never an address | The chart |
+| `loadBalancer.resources` | Requests `250m` and `256Mi`; limits `2` CPUs and `1Gi`. **A starting point**, to be read against QA | Below | What the projects that ship Envoy use; Envoy's documentation; lab |
 | `loadBalancer.image` | A named Envoy image **by digest**, from a registry the cluster may pull from | The operator's own default is the moving tag `envoyproxy/envoy:v1.37-latest` | lab |
 | `loadBalancer.retryPolicy` | The chart's: 2 retries, 60 s a try | Unchanged from the install runbook | The chart |
 | `route.balance` | `roundrobin` | A passthrough Route defaults to `source`, which sent every connection to one Envoy pod | lab: [mongot-route-balance-rationale.md](../../docs/mongot-route-balance-rationale.md) |
 | `route.name`, `route.enabled` | The chart's | | |
+
+**Envoy's CPU and memory.** Neither MongoDB nor Envoy gives a number. MongoDB states the operator's defaults and
+no rule; Envoy: "we do not currently publish any official benchmarks. We encourage users to benchmark Envoy in
+their own environments with a configuration similar to what they plan on using in production." So the numbers
+are taken from what the projects that ship Envoy on Kubernetes set, and from two facts about this Envoy.
+
+| Who | CPU requested | CPU limit | Memory requested | Memory limit |
+| --- | --- | --- | --- | --- |
+| MongoDB's operator 1.13.0, for this Envoy | 100m | 500m | 128Mi | 512Mi |
+| Istio 1.31.1, its gateway and its sidecar | 100m | 2000m | 128Mi | 1024Mi |
+| Envoy Gateway 1.9.2 | 100m | none | 512Mi | none |
+| Kuma 2.14.5, its sidecar | 50m | none | 64Mi | 512Mi |
+| Emissary-ingress 4.1.0 (Envoy and its control plane in one pod) | 200m | none | 300Mi | 600Mi |
+
+- **The CPU limit is a core or more, here 2.** Envoy keeps every search of one connection on one worker thread:
+  "Envoy will allocate all streams for a given connection to a single worker thread." mongod holds a few
+  long-lived connections, so one busy connection is one busy thread, and a limit of half a core lets it run half
+  of every tenth of a second. The operator's 500m is the only limit under a core in the table. 2 is Istio's.
+- **The limit also has to carry the idle workers**: one for every CPU of the node, above. Istio, which sets the
+  number of workers from the CPU limit, says why: "If we are running on a 100 core machine, but with only 2 CPUs
+  allocated, we want to have 2 threads, not 100, or we will get excessively throttled." This chart cannot set
+  that number; a generous limit is what is left.
+- **The CPU request, 250m**, is above Istio's measured cost of a proxy. At "1000 http requests per second
+  containing 1 KB of payload each", "a single sidecar proxy with 2 worker threads consumes about 0.20 vCPU and 60
+  MB of memory." That is HTTP/1.1 with small payloads, not searches streamed over gRPC with TLS on both sides: a
+  guide, not a measurement of this load.
+- **Memory, 256Mi requested and 1Gi at most.** On the lab each Envoy pod used 17 to 24 MiB, idle. 1Gi is Istio's
+  limit; Emissary's rule is to "keep ... memory usage below 50% of the pod's limit".
+- **What decides it is QA**, on the dashboard's Envoy section and these two: the share of periods in which the
+  pod was throttled, `rate(container_cpu_cfs_throttled_periods_total[5m]) / rate(container_cpu_cfs_periods_total[5m])`
+  for the Envoy container, which should stay near zero; and `container_memory_working_set_bytes` against the
+  limit. On the lab, idle, no period was throttled.
+
+Where the table and the quotes are from: the operator's `controllers/operator/mongodbsearchenvoy_controller.go`
+at tag 1.13.0; Istio's [gateway chart](https://github.com/istio/istio/blob/1.31.1/manifests/charts/gateway/values.yaml),
+its `pilot/cmd/pilot-agent/config/config.go` and its
+[Performance and Scalability](https://istio.io/latest/docs/ops/deployment/performance-and-scalability/) page;
+Envoy Gateway's [`api/v1alpha1/shared_types.go`](https://github.com/envoyproxy/gateway/blob/v1.9.2/api/v1alpha1/shared_types.go);
+Kuma's [`pkg/config/plugins/runtime/k8s/config.go`](https://github.com/kumahq/kuma/blob/v2.14.5/pkg/config/plugins/runtime/k8s/config.go);
+Emissary-ingress's [chart values](https://github.com/emissary-ingress/emissary/blob/v4.1.0/charts/emissary-ingress/values.yaml)
+and scaling page; Envoy's documentation at v1.37.0, `operations/cli`, `faq/performance/how_fast_is_envoy` and
+`faq/performance/how_to_benchmark_envoy`. All read on 2026-10-10.
+
+What is given in `loadBalancer.resources` replaces the operator's defaults whole. A change restarts the Envoy
+pods one at a time, a new pod Ready before an old one stops: on the lab 139 searches were tried through such a
+change, one a second, and all were answered.
 
 ### The source
 
@@ -174,7 +222,7 @@ setting.
 | Wanted | The resource's field | Today |
 | --- | --- | --- |
 | mongot pods on different nodes, as a rule | `clusters[].nodeAffinity` places pods on kinds of node; a required pod anti-affinity would go through `clusters[].statefulSet` | The operator's preferred anti-affinity only. An override through `statefulSet` restarted every mongot pod on the lab when one was tried |
-| Envoy's CPU and memory | `clusters[].loadBalancer.managed.resourceRequirements` | The operator's defaults: 100m and 128Mi requested, 500m and 512Mi at most |
+| The number of Envoy's worker threads (`--concurrency`) | None. It would be an argument of the Envoy container, through `clusters[].loadBalancer.managed.deployment`, which would have to restate the operator's own arguments | One worker for every CPU of the node |
 | JVM flags, a heap that is not half the request | `clusters[].jvmFlags` | Half the request |
 | mongot's log level | `logLevel` | The operator's default |
 | How many mongot pods must be Ready before Envoy sends to them | `clusters[].loadBalancer.managed.minMongotReadyReplicas` | Not set. The CRD: "Defaults to 1 if not specified". The operator's source at 1.13.0 applies it to the shards of a sharded source only |
@@ -189,8 +237,8 @@ setting.
 | 4 | Where the production values live | A repository of your own; then one run of that on the lab or on QA |
 | 5 | The images by digest: Envoy, the Jobs, the index names exporter | Your registry |
 | 6 | The first volume alert at 70 or 75 | 70 is this page's |
-| 7 | Whether the chart should gain the values of "Not settable" before production | Mostly Envoy's resources. MongoDB gives no sizing for Envoy: its defaults are stated without a rule |
-| 8 | Two Envoy pods or three | Three keep two through a drain; the cost is 100m and 128Mi requested |
+| 7 | Envoy's CPU and memory: the starting point above, or other numbers | What QA's Envoy pods use, and whether they are throttled |
+| 8 | Two Envoy pods or three | Three keep two through a drain; the cost is one more pod's request |
 
 ## To show on QA first
 
@@ -204,4 +252,6 @@ None of these can be shown on the lab, whose indexes are 16 MiB a pod on one nod
 - **One pod deleted**: that it comes back on its volume and goes on, with 190 GB.
 - **A node drained**, with the two disruption budgets: that one mongot pod and one Envoy pod go at a time, how long a
   mongot pod with its vSphere disk takes to be Ready on another node, and so how long a node update takes.
+- **Envoy under a real load**: its CPU against its limit and the share of throttled periods, with one worker thread
+  for every CPU of a production node.
 - **A change of `operator.version`** under Argo CD.

@@ -35,6 +35,13 @@ loadBalancer:
   # TO DECIDE. The public name mongod connects to: the Route's host, and a name in the ...-search-lb-0-cert.
   externalHostname: mongot-search.company.net
   replicas: 2
+  # A starting point, to be read against QA: production-settings.md, "Envoy's CPU and memory". The operator's own
+  # defaults are 100m and 128Mi requested, 500m and 512Mi at most. The CPU limit is above one core because Envoy
+  # keeps a connection on one worker thread, and mongod holds a few long-lived connections; 2 CPUs and 1Gi are
+  # Istio's limits for its gateway. What is given here replaces the operator's defaults whole.
+  resources:
+    requests: {cpu: 250m, memory: 256Mi}
+    limits: {cpu: "2", memory: 1Gi}
   # TO DECIDE. An Envoy image by digest from your registry; the operator's own default is a moving tag.
   # image: <registry>/envoy@sha256:<digest>
 
