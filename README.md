@@ -37,7 +37,7 @@ across the `mongot` pods.
 | [TESTING.md](TESTING.md) | the test suite, and the failure each assertion guards against |
 | [OBSERVE.md](OBSERVE.md) | watching traffic land on the pods, five different ways |
 
-**Install it with Helm**
+**Install it** (with Argo CD: [chart/mongodb-search-helm/argocd.md](chart/mongodb-search-helm/argocd.md); the rows below are the chart and the same install by hand with Helm)
 
 | Doc | What it covers |
 |---|---|

@@ -592,7 +592,7 @@ When you change `operator.version`, change `appVersion` in `Chart.yaml` to match
 The chart is meant to be run by an Argo CD Application, with the values in git: [argocd.md](argocd.md) is the page
 for it. It has the Application to copy ([`examples/argocd-application.yaml`](examples/argocd-application.yaml)),
 the order of a sync, the day-to-day table, and what each operation did on the lab with Argo CD 3.5.3: a first
-install into an empty namespace, a sync, automated sync, prune, and the deletion of the Application.
+install into a namespace with nothing of the chart in it, a sync, automated sync, prune, and the deletion of the Application.
 
 - **One sync installs everything**: 127 s on the lab, from a namespace that held only the prerequisites.
 - **`search.keepOnUninstall: true` belongs in the Application.** With it a prune skips the MongoDBSearch and the

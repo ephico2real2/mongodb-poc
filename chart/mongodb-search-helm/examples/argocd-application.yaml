@@ -23,7 +23,8 @@ spec:
       valueFiles:
         - examples/values-dvh-gp6-rnd.yaml
       # Keeps the MongoDBSearch, and so every mongot volume, through a prune and through the deletion of this
-      # Application. Take it out only to let Argo CD delete the search.
+      # Application. Take it out only to let Argo CD delete the search. Not `forceString: true`: the chart's schema
+      # wants a boolean.
       parameters:
         - name: search.keepOnUninstall
           value: "true"
