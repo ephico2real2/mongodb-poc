@@ -1,5 +1,6 @@
 # MongoDB Search through Argo CD (OpenShift GitOps). The namespace and the hand-made objects of runbook Steps 1 to 5
-# must exist first, so there is no CreateNamespace here. Not run in the lab: see the chart README, "Tested".
+# must exist first, so there is no CreateNamespace here. Run on the lab with examples/values-crc.yaml: see the chart
+# README, "Argo CD".
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -12,6 +13,9 @@ spec:
     targetRevision: main
     path: chart/mongodb-search-helm
     helm:
+      # The chart's object names start with the release name. Argo CD would use the Application's name: give the
+      # name the Helm commands of the documents use, so that Helm and Argo CD can take over from each other.
+      releaseName: mongot
       # The MongoDBSearch CRD then comes from OLM, before the resource's wave. Without this Argo CD would track a
       # CRD that OLM manages and other namespaces may use, and could delete it with the Application.
       skipCrds: true

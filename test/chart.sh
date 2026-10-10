@@ -463,6 +463,7 @@ refused "a search name the operator's suffixes would overflow" --set search.name
 # Argo CD: every hook Job is also an Argo hook, and the example never lets Argo own the CRD.
 [[ "$(render | grep -c 'argocd.argoproj.io/hook: \(Sync\|PreSync\)')" == 7 ]] && ok "every hook object carries an Argo CD hook" || bad "Argo CD hook annotations"
 grep -q 'skipCrds: true' ${CHART}/examples/argocd-application.yaml && ok "the Argo CD example skips the CRD" || bad "argocd example: skipCrds"
+grep -q '^      releaseName: mongot$' ${CHART}/examples/argocd-application.yaml && ok "the Argo CD example names the release, so object names match Helm's" || bad "argocd example: releaseName"
 
 # The Jobs' scripts: bash syntax, and shellcheck when available.
 tmp="$(mktemp -d)"; trap 'rm -rf "${tmp}"' EXIT

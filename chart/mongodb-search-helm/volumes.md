@@ -110,8 +110,10 @@ So this chart has no value that keeps a volume through a scale-down: there is no
    "ignored (no prune)". The two options on the resource override the Application's own `Prune` and `Delete`
    options. It does not stop `oc delete mongodbsearch`, nor a sync with `Force`: Argo CD then deletes the resource
    and creates it again when its apply is refused, and always when `Replace=true` is set as well ("the 'kubectl
-   delete/create' command"). The Argo CD part is from Argo CD 3.5.3's documentation and source: no Application
-   was run against this chart. When the search is meant to go:
+   delete/create' command"). On the lab with Argo CD 3.5.3 (2026-10-10) a sync of the resource alone with
+   prune skipped it, "ignored (no prune)", and a delete of the Application with its resources finalizer left the resource, its pods
+   and its claims: the README, "Argo CD", has the run. What is said here of `Force` and `Replace` is from Argo
+   CD's documentation and source only. When the search is meant to go:
    `oc delete mongodbsearch <search.name> -n <namespace>`.
 4. **Change the resource through the values only.** A field of the MongoDBSearch that was patched by hand stays
    owned by that patch: on the lab, Helm 4 then refused the next upgrade that changed it ("conflict with
