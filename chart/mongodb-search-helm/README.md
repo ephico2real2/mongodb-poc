@@ -58,7 +58,7 @@ bash $P --clean                                       # removes the key files on
 From the package alone, with no clone:
 
 ```bash
-helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.15/mongodb-search-helm-0.3.15.tgz --untar
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.16/mongodb-search-helm-0.3.16.tgz --untar
 bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
 ```
 
@@ -66,7 +66,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.15/mongodb-search-helm-0.3.15.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.16/mongodb-search-helm-0.3.16.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -587,7 +587,31 @@ When you change `operator.version`, change `appVersion` in `Chart.yaml` to match
 ## Argo CD
 
 Every hook also carries Argo CD annotations, and [`examples/argocd-application.yaml`](examples/argocd-application.yaml)
-shows an Application. It sets `skipCrds: true`, so Argo CD never owns a CRD that OLM manages. Not run in the lab.
+shows an Application. It sets `skipCrds: true`, so Argo CD never owns a CRD that OLM manages, and `releaseName`,
+because the names of the chart's objects start with the release name: an Application that takes over from a Helm
+release, or hands back to one, must use that release's name. Without it Argo CD uses the Application's name, and
+the example's OperatorGroup would be `mongodb-search-mongodb-search-helm` where Helm made `mongot-mongodb-search-helm`.
+
+**Run on the lab**, 2026-10-10, with OpenShift GitOps 1.22.0 (Argo CD 3.5.3) and chart 0.3.15: the example's
+Application with `examples/values-crc.yaml`, `search.keepOnUninstall=true` and manual sync. The Helm release was
+uninstalled first, with the MongoDBSearch kept ([volumes.md](volumes.md)).
+
+| Step | Result |
+| --- | --- |
+| The Application is created | 28 resources compared. The MongoDBSearch read `Synced` at once: the live object is what the chart renders. The rest read `Missing` |
+| First sync | `Failed` after 525 s. The operator was installed (InstallPlan `Complete`, ClusterServiceVersion `Succeeded`), and Argo CD failed the Subscription's task on its health: `ResolutionFailed \| True`, the condition the csv-reclaim hook waits for before it removes the ClusterServiceVersion an uninstall leaves. The later waves were not applied. [Issue #101](https://github.com/ephico2real2/mongodb-poc/issues/101) |
+| Second sync, nothing changed | `Succeeded`: the preflight, csv-reclaim, approver and wait hooks, and the waves in order. The Application `Synced` and `Healthy`; the MongoDBSearch, its three mongot pods and their three claims the same objects, with no restart |
+| Prune: the Application pointed at a revision of the chart without the MongoDBSearch template, and that one resource synced with prune | Argo CD showed the resource `OutOfSync`, requiring pruning. The result: `PruneSkipped`, "ignored (no prune)". The resource stayed, and the Application stayed `OutOfSync` |
+| The Application deleted with the finalizer `resources-finalizer.argocd.argoproj.io` | Gone after 36 s. Deleted: the Route, the OperatorGroup, the Subscription, the monitoring objects. Kept: the MongoDBSearch, its pods and its claims, and searches went on being answered, as after a `helm uninstall` |
+| `helm install` afterwards, the same release name, no flag | 45 s; the resource adopted, the same pods and claims. Argo CD's `tracking-id` and `last-applied-configuration` annotations stay on it |
+
+The hook objects that stay after a sync (the Jobs, and the preflight's ServiceAccount, Role and RoleBinding) are
+listed by Argo CD as requiring pruning; the Application read `Synced` with them.
+
+Not run: a sync of the whole Application with prune past its first waves (two attempts ended when the lab's
+control plane restarted), a first install into a namespace with no ClusterServiceVersion, and automated sync. The
+times are those of a lab whose controller manager was restarting that night, during which no Job is recorded as
+finished: they are not the chart's.
 
 ## Tests
 
