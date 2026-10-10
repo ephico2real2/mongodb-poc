@@ -106,10 +106,22 @@ Each of these starts in git and ends with a check.
 | Bring it back | The Application again | Sync | One sync adopts the search that was kept: 63 to 72 s on the lab |
 | Remove the search for good | Take the Application out | Delete the Application, then `oc delete mongodbsearch <search.name> -n <namespace>` | Every mongot volume goes with it. Then `oc delete csv mongodb-kubernetes.v<version> -n <namespace>` removes the operator |
 
-The install, newer-chart, remove, bring-back and remove-for-good rows were run under Argo CD (below). The
-change-a-value, more-pods, fewer-pods and bigger-volumes rows are the chart's and the operator's behaviour as
-measured with `helm upgrade` ([scaling.md](scaling.md), [volumes.md](volumes.md), the runbook) and were not run
-under Argo CD: there a preflight or a gate that stops is a sync that reads `Failed` at that hook.
+Every row was run under Argo CD (below), the bigger volumes one up to the gate and its back-out: the lab's storage
+classes cannot grow a volume.
+
+**When a sync fails at a hook**, three things are worth knowing; all three were seen on the lab.
+
+- **The reason is in the Job's log, not in Argo CD's message.** Argo CD says "Job has reached the specified backoff
+  limit". A Job that failed is kept: `oc logs -n <namespace> job/mongot-mongodb-search-helm-preflight`, or
+  `...-wait` for the gate.
+- **Automated sync tries a failed sync again, five times.** With `automated: {}` and no `retry` of its own, Argo CD
+  retried the refused scale-down at 08:16, 08:17, 08:18, 08:19 and 08:21, and the stopped volume change five times
+  in 8 minutes, each attempt running the hooks again. A commit that corrects it is synced once those end: 49 s
+  after its push, on the lab.
+- **`Synced` and `Healthy` do not mean the sync passed.** While the gate was failing on a changed volume size the
+  Application read `Synced` and `Healthy`, and the MongoDBSearch read `Failed`: Argo CD has no health check for a
+  MongoDBSearch. Read the operation's phase, `oc get application <name> -n <argo cd's namespace> -o
+  jsonpath='{.status.operationState.phase}'`, and the resource's own, `oc get mongodbsearch -n <namespace>`.
 
 While the MongoDBSearch is live and no longer in the manifests, the Application stays `OutOfSync` and a sync with
 prune reports it as "ignored (no prune)".
@@ -142,6 +154,21 @@ In every one of these the Subscription and the ClusterServiceVersion were read e
 | **The Application deleted** with the finalizer `resources-finalizer.argocd.argoproj.io` | Gone after 36 s, each of five times. Deleted: the Route, the OperatorGroup, the Subscription, the monitoring objects. Kept: the MongoDBSearch, its three mongot pods and its volumes. The operator's pod kept running and its ClusterServiceVersion read `Failed`, `NoOperatorGroup`, within 2 minutes. Searches through mongod went on being answered each time they were tried; after a `helm uninstall`, which removes the same Route, a new connection to the Route's host got no answer ([volumes.md](volumes.md)) |
 | **The MongoDBSearch deleted by hand**, `oc delete mongodbsearch` | The StatefulSet gone after 1 s; the three mongot pods and their three volume claims after 12 s; the two Envoy pods after 62 s. The volumes read `Released`: the lab's storage class retains them. On a class whose reclaim policy is `Delete`, `thin-csi` among them, the disks go with the claims (not run: the lab's class retains) |
 
+### Changing, scaling and growing
+
+Each as a commit to the values file on the branch the lab's Application followed, synced by Argo CD itself
+(`automated: {}`), chart 0.3.18. A search through mongod was tried every 5 s throughout: none failed in any of
+these steps.
+
+| Operation | Result |
+| --- | --- |
+| **A value changed**: the mongot memory request, 1100Mi to 1200Mi | One sync, `Succeeded` in 144 s (08:12:19Z to 08:14:43Z). The three mongot pods were restarted one at a time, the highest number first, about 33 s each, every one on its own volume claim. 28 searches tried |
+| **Fewer mongot pods** (`search.replicas` 3 to 2), without `search.allowVolumeLoss` | The sync failed at the preflight. Its log: "REFUSED: search.replicas would go from 3 to 2 ... To do it knowingly, set search.allowVolumeLoss=true for this one upgrade. Nothing was changed". The same three pods and claims. 46 searches tried |
+| **Fewer mongot pods**, with `search.allowVolumeLoss: true` | One sync, `Succeeded` in 65 s. The third pod and its volume claim were gone 13 s after the pod began to go. The preflight's log: "the volumes of the pods that go are deleted". 24 searches tried |
+| **More mongot pods**: back to 3 | One sync, `Succeeded` in 71 s. The third pod came back on a new volume claim and was Ready within 32 s of appearing. 17 searches tried |
+| **Bigger volumes**: `search.persistence.storage` 4Gi to 5Gi | The sync failed at the gate, as it is meant to. Its log: "STOPPED: search.persistence.storage is now 5Gi and the StatefulSet mongot-search-0 still has 4Gi. Nothing is broken: the mongot pods run and answer as before ... Next: volume-expansion-runbook.md in the chart". The MongoDBSearch read `Failed`; the same pods and claims. 92 searches tried in the 10 minutes it was left that way |
+| **The back-out**: the old size in git | One sync, `Succeeded` in 60 s; the MongoDBSearch `Running` again 53 s after the push; no pod restarted. 17 searches tried |
+
 ### Charts before 0.3.17
 
 | Operation | Result |
@@ -172,6 +199,8 @@ A cluster run by Argo CD does not need this. It is here for a cluster that was i
 ## Not run
 
 - A change of `operator.version` under Argo CD.
+- Growing a volume to the end: the lab's storage classes cannot. The sync stopping at the gate and the back-out
+  were run; the steps in between are [volume-expansion-runbook.md](volume-expansion-runbook.md)'s.
 - A namespace that also holds Subscriptions of other operators: the chart's hooks are tested for it against a
   stand-in only ([`test/csv-reclaim.sh`](../../test/csv-reclaim.sh)).
 - `selfHeal`, and a sync with `Force` or `Replace`: what [volumes.md](volumes.md) says of those is from Argo CD's

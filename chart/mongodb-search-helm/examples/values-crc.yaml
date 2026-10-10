@@ -1,8 +1,6 @@
 # The lab: CRC, namespace mongodb-poc. The secrets and the trust bundle already in the namespace are used as they
-# are. These are the values the lab's release runs with: change the lab by changing this file.
-# A fresh install from this file makes 4Gi claims; the lab's own claims, made before the size was raised, request
-# 2Gi and were not grown (a claim's size is not changed by the value: volume-expansion-runbook.md).
-#   helm upgrade --install mongot chart/mongodb-search-helm -n mongodb-poc -f chart/mongodb-search-helm/examples/values-crc.yaml --timeout 20m
+# are. The lab is run by Argo CD (argocd-application-crc.yaml, beside this file), which reads these values from
+# main: change the lab by changing this file there. Argo CD syncs it by itself.
 namespace: mongodb-poc
 search:
   resources:
