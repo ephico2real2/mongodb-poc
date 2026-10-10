@@ -464,6 +464,17 @@ refused "a search name the operator's suffixes would overflow" --set search.name
 [[ "$(render | grep -c 'argocd.argoproj.io/hook: \(Sync\|PreSync\)')" == 7 ]] && ok "every hook object carries an Argo CD hook" || bad "Argo CD hook annotations"
 grep -q 'skipCrds: true' ${CHART}/examples/argocd-application.yaml && ok "the Argo CD example skips the CRD" || bad "argocd example: skipCrds"
 grep -q '^      releaseName: mongot$' ${CHART}/examples/argocd-application.yaml && ok "the Argo CD example names the release, so object names match Helm's" || bad "argocd example: releaseName"
+if command -v yq >/dev/null; then
+for f in argocd-application.yaml argocd-application-crc.yaml; do
+  [[ "$(yq '.spec.source.helm.skipCrds' "${CHART}/examples/$f")" == true && "$(yq '.spec.source.helm.releaseName' "${CHART}/examples/$f")" == mongot \
+     && "$(yq '.spec.source.helm.parameters[] | select(.name == "search.keepOnUninstall") | .value' "${CHART}/examples/$f")" == true ]] \
+    && ok "$f skips the CRD, names the release and keeps the search through a prune and an Application delete" || bad "$f: skipCrds, releaseName or search.keepOnUninstall"
+done
+[[ "$(yq '.spec.source.targetRevision' ${CHART}/examples/argocd-application.yaml)" == "mongodb-search-helm-$(sed -n 's/^version: *//p' ${CHART}/Chart.yaml)" ]] \
+  && ok "the Argo CD example points at this chart version's release tag" || bad "argocd example: targetRevision is not this version's tag"
+[[ "$(yq '.spec.syncPolicy.automated.prune // "unset"' ${CHART}/examples/argocd-application-crc.yaml)" == unset && "$(yq '.spec.source.helm.valueFiles[0]' ${CHART}/examples/argocd-application-crc.yaml)" == examples/values-crc.yaml ]] \
+  && ok "the lab's Application syncs by itself with the lab values, without prune" || bad "lab application: values file or prune"
+fi
 
 # The Jobs' scripts: bash syntax, and shellcheck when available.
 tmp="$(mktemp -d)"; trap 'rm -rf "${tmp}"' EXIT

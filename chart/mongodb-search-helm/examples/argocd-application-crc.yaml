@@ -1,0 +1,32 @@
+# The lab's Application: CRC, namespace mongodb-poc, the chart as it is on main, the lab's values. The lab is run by
+# Argo CD, not by helm commands: change it by changing examples/values-crc.yaml, or the chart, on main.
+#   oc apply -f chart/mongodb-search-helm/examples/argocd-application-crc.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mongodb-search
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ephico2real2/mongodb-poc.git
+    targetRevision: main
+    path: chart/mongodb-search-helm
+    helm:
+      releaseName: mongot
+      skipCrds: true
+      valueFiles:
+        - examples/values-crc.yaml
+      parameters:
+        - name: search.keepOnUninstall
+          value: "true"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mongodb-poc
+  ignoreDifferences:
+    - group: route.openshift.io
+      kind: Route
+      jsonPointers: [/status]
+  # Every change on main is synced by Argo CD itself; nothing is pruned.
+  syncPolicy:
+    automated: {}

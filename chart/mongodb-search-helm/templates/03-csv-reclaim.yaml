@@ -6,7 +6,7 @@ The script is the openshift-coo chart's csv-reclaim (itself the openshift-grafan
 deletes only a CSV of this package that is not an OLM copy, has no owner, is referenced by no Subscription and is
 settled (Succeeded/Failed), and only on one of two verdicts: OLM reports ResolutionFailed on the Subscription, or
 the namespace holds no Subscription of this package at all. A clean install pays one list and exits.
-Measured for other operators on CRC; for mongodb-kubernetes see the chart README, "Tested" and "Argo CD".
+Measured for other operators on CRC; for mongodb-kubernetes see the chart README, "Tested", and argocd.md.
 
 Helm weight -2, ahead of the approver: the Subscription is there by then, and the first verdict decides. Argo CD
 wave -3, ahead of the OperatorGroup (-2) and the Subscription (-1): there the second verdict decides, before a
