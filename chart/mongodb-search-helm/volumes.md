@@ -26,7 +26,7 @@ installs, MongoDB Controllers for Kubernetes 1.13.0, and was measured on the lab
 | The StatefulSet deleted, without `--cascade=orphan` | **Deleted**, every one | Not run |
 | The StatefulSet deleted **with** `--cascade=orphan` | Kept | The operator made the StatefulSet again within a second; the three pods were adopted without a restart and the three claims kept their uids |
 | The MongoDBSearch deleted, or `helm uninstall` with the chart's default | **Deleted**, every one | Not run today |
-| `helm uninstall` with `search.keepOnUninstall: true` | Kept | 2026-10-10: Helm answered "These resources were kept due to the resource policy: [MongoDBSearch] mongot". The resource, the StatefulSet, the three mongot pods, the two Envoy pods and the three claims kept their uids, with no restart. `helm install` under the same name then adopted them, with no flag, in 42 s |
+| `helm uninstall` with `search.keepOnUninstall: true` | Kept | 2026-10-10: Helm answered "These resources were kept due to the resource policy: [MongoDBSearch] mongot". The resource, the StatefulSet, the three mongot pods, the two Envoy pods and the three claims kept their uids, with no restart. `helm install` under the same name then adopted the resource in 42 s, without `--take-ownership`; the same pods and claims |
 
 ## Why
 
@@ -91,12 +91,15 @@ So this chart has no value that keeps a volume through a scale-down: there is no
    see [scaling.md](scaling.md) for how mongot is scaled.
 3. **`search.keepOnUninstall: true`** if an uninstall must not take the indexes with it. `helm uninstall` then
    leaves the MongoDBSearch, its pods and its volumes, and removes the rest of the release: the Route, the
-   OperatorGroup and the Subscription, the monitoring objects. On the lab (2026-10-10, chart 0.3.14) a new TLS
-   connection to the Route's host then got no answer, while the connection mongod already had open went on
-   answering searches, each time it was tried up to 2 min 41 s after the uninstall; how long such a connection
-   lasts was not measured. The operator's pod kept running, and its ClusterServiceVersion went `Failed` with
-   `NoOperatorGroup` within 2 minutes. `helm install` under the same release name adopted the resource with no
-   flag, in 42 s: the same pods and claims, no restart, the Route made again and the operator replaced. Under
+   OperatorGroup and the Subscription, the monitoring objects. On the lab (2026-10-10, chart 0.3.14) searches
+   through the lab's GUI went on being answered by the mongot pods, each time it was tried up to 2 min 41 s after
+   the uninstall, while a new TLS connection to the Route's host got no answer and the router held the old HAProxy
+   process beside the new one. mongod points its `mongotHost` at the Route, so what answered was most likely the
+   connection mongod already had open, through the old process; the connection itself was not observed, and how
+   long it lasts was not measured. The operator's pod kept running, and its ClusterServiceVersion, still
+   `Succeeded` 20 s after the uninstall, read `Failed` with `NoOperatorGroup` 2 min after it. `helm install`
+   under the same release name adopted the resource in 42 s, without `--take-ownership`: the same pods and
+   claims, no restart, the Route made again and the operator replaced. Under
    Argo CD the value also sets `Prune=false`
    and `Delete=false` in the resource's sync options, since Argo CD takes Helm's annotation as `Delete=false` only
    ("Supported as equivalent to `argocd.argoproj.io/sync-options: Delete=false`",

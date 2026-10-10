@@ -1,5 +1,7 @@
 # The lab: CRC, namespace mongodb-poc. The secrets and the trust bundle already in the namespace are used as they
 # are. These are the values the lab's release runs with: change the lab by changing this file.
+# A fresh install from this file makes 4Gi claims; the lab's own claims, made before the size was raised, request
+# 2Gi and were not grown (a claim's size is not changed by the value: volume-expansion-runbook.md).
 #   helm upgrade --install mongot chart/mongodb-search-helm -n mongodb-poc -f chart/mongodb-search-helm/examples/values-crc.yaml --timeout 20m
 namespace: mongodb-poc
 search:
@@ -22,8 +24,11 @@ source:
 route:
   name: mongot-grpc                    # the lab's Route name; it targets the operator's mongot-search-0-proxy-svc
 monitoring:
+  # A ConfigMap for a Grafana dashboard sidecar: the lab's Grafana (release grafana-validate) reads it; harmless
+  # on a namespace without one.
   grafanaDashboard: true
-  # Needs the Secret search-index-info-password and the user it belongs to on the lab's mongod.
+  # Needs the Secret search-index-info-password and the user it belongs to on the lab's mongod. Neither is made by
+  # generate-mongodbsearch-prerequisites.sh: the README, "Index names, as metrics", has the two commands.
   indexInfo:
     enabled: true
     uriOptions: replicaSet=rs0

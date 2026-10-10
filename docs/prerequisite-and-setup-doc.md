@@ -305,7 +305,7 @@ oc logs -n $NS job/mongot-mongodb-search-helm-wait -c wait
 
 ## Tested on CRC
 
-Oct 6, 2026, namespace `mongodb-poc`, OpenShift 4.22.7, Helm 4.3.0, with [`examples/values-crc.yaml`](../chart/mongodb-search-helm/examples/values-crc.yaml). The five prerequisites were the ones already in the lab, used as they were.
+Oct 6, 2026, namespace `mongodb-poc`, OpenShift 4.22.7, Helm 4.3.0, with [`examples/values-crc.yaml`](../chart/mongodb-search-helm/examples/values-crc.yaml) as it then was (2Gi, 1Gi requested, no monitoring values). The five prerequisites were the ones already in the lab, used as they were.
 
 | Run | Result | Helm time |
 | --- | --- | --- |
