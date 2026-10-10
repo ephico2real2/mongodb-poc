@@ -58,7 +58,7 @@ bash $P --clean                                       # removes the key files on
 From the package alone, with no clone:
 
 ```bash
-helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.16/mongodb-search-helm-0.3.16.tgz --untar
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.17/mongodb-search-helm-0.3.17.tgz --untar
 bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
 ```
 
@@ -66,7 +66,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.16/mongodb-search-helm-0.3.16.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.17/mongodb-search-helm-0.3.17.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -594,6 +594,16 @@ same ones (the MongoDBSearch and the Route are named from the values). Without i
 name, and the example's OperatorGroup would be `mongodb-search-mongodb-search-helm` where Helm made
 `mongot-mongodb-search-helm`.
 
+**The order under Argo CD** is Helm's, with one difference. The csv-reclaim hook runs in wave -3, ahead of the
+OperatorGroup (-2) and the Subscription (-1), where under Helm it runs after them. Under Helm it deletes the
+ClusterServiceVersion an uninstall left behind once OLM reports `ResolutionFailed` on the new Subscription. Argo CD
+reads that condition as a Degraded Subscription and fails the sync, so there the hook acts earlier and on other
+evidence: the namespace holds no Subscription of the operator's package. It deletes the same ClusterServiceVersion
+(of this package, not a copy, without an owner, referenced by no Subscription, settled) and ends when it is gone.
+A list of Subscriptions that fails, a Subscription of the package under another name and a Subscription whose
+package cannot be read are not that evidence: nothing is deleted then. [`test/csv-reclaim.sh`](../../test/csv-reclaim.sh)
+runs the hook's script against a stand-in `oc`.
+
 **Run on the lab**, 2026-10-10, with OpenShift GitOps 1.22.0 (Argo CD 3.5.3) and chart 0.3.15: the example's
 Application with `examples/values-crc.yaml`, `search.keepOnUninstall=true` and manual sync. The Helm release was
 uninstalled first, with the MongoDBSearch kept ([volumes.md](volumes.md)).
@@ -601,11 +611,26 @@ uninstalled first, with the MongoDBSearch kept ([volumes.md](volumes.md)).
 | Step | Result |
 | --- | --- |
 | The Application is created | 28 resources compared. The MongoDBSearch read `Synced` at once: the live object is what the chart renders. 23 read `Missing`; the four Jobs the Helm run had left read as requiring pruning |
-| First sync | `Failed` after 521 s. The operator was installed (InstallPlan `Complete`, ClusterServiceVersion `Succeeded`), and Argo CD failed the Subscription's task on its health: `ResolutionFailed \| True`, the condition the csv-reclaim hook waits for before it removes the ClusterServiceVersion an uninstall leaves. The later waves were not applied. [Issue #101](https://github.com/ephico2real2/mongodb-poc/issues/101) |
+| First sync | `Failed` after 521 s. The operator was installed (InstallPlan `Complete`, ClusterServiceVersion `Succeeded`), and Argo CD failed the Subscription's task on its health: `ResolutionFailed \| True`, the condition the csv-reclaim hook waits for before it removes the ClusterServiceVersion an uninstall leaves. The later waves were not applied. [Issue #101](https://github.com/ephico2real2/mongodb-poc/issues/101), corrected in chart 0.3.17: the second table |
 | Second sync, nothing changed | `Succeeded`: the preflight, csv-reclaim, approver and wait hooks, and the waves in order. The Application `Synced` and `Healthy`; the MongoDBSearch, its three mongot pods and their three claims the same objects, with no restart |
 | Prune: the Application pointed at a revision of the chart without the MongoDBSearch template, and that one resource alone synced with prune | Argo CD showed the resource `OutOfSync`, requiring pruning. The result: `PruneSkipped`, "ignored (no prune)". The resource stayed, and the Application stayed `OutOfSync` |
 | The Application deleted with the finalizer `resources-finalizer.argocd.argoproj.io` | Gone after 36 s. Deleted: the Route, the OperatorGroup, the Subscription, the monitoring objects. Kept: the MongoDBSearch, its three mongot pods and its claims, and searches went on being answered, as after a `helm uninstall` |
 | `helm install` afterwards, the same release name, no flag | 45 s; the resource adopted, the same mongot pods and claims. Argo CD's `tracking-id` and `last-applied-configuration` annotations stay on it |
+
+**Run again with the chart of 0.3.17**, the same day, from its commits before the release (`954968f`, `71e6fc8`),
+each time after an uninstall or an Application delete had left the operator's ClusterServiceVersion with no
+Subscription and no OperatorGroup. The Subscription and the ClusterServiceVersion were read every 3 s during each
+sync, and the control plane's restart counts did not move during any step.
+
+| Step | Result |
+| --- | --- |
+| One sync over the ClusterServiceVersion a `helm uninstall` had left, reading `Succeeded` when the sync began and `Failed` (`NoOperatorGroup`) when the hook ran | `Succeeded` in 71 s (05:17:13Z to 05:18:24Z). The hook's log: "no Subscription of mongodb-kubernetes in mongodb-poc", the ClusterServiceVersion "ORPHANED", then "gone", within 2 s. The Subscription, made after it, read `UpgradePending`, then `AtLatestKnown`; `ResolutionFailed` was `True` in none of the readings. The Application `Synced` and `Healthy` |
+| A second sync, nothing left behind | `Succeeded` in 55 s. The hook's log: "nothing could be orphaned, not waiting" |
+| One sync over the ClusterServiceVersion an Application delete had left, reading `Failed` (`NoOperatorGroup`) from the start | `Succeeded` in 68 s (05:27:16Z to 05:28:24Z), the same log and the same readings |
+| `helm install` over a left-behind ClusterServiceVersion, the same chart | Deployed in 43 s. The hook took Helm's path, as before: "Subscription reports ResolutionFailed", "ORPHANED", "OLM will re-resolve the Subscription on its own" |
+
+Through all of it the MongoDBSearch, its three mongot pods and their three claims were the same objects, and
+`test/run.sh search` passed 15 of 15 at the end.
 
 The hook objects that stay after a sync are listed by Argo CD as requiring pruning, and the Application read
 `Synced` with them. They are the preflight Job, whose delete policy is `BeforeHookCreation` alone, and the
