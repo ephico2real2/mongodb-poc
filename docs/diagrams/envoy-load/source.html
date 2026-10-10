@@ -152,11 +152,11 @@ a { color: var(--remote); }
             <text x="30" y="361" fill="var(--muted)">a second</text>
             <text x="30" y="386" fill="var(--muted)">95th pct</text>
             <text x="30" y="426" fill="var(--muted)">The lab, 2026-10-10: one mongod connection, so one Envoy pod carried every search. Ten results a search; no search failed.</text>
-            <text x="30" y="446" fill="var(--muted)">At 64 at once with 2 CPUs, mongot was throttled at its own limit of 1 CPU in 22% of periods, and that step was slower.</text>
+            <text x="30" y="446" fill="var(--muted)">At 64 at once with 2 CPUs, mongot was throttled at its own limit of 1 CPU in 22% of periods, and the lab was slowing.</text>
           </g>
         </svg>
       </div>
-      <figcaption>With the operator's default limit the busy Envoy pod was held at half a CPU from 16 searches at once and throttled in up to 34% of periods. With 2 CPUs it was never throttled and used up to 0.60 CPUs: searches were faster at 16 and 32 at once, and slower at 64, where mongot was then the limit. Measured on the lab, where one mongod connection carries every search.</figcaption>
+      <figcaption>With the operator's default limit the busy Envoy pod was held at half a CPU from 16 searches at once and throttled in up to 34% of periods. With 2 CPUs it was never throttled and used up to 0.60 CPUs: searches were faster at 16 and 32 at once, and slower at 64, where mongot was throttled in 22% of periods and the lab was slowing. Measured on the lab, where one mongod connection carries every search.</figcaption>
     </figure>
   </section>
 </div>

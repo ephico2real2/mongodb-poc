@@ -3,8 +3,11 @@
 A load test of search on the lab, run on 2026-10-10, to see how the Envoy that the operator puts in front of mongot
 behaves under concurrent searches: its CPU for each search, whether its CPU limit holds it back, its memory, and how
 mongod's connection lands on the Envoy pods. It was run with the operator's default resources for Envoy and with the
-starting point [production-settings.md](../chart/mongodb-search-helm/production-settings.md) gives for production.
-The tool is in [test/load/](../test/load/), so the same test can be run on another cluster.
+starting point [production-settings.md](../production-settings.md) gives for production.
+The tool is in [test/load/](../../../test/load/) of the repository, so the same test can be run on another cluster.
+
+This page is packaged with the chart; its pictures are not (a chart has to stay small), and are linked from the
+repository.
 
 ## The result
 
@@ -13,32 +16,34 @@ The tool is in [test/load/](../test/load/), so the same test can be run on anoth
   throttled in 28 to 34% of periods from 16 at once. With a limit of 2 CPUs it was never throttled.
 - **Up to 32 at once, searches were faster with 2 CPUs**: at 32 the 95th percentile was 24 ms where it was
   37 ms, and 2,250 searches a second where there were 1,879.
-- **At 64 at once they were slower**: 2,032 a second and 72 ms, against 2,452 and 52 ms. With Envoy
-  no longer holding the load back, mongot reached its own limit of 1 CPU and was throttled in 22% of periods
-  (2% in the run at half a CPU). Raising one limit moved the load to the next.
+- **At 64 at once they were slower**: 2,032 a second and 72 ms, against 2,452 and 52 ms. mongot, at its own
+  limit of 1 CPU, was throttled in 22% of periods (2% in the run at half a CPU), and the lab was by then slowing:
+  the readings of the pods came 21 s apart in that step, and the next run was unusable. Which of the two slowed
+  the step, this run cannot say.
 - **One mongod sends every search through one Envoy pod.** Each Envoy pod held one connection from mongod, and
   all the searches went down one of them. The other Envoy pod used 0.005 to 0.014 CPUs. A second or third
   Envoy pod stands by for that mongod; it does not add capacity for it.
 - **Envoy's cost**: about 0.4 CPUs at 1,000 searches a second, each returning ten results. For each search a
-  second it used 0.7 to 0.9 thousandths of a CPU at the lowest rate and 0.2 to 0.3 at the highest.
-- **Envoy's memory stayed small**: 42 MiB at most by its cgroup's count, 36 MiB of working set.
+  second the two Envoy pods together used 0.7 to 0.9 thousandths of a CPU at the lowest rate and 0.2 to 0.3 at the
+  highest.
+- **Envoy's memory stayed small**: 42.0 MiB at most by its cgroup's count, 35.8 MiB of working set.
 - **Nothing failed**: 927,899 searches in the two runs, 0 failed, no retry by Envoy.
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The CPU of the Envoy pod that carried the searches, at seven steps of concurrency from 1 to 64, in two runs on the lab. With the default limit of half a CPU it rose to the limit and was throttled in 3 per cent of periods at 8 searches at once and in 28 to 34 per cent from 16 on. With a limit of 2 CPUs it was never throttled and used up to 0.60 CPUs; the 95th percentile of the search time at 32 at once was 24 ms where it was 37, and at 64 at once 72 ms where it was 52." src="diagrams/envoy-load/cpu-against-limit.light.png">
+<img alt="The CPU of the Envoy pod that carried the searches, at seven steps of concurrency from 1 to 64, in two runs on the lab. With the default limit of half a CPU it rose to the limit and was throttled in 3 per cent of periods at 8 searches at once and in 28 to 34 per cent from 16 on. With a limit of 2 CPUs it was never throttled and used up to 0.60 CPUs; the 95th percentile of the search time at 32 at once was 24 ms where it was 37, and at 64 at once 72 ms where it was 52." src="https://raw.githubusercontent.com/ephico2real2/mongodb-poc/main/docs/diagrams/envoy-load/cpu-against-limit.light.png">
 <!-- markdownlint-enable MD033 -->
 
-*With the operator's default limit the busy Envoy pod was held at half a CPU from 16 searches at once and throttled in up to 34% of periods. With 2 CPUs it was never throttled and used up to 0.60 CPUs: searches were faster at 16 and 32 at once, and slower at 64, where mongot was then the limit. Measured on the lab, where one mongod connection carries every search.*
+*With the operator's default limit the busy Envoy pod was held at half a CPU from 16 searches at once and throttled in up to 34% of periods. With 2 CPUs it was never throttled and used up to 0.60 CPUs: searches were faster at 16 and 32 at once, and slower at 64, where mongot was throttled in 22% of periods and the lab was slowing. Measured on the lab, where one mongod connection carries every search.*
 
 ```text
 At once                    1           2           4           8           16          32          64
 Limit half a CPU
-  busy Envoy pod, CPUs     0.14        0.18        0.27        0.39        0.47        0.48        0.49
+  busy Envoy pod, CPUs     0.142       0.185       0.269       0.390       0.465       0.477       0.486
   periods throttled        0%          0%          0%          3%          28%         32%         34%
   searches a second        168         319         590         1,000       1,325       1,879       2,452
   95th percentile          9 ms        10 ms       10 ms       12 ms       24 ms       37 ms       52 ms
 Limit 2 CPUs
-  busy Envoy pod, CPUs     0.13        0.19        0.26        0.38        0.47        0.60        0.47
+  busy Envoy pod, CPUs     0.129       0.193       0.264       0.382       0.475       0.598       0.465
   periods throttled        0%          0%          0%          0%          0%          0%          0%
   searches a second        191         326         577         916         1,436       2,250       2,032
   95th percentile          8 ms        9 ms        10 ms       15 ms       21 ms       24 ms       72 ms
@@ -51,7 +56,7 @@ Limit 2 CPUs
 | Cluster | OpenShift Local 4.22.7, one node of 12 CPUs, namespace `mongodb-poc` |
 | Search | Chart `mongodb-search-helm` 0.3.23 under Argo CD, operator 1.13.0, mongot 1.70.1: three mongot pods (1 CPU at most each), two Envoy pods (Envoy 1.37.6) |
 | Source | A replica set of three mongod on a virtual machine of the same workstation |
-| Data | `sample_mflix.movies`: 20,024 documents, made by `mongodb/scripts/generate-bulk.py`; the index `default` |
+| Data | `sample_mflix.movies`: 20,024 documents, 20,000 of them made by `mongodb/scripts/generate-bulk.py`; the index `default` |
 | The searches | `$search` for one of eight words the collection holds, over every field; the first 10 results, two fields of each. The generator counted 10 results a search |
 | The generator | One pod in the namespace: one `mongosh` that keeps N searches in flight through the driver, N stepping 1, 2, 4, 8, 16, 32, 64, for 60 s a step with 15 s between |
 | Read while it ran | From every Envoy pod, mongot pod and the generator, about every 6 s: the CPU time used, the periods and the throttled periods of the container, and its memory, from its cgroup. From Prometheus afterwards: Envoy's own counters |
@@ -124,10 +129,11 @@ python3 test/load/analyze.py C-default
 The control plane's restart counts were read by hand before and after each of the two runs and did not move.
 
 **A third run is not used.** The run at the defaults was repeated straight after, from 19:53Z. During it the
-lab's kube-controller-manager restarted four times, the readings of the pods failed from the second step, and the
-searches a second fell to a tenth. The workstation that holds the cluster, mongod and the generator was at a load
-average of 14 to 16 by then, after six runs in a day. No search failed in it either; its figures say nothing of
-Envoy.
+lab's kube-controller-manager restarted four times, the readings of the pods came 9 to 66 s apart instead of 6
+(the control plane answered slowly, so from the second step no step has two readings inside it), and the searches
+a second fell to between a seventh and a quarter of the first run's. The workstation that holds the cluster, mongod
+and the generator (18 logical CPUs) was at a load average of 14 to 16 by then, after six runs in a day. No search
+failed in it either; its figures say nothing of Envoy.
 
 ## What Envoy's own counters say
 
@@ -146,13 +152,13 @@ about one every 40 s.
 ## What the console showed
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The MongoDB Search dashboard in the OpenShift console over the two runs, 14:28 to 14:53 local time. Searches per second per mongot pod: two humps, the three pods in equal bands, a third each. Requests per second to mongot per Envoy pod: two humps, each of one Envoy pod only. Open connections from mongod per Envoy pod: 1 on each. Retries per second: none. Responses from mongot: all 2xx. Envoy to mongot latency, 95th percentile: up to about 7 ms in the first run and about 9 ms at the end of the second." src="screenshots/envoy-load-dashboard.png">
+<img alt="The MongoDB Search dashboard in the OpenShift console over the two runs, 14:28 to 14:53 local time. Searches per second per mongot pod: two humps, the three pods in equal bands, a third each. Requests per second to mongot per Envoy pod: two humps, each of one Envoy pod only. Open connections from mongod per Envoy pod: 1 on each. Retries per second: none. Responses from mongot: all 2xx. Envoy to mongot latency, 95th percentile: up to about 7 ms in the first run and about 9 ms at the end of the second. Between the humps, 14:41 to 14:44, the Envoy pods were replaced for the change of limit: the requests panel shows two short traces of other pods there and the connections panel a gap." src="https://raw.githubusercontent.com/ephico2real2/mongodb-poc/main/docs/screenshots/envoy-load-dashboard.png">
 <!-- markdownlint-enable MD033 -->
 
 *The dashboard over the two runs: the first hump is the run at half a CPU, the second the run at 2 CPUs. Each hump of requests is one Envoy pod; each Envoy pod holds one connection from mongod; the three mongot pods take a third of the searches each; no retries.*
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The OpenShift console, the Metrics tab of the pod mongot-search-lb-0-778dd7bffc-8rw7d, an Envoy pod, in the project mongodb-poc, as the user developer. Memory usage: a flat line near the bottom, under the dotted line of its request and far under the dashed box of its limit. CPU usage: a line that rises in steps from near zero to between 300m and 400m, toward the dashed box of its limit of 500m; the dotted line is its request, 100m. The time axis shows 1:55 PM and 2:00 PM." src="screenshots/envoy-load-pod-metrics.png">
+<img alt="The OpenShift console, the Metrics tab of the pod mongot-search-lb-0-778dd7bffc-8rw7d, an Envoy pod, in the project mongodb-poc, as the user developer. Memory usage: a flat line near the bottom, under the dotted line of its request and far under the dashed box of its limit. CPU usage: a line that rises in steps from near zero to between 300m and 400m, toward the dashed box of its limit of 500m; the dotted line is its request, 100m. The time axis shows 1:55 PM and 2:00 PM." src="https://raw.githubusercontent.com/ephico2real2/mongodb-poc/main/docs/screenshots/envoy-load-pod-metrics.png">
 <!-- markdownlint-enable MD033 -->
 
 *An Envoy pod at the default limit, in the console, during a run of the first set (18:52Z to 19:01Z; the console shows local time): its CPU climbs toward its limit, the dashed box. The console draws an average over minutes, so it reads lower than the counts in the tables. Its memory does not move.*
@@ -185,12 +191,15 @@ same, and the default limit was run twice.
 1. **Envoy's CPU limit, not its request, is the number to set.** The operator's default limit is half a CPU. On the
    lab Envoy began to be throttled at about 1,000 searches a second and was throttled in about a third
    of periods from 16 at once, while searches waited. `loadBalancer.resources` with a limit of 2 CPUs removed it.
-2. **Raise mongot's CPU with it.** Envoy at its limit was also a brake on what reached mongot. Without it, the lab's
-   mongot pods, at 1 CPU each, were the next to be throttled, and the heaviest step got slower, not faster.
+2. **Raise mongot's CPU with it.** Envoy at its limit was also a brake on what reached mongot: with 2 CPUs the
+   lab's mongot pods, at 1 CPU each, were throttled in 11% of periods at 32 at once (1% with Envoy at half a CPU)
+   and 22% at 64. The step at 64 was slower than with Envoy at its default, but the lab was slowing in that step
+   (above), and in the first set the same step was faster with 2 CPUs while mongot was throttled in 41% of
+   periods: mongot's limit is the next one; by how much it costs, one run does not say.
 3. **More Envoy pods do not help one mongod.** mongod holds one connection to the load balancer's address and sends
    every search over it, so every search of that mongod goes through the one Envoy pod the connection landed on
-   ([mongot-route-balance-rationale.md](mongot-route-balance-rationale.md)). The second Envoy pod is what takes the
-   connection when the first goes: see [disruption-budgets.md](../chart/mongodb-search-helm/disruption-budgets.md).
+   ([mongot-route-balance-rationale.md](../../../docs/mongot-route-balance-rationale.md)). The second Envoy pod is what takes the
+   connection when the first goes: see [disruption-budgets.md](../disruption-budgets.md).
 4. **In principle one Envoy pod can use about one CPU for one mongod**: Envoy keeps a connection on one of its
    worker threads (its documentation). That was not reached on the lab: the busy pod used 0.68 CPUs at most,
    with mongot and the generator as the limits. A limit of 2 leaves room for that thread and the rest of the
@@ -209,7 +218,7 @@ same, and the default limit was run twice.
   several `mongos`, come over several connections and may land on different Envoy pods.
 - **Large results, vector searches, or a node with many more CPUs**, where Envoy starts one worker thread for each.
 
-The repository's older [`mongodb/scripts/load-test.sh`](../mongodb/scripts/load-test.sh) is another test: it runs
+The repository's older [`mongodb/scripts/load-test.sh`](../../../mongodb/scripts/load-test.sh) is another test: it runs
 `mongosh` workers from the workstation inside the lab's mongod container, and reports the latency and the spread
 over the mongot pods. This one runs in the cluster and reads what Envoy and mongot use.
 
@@ -229,6 +238,6 @@ else. The connection string stays in the Secret.
 
 ## Diagram sources
 
-The figure is drawn in [diagrams/envoy-load/source.html](diagrams/envoy-load/source.html) from the two runs'
-result files and rendered with [diagram-kit](https://github.com/ephico2real2/diagram-kit); [diagrams/README.md](diagrams/README.md)
-has the command. The figure, its text twin here and its page change together.
+The figure is drawn in [docs/diagrams/envoy-load/source.html](../../../docs/diagrams/envoy-load/source.html) from the
+two runs' result files and rendered with [diagram-kit](https://github.com/ephico2real2/diagram-kit);
+[docs/diagrams/README.md](../../../docs/diagrams/README.md) has the command. The figure, its text twin here and its page change together.

@@ -566,10 +566,14 @@ MongoDB's remedies, in its order, with where each is said and how it is done wit
 **Measured on the lab**, 2026-10-09: while two inserts a second were written to one index for 14 minutes, twice, its lag read 0 on two pods at each of 61 readings and 0 or 1 second on the third (1 second at 5 of 61 readings in the first run and 14 of 61 in the second). The document counts of the three pods read 17 to 24 apart during the same minutes: Prometheus reads the first pod 9 seconds after the other two. With nothing written, the gauge read 6 to 10 seconds for minutes at a time on one pod or another (Prometheus's 15-second samples of the same hours hold 10 s for up to 5 minutes running, once 11 s and once 17 s); why was not looked into.
 ## Volumes and scaling
 
-Five documents beside this one, and a script, for running mongot once it is installed:
+Five documents beside this one, two test records in `docs/`, and a script, for running mongot once it is installed.
+All of them are in the chart's package; the pictures of the test records are linked from the repository, since a
+chart with them in it is too large for `helm install`.
 
 | Document | For |
 | --- | --- |
+| [docs/envoy-performance-testing.md](docs/envoy-performance-testing.md) | A load test of search on the lab: what the managed Envoy does under concurrent searches at its default CPU limit and at 2 CPUs, how mongod's connection lands on the Envoy pods, and how to run the same test elsewhere |
+| [docs/testing-mongot-storage-resize.md](docs/testing-mongot-storage-resize.md) | One resize of mongot's volumes from start to finish, with every command's output and the console at each stage |
 | [disruption-budgets.md](disruption-budgets.md) | The two PodDisruptionBudgets the chart creates, for the mongot pods and the Envoy pods: what they do when nodes are drained on a cluster of several nodes, with figures; what was measured with and without them; what they do not cover; two Envoy pods or three |
 | [production-settings.md](production-settings.md) | Which values to run with in production, and why: what the MongoDBSearch resource does not let you set or change later, the value or the runbook that covers each, what is still to decide, and what to show on QA first. [examples/values-production.yaml](examples/values-production.yaml) is the same as a file |
 | [volumes.md](volumes.md) | Which actions keep a mongot pod's volume and which delete it. The operator deletes the volume of every pod that is scaled away, and a pod without its volume builds every index again: 4 to 5 hours for about 180 to 190 GB a pod, as the owner reports for a QA cluster. What the chart refuses, and what protects a volume |

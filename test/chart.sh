@@ -29,17 +29,23 @@ helm lint "${CHART}" -f "${REMOTE}" >/dev/null 2>&1 && ok "helm lint (runbook va
 pkg="$(mktemp -d)"
 cp -R "${CHART}" "${pkg}/chart"
 mkdir "${pkg}/chart/some-namespace"
-for f in some-namespace/ent-mongot-search-cert.secret.yaml some-namespace/ent-trust-bundle.configmap.yaml left.pem left.key left.crt key.pass; do echo x > "${pkg}/chart/${f}"; done
+for f in some-namespace/ent-mongot-search-cert.secret.yaml some-namespace/ent-trust-bundle.configmap.yaml left.pem left.key left.crt key.pass docs/left.png left.jpg; do echo x > "${pkg}/chart/${f}"; done
 helm package "${pkg}/chart" -d "${pkg}" >/dev/null 2>&1
 packed="$(tar -tzf "${pkg}"/mongodb-search-helm-*.tgz 2>/dev/null)"
 grep -qx 'mongodb-search-helm/generate-mongodbsearch-prerequisites.sh' <<<"${packed}" \
   && ok "the package holds generate-mongodbsearch-prerequisites.sh" || bad "the package lacks the prerequisites script"
 # The volume script and the documents on volumes, scaling and production settings travel with the chart too: they are what an
 # operator of the chart reads beside its values.
-for f in expand-mongot-volumes.sh volumes.md scaling.md volume-expansion-runbook.md production-settings.md disruption-budgets.md; do
+for f in expand-mongot-volumes.sh volumes.md scaling.md volume-expansion-runbook.md production-settings.md disruption-budgets.md \
+         docs/envoy-performance-testing.md docs/testing-mongot-storage-resize.md; do
   grep -qx "mongodb-search-helm/${f}" <<<"${packed}" || bad "the package lacks ${f}"
 done
-ok "the package holds the volume script, volumes.md, scaling.md, the expansion runbook and the production settings"
+ok "the package holds the volume script, the operations documents and the two test records of docs/"
+# Pictures stay out, and the package stays small: `helm install` stores the whole chart in the release's record and
+# refused one of 2.7 MB with "Request entity too large". 500 kB leaves that record well under a Secret's 1 MiB.
+! grep -q -i -E '\.(png|jpe?g|gif)$' <<<"${packed}" && ok "the package holds no picture" || bad "the package holds a picture: $(grep -i -E '\.(png|jpe?g|gif)$' <<<"${packed}" | head -3 | tr '\n' ' ')"
+size="$(wc -c < "$(ls "${pkg}"/*.tgz | head -1)" | tr -d ' ')"
+[[ "${size}" -lt 500000 ]] && ok "the package is ${size} bytes, small enough for a Helm release record" || bad "the package is ${size} bytes: too large for helm install"
 # The hooks send their reader to two of those documents by name.
 grep -q 'volume-expansion-runbook.md' "${CHART}/templates/40-wait.yaml" && grep -q 'volumes.md' "${CHART}/templates/00-preflight.yaml" \
   && ok "the gate names the expansion runbook and the preflight names volumes.md" || bad "a hook no longer names its document"
@@ -551,7 +557,7 @@ mon="$(render -s templates/30-monitoring.yaml)" && sel="$(render -s templates/11
 kept="$(render --set search.keepOnUninstall=true -s templates/11-poddisruptionbudgets.yaml)" && grep -q 'kind: PodDisruptionBudget' <<<"${kept}" && ! grep -q 'resource-policy\|Prune=false' <<<"${kept}" \
   && ok "the budgets are not kept by keepOnUninstall: they go with the release, like the Route" || bad "the budgets do not render with keepOnUninstall, or one carries keep or Prune=false"
 
-# The load test's three files parse (it needs a cluster to run: docs/envoy-performance-testing.md).
+# The load test's three files parse (it needs a cluster to run: the chart's docs/envoy-performance-testing.md).
 bash -n test/load/run.sh 2>/dev/null && python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read())' test/load/analyze.py 2>/dev/null \
   && ok "the load test's driver and its analysis parse" || bad "test/load/run.sh or test/load/analyze.py does not parse"
 if command -v node >/dev/null; then
