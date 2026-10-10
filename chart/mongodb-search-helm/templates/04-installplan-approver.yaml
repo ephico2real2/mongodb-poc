@@ -145,7 +145,7 @@ spec:
                   case "$msg" in
                     *"is not referenced by a subscription"*)
                       if [ "$RECLAIM_ENABLED" = "true" ] && ! out_of_time; then
-                        log "ResolutionFailed: a CSV left by an earlier uninstall blocks OLM; the csv-reclaim Job clears it, waiting"
+                        log "ResolutionFailed: a CSV left by an earlier uninstall blocks OLM; under Helm the csv-reclaim Job clears it now, under Argo CD that Job ran before this one (see its log); waiting"
                         sleep 5; continue
                       fi
                       fail "OLM cannot resolve ${SUBSCRIPTION}: a CSV left by an earlier uninstall blocks it. Delete it and sync again:

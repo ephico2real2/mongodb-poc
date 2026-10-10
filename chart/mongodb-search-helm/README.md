@@ -602,7 +602,10 @@ evidence: the namespace holds no Subscription of the operator's package. It dele
 (of this package, not a copy, without an owner, referenced by no Subscription, settled) and ends when it is gone.
 A list of Subscriptions that fails, a Subscription of the package under another name and a Subscription whose
 package cannot be read are not that evidence: nothing is deleted then. [`test/csv-reclaim.sh`](../../test/csv-reclaim.sh)
-runs the hook's script against a stand-in `oc`.
+runs the hook's script against a stand-in `oc`. The hook removes one cause of `ResolutionFailed`, the left-behind
+ClusterServiceVersion; a Subscription that cannot be resolved for another reason (a catalog that does not answer)
+still fails the sync. And a sync that fails in wave -2, after the hook, leaves the namespace with no operator until
+the next sync: before 0.3.17 the hook had not run by then, and the left-behind operator went on running.
 
 **Run on the lab**, 2026-10-10, with OpenShift GitOps 1.22.0 (Argo CD 3.5.3) and chart 0.3.15: the example's
 Application with `examples/values-crc.yaml`, `search.keepOnUninstall=true` and manual sync. The Helm release was
@@ -618,15 +621,19 @@ uninstalled first, with the MongoDBSearch kept ([volumes.md](volumes.md)).
 | `helm install` afterwards, the same release name, no flag | 45 s; the resource adopted, the same mongot pods and claims. Argo CD's `tracking-id` and `last-applied-configuration` annotations stay on it |
 
 **Run again with the chart of 0.3.17**, the same day, from its commits before the release (`954968f`, `71e6fc8`),
-each time after an uninstall or an Application delete had left the operator's ClusterServiceVersion with no
-Subscription and no OperatorGroup. The Subscription and the ClusterServiceVersion were read every 3 s during each
-sync, and the control plane's restart counts did not move during any step.
+each time but the second after an uninstall or an Application delete had left the operator's ClusterServiceVersion
+with no Subscription and no OperatorGroup. The Subscription and the ClusterServiceVersion were read every 3 to 4 s
+during each sync, and the control plane's restart counts did not move during any step. OLM records an event on the
+namespace for every resolution it fails (`oc get events -n default --field-selector
+involvedObject.kind=Namespace,involvedObject.name=mongodb-poc,reason=ResolutionFailed`): it recorded none between
+05:17:13Z and 05:28:24Z, the span of the two single syncs, and it did record the ones of the run before the change
+(03:25Z) and of the `helm install` of the last row (05:30:38Z to 05:30:43Z).
 
 | Step | Result |
 | --- | --- |
 | One sync over the ClusterServiceVersion a `helm uninstall` had left, reading `Succeeded` when the sync began and `Failed` (`NoOperatorGroup`) when the hook ran | `Succeeded` in 71 s (05:17:13Z to 05:18:24Z). The hook's log: "no Subscription of mongodb-kubernetes in mongodb-poc", the ClusterServiceVersion "ORPHANED", then "gone", within 2 s. The Subscription, made after it, read `UpgradePending`, then `AtLatestKnown`; `ResolutionFailed` was `True` in none of the readings. The Application `Synced` and `Healthy` |
 | A second sync, nothing left behind | `Succeeded` in 55 s. The hook's log: "nothing could be orphaned, not waiting" |
-| One sync over the ClusterServiceVersion an Application delete had left, reading `Failed` (`NoOperatorGroup`) from the start | `Succeeded` in 68 s (05:27:16Z to 05:28:24Z), the same log and the same readings |
+| One sync over the ClusterServiceVersion an Application delete had left, reading `Failed` (`NoOperatorGroup`) from the start | `Succeeded` in 68 s (05:27:16Z to 05:28:24Z), the same steps in the log and the same readings |
 | `helm install` over a left-behind ClusterServiceVersion, the same chart | Deployed in 43 s. The hook took Helm's path, as before: "Subscription reports ResolutionFailed", "ORPHANED", "OLM will re-resolve the Subscription on its own" |
 
 Through all of it the MongoDBSearch, its three mongot pods and their three claims were the same objects, and
@@ -639,7 +646,7 @@ that failed before they succeeded. By Argo CD's source (read, not run) a sync wi
 object: the leftovers go at the next sync, by the Jobs' `ttlSecondsAfterFinished` (600 s), or with the Application
 when it is deleted with its resources finalizer.
 
-Not run: a sync of the whole Application with prune past wave 1 (the first attempt failed in wave -1 on the
+Not run: a sync of the whole Application with prune past wave 1 (the first attempt failed in wave -1, then the hook's wave, on the
 csv-reclaim Job's deadline while the lab's controller manager was down, the second in wave 1 when its API server
 restarted); a first install under Argo CD into a namespace with none of the chart's objects, no
 ClusterServiceVersion and no MongoDBSearch (here Helm had made the resource, Argo CD adopted it, and the gate ran

@@ -269,7 +269,12 @@ spec:
                 fi
               done
 
-              if [ -n "$RECLAIMED" ] && [ "$VERDICT" = "no-subscription" ]; then
+              if [ -n "$RECLAIMED" ] && [ "$VERDICT" = "no-subscription" ] && [ -n "$UNSETTLED" ]; then
+                # The settled candidates are gone, but one of this package never settled and is still here: it
+                # blocks the Subscription exactly as the deleted ones would have, so do not say nothing is left.
+                log "reclaimed:${RECLAIMED} — but a candidate CSV (${UNSETTLED# }) never settled within ${WAIT_SECONDS}s and is still in the way of the Subscription"
+                log "inspect: oc get ${CSVS} -n ${NAMESPACE}; if it stays unsettled, OLM is stuck on it, not on this chart"
+              elif [ -n "$RECLAIMED" ] && [ "$VERDICT" = "no-subscription" ]; then
                 log "reclaimed:${RECLAIMED} — nothing of ${PACKAGE} is left in the way of the Subscription"
               elif [ -n "$RECLAIMED" ]; then
                 log "reclaimed:${RECLAIMED} — OLM will re-resolve the Subscription on its own"

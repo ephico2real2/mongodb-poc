@@ -225,6 +225,22 @@ new nosub-clean; run 60
 [[ $rc == 0 && "$(deleted)" == 0 && $took -le 2 && "$out" == *"nothing could be orphaned"* ]] \
   && ok "with no Subscription and no ClusterServiceVersion, a first install, it does nothing and does not wait" || bad "first install: rc=$rc took=${took}s: $out"
 
+new nosub-twosubs; csv "${OLD}" Succeeded; sub cert-manager openshift-cert-manager-operator "cert-manager-operator.v1.20.0" "-"; sub coo cluster-observability-operator "cluster-observability-operator.v1.5.3" "-"; run 60
+[[ $rc == 0 && "$(deleted)" == 1 && "$out" == *"${OLD}: gone"* ]] && ! there "${OLD}" \
+  && ok "with two Subscriptions of other packages (a shared namespace), the orphan is still deleted, once" || bad "two other Subscriptions: rc=$rc deleted=$(deleted): $out"
+
+new twosubs-ours-second; csv "${OLD}" Succeeded; sub cert-manager openshift-cert-manager-operator "cert-manager-operator.v1.20.0" "-"; sub my-search-operator "${PKG}" "-" "-"; run 3
+[[ $rc == 0 && "$(deleted)" == 0 && "$out" == *"no verdict within 3s; taking no action"* ]] && there "${OLD}" \
+  && ok "a Subscription of this package listed after another package's still counts: nothing is deleted" || bad "ours listed second: rc=$rc deleted=$(deleted): $out"
+
+new nosub-adopted; csv "${OLD}" Succeeded; printf -- '-\n[{"kind":"Subscription"}]\n' > "${FAKE}/csv/${OLD}/owners"; run 60
+[[ $rc == 0 && "$(deleted)" == 0 && "$out" == *"no Subscription of ${PKG}, and no CSV here is orphaned — nothing deleted"* && "$out" != *"ResolutionFailed"* ]] && there "${OLD}" \
+  && ok "with no Subscription, a candidate that is owned by the time of the decision is left alone, and the message names this path" || bad "no Subscription, adopted: rc=$rc deleted=$(deleted): $out"
+
+new nosub-partial; csv "${PKG}.v1.12.0" Replacing; csv "${OLD}" Succeeded; run 3
+[[ $rc == 0 && "$(deleted)" == 1 && "$out" == *"${OLD}: gone"* && "$out" == *"${PKG}.v1.12.0) never settled"* && "$out" != *"nothing of ${PKG} is left in the way"* ]] && there "${PKG}.v1.12.0" && ! there "${OLD}" \
+  && ok "with no Subscription, two CSVs of the package of which one never settles: the settled one goes, and the end message does not say nothing is left" || bad "no Subscription, one unsettled: rc=$rc deleted=$(deleted): $out"
+
 # ------------------------------------------------------------------------------------------- where the hook runs
 wave() {  # <kind> <name>: the Argo CD wave of that object in the render
   helm template mongot "${CHART}" -n "${NS}" -f "${CHART}/examples/values-dvh-gp6-rnd.yaml" | python3 -c '
