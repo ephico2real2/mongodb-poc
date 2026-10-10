@@ -132,6 +132,10 @@ new orphan; csv "${OLD}" Succeeded; sub "${PKG}" "${PKG}" "-" "-\n-\nTrue"; run 
   && grep -q "^delete clusterserviceversion.operators.coreos.com/${OLD} -n ${NS} --wait=false\$" "${FAKE}/calls" \
   && ok "an orphan is deleted once OLM reports ResolutionFailed, by its full name and without waiting" || bad "orphan with ResolutionFailed: rc=$rc deleted=$(deleted): $out"
 
+new orphan-finalizer; csv "${OLD}" Succeeded; sub "${PKG}" "${PKG}" "-" "True"; echo 999 > "${FAKE}/sticky"; run 20
+[[ $rc == 0 && "$(deleted)" == 1 && $took -le 5 && "$out" != *"waiting for it to be gone"* ]] && ! grep -q -- '-o name$' <(sed -n '/^delete /,$p' "${FAKE}/calls") \
+  && ok "on ResolutionFailed the hook does not wait for the deleted ClusterServiceVersion to go, as before" || bad "ResolutionFailed, a finalizer that holds: rc=$rc took=${took}s: $out"
+
 new installed; csv "${OLD}" Succeeded; sub "${PKG}" "${PKG}" "-\n${PKG}.v1.14.0" "-"; run 20
 [[ $rc == 0 && "$(deleted)" == 0 && "$out" == *"OLM reports an installed CSV"* ]] && there "${OLD}" \
   && ok "OLM installing another version is a verdict: nothing is deleted" || bad "installed verdict: rc=$rc deleted=$(deleted): $out"
