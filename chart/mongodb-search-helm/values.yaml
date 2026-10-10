@@ -35,7 +35,9 @@ installPlanApprover:
   waitSeconds: 300
 
 # Clears a CSV that a previous uninstall left behind with no Subscription, the case that blocks a reinstall. It
-# deletes only an unowned, unreferenced, settled CSV of this package, and only after OLM reports ResolutionFailed.
+# deletes only an unowned, unreferenced, settled CSV of this package, and only after OLM reports ResolutionFailed
+# or, under Argo CD, where the hook runs before the Subscription is made, when the namespace holds no Subscription
+# of this package.
 csvReclaim:
   enabled: true
   waitSeconds: 120

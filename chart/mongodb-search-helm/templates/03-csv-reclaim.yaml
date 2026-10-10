@@ -2,12 +2,16 @@
 Clears a CSV left by an earlier uninstall, so a reinstall is one shot. `helm uninstall` removes the Subscription
 and OLM leaves the CSV (and so the operator) in place; a new Subscription then cannot resolve against it.
 
-The script is the openshift-coo chart's csv-reclaim (itself the openshift-grafana chart's), unchanged. It deletes
-only a CSV of this package that is not an OLM copy, has no owner, is referenced by no Subscription and is settled
-(Succeeded/Failed), and only after OLM reports ResolutionFailed. A clean install pays one list and exits.
-Measured for other operators on CRC; for mongodb-kubernetes see the chart README, "Tested".
+The script is the openshift-coo chart's csv-reclaim (itself the openshift-grafana chart's), with one addition. It
+deletes only a CSV of this package that is not an OLM copy, has no owner, is referenced by no Subscription and is
+settled (Succeeded/Failed), and only on one of two verdicts: OLM reports ResolutionFailed on the Subscription, or
+the namespace holds no Subscription of this package at all. A clean install pays one list and exits.
+Measured for other operators on CRC; for mongodb-kubernetes see the chart README, "Tested" and "Argo CD".
 
-Helm weight -2, ahead of the approver; Argo CD wave -1, the Subscription's. Rendered only with the Subscription.
+Helm weight -2, ahead of the approver: the Subscription is there by then, and the first verdict decides. Argo CD
+wave -3, ahead of the OperatorGroup (-2) and the Subscription (-1): there the second verdict decides, before a
+Subscription exists. Argo CD fails a sync on a Subscription that reads ResolutionFailed, so under Argo CD the CSV
+must be gone before the Subscription is made (issue #101). Rendered only with the Subscription.
 */ -}}
 {{- if and .Values.operator.install .Values.csvReclaim.enabled }}
 apiVersion: batch/v1
@@ -18,7 +22,7 @@ metadata:
   labels:
     {{- include "mongodb-search-helm.labels" . | nindent 4 }}
   annotations:
-    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/sync-wave: "-3"
     argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
     helm.sh/hook: post-install,post-upgrade
@@ -138,7 +142,25 @@ spec:
               # reports an installed CSV (healthy, nothing to do) or ResolutionFailed (act).
               DEADLINE=$(( $(date +%s) + WAIT_SECONDS ))
               VERDICT=""
-              while [ "$(date +%s)" -lt "$DEADLINE" ]; do
+              # NO SUBSCRIPTION OF THIS PACKAGE IS A VERDICT TOO, AND IT NEEDS NO WAITING. OLM refuses to resolve
+              # a new Subscription while a CSV of its package sits in the namespace unreferenced: that refusal
+              # is the ResolutionFailed below. With no Subscription there is nobody to report it yet, and the
+              # candidate found above is in the way of the one this chart is about to make. Under Helm this
+              # hook runs after the Subscription exists, so this branch is Argo CD's (wave -3). Measured on
+              # CRC with Argo CD 3.5.3: waiting for ResolutionFailed there failed the whole sync, because Argo
+              # CD reads that condition as a Degraded Subscription.
+              #
+              # ONLY ON A LIST THAT SUCCEEDED. A failed list is not "no Subscription"; neither is a
+              # Subscription under another name whose package is this one, or one whose package cannot be read.
+              if subs="$(oc get "$SUBS" -n "$NAMESPACE" -o name 2>/dev/null)"; then
+                VERDICT=no-subscription
+                for s in $subs; do
+                  [ "${s##*/}" = "$SUBSCRIPTION" ] && VERDICT=""
+                  pkg="$(oc get "$s" -n "$NAMESPACE" -o jsonpath='{.spec.name}' 2>/dev/null)" || pkg="$PACKAGE"
+                  [ "$pkg" = "$PACKAGE" ] && VERDICT=""
+                done
+              fi
+              while [ -z "$VERDICT" ] && [ "$(date +%s)" -lt "$DEADLINE" ]; do
                 if [ -n "$(oc get "$SUBS" "$SUBSCRIPTION" -n "$NAMESPACE" -o jsonpath='{.status.installedCSV}' 2>/dev/null || true)" ]; then
                   VERDICT=installed; break
                 fi
@@ -153,7 +175,7 @@ spec:
                 log "OLM reports an installed CSV — nothing orphaned, nothing to do"
                 exit 0
               fi
-              if [ "$VERDICT" != "resolution-failed" ]; then
+              if [ "$VERDICT" != "resolution-failed" ] && [ "$VERDICT" != "no-subscription" ]; then
                 # No verdict either way inside the budget. Deleting a CSV on no evidence is the one thing
                 # this Job must never do, so it exits 0 and leaves the decision to the approver, which will
                 # report its own timeout with the InstallPlan state.
@@ -161,9 +183,15 @@ spec:
                 exit 0
               fi
 
-              log "Subscription reports ResolutionFailed — looking for an orphaned CSV to clear"
+              if [ "$VERDICT" = "no-subscription" ]; then
+                WHY="no Subscription of ${PACKAGE}"
+                log "no Subscription of ${PACKAGE} in ${NAMESPACE} — looking for an orphaned CSV to clear before one is made"
+              else
+                WHY="ResolutionFailed"
+                log "Subscription reports ResolutionFailed — looking for an orphaned CSV to clear"
+              fi
               # SIX CONDITIONS, ALL REQUIRED, because this deletes something the chart does not own.
-              # Condition 1 (ResolutionFailed) is already established above.
+              # Condition 1 (ResolutionFailed, or no Subscription of this package) is already established above.
               RECLAIMED=""
               UNSETTLED=""
               for c in $(oc get "$CSVS" -n "$NAMESPACE" -o name 2>/dev/null || true); do
@@ -223,17 +251,43 @@ spec:
                 A Forbidden means this ServiceAccount lacks delete on clusterserviceversions in ${NAMESPACE}."
                 fi
                 RECLAIMED="${RECLAIMED} ${name}"
+                # WITH NO SUBSCRIPTION YET, WAIT FOR IT TO BE GONE. The Subscription is made next, and a CSV
+                # that is still being finalized would be in its way exactly as before. Not on the
+                # ResolutionFailed path: there OLM re-resolves by itself (see --wait=false above). Only
+                # NotFound is "gone"; anything else is asked again, and an end of the budget is a failure
+                # that names the CSV, which beats a Subscription failing later without saying why.
+                if [ "$VERDICT" = "no-subscription" ]; then
+                  GONE_BY=$(( $(date +%s) + 30 )); [ "$DEADLINE" -gt "$GONE_BY" ] && GONE_BY="$DEADLINE"
+                  while :; do
+                    if err="$(oc get "$c" -n "$NAMESPACE" -o name 2>&1 >/dev/null)"; then err="it is still there"
+                    else case "$err" in *NotFound*|*"not found"*) log "  ${name}: gone"; break ;; esac; fi
+                    [ "$(date +%s)" -ge "$GONE_BY" ] && fail "deleted ${name}, and it was not gone when the wait ended: ${err}
+                A CSV carries the finalizer operators.coreos.com/csv-cleanup: oc get ${c} -n ${NAMESPACE} -o yaml"
+                    log "  ${name}: deleted, waiting for it to be gone ..."
+                    sleep 5
+                  done
+                fi
               done
 
-              if [ -n "$RECLAIMED" ]; then
+              if [ -n "$RECLAIMED" ] && [ "$VERDICT" = "no-subscription" ] && [ -n "$UNSETTLED" ]; then
+                # The settled candidates are gone, but one of this package never settled and is still here: it
+                # blocks the Subscription exactly as the deleted ones would have, so do not say nothing is left.
+                log "reclaimed:${RECLAIMED} — but a candidate CSV (${UNSETTLED# }) never settled within ${WAIT_SECONDS}s and is still in the way of the Subscription"
+                log "inspect: oc get ${CSVS} -n ${NAMESPACE}; if it stays unsettled, OLM is stuck on it, not on this chart"
+              elif [ -n "$RECLAIMED" ] && [ "$VERDICT" = "no-subscription" ]; then
+                log "reclaimed:${RECLAIMED} — nothing of ${PACKAGE} is left in the way of the Subscription"
+              elif [ -n "$RECLAIMED" ]; then
                 log "reclaimed:${RECLAIMED} — OLM will re-resolve the Subscription on its own"
               elif [ -n "$UNSETTLED" ]; then
                 # A candidate was found but never settled inside the budget. That is the orphan case with
                 # OLM still working, not "no orphan": say which, so the approver's later timeout is read
                 # against the right cause. Measured: the old message called a stuck-Installing orphan
                 # "not the orphan case".
-                log "ResolutionFailed and a candidate CSV (${UNSETTLED# }) never settled within ${WAIT_SECONDS}s — left alone, nothing deleted"
+                log "${WHY} and a candidate CSV (${UNSETTLED# }) never settled within ${WAIT_SECONDS}s — left alone, nothing deleted"
                 log "inspect: oc get ${CSVS} -n ${NAMESPACE}; if it stays unsettled, OLM is stuck on it, not on this chart"
+              elif [ "$VERDICT" = "no-subscription" ]; then
+                # The candidate of the scan above turned out to be a copy, owned or referenced by now.
+                log "no Subscription of ${PACKAGE}, and no CSV here is orphaned — nothing deleted"
               else
                 # ResolutionFailed with nothing reclaimable is a real problem this Job cannot fix, and
                 # saying so beats letting the approver time out with a less specific message.
@@ -252,7 +306,7 @@ metadata:
   labels:
     {{- include "mongodb-search-helm.labels" . | nindent 4 }}
   annotations:
-    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/sync-wave: "-3"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -262,7 +316,7 @@ metadata:
   labels:
     {{- include "mongodb-search-helm.labels" . | nindent 4 }}
   annotations:
-    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/sync-wave: "-3"
 rules:
   # The Subscription's ResolutionFailed condition and installedCSV.
   - apiGroups: ["operators.coreos.com"]
@@ -281,7 +335,7 @@ metadata:
   labels:
     {{- include "mongodb-search-helm.labels" . | nindent 4 }}
   annotations:
-    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/sync-wave: "-3"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
