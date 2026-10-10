@@ -11,7 +11,7 @@ search:
     # class whose claims can grow, which the lab's default hostpath class cannot. It was 4Gi when installed and
     # was grown to 5Gi, 6Gi, 7Gi and 8Gi with volume-expansion-runbook.md. A volume cannot be made smaller: do not
     # lower this number. Each claim is a directory of one NAS export: a pod sees the export's size, not this.
-    storage: 8Gi
+    storage: 9Gi
     storageClass: ipsec-nas-csi
     autoExpand:
       enabled: true
