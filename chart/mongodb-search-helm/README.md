@@ -61,7 +61,7 @@ bash $P --clean                                       # removes the key files on
 From the package alone, with no clone:
 
 ```bash
-helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.19/mongodb-search-helm-0.3.19.tgz --untar
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.20/mongodb-search-helm-0.3.20.tgz --untar
 bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
 ```
 
@@ -69,7 +69,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.19/mongodb-search-helm-0.3.19.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.20/mongodb-search-helm-0.3.20.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -263,7 +263,7 @@ What to know when reading them:
 
 - **They show that every pod holds the same data, not how queries are spread.** Every mongot pod holds every index (the lab's three pods each report the same five). The second section shows the spread of queries.
 - **Documents indexed is the strict comparison; index size is a loose one.** Each pod writes and merges its own index files, so the same documents need not take the same bytes. On the lab the indexes built once from a collection have the same size on every pod; after 600 documents were written to one of them, its 605 documents took 112,781 bytes on two pods and 113,402 on the third, and still did after 12 quiet minutes. While an index is written to, the document counts differ too, by what arrived between the readings of the pods: on the lab Prometheus reads the first pod 9 seconds after the other two, and at two inserts a second the readings taken every 15 seconds on the minute were 17 to 24 documents apart, those taken 4 or 8 seconds later 7 to 15. The gap is the readings', not the pods'.
-- **Data volume used is the file system under mongot's data path.** With a volume of its own per pod, that is the volume. The lab's storage class is a hostpath provisioner, so there it is the node's disk: 160.5 GB in total and 82.5% used on every pod, while each pod's data takes about 18 MiB.
+- **Data volume used is the file system under mongot's data path.** With a volume of its own per pod, that is the volume. On the lab's hostpath class it was the node's disk: 160.5 GB in total and 82.5% used on every pod, while each pod's data took about 18 MiB. On the NFS class the lab has used since 2026-10-10 it is the NAS export, 9.8 GiB and 20% used on every pod.
 - **The pool panel does not count refused searches.** mongot's source gives the counter to a caller-runs policy: when the concurrent search pool is full the work runs on the calling thread, and the search is still answered. Above zero, the pool is saturated.
 - **The heap limit is the JVM's, not the pod's.** On the lab it is 495 MiB, a quarter of the pod's 2 Gi memory limit. The older *JVM memory used* panel shows heap and non-heap together, in bytes.
 - **Not seen on the lab:** an index out of `STEADY`, indexing activity, and work outside the pool. Those three panels were flat at zero throughout; their queries answer, and what they look like in trouble was not observed.
@@ -464,7 +464,7 @@ MongoDB's own recommended alert is one level later at each step, at 85, 90 and 9
 - **Rising into the next level leaves no minute without an alert.** The lower level stays on while the higher one holds, and stops when that one fires. Without that, a notice that the warning is *resolved* would go out at the moment the disk passes 90%. Falling back, the higher alert stops at once and the lower one holds its own time again.
 - **A restarted pod is the same alert**: the alert names the namespace and the pod only.
 - **Room for a rebuild.** MongoDB: "Plan for roughly 125% of the expected steady-state footprint during a rebuild." mongot keeps the old index beside the new one until the new one can answer, and builds nothing above 85%. So a volume that is more than about 68% used (0.85 / 1.25) cannot take a rebuild of everything on it; that figure is derived here, not MongoDB's. In bytes: 190 GB of indexes are 70% of a 271 GB volume, 75% of 253 GB and 80% of 238 GB.
-- **On a shared disk the number is the disk's.** With a hostpath provisioner the data path is on the node's disk: the lab's three pods all read the same 61.6% of a 149 GiB disk on 2026-10-09, of which mongot's indexes are 16 MiB, and would raise three alerts that say the same thing. The alert's text says so. With a volume of its own per pod, the number is that volume's.
+- **On a shared disk the number is the disk's.** With a hostpath provisioner the data path is on the node's disk: the lab's three pods all read the same 61.6% of a 149 GiB disk on 2026-10-09, of which mongot's indexes are 16 MiB, and would raise three alerts that say the same thing. The alert's text says so. An NFS export is shared the same way: on the lab's NFS class, since 2026-10-10, the three pods all read the same share of the export, 19.7% with claims of 4Gi and 19.5% after they had been grown to 6Gi: the export's use, which the size of a claim does not enter. With a volume of its own per pod, the number is that volume's.
 
 **Changing the levels.** They are values of the chart, whole numbers, and must rise. With the release's own values file, as for every upgrade of this chart: `--reuse-values` keeps the old chart's defaults, so from a release of 0.3.10 or earlier these three are absent and the upgrade is refused when the chart renders, `monitoring.alerts.dataPathUsed is missing: ...`.
 

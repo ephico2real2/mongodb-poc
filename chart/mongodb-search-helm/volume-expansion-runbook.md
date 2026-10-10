@@ -29,8 +29,9 @@ where, and what was not run anywhere, is at the end.
 | 5 | Sync or upgrade again: the gate passes | Argo CD or Helm | Nothing new |
 | 6 | Verify and write down | The cluster, read only | Nothing |
 
-Allow an hour without hurry. On the lab steps 2 to 5 took under 3 minutes with nothing to grow; how long a claim
-takes to grow on your storage is not known here.
+Allow an hour without hurry. On the lab the whole of it took 2 min 4 s under Argo CD, from the start of the first
+sync to its retry passing, on an NFS class where a claim grows within a second because only its number changes. How
+long a disk takes to grow on your storage is not known here.
 
 ```bash
 export TargetNamespace=<the namespace>
@@ -47,7 +48,7 @@ All of these must hold. Stop if one does not.
 | Every mongot pod is Ready, and the resource is `Running` | `bash $X --check --statefulset $STS` | "3 of 3 pods ready"; "MongoDBSearch ... is Running" |
 | Every index is `STEADY` on every pod | The dashboard: *Indexes not STEADY* is green; *Indexes being built* is 0 | No build or recovery under way |
 | The operator runs | `oc get pods -n <the operator's namespace> \| grep mongodb-kubernetes-operator` | `1/1 Running`. It is what makes the StatefulSet again in step 4 |
-| The storage class can grow a volume | The same `--check`: "(expands: true)" on every line | `true`. OpenShift's `thin-csi` for vSphere ships with `allowVolumeExpansion: true`; a cluster may have changed it |
+| The storage class can grow a volume | The same `--check`: "(expands: true)" on every line | `true`. OpenShift's `thin-csi` for vSphere ships with `allowVolumeExpansion: true`; a cluster may have changed it. `true` says the class permits it, not that its driver can: step 3's table has what a driver without a resizer does |
 | The new size is larger than what every claim has | The same `--check`: "has ..." | A volume cannot be made smaller, ever |
 | No claim is being resized | The same `--check`: "conditions []" | Empty |
 | No snapshot of the disks | Ask the vSphere administrator | VMware: "Expanding volume is not supported when volume snapshot is present, and when a Node VM snapshot is present with the volume attached to it" |
@@ -106,6 +107,13 @@ Sync hook in the last wave in Argo CD, a post-upgrade hook in Helm) stops with:
 Do not try to mend the `Failed` resource in any other way. In particular **do not delete the StatefulSet with a
 plain `oc delete`, and do not scale it**: either deletes volumes.
 
+**Under Argo CD with automated sync, the failed sync is tried again by itself**, five times, over 11 minutes on
+the lab; each attempt stops at the gate in the same way. If steps 3 and 4 are finished before the last attempt,
+that attempt passes and step 5 is done for you: on the lab the first retry passed, 27 s after step 4. Once the
+five are spent the operation reads `Failed` and Argo CD does not sync that revision again by itself, not after
+step 4 either: the Application reads `Synced`, so there is nothing for it to do. Step 5 is then a sync by hand.
+On a real cluster, where a disk takes time to grow, expect that.
+
 To back out here: put the old size back in the values and sync. The resource returns to `Running` and the gate passes: on the lab, 32 seconds, with the StatefulSet and the pods untouched.
 
 ## After the sync
@@ -127,7 +135,9 @@ bash $X --expand --statefulset $STS --apply
 
 It asks for the namespace to be typed back, then takes the pods in order, the lowest first. For each: it asks the
 claim for the new size, waits until the claim has it and no resize is under way, checks that the pod is Ready, and
-prints the size of the file system the pod sees. Only then the next pod. It prints, for example:
+prints the size of the file system the pod sees. Only then the next pod. Where the pods share one file system (an
+NFS export, a hostpath provisioner), that last figure is the shared file system's and stays as it was: the claim's
+size is then a number and nothing more. It prints, for example:
 
 ```text
 pod 0: asking claim data-mongot-search-0-0 for 300Gi (it asks 250Gi, has 250Gi)
@@ -157,7 +167,7 @@ following the source because the volume was over 90% used, it starts again by it
 | `allowVolumeExpansion is false` | The storage class cannot grow a volume. Nothing was changed | A cluster administrator sets `allowVolumeExpansion: true` on the class, if its driver supports it. Then run again |
 | `FileSystemResizePending for ... s`, exit 3 | The disk has grown, and its file system grows only when the pod starts again: a driver or a vSphere without online expansion | Run again with `--restart-if-pending`. It deletes that one pod, which keeps its claim and comes back on it, and waits for it. One pod at a time, as before |
 | `the resize has failed [... Error]`, exit 2 | The storage refused: usually no room on the datastore, or a snapshot | `oc describe pvc <claim> -n $TargetNamespace` says why. Clear the cause; Kubernetes tries again by itself. A size that can never be met is withdrawn by asking the claim for a smaller size that is still above what it has (Kubernetes, "Recovering from Failure when Expanding Volumes"), and by putting that size in the values |
-| `not at ... within 900 s`, exit 2 | Slow, or stuck without saying so | Look at the claim's events (`oc describe pvc`). Run again to go on waiting: the request stands. `--wait <seconds>` allows more |
+| `not at ... within 900 s`, exit 2 | Slow, or stuck without saying so | Look at the claim's events (`oc describe pvc`). Run again to go on waiting: the request stands. `--wait <seconds>` allows more. A class that allows expansion over a driver with no resizer ends here, with the one event `ExternalExpanding`, "waiting for an external controller to expand this PVC", for good: seen on the lab's hostpath class ([enhancement/README.md](../../enhancement/README.md), step A5) |
 | `pod ... is not Ready` | A pod is not healthy | Find out why first. Nothing was changed for that pod's claim |
 
 It stops before the next pod in every one of these, so at most one volume is ever mid-way.
@@ -199,7 +209,15 @@ done. Sync or upgrade the chart again: its gate passes now
 ### 5. Sync or upgrade again
 
 The same sync, or the same `helm upgrade` with the same values. Nothing changes in the cluster; the gate runs and
-passes, and the release is `deployed` again (the application is Synced and Healthy).
+passes, and the release is `deployed` again. Under Argo CD: a sync by hand, unless a retry of the first sync has
+passed already (step 2). Check the operation, not the Application's `Synced` and `Healthy`, which it showed all
+through the failed attempts:
+
+```bash
+oc get application <name> -n <argo cd's namespace> -o jsonpath='{.status.operationState.phase}: {.status.operationState.message}'
+```
+
+`Succeeded: successfully synced (no more tasks)`.
 
 ### 6. Verify, and write down
 
@@ -239,6 +257,9 @@ bash $X --expand --statefulset $STS --size 300Gi --apply     # the resource stil
 
 ## What was run, and where
 
+One run from start to finish, with every command's output and the OpenShift console at each stage:
+[testing-mongot-storage-resize.md](../../docs/testing-mongot-storage-resize.md).
+
 | What | Where | Result |
 | --- | --- | --- |
 | Steps 1 and 2: the size changed in the values, the gate | The lab, 2026-10-09, with `helm upgrade` | The resource `Failed` with the "Forbidden" sentence; the gate stopped in 32 s with the message above; the pods untouched; a search answered |
@@ -249,10 +270,17 @@ bash $X --expand --statefulset $STS --size 300Gi --apply     # the resource stil
 | A pod deleted keeps its claim | The lab | The same claim, Ready in 24 s |
 | The script | `test/expand-volumes.sh`, 53 checks against a stand-in `oc`, under bash 5 and bash 3.2, in CI on Linux and macOS | Every refusal changes nothing; one claim at a time; a pending or failed resize stops before the next pod; the one delete always has `--cascade=orphan` |
 | The script's `--check` and `--dry-run` | The lab | Read the three sizes, the class, the volumes and the pods' file systems |
-| **Step 3 on a real volume: a claim that grows** | **Nowhere by this repository.** No storage class of the lab allows it; the API refuses there with "only dynamically provisioned pvc can be resized and the storageclass that provisions the pvc must support resize" | Rests on Kubernetes', OpenShift's and VMware's documents below, and on MongoDB's own test of the same steps on another storage class (pull request 1621, open) |
-| Argo CD | The sync that stops at the gate, and the back-out, were run under Argo CD on 2026-10-10: [argocd.md](argocd.md). The steps between them, not: the lab's classes cannot grow a volume. The hooks carry Argo CD's annotations (PreSync, and Sync at waves -3, -1 and 3) | |
+| A class that does not allow expansion | The lab: its NFS class as it was found, 2026-10-10, and its hostpath class the day before | The API refused: "only dynamically provisioned pvc can be resized and the storageclass that provisions the pvc must support resize". On the NFS class the script refused first: "allowVolumeExpansion is false: Kubernetes will not grow it. Nothing was changed for this claim" |
+| **The whole runbook, steps 0 to 6, under Argo CD**, 4Gi to 5Gi | The lab, 2026-10-10, 15:25Z to 15:28Z, on an NFS class (driver `nfs.csi.k8s.io`, csi-driver-nfs 4.13.4 with csi-resizer 2.2.0) once `allowVolumeExpansion: true` had been set on it; automated sync | The sync stopped at the gate about 50 s after it began. `--expand --pod 0`, then `--expand` for the rest: each claim had 5Gi within a second of being asked, with the events `Resizing` and `VolumeResizeSuccessful`. `--recreate-statefulset`, 7 s: "made again at 5Gi; MongoDBSearch mongot is Running", "the pods are the same pods: none was restarted", "the volume claims are the same claims". Argo CD's first retry passed the gate: `Succeeded` 2 min 4 s after the sync began (15:25:54Z to 15:27:58Z), with no sync by hand. 27 searches through mongod were tried, one every 5 to 6 s, and all were answered |
+| `--recreate-statefulset` before every claim has grown | The lab, in that run | Refused: "claim data-mongot-search-0-1 has 4Gi, less than 5Gi: grow the claims first (--expand)" |
+| **The other order**, 5Gi to 6Gi: `--expand --size 6Gi` one pod at a time, then the values | The lab, 15:29Z to 15:50Z, the same class | The three claims had 6Gi within 5 s in all; the resource stayed `Running` at 5Gi and the Application `Synced`. `--size 4Gi` was refused: "a volume cannot be made smaller". Then the size in git: the sync stopped at the gate |
+| **The steps by hand outlasting Argo CD's retries** | The lab, in that run: step 4 was held back on purpose | Five retries, each stopped at the gate; the operation `Failed` 10 min 59 s after it began, the Application `Synced` and `Healthy` throughout. No new operation in the 200 s after a refresh. Step 4, 2 s, the resource `Running`: still no operation in 210 s. A sync by hand: `Succeeded` in 63 s. 225 searches tried in the 21 minutes, all answered; the same pods, not restarted, and the same claims from the first install to the end |
+| **The same again, recorded**, 6Gi to 7Gi, values first | The lab, 15:56Z to 16:01Z, the same class | [testing-mongot-storage-resize.md](../../docs/testing-mongot-storage-resize.md). Argo CD's second retry passed the gate, 3 min 36 s after the push; 42 searches tried, all answered; the same pods and claims |
+| **What that class cannot show** | | An NFS volume is a directory of an export. The driver's answer to a resize is the size it was asked for and nothing else (its `ControllerExpandVolume`; its node part has no expansion), so only the claim's number changed: the pods read "9.8G at /mongot/data, 20% used" before and after, and *Data volume used* did not fall. A disk that takes time to grow, `FileSystemResizePending`, `--restart-if-pending` and a failed resize were **run nowhere by this repository**: they rest on Kubernetes', OpenShift's and VMware's documents below, on MongoDB's own test of the same steps (pull request 1621, open), and on the script's tests against a stand-in |
+| Argo CD | Everything above. The back-out of step 2 was run under Argo CD earlier that day: [argocd.md](argocd.md). The hooks carry Argo CD's annotations (PreSync, and Sync at waves -3, -1 and 3) | |
 
-Run step 3 first on a cluster where losing time costs nothing, and `--pod 0` before the rest.
+Run step 3 first on a cluster where losing time costs nothing, and `--pod 0` before the rest: what the lab could
+not show is exactly what differs on vSphere.
 
 ## Sources
 
@@ -261,3 +289,5 @@ Run step 3 first on a cluster where losing time costs nothing, and `--pod 0` bef
 - VMware: *Expanding a Volume with vSphere Container Storage Plug-in* (3.0), on techdocs.broadcom.com.
 - MongoDB: [mongodb/mongodb-kubernetes pull request 1621](https://github.com/mongodb/mongodb-kubernetes/pull/1621), the manual resize it tests; [pull request 1273](https://github.com/mongodb/mongodb-kubernetes/pull/1273), the volume policy.
 - mongot 1.70.1: `PeriodicDiskMonitor.java`, `HysteresisGate.java`, `DiskMonitorConfig.java`.
+- csi-driver-nfs 4.13.4: `pkg/nfs/controllerserver.go`, `ControllerExpandVolume`; `pkg/nfs/nodeserver.go`,
+  `NodeExpandVolume` ("Unimplemented").
