@@ -61,7 +61,7 @@ bash $P --clean                                       # removes the key files on
 From the package alone, with no clone:
 
 ```bash
-helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.20/mongodb-search-helm-0.3.20.tgz --untar
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.21/mongodb-search-helm-0.3.21.tgz --untar
 bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
 ```
 
@@ -69,7 +69,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.20/mongodb-search-helm-0.3.20.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.21/mongodb-search-helm-0.3.21.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -563,10 +563,11 @@ MongoDB's remedies, in its order, with where each is said and how it is done wit
 **Measured on the lab**, 2026-10-09: while two inserts a second were written to one index for 14 minutes, twice, its lag read 0 on two pods at each of 61 readings and 0 or 1 second on the third (1 second at 5 of 61 readings in the first run and 14 of 61 in the second). The document counts of the three pods read 17 to 24 apart during the same minutes: Prometheus reads the first pod 9 seconds after the other two. With nothing written, the gauge read 6 to 10 seconds for minutes at a time on one pod or another (Prometheus's 15-second samples of the same hours hold 10 s for up to 5 minutes running, once 11 s and once 17 s); why was not looked into.
 ## Volumes and scaling
 
-Three documents beside this one, and a script, for running mongot once it is installed:
+Four documents beside this one, and a script, for running mongot once it is installed:
 
 | Document | For |
 | --- | --- |
+| [production-settings.md](production-settings.md) | Which values to run with in production, and why: what the MongoDBSearch resource does not let you set or change later, the value or the runbook that covers each, what is still to decide, and what to show on QA first. [examples/values-production.yaml](examples/values-production.yaml) is the same as a file |
 | [volumes.md](volumes.md) | Which actions keep a mongot pod's volume and which delete it. The operator deletes the volume of every pod that is scaled away, and a pod without its volume builds every index again: 4 to 5 hours for about 180 to 190 GB a pod, as the owner reports for a QA cluster. What the chart refuses, and what protects a volume |
 | [scaling.md](scaling.md) | How mongot is given more CPU, memory or pods through the values; that nothing scales it by itself; and why its StatefulSet is never scaled by hand |
 | [volume-expansion-runbook.md](volume-expansion-runbook.md) | Growing the volumes: the size in the values, the sync, and then the steps by hand, in order, with what to check and what to do when one stops |

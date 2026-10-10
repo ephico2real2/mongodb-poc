@@ -34,7 +34,7 @@ grep -qx 'mongodb-search-helm/generate-mongodbsearch-prerequisites.sh' <<<"${pac
   && ok "the package holds generate-mongodbsearch-prerequisites.sh" || bad "the package lacks the prerequisites script"
 # The volume script and the three documents on volumes and scaling travel with the chart too: they are what an
 # operator of the chart reads beside its values.
-for f in expand-mongot-volumes.sh volumes.md scaling.md volume-expansion-runbook.md; do
+for f in expand-mongot-volumes.sh volumes.md scaling.md volume-expansion-runbook.md production-settings.md; do
   grep -qx "mongodb-search-helm/${f}" <<<"${packed}" || bad "the package lacks ${f}"
 done
 ok "the package holds the volume script, volumes.md, scaling.md and the expansion runbook"
@@ -475,6 +475,19 @@ done
 [[ "$(yq '.spec.syncPolicy.automated.prune // "unset"' ${CHART}/examples/argocd-application-crc.yaml)" == unset && "$(yq '.spec.source.helm.valueFiles[0]' ${CHART}/examples/argocd-application-crc.yaml)" == examples/values-crc.yaml ]] \
   && ok "the lab's Application syncs by itself with the lab values, without prune" || bad "lab application: values file or prune"
 fi
+
+# The production example: it renders, and holds what production-settings.md says a production install starts with.
+PROD=${CHART}/examples/values-production.yaml
+p="$(helm template mongot "${CHART}" -n some-namespace -f "${PROD}" -s templates/10-mongodbsearch.yaml 2>&1)"
+grep -q 'helm.sh/resource-policy: keep' <<<"$p" && grep -q 'sync-options: SkipDryRunOnMissingResource=true,Prune=false,Delete=false' <<<"$p" \
+  && ok "the production example keeps the search through an uninstall, a prune and an Application delete" || bad "production example: keepOnUninstall"
+grep -q '^  version: "1.70.1"$' <<<"$p" && grep -q '^      replicas: 3$' <<<"$p" && grep -q '^          replicas: 2$' <<<"$p" \
+  && ok "the production example names mongot's version, three mongot pods and two Envoy pods" || bad "production example: version or replicas"
+grep -q '^          storage: 300Gi$' <<<"$p" && grep -q '^          storageClass: thin-csi$' <<<"$p" \
+  && ok "the production example asks for the page's volume size on a class that expands" || bad "production example: persistence"
+[[ "$(grep -c '^        - "mongod-[123].company.net:27017"$' <<<"$p")" == 3 ]] && ok "the production example lists every member of the source" || bad "production example: source members"
+helm template mongot "${CHART}" -n some-namespace -f "${PROD}" --set search.replicas=3 >/dev/null 2>&1 && ! grep -q '^  allowVolumeLoss: true' "${PROD}" \
+  && ok "the production example renders whole and never allows volume loss" || bad "production example: render or allowVolumeLoss"
 
 # The Jobs' scripts: bash syntax, and shellcheck when available.
 tmp="$(mktemp -d)"; trap 'rm -rf "${tmp}"' EXIT

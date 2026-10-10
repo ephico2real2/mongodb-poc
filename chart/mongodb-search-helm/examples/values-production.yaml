@@ -1,0 +1,60 @@
+# Production: the settings of production-settings.md, beside the chart. Everything not listed keeps the chart's
+# default, and that page says why for each. The names here are placeholders: keep the real file in a repository
+# of your own, this one is public.
+#
+# TO DECIDE marks what this file cannot know. Two of them are left out and so fall back to the chart's defaults,
+# which are too small for a large deployment: search.resources, and the images by digest.
+
+# Empty: the namespace given to helm with -n, or the Application's destination.
+namespace: ""
+
+search:
+  replicas: 3
+  # Named, so that an operator upgrade does not move mongot by itself.
+  version: "1.70.1"
+  # Keeps the MongoDBSearch, its pods and its volumes through an uninstall, an Argo CD prune and the deletion of
+  # the Application. Without it each of those deletes every index.
+  keepOnUninstall: true
+  # Never true in git. It is set for the one sync that lowers search.replicas on purpose, and taken out after.
+  allowVolumeLoss: false
+  persistence:
+    # TO DECIDE. At least 1.47 times the indexes of one pod: 300Gi holds 190 GB of indexes with room for a full
+    # rebuild. The operator cannot grow it; growing it later is volume-expansion-runbook.md.
+    storage: 300Gi
+    # A class that allows expansion. It cannot be changed on a search that exists.
+    storageClass: thin-csi
+  # TO DECIDE, from QA's dashboard. The heap is half of the memory request; MongoDB: no more than about 30 GB of
+  # heap, so no more than 60Gi requested. A memory limit equal to the request.
+  # resources:
+  #   requests: {cpu: "<cores>", memory: <twice the heap>}
+  #   limits: {cpu: "<cores>", memory: <the same>}
+
+loadBalancer:
+  # TO DECIDE. The public name mongod connects to: the Route's host, and a name in the ...-search-lb-0-cert.
+  externalHostname: mongot-search.company.net
+  replicas: 2
+  # TO DECIDE. An Envoy image by digest from your registry; the operator's own default is a moving tag.
+  # image: <registry>/envoy@sha256:<digest>
+
+source:
+  # TO DECIDE. Every member of the replica set, so that mongot keeps following when one is down.
+  hostAndPorts:
+    - mongod-1.company.net:27017
+    - mongod-2.company.net:27017
+    - mongod-3.company.net:27017
+
+operator:
+  # The only version the chart's approver approves. To upgrade the operator, change it here.
+  version: "1.13.0"
+
+monitoring:
+  alerts:
+    # The chart's levels, written out: the first is beside the 68% above which a full rebuild no longer fits.
+    dataPathUsed: {info: 70, warning: 80, critical: 90}
+  # true only where the Cluster Observability Operator (1.5 or later) is installed: without it the install fails.
+  persesDashboard:
+    enabled: true
+
+# TO DECIDE. The Jobs' image at a tag or digest that matches the cluster; the default tag is latest.
+# jobs:
+#   image: {repository: registry.redhat.io/openshift4/ose-cli, tag: <the cluster's version>}
