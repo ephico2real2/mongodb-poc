@@ -1,6 +1,6 @@
-# MongoDB Search through Argo CD (OpenShift GitOps). The namespace and the hand-made objects of runbook Steps 1 to 5
-# must exist first, so there is no CreateNamespace here. Run on the lab with examples/values-crc.yaml: see the chart
-# README, "Argo CD".
+# MongoDB Search through Argo CD (OpenShift GitOps): argocd.md, beside the chart, is the page for it. The namespace
+# and the five prerequisites must exist first, so there is no CreateNamespace here. The lab's own Application is
+# argocd-application-crc.yaml.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -10,7 +10,8 @@ spec:
   project: default
   source:
     repoURL: https://github.com/ephico2real2/mongodb-poc.git
-    targetRevision: main
+    # A release tag: a sync then changes only when this line does.
+    targetRevision: mongodb-search-helm-0.3.18
     path: chart/mongodb-search-helm
     helm:
       # The chart's object names start with the release name. Argo CD would use the Application's name: give the
@@ -21,6 +22,12 @@ spec:
       skipCrds: true
       valueFiles:
         - examples/values-dvh-gp6-rnd.yaml
+      # Keeps the MongoDBSearch, and so every mongot volume, through a prune and through the deletion of this
+      # Application. Take it out only to let Argo CD delete the search. Not `forceString: true`: the chart's schema
+      # wants a boolean.
+      parameters:
+        - name: search.keepOnUninstall
+          value: "true"
   destination:
     server: https://kubernetes.default.svc
     namespace: dvh-gp6-rnd
@@ -29,6 +36,6 @@ spec:
     - group: route.openshift.io
       kind: Route
       jsonPointers: [/status]
-  # No automated prune or self-heal: pruning the MongoDBSearch deletes the mongot volumes, unless
-  # search.keepOnUninstall is true (volumes.md).
+  # By hand. `automated: {}` and `automated: {prune: true}` were also run with the parameter above: a prune skips
+  # the MongoDBSearch. Without the parameter, do not prune: it deletes the search and its volumes.
   syncPolicy: {}

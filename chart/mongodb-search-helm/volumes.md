@@ -25,7 +25,7 @@ installs, MongoDB Controllers for Kubernetes 1.13.0, and was measured on the lab
 | `search.replicas` set to 0 | **Deleted**, every one | Not run. MongoDB: at 0 "the Kubernetes Operator scales the StatefulSet to zero pods" |
 | The StatefulSet deleted, without `--cascade=orphan` | **Deleted**, every one | Not run |
 | The StatefulSet deleted **with** `--cascade=orphan` | Kept | The operator made the StatefulSet again within a second; the three pods were adopted without a restart and the three claims kept their uids |
-| The MongoDBSearch deleted, or `helm uninstall` with the chart's default | **Deleted**, every one | Not run today |
+| The MongoDBSearch deleted, or `helm uninstall` with the chart's default | **Deleted**, every one | 2026-10-10. `oc delete mongodbsearch`: the StatefulSet gone after 1 s, the three mongot pods and their three claims after 12 s. `helm uninstall` with the default: the same after 11 s. The volumes read `Released`, the lab's class retaining them; a search through mongod then ended in a 504 |
 | `helm uninstall` with `search.keepOnUninstall: true` | Kept | 2026-10-10: Helm answered "These resources were kept due to the resource policy: [MongoDBSearch] mongot". The resource, the StatefulSet, the three mongot pods, the two Envoy pods and the three claims kept their uids, with no restart. `helm install` under the same name then adopted the resource in 42 s, without `--take-ownership`; the same pods and claims |
 
 ## Why
@@ -110,9 +110,9 @@ So this chart has no value that keeps a volume through a scale-down: there is no
    "ignored (no prune)". The two options on the resource override the Application's own `Prune` and `Delete`
    options. It does not stop `oc delete mongodbsearch`, nor a sync with `Force`: Argo CD then deletes the resource
    and creates it again when its apply is refused, and always when `Replace=true` is set as well ("the 'kubectl
-   delete/create' command"). On the lab with Argo CD 3.5.3 (2026-10-10) a sync of the resource alone with
-   prune skipped it, "ignored (no prune)", and a delete of the Application with its resources finalizer left the resource, its pods
-   and its claims: the README, "Argo CD", has the run. What is said here of `Force` and `Replace` is from Argo
+   delete/create' command"). On the lab with Argo CD 3.5.3 (2026-10-10) a sync with prune skipped the resource,
+   "ignored (no prune)", by hand and automated, and a delete of the Application with its resources finalizer left
+   the resource, its pods and its claims: [argocd.md](argocd.md) has the runs. What is said here of `Force` and `Replace` is from Argo
    CD's documentation and source only. When the search is meant to go:
    `oc delete mongodbsearch <search.name> -n <namespace>`.
 4. **Change the resource through the values only.** A field of the MongoDBSearch that was patched by hand stays

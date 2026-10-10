@@ -49,7 +49,7 @@ NS=$TargetNamespace                       # Part 2 uses $NS
 # The script is a file of the chart. From a checkout of this repository, at its root:
 PREREQ=chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
 # From the published chart, with no clone (chart 0.3.3 and later):
-#   helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.17/mongodb-search-helm-0.3.17.tgz --untar
+#   helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.18/mongodb-search-helm-0.3.18.tgz --untar
 #   PREREQ=mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
 
 mkdir -m 700 $TargetNamespace             # the script never creates it
@@ -133,6 +133,8 @@ To make the five objects with `oc` alone, see [Part 1 by hand](#part-1-by-hand).
 
 ## Part 2: Install the chart
 
+With Argo CD, which is how this is meant to be run: [`argocd.md`](../chart/mongodb-search-helm/argocd.md), beside the chart, after Part 1. The steps below install the same chart by hand with Helm.
+
 ### Step 6: Write the values file
 
 `--check` prints the namespace, the hostname and the user name as the script found them. Set the namespace, and the two values that have no default: the public hostname and the source mongod. Everything else defaults to the runbook's values; the full list is in the [chart README](../chart/mongodb-search-helm/README.md#values).
@@ -164,7 +166,7 @@ From the published package, with no clone of the repository:
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.17/mongodb-search-helm-0.3.17.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.18/mongodb-search-helm-0.3.18.tgz \
   -n $NS -f my-values.yaml --timeout 20m
 ```
 
@@ -352,5 +354,5 @@ The script's own tests ([`test/prerequisites.sh`](../test/prerequisites.sh), 105
 Not tested:
 
 - A cluster where the operator is installed by someone else (`operator.install=false`).
-- Argo CD beyond the run of 2026-10-10 in the chart README, "Argo CD": a first install into a namespace with none of the chart's objects, automated sync, and `syncPolicy.retry`.
+- What [`argocd.md`](../chart/mongodb-search-helm/argocd.md) lists as not run under Argo CD: a change of `operator.version`, a namespace shared with other operators' Subscriptions, `selfHeal`, and an application controller that is not a cluster administrator.
 - Anything in `dvh-gp6-rnd`.

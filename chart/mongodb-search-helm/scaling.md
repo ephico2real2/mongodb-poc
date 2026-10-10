@@ -48,7 +48,7 @@ search:
     limits: {cpu: "4", memory: 12Gi}
 ```
 
-Then `helm upgrade` with the release's values file, or an Argo CD sync. The operator changes the StatefulSet's pod
+Then a sync of the Argo CD Application (or `helm upgrade` with the release's values file). The operator changes the StatefulSet's pod
 template, and Kubernetes restarts the pods one at a time, the highest number first, each Ready before the next.
 
 - **Each pod comes back on its own volume**, with its indexes, and goes on from where it was: nothing is built
