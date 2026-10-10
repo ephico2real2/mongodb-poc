@@ -53,7 +53,13 @@
         },
         "persistence": {
           "type": "object", "additionalProperties": false, "required": ["storage"],
-          "properties": {"storage": {"type": "string", "minLength": 1}, "storageClass": {"type": "string"}}
+          "properties": {
+            "storage": {"type": "string", "minLength": 1}, "storageClass": {"type": "string"},
+            "autoExpand": {
+              "type": "object", "additionalProperties": false,
+              "properties": {"enabled": {"type": "boolean"}, "claimWaitSeconds": {"type": "integer", "minimum": 30}}
+            }
+          }
         },
         "keepOnUninstall": {"type": "boolean"},
         "podDisruptionBudget": {

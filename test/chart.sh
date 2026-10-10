@@ -590,8 +590,8 @@ done
 # ------------------------------------------------------------------------------------------------ volumes
 # The two hooks are shell scripts in Jobs. Each is taken out of the render and run here against a stand-in `oc`, so
 # that what they say and how they end is tested without a cluster.
-hook_script() {  # <template>: the script of the Job's container, as rendered
-  render -s "templates/$1" | python3 -c '
+hook_script() {  # <template> [helm arguments]: the script of the Job's container, as rendered
+  render -s "templates/$1" "${@:2}" | python3 -c '
 import re, sys
 doc = sys.stdin.read()
 m = re.search(r"^          args:\n            - \|\n((?:(?:              .*)?\n)+)", doc, re.M)
@@ -609,7 +609,8 @@ case "$*" in
   *statefulsets.apps*volumeClaimTemplates*) printf '%s' "${FAKE_HAVE_SIZE:-}" ;;
   *mongodbsearch*"{.status.phase}"*) printf '%s' "${FAKE_PHASE:-Running}" ;;
   *mongodbsearch*"{.status.message}"*) printf '%s' "${FAKE_MESSAGE:-}" ;;
-  *"{.metadata.generation}"*|*"{.status.observedGeneration}"*) printf 7 ;;
+  *"{.status.observedGeneration}"*) printf '%s' "${FAKE_OBSERVED:-7}" ;;
+  *"{.metadata.generation}"*) printf 7 ;;
   *subscriptions*installedCSV*) printf 'mongodb-kubernetes.v1.13.0' ;;
   *clusterserviceversions*"{.status.phase}"*) printf Succeeded ;;
   *go-template*) printf 'tls.crt\ntls.key\nca.crt\npassword\n' ;;
@@ -661,6 +662,83 @@ out2="$(gate WAIT_SECONDS=3 FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WAN
 out3="$(gate WAIT_SECONDS=3 FAKE_PHASE=Pending FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi)"; rc3=$?
 [[ $rc == 1 && $rc2 == 1 && $rc3 == 1 && "$out$out2$out3" != *STOPPED* && "$out" == *"MongoDBSearch mongot Running: not within 3s"* && "$out2" == *"not within 3s"* && "$out3" == *"not within 3s"* ]] \
   && ok "any other failure is waited for and reported as before" || bad "the gate and another failure (exit ${rc}, ${rc2})"
+
+# ------------------------------------------------------------------------------------------------ volumes, grown by the chart
+# search.persistence.autoExpand: a Job between the MongoDBSearch and the gate runs the runbook's script. Off unless
+# asked for; on, it may do one thing more than read: ask a claim for more, and delete the mongot StatefulSet by name.
+AE=(--set search.persistence.autoExpand.enabled=true)
+EXPAND=mongot-mongodb-search-helm-expand-volumes
+grep -q 'expand-volumes' <<<"$(objects)" && bad "autoExpand is off by default: nothing of it is rendered" || ok "autoExpand is off by default: no Job, no role and no script reach the cluster"
+o="$(objects "${AE[@]}")"; missing=""
+for k in ConfigMap ServiceAccount Role RoleBinding Job; do has "$o" "${k}/${EXPAND}" || missing="${missing} ${k}"; done
+[[ -z "${missing}" ]] && ok "autoExpand.enabled=true renders the script, a service account, its role and the Job" || bad "autoExpand renders no:${missing}"
+# Its place: after the resource (wave 1), before the gate (wave 3; for Helm a lower hook weight than the gate's).
+annotation() {  # <Job's name> <annotation> [helm arguments]
+  render "${@:3}" | NAME="$1" KEY="$2" python3 -c '
+import os, re, sys
+for doc in sys.stdin.read().split("\n---"):
+    if re.search(r"^kind: Job$", doc, re.M) and re.search(r"^  name: " + re.escape(os.environ["NAME"]) + "$", doc, re.M):
+        m = re.search(r"^    " + re.escape(os.environ["KEY"]) + r": \"?([^\"\n]+)\"?$", doc, re.M); print(m.group(1) if m else "absent")'; }
+[[ "$(annotation "${EXPAND}" argocd.argoproj.io/sync-wave "${AE[@]}")" == 2 && "$(annotation mongot-mongodb-search-helm-wait argocd.argoproj.io/sync-wave "${AE[@]}")" == 3 \
+   && "$(annotation "${EXPAND}" argocd.argoproj.io/hook "${AE[@]}")" == Sync \
+   && "$(annotation "${EXPAND}" helm.sh/hook "${AE[@]}")" == "post-install,post-upgrade" \
+   && "$(annotation "${EXPAND}" helm.sh/hook-weight "${AE[@]}")" -lt "$(annotation mongot-mongodb-search-helm-wait helm.sh/hook-weight "${AE[@]}")" ]] \
+  && ok "the Job runs after the MongoDBSearch and before the gate, under Argo CD and under Helm" || bad "the place of the Job that grows the volumes"
+[[ "$(annotation mongot-mongodb-search-helm-approver helm.sh/hook-weight)" -lt "$(annotation mongot-mongodb-search-helm-wait helm.sh/hook-weight)" ]] \
+  && ok "the gate is still Helm's last hook" || bad "the gate's hook weight"
+if command -v yq >/dev/null; then
+  rules="$(render "${AE[@]}" | yq -o=json -I=0 "select(.kind==\"Role\" and .metadata.name==\"${EXPAND}\") | .rules")"
+  [[ "${rules}" == '[{"apiGroups":["mongodb.com"],"resources":["mongodbsearch"],"verbs":["get"]},{"apiGroups":["apps"],"resources":["statefulsets"],"verbs":["get"]},{"apiGroups":["apps"],"resources":["statefulsets"],"resourceNames":["mongot-search-0"],"verbs":["delete"]},{"apiGroups":[""],"resources":["pods"],"verbs":["get","list"]},{"apiGroups":[""],"resources":["persistentvolumeclaims"],"verbs":["get","list","patch"]}]' ]] \
+    && ok "its role: read, ask a claim for more, and delete the one StatefulSet by name; no pod and no claim can be deleted" || bad "the role of the Job that grows the volumes: ${rules}"
+  rules="$(render "${AE[@]}" --set search.name=srch | yq -o=json -I=0 "select(.kind==\"Role\" and .metadata.name==\"${EXPAND}\") | .rules[2].resourceNames")"
+  [[ "${rules}" == '["srch-search-0"]' ]] && ok "the StatefulSet it may delete follows search.name" || bad "the StatefulSet's name in the role: ${rules}"
+  # Both are read without their last newline: yq prints one more after a value.
+  [[ "$(render "${AE[@]}" | yq "select(.kind==\"ConfigMap\" and .metadata.name==\"${EXPAND}\") | .data.\"expand-mongot-volumes.sh\"")" == "$(cat "${CHART}/expand-mongot-volumes.sh")" ]] \
+    && ok "the script the Job runs is the chart's expand-mongot-volumes.sh, byte for byte" || bad "the mounted script differs from expand-mongot-volumes.sh"
+  [[ "$(render "${AE[@]}" --set search.replicas=3 --set search.persistence.autoExpand.claimWaitSeconds=600 --set wait.waitSeconds=900 | yq "select(.kind==\"Job\" and .metadata.name==\"${EXPAND}\") | .spec.activeDeadlineSeconds")" == 5220 ]] \
+    && ok "the Job's deadline covers the reconcile, each pod's claim and readiness, and the StatefulSet made again" || bad "the deadline of the Job that grows the volumes"
+fi
+refused "an autoExpand.enabled that is not true or false" --set search.persistence.autoExpand.enabled=perhaps
+refused "an unknown key under autoExpand" --set search.persistence.autoExpand.restart=true
+refused "a claim wait under 30 s" "${AE[@]}" --set search.persistence.autoExpand.claimWaitSeconds=5
+
+# The Job's script, run here against the stand-in oc and a stand-in for expand-mongot-volumes.sh that writes down how
+# it was called. (The script itself is tested by test/expand-volumes.sh.)
+hook_script 12-volume-expansion.yaml "${AE[@]}" > "${hooks}/expand.sh"
+cat > "${hooks}/script.sh" <<'SC'
+printf '%s\n' "$*" >> "${CALLS}"
+case "$1" in --expand) exit "${FAKE_EXPAND_RC:-0}" ;; --recreate-statefulset) exit "${FAKE_RECREATE_RC:-0}" ;; esac
+SC
+grow() { : > "${hooks}/calls"; env PATH="${hooks}/bin:${PATH}" NAMESPACE=x SEARCH=mongot MONGOT_STS=mongot-search-0 WAIT_SECONDS=3 INTERVAL=1 CLAIM_WAIT=77 \
+           SCRIPT="${hooks}/script.sh" CALLS="${hooks}/calls" "$@" bash "${hooks}/expand.sh" 2>&1; }
+calls() { tr '\n' '|' < "${hooks}/calls"; }
+bash -n "${hooks}/expand.sh" && ok "the Job's script parses" || bad "the Job's script does not parse"
+# Nothing to grow: a healthy resource, a first install, another failure, the operator's refusal with equal sizes.
+quiet=yes
+for case in "FAKE_PHASE=Running FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=300Gi" "FAKE_PHASE=Pending FAKE_WANT_SIZE=300Gi" "FAKE_PHASE=Failed FAKE_MESSAGE=other FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi"; do
+  out="$(grow ${case})"; rc=$?
+  [[ $rc == 0 && "$out" == *"nothing to grow"* && -z "$(calls)" ]] || { quiet=no; bad "the Job acted, or failed, on ${case} (exit ${rc}): ${out##*$'\n'}"; }
+done
+out="$(grow FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=250Gi FAKE_HAVE_SIZE=250Gi)"; rc=$?
+[[ $rc == 0 && -z "$(calls)" ]] || { quiet=no; bad "the Job acted on a refusal with equal sizes (exit ${rc})"; }
+[[ "${quiet}" == yes ]] && ok "the Job does nothing on a healthy resource, a first install or another failure: the script is not run at all"
+# The operator has refused a larger size: the runbook's steps, in order, on this namespace and StatefulSet only.
+out="$(grow FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi)"; rc=$?
+T="--target-namespace x --statefulset mongot-search-0"
+[[ $rc == 0 && "$(calls)" == "--check ${T}|--expand --apply --yes --wait 77 ${T}|--recreate-statefulset --apply --yes --wait 77 ${T}|" && "$out" == *"is now 300Gi and StatefulSet mongot-search-0 has 250Gi"* ]] \
+  && ok "on the operator's refusal of a larger size it reports, grows the claims, then makes the StatefulSet again: three runs of the script, in that order" \
+  || bad "the Job on a changed size (exit ${rc}): $(calls)"
+# A claim that does not grow: the Job fails, says how the script ended, and never reaches the delete.
+out="$(grow FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi FAKE_EXPAND_RC=2)"; rc=$?
+[[ $rc == 1 && "$(calls)" != *recreate* && "$out" == *"FAILED: the volume claims were not all grown (the script ended with 2). No pod, claim or StatefulSet was deleted"* ]] \
+  && ok "when a claim does not grow the Job fails before the StatefulSet is touched, and says so" || bad "the Job and a claim that does not grow (exit ${rc}): $(calls)"
+out="$(grow FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi FAKE_RECREATE_RC=4)"; rc=$?
+[[ $rc == 1 && "$out" == *"FAILED: the StatefulSet was not made again at 300Gi (the script ended with 4)"*"Do NOT delete the mongot pods"* ]] \
+  && ok "when the StatefulSet is not made again it fails and says not to delete the pods" || bad "the Job and a StatefulSet not made again (exit ${rc})"
+# The operator has not seen the change (it is down, or slow): nothing is touched.
+out="$(grow FAKE_OBSERVED=6 FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi)"; rc=$?
+[[ $rc == 1 && -z "$(calls)" && "$out" == *"has not reconciled MongoDBSearch mongot at its current generation within 3s. Nothing was changed."* ]] \
+  && ok "while the operator has not reconciled the resource it changes nothing, and fails after its budget" || bad "the Job and an operator that has not reconciled (exit ${rc}): $(calls)"
 rm -rf "${hooks}"
 
 # ------------------------------------------------------------------------------------------------ index names

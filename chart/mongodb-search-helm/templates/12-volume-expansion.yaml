@@ -1,0 +1,178 @@
+{{- /*
+Growing mongot's volumes from the values alone (search.persistence.autoExpand.enabled; off unless asked for).
+
+A larger search.persistence.storage cannot reach a StatefulSet that exists: Kubernetes forbids a change of its
+volume claim template, and the operator leaves the MongoDBSearch Failed. Without this Job the gate stops there and
+names volume-expansion-runbook.md. With it, a Job between the MongoDBSearch and the gate takes the runbook's steps by
+hand, with the runbook's own script, expand-mongot-volumes.sh, mounted from the chart: the claims are grown one pod
+at a time, and the StatefulSet is then deleted with --cascade=orphan for the operator to make again.
+
+It acts on one signal only: the resource is Failed, the operator names the forbidden StatefulSet update, and the two
+sizes differ. A first install, an upgrade that changes no size and any other failure pass through untouched. Argo CD
+and Helm run a hook on every sync and upgrade: run a second time it finds nothing to grow.
+*/ -}}
+{{- if .Values.search.persistence.autoExpand.enabled }}
+{{- $name := printf "%s-expand-volumes" (include "mongodb-search-helm.fullname" .) }}
+{{- $claimWait := int .Values.search.persistence.autoExpand.claimWaitSeconds }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+data:
+  expand-mongot-volumes.sh: |
+    {{- .Files.Get "expand-mongot-volumes.sh" | trimSuffix "\n" | nindent 4 }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+---
+# In this namespace only. It may ask a volume claim for more (a claim cannot be made smaller, and nothing else of a
+# claim can be changed), and delete one object: the mongot StatefulSet, by name. It may not delete a pod or a claim.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+rules:
+  - apiGroups: ["mongodb.com"]
+    resources: ["mongodbsearch"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    resourceNames: [{{ include "mongodb-search-helm.mongotStatefulSet" . | quote }}]
+    verbs: ["delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ include "mongodb-search-helm.namespace" . }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $name }}
+  namespace: {{ include "mongodb-search-helm.namespace" . }}
+  labels:
+    {{- include "mongodb-search-helm.labels" . | nindent 4 }}
+  annotations:
+    # After the MongoDBSearch (wave 1), before the gate (wave 3).
+    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 0
+  # The operator's reconcile, then for each pod its claim and its readiness, then the StatefulSet made again.
+  activeDeadlineSeconds: {{ add .Values.wait.waitSeconds (mul 2 $claimWait (int .Values.search.replicas)) $claimWait 120 }}
+  ttlSecondsAfterFinished: {{ .Values.jobs.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "mongodb-search-helm.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $name }}
+      {{- include "mongodb-search-helm.jobPod" . | nindent 6 }}
+      volumes:
+        - name: script
+          configMap:
+            name: {{ $name }}
+      containers:
+        - name: expand
+          {{- include "mongodb-search-helm.jobContainer" . | nindent 10 }}
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+              readOnly: true
+          env:
+            - name: NAMESPACE
+              value: {{ include "mongodb-search-helm.namespace" . | quote }}
+            - name: SEARCH
+              value: {{ .Values.search.name | quote }}
+            - name: MONGOT_STS
+              value: {{ include "mongodb-search-helm.mongotStatefulSet" . | quote }}
+            - name: WAIT_SECONDS
+              value: {{ .Values.wait.waitSeconds | quote }}
+            - name: INTERVAL
+              value: {{ .Values.wait.intervalSeconds | quote }}
+            - name: CLAIM_WAIT
+              value: {{ $claimWait | quote }}
+            - name: SCRIPT
+              value: /scripts/expand-mongot-volumes.sh
+          args:
+            - |
+              set -uo pipefail
+              log()  { printf '[expand %s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
+              fail() { printf '[expand] FAILED: %s\n' "$*" >&2; exit 1; }
+              MDBS=mongodbsearch.mongodb.com
+              field() { oc get "$1" "$2" -n "$NAMESPACE" -o jsonpath="{$3}" 2>/dev/null; }
+              script() { bash "$SCRIPT" "$@" --target-namespace "$NAMESPACE" --statefulset "$MONGOT_STS"; }
+
+              # 1. The operator has seen the resource as it is now. Until it has, status.phase is the previous
+              #    generation's, and a StatefulSet deleted while the operator is away is not made again.
+              DEADLINE=$(( $(date +%s) + WAIT_SECONDS ))
+              observed() {
+                local g; g="$(field "$MDBS" "$SEARCH" .metadata.generation)"
+                [ -n "$g" ] && [ "$g" = "$(field "$MDBS" "$SEARCH" .status.observedGeneration)" ]
+              }
+              until observed; do
+                [ "$(date +%s)" -lt "$DEADLINE" ] || fail "the operator has not reconciled MongoDBSearch ${SEARCH} at its current generation within ${WAIT_SECONDS}s. Nothing was changed. Inspect: oc get ${MDBS} ${SEARCH} -n ${NAMESPACE} -o yaml"
+                log "waiting: MongoDBSearch ${SEARCH} reconciled at its current generation"
+                sleep "$INTERVAL"
+              done
+
+              # 2. Is there a changed volume size to act on? The gate's own test.
+              {{- include "mongodb-search-helm.volumeSizeChanged" . | nindent 14 }}
+              if ! volume_size_changed; then
+                log "MongoDBSearch ${SEARCH} is $(field "$MDBS" "$SEARCH" .status.phase), with no changed volume size waiting: nothing to grow"
+                exit 0
+              fi
+              log "search.persistence.storage is now ${WANT_SIZE} and StatefulSet ${MONGOT_STS} has ${HAVE_SIZE}: taking the steps of volume-expansion-runbook.md, with its script"
+
+              # 3. The runbook's steps 3 and 4. The script stops at the first claim or pod that is not as it
+              #    should be, and before it has deleted anything.
+              script --check
+              script --expand --apply --yes --wait "$CLAIM_WAIT" \
+                || fail "the volume claims were not all grown (the script ended with $?). No pod, claim or StatefulSet was deleted, and the mongot pods run as before. What the script said is above; volume-expansion-runbook.md, step 3, says what each ending means. The next sync or upgrade goes on from here."
+              script --recreate-statefulset --apply --yes --wait "$CLAIM_WAIT" \
+                || fail "the StatefulSet was not made again at ${WANT_SIZE} (the script ended with $?). What the script said is above; volume-expansion-runbook.md, step 4. Do NOT delete the mongot pods."
+              log "the volumes of ${MONGOT_STS} are at ${WANT_SIZE} and MongoDBSearch ${SEARCH} is Running: the gate decides the rest"
+{{- end }}
