@@ -698,19 +698,22 @@ import os, re, sys
 for doc in sys.stdin.read().split("\n---"):
     if re.search(r"^kind: Job$", doc, re.M) and re.search(r"^  name: " + re.escape(os.environ["NAME"]) + "$", doc, re.M):
         m = re.search(r"^    " + re.escape(os.environ["KEY"]) + r": \"?([^\"\n]+)\"?$", doc, re.M); print(m.group(1) if m else "absent")'; }
+# below <a> <b>: a < b, for two whole numbers only. bash's -lt takes a word that is not a number for a variable, so a
+# missing weight ("absent") would read as 0 (and under set -u stop this script there instead of reporting).
+below() { [[ "$1" =~ ^-?[0-9]+$ && "$2" =~ ^-?[0-9]+$ ]] && (( $1 < $2 )); }
 [[ "$(annotation "${EXPAND}" argocd.argoproj.io/sync-wave "${AE[@]}")" == 2 && "$(annotation mongot-mongodb-search-helm-wait argocd.argoproj.io/sync-wave "${AE[@]}")" == 3 \
    && "$(annotation "${EXPAND}" argocd.argoproj.io/hook "${AE[@]}")" == Sync \
-   && "$(annotation "${EXPAND}" helm.sh/hook "${AE[@]}")" == "post-install,post-upgrade" \
-   && "$(annotation "${EXPAND}" helm.sh/hook-weight "${AE[@]}")" -lt "$(annotation mongot-mongodb-search-helm-wait helm.sh/hook-weight "${AE[@]}")" ]] \
+   && "$(annotation "${EXPAND}" helm.sh/hook "${AE[@]}")" == "post-install,post-upgrade" ]] \
+   && below "$(annotation "${EXPAND}" helm.sh/hook-weight "${AE[@]}")" "$(annotation mongot-mongodb-search-helm-wait helm.sh/hook-weight "${AE[@]}")" \
   && ok "the Job runs after the MongoDBSearch and before the gate, under Argo CD and under Helm" || bad "the place of the Job that grows the volumes"
-[[ "$(annotation mongot-mongodb-search-helm-approver helm.sh/hook-weight)" -lt "$(annotation mongot-mongodb-search-helm-wait helm.sh/hook-weight)" ]] \
+below "$(annotation mongot-mongodb-search-helm-approver helm.sh/hook-weight)" "$(annotation mongot-mongodb-search-helm-wait helm.sh/hook-weight)" \
   && ok "the gate is still Helm's last hook" || bad "the gate's hook weight"
 if command -v yq >/dev/null; then
   rules="$(render "${AE[@]}" | yq -o=json -I=0 "select(.kind==\"Role\" and .metadata.name==\"${EXPAND}\") | .rules")"
-  [[ "${rules}" == '[{"apiGroups":["mongodb.com"],"resources":["mongodbsearch"],"verbs":["get"]},{"apiGroups":["apps"],"resources":["statefulsets"],"verbs":["get"]},{"apiGroups":["apps"],"resources":["statefulsets"],"resourceNames":["mongot-search-0"],"verbs":["delete"]},{"apiGroups":[""],"resources":["pods"],"verbs":["get","list"]},{"apiGroups":[""],"resources":["persistentvolumeclaims"],"verbs":["get","list","patch"]}]' ]] \
-    && ok "its role: read, ask a claim for more, and delete the one StatefulSet by name; it can list no StatefulSet and delete no pod and no claim" || bad "the role of the Job that grows the volumes: ${rules}"
-  rules="$(render "${AE[@]}" --set search.name=srch | yq -o=json -I=0 "select(.kind==\"Role\" and .metadata.name==\"${EXPAND}\") | .rules[2].resourceNames")"
-  [[ "${rules}" == '["srch-search-0"]' ]] && ok "the StatefulSet it may delete follows search.name" || bad "the StatefulSet's name in the role: ${rules}"
+  [[ "${rules}" == '[{"apiGroups":["mongodb.com"],"resources":["mongodbsearch"],"resourceNames":["mongot"],"verbs":["get"]},{"apiGroups":["apps"],"resources":["statefulsets"],"resourceNames":["mongot-search-0"],"verbs":["get","delete"]},{"apiGroups":[""],"resources":["pods"],"verbs":["get","list"]},{"apiGroups":[""],"resources":["persistentvolumeclaims"],"verbs":["get","list","patch"]}]' ]] \
+    && ok "its role: read the one MongoDBSearch and the one StatefulSet by name, ask a claim for more, and delete that StatefulSet; it can list no StatefulSet and delete no pod and no claim" || bad "the role of the Job that grows the volumes: ${rules}"
+  rules="$(render "${AE[@]}" --set search.name=srch | yq -o=json -I=0 "select(.kind==\"Role\" and .metadata.name==\"${EXPAND}\") | .rules | map(select(.resources[0] == \"mongodbsearch\" or .resources[0] == \"statefulsets\") | .resourceNames[0])")"
+  [[ "${rules}" == '["srch","srch-search-0"]' ]] && ok "the MongoDBSearch and the StatefulSet it may read and delete follow search.name" || bad "the names in the role under search.name=srch: ${rules}"
   # Both are read without their last newline: yq prints one more after a value.
   [[ "$(render "${AE[@]}" | yq "select(.kind==\"ConfigMap\" and .metadata.name==\"${EXPAND}\") | .data.\"expand-mongot-volumes.sh\"")" == "$(cat "${CHART}/expand-mongot-volumes.sh")" ]] \
     && ok "the script the Job runs is the chart's expand-mongot-volumes.sh, byte for byte" || bad "the mounted script differs from expand-mongot-volumes.sh"
@@ -749,6 +752,9 @@ T="--target-namespace x --statefulset mongot-search-0"
 [[ $rc == 0 && "$(calls)" == "--check ${T}|--expand --apply --yes --wait 77 ${T}|--recreate-statefulset --apply --yes --wait 77 ${T}|" && "$out" == *"is now 300Gi and StatefulSet mongot-search-0 has 250Gi"* ]] \
   && ok "on the operator's refusal of a larger size it reports, grows the claims, then makes the StatefulSet again: three runs of the script, in that order" \
   || bad "the Job on a changed size (exit ${rc}): $(calls)"
+# Its last line is what the cluster reads then (here the stand-in still says Failed and 250Gi), not what was asked for.
+[[ "$out" == *"StatefulSet mongot-search-0 now has 250Gi and MongoDBSearch mongot is Failed: the gate decides the rest"* ]] \
+  && ok "the Job's last line reports the size and the phase as oc reads them, not a fixed Running" || bad "the Job's last line: ${out##*$'\n'}"
 # A claim that does not grow: the Job fails, says how the script ended, and never reaches the delete.
 out="$(grow FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi FAKE_EXPAND_RC=2)"; rc=$?
 [[ $rc == 1 && "$(calls)" != *recreate* && "$out" == *"FAILED: the volume claims were not all grown (the script ended with 2). No pod, claim or StatefulSet was deleted"* ]] \

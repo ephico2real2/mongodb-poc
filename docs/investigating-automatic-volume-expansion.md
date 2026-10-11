@@ -24,7 +24,7 @@ flag is in the chart, in the runbook, under "Letting the chart take steps 3 to 5
   or an upgrade, mounts the runbook's script from the chart, and acts only when the operator has refused the new
   size. On the lab it grew the volumes three times, to 9Gi, 10Gi and 11Gi, the last with the size synced first
   and the flag set after: the same pods and claims throughout, and 474 of 474 searches answered. Two defects showed
-  only there, and are corrected: the Job hung inside `oc delete`, and the flag alone did not start a sync. It is one template of 178 lines, changes one flag of the script, and needs no image and no cluster-wide
+  only there, and are corrected: the Job hung inside `oc delete`, and the flag alone did not start a sync. It is one template of 183 lines, changes one flag of the script, and needs no image and no cluster-wide
   install.
 - **A controller of our own would do the same three steps, at a much higher cost.** A custom resource is not
   needed at all (the size already has a place, the MongoDBSearch); what a controller adds is that it acts without
@@ -117,9 +117,8 @@ Its role, in the release's namespace only:
 
 | On | It may | Why |
 | --- | --- | --- |
-| The MongoDBSearch | read | the size asked for, the phase, the operator's message |
-| StatefulSets | read | the size the StatefulSet has, its pods |
-| The mongot StatefulSet, by name | delete | the one delete of the runbook, always with `--cascade=orphan` |
+| The MongoDBSearch, by name | read | the size asked for, the phase, the operator's message |
+| The mongot StatefulSet, by name | read, delete | the size the StatefulSet has, its pods; the one delete of the runbook, always with `--cascade=orphan` |
 | Pods | read, list | each pod Ready before and after its claim grows; the same pods afterwards |
 | Volume claims | read, list, ask for more | Kubernetes lets a claim's size only grow, and nothing else of a claim be changed |
 
@@ -284,7 +283,7 @@ part that does what three lines of the Job's script do.
 | | By hand (today) | The Job | A controller (shell-operator) | A controller with our own resource (Go, Python) | MongoDB's operator does it |
 | --- | --- | --- | --- | --- | --- |
 | Steps after the values change | 3 (two runs of the script, one more sync) | 0 | 0 | 0, and a second object to write | 0 |
-| New code | none | one template of 178 lines; one flag changed in the script | a Deployment, an image with our script, hook bindings | a controller, its tests, its image, its release | none of ours |
+| New code | none | one template of 183 lines; one flag changed in the script | a Deployment, an image with our script, hook bindings | a controller, its tests, its image, its release | none of ours |
 | New image to own | no | no (the Jobs' `ose-cli`) | yes | yes | no |
 | Runs | when a person runs it | inside a sync or an upgrade | all year | all year | all year, already |
 | Cluster administrator needed to install | no | no | no | yes, for the definition | no |

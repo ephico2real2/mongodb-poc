@@ -42,7 +42,8 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-2"
 ---
-# In this namespace only. It may ask a volume claim for more (a claim cannot be made smaller, and nothing else of a
+# In this namespace only. It reads the one MongoDBSearch and the one StatefulSet by name, as the preflight does, and
+# the pods and claims. It may ask a volume claim for more (a claim cannot be made smaller, and nothing else of a
 # claim can be changed), and delete one object: the mongot StatefulSet, by name. It may not delete a pod or a claim.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -56,14 +57,12 @@ metadata:
 rules:
   - apiGroups: ["mongodb.com"]
     resources: ["mongodbsearch"]
-    verbs: ["get"]
-  - apiGroups: ["apps"]
-    resources: ["statefulsets"]
+    resourceNames: [{{ .Values.search.name | quote }}]
     verbs: ["get"]
   - apiGroups: ["apps"]
     resources: ["statefulsets"]
     resourceNames: [{{ include "mongodb-search-helm.mongotStatefulSet" . | quote }}]
-    verbs: ["delete"]
+    verbs: ["get", "delete"]
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list"]
@@ -179,5 +178,6 @@ spec:
                 || fail "the volume claims were not all grown (the script ended with $?). No pod, claim or StatefulSet was deleted, and the mongot pods run as before. What the script said is above; volume-expansion-runbook.md, step 3, says what each ending means. The next sync or upgrade goes on from here."
               script --recreate-statefulset --apply --yes --wait "$CLAIM_WAIT" \
                 || fail "the StatefulSet was not made again at ${WANT_SIZE} (the script ended with $?). What the script said is above; volume-expansion-runbook.md, step 4. Do NOT delete the mongot pods."
-              log "the volumes of ${MONGOT_STS} are at ${WANT_SIZE} and MongoDBSearch ${SEARCH} is Running: the gate decides the rest"
+              # What the cluster says now, not what was asked for: --recreate-statefulset also ends well with "nothing to do".
+              log "StatefulSet ${MONGOT_STS} now has $(field statefulsets.apps "$MONGOT_STS" '.spec.volumeClaimTemplates[0].spec.resources.requests.storage') and MongoDBSearch ${SEARCH} is $(field "$MDBS" "$SEARCH" .status.phase): the gate decides the rest"
 {{- end }}
