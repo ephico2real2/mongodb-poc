@@ -22,8 +22,8 @@ flag is in the chart, in the runbook, under "Letting the chart take steps 3 to 5
   and it is MongoDB's.
 - **A Job in the chart does it with what we already have.** It runs between the MongoDBSearch and the gate of a sync
   or an upgrade, mounts the runbook's script from the chart, and acts only when the operator has refused the new
-  size. On the lab it grew the volumes seven times, from 8Gi to 15Gi, with the size synced first and the flag set
-  after, and with both in one change: the same pods and claims throughout, and 552 of 552 searches answered. Two defects showed
+  size. On the lab it grew the volumes eight times, from 8Gi to 16Gi, with the size synced first and the flag set
+  after, and with both in one change: the same pods and claims throughout, and 566 of 566 searches answered. Two defects showed
   only there, and are corrected: the Job hung inside `oc delete`, and the flag alone did not start a sync. It is one template of 237 lines, changes one flag of the script, and needs no image and no cluster-wide
   install.
 - **A controller of our own would do the same three steps, at a much higher cost.** A custom resource is not
@@ -169,7 +169,7 @@ by a controller or a workflow engine that can report progress on its own."
 ### What was run on the lab
 
 OpenShift Local 4.22.7, Argo CD (OpenShift GitOps 1.22.0) with automated sync following the branch, three mongot
-pods on the NFS class `ipsec-nas-csi`, 2026-10-10 21:40Z to 2026-10-11 04:10Z. The size and the flag were changed in
+pods on the NFS class `ipsec-nas-csi`, 2026-10-10 21:40Z to 2026-10-11 05:00Z. The size and the flag were changed in
 git each time; no claim was patched and no StatefulSet was deleted by hand.
 
 | # | In git | What happened |
@@ -185,11 +185,13 @@ git each time; no claim was patched and no StatefulSet was deleted by hand.
 | 9 | Chart 0.3.26 as first built (a pod restarted in the middle of the claims): 13Gi, the flag on, one change | One sync, `Succeeded` in 57 s; the Job ran for 7 s. No claim waited for its pod (this driver has no file system to grow), so no pod was deleted: "the pods are the same pods: none was restarted" |
 | 10 | Chart 0.3.26 in its final order (every claim, the StatefulSet made again, then the pods that wait): 14Gi, the flag on, one change | One sync, `Succeeded` in 63 s; the Job ran for 14 s and ended its last step with "no claim of mongot-search-0 waits for its pod (FileSystemResizePending): no pod is restarted" |
 | 11 | Chart 0.3.26 after its second review: 15Gi, the flag on, one change | One sync, `Succeeded` in 59 s; the Job ran for 9 s, and again "no claim of mongot-search-0 waits for its pod (FileSystemResizePending): no pod is restarted" |
-| 12 | The same chart, the flag still on, nothing changed: one sync by hand | The Job looked for claims of its StatefulSet that wait for their pods, found none, and said "MongoDBSearch mongot is Running, with no changed volume size waiting: nothing to grow". The sync passed in 50 s |
+| 12 | The same chart (before the plan), the flag still on, nothing changed: one sync by hand | The Job looked for claims of its StatefulSet that wait for their pods, found none, and said "MongoDBSearch mongot is Running, with no changed volume size waiting: nothing to grow". The sync passed in 50 s |
+| 13 | Chart 0.3.26 as it is released (the plan first, the verification last): 16Gi, the flag on, one change | One sync, `Succeeded` in 58 s. The plan: "to do, in this order: grow 3 claim(s); make the StatefulSet again". The three steps as in run 10, no pod restarted. The verification, with `df` run in each pod by the Job's own account: "file systems compared with their claims: 0; shared exports that cannot show it: 3" |
+| 14 | The same chart, the flag still on, nothing changed: one sync by hand | The plan read each claim ("asks 16Gi, has 16Gi; the pod sees 9.7 GiB (nfs4)") and ended "nothing to do: the StatefulSet and every claim there is have what MongoDBSearch mongot asks for". Nothing else was run. The sync passed in 52 s |
 
-Over all of it, from run 3 to run 11 (every reading in the recorded timelines): the same three mongot pods (started
-16:50Z, one restart each, from the machine's restart before run 2) and the same three claims, under eight
-StatefulSets in turn; 552 searches through mongod tried,
+Over all of it, from run 3 to run 13 (every reading in the recorded timelines): the same three mongot pods (started
+16:50Z, one restart each, from the machine's restart before run 2) and the same three claims, under nine
+StatefulSets in turn; 566 searches through mongod tried,
 one every 12 to 14 s while a run was watched, 0 failed; no restart of the control plane.
 
 The Job's log in run 6:
