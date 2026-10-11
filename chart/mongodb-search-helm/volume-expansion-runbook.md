@@ -26,6 +26,7 @@ where, and what was not run anywhere, is at the end.
 | 2 | Sync (Argo CD) or `helm upgrade`. **It stops at the gate, by design** | Argo CD or Helm | The MongoDBSearch asks for the new size and is `Failed`. Pods untouched |
 | 3 | Grow each volume claim, one pod at a time: `--expand` | The script | Each claim, and the volume behind it |
 | 4 | Make the StatefulSet again: `--recreate-statefulset` | The script | The StatefulSet object only |
+| 4b | Only where a claim waits for its pod: restart those pods, one at a time: `--restart-pending` | The script | Those pods, each back on its claim |
 | 5 | Sync or upgrade again: the gate passes | Argo CD or Helm | Nothing new |
 | 6 | Verify and write down | The cluster, read only | Nothing |
 
@@ -94,13 +95,14 @@ repeat what is done.
 oc logs job/<release>-mongodb-search-helm-expand-volumes -n $TargetNamespace
 ```
 
-**It restarts a pod only when its volume asks for it.** Where the storage grows a file system in use, no pod is
-touched. Where it cannot, the claim reads `FileSystemResizePending` (step 3) and its file system grows when its pod
-is started again: after two minutes of that, the Job deletes that one pod (the script's `--restart-if-pending`).
-The pod keeps its claim and comes back on it; the script waits for it to be Ready before it asks the next claim, so
-one mongot pod is away at a time and the others answer. How long a pod with large indexes takes to be Ready again is
-not measured: on the lab, with 16 MiB of indexes, 24 s. A deleted pod is not an eviction, so the disruption budget
-does not hold it back.
+**It restarts a pod only when its volume asks for it, and last.** The Job's order is steps 3, 4 and 4b: every
+claim is asked first, the StatefulSet is made again, and only then are the pods restarted whose claims still read
+`FileSystemResizePending`, one at a time, each waited for until it is Ready on its claim. Where the storage grows a
+file system in use, no claim waits and no pod is touched. The resource is `Running` again before the first pod
+goes, so the restarts, which may be long with large indexes, happen with the operator in charge. One mongot pod is
+away at a time and the others answer. How long a pod with large indexes takes to be Ready again is not measured: on
+the lab, with 16 MiB of indexes, 24 s. A deleted pod is not an eviction, so the disruption budget does not hold it
+back. This restart has not run on a cluster: step 4b says why.
 
 ## 0. Before starting
 
@@ -228,7 +230,7 @@ following the source because the volume was over 90% used, it starts again by it
 | If it stops with | It means | Do |
 | --- | --- | --- |
 | `allowVolumeExpansion is false` | The storage class cannot grow a volume. Nothing was changed | A cluster administrator sets `allowVolumeExpansion: true` on the class, if its driver supports it. Then run again |
-| `FileSystemResizePending for ... s`, exit 3 | The disk has grown, and its file system grows only when the pod starts again: a driver or a vSphere without online expansion | Run again with `--restart-if-pending`. It deletes that one pod, which keeps its claim and comes back on it, and waits for it. One pod at a time, as before |
+| `FileSystemResizePending for ... s`, exit 3 | The disk has grown, and its file system grows only when the pod starts again: a driver or a vSphere without online expansion. It stopped before the next claim | Run it again with `--restart-later`: it asks the remaining claims and leaves each that waits. Then step 4 with `--restart-later`, then step 4b restarts those pods. (Or `--restart-if-pending`, which restarts each pod here, before the next claim, while the resource is still `Failed`) |
 | `the resize has failed [... Error]`, exit 2 | The storage refused: usually no room on the datastore, or a snapshot | `oc describe pvc <claim> -n $TargetNamespace` says why. Clear the cause; Kubernetes tries again by itself. A size that can never be met is withdrawn by asking the claim for a smaller size that is still above what it has (Kubernetes, "Recovering from Failure when Expanding Volumes"), and by putting that size in the values |
 | `not at ... within 900 s`, exit 2 | Slow, or stuck without saying so | Look at the claim's events (`oc describe pvc`). Run again to go on waiting: the request stands. `--wait <seconds>` allows more. A class that allows expansion over a driver with no resizer ends here, with the one event `ExternalExpanding`, "waiting for an external controller to expand this PVC", for good: seen on the lab's hostpath class ([enhancement/README.md](../../enhancement/README.md), step A5) |
 | `pod ... is not Ready` | A pod is not healthy | Find out why first. Nothing was changed for that pod's claim |
@@ -270,6 +272,40 @@ done. Sync or upgrade the chart again: its gate passes now
 | `WARNING: the volume claims ... are not the same as before` | A claim was replaced. This should not happen | Stop. `oc get pvc,pv` and the events of the namespace; if the volumes were retained (step 0), their disks are still there |
 
 **Never do this step by hand without `--cascade=orphan`.**
+
+### 4b. Restart the pods whose volume waits for them
+
+Only where step 3 left a claim at `FileSystemResizePending`. Making the StatefulSet again does not restart a pod:
+the operator's new StatefulSet has the same pod template, and it adopts the pods as they are (the lab, every run:
+"the pods are the same pods: none was restarted").
+
+| Fact | Source |
+| --- | --- |
+| "File system expansion is either done when a Pod is starting up or when a Pod is running and the underlying file system supports online expansion." For a claim in use: "you don't need to delete and recreate a Pod or deployment that is using an existing PVC" | Kubernetes, Expanding Persistent Volumes Claims |
+| Where that is not so, the claim "is set to `FileSystemResizePending`", and: "You can now create or recreate a new pod from the PVC to finish the file system resizing" | OpenShift, Expanding persistent volumes |
+| For a StatefulSet: grow each claim, delete the StatefulSet with `--cascade=orphan`, recreate it, "to keep the original Pods up and running". No pod is restarted by it | Google Kubernetes Engine, Managing volume expansions in StatefulSets |
+| "FileSystemResizePending is a normal intermediate state: drivers that support online expansion finish it without a pod restart. If it persists (the driver has no online expansion), delete that pod once" | MongoDB, pull request 1621 |
+
+So a claim that still waits after two minutes needs its pod started again, and nothing does that by itself.
+
+```bash
+bash $X --recreate-statefulset --statefulset $STS --restart-later --apply    # step 4, over claims that wait
+bash $X --restart-pending --statefulset $STS --dry-run
+bash $X --restart-pending --statefulset $STS --apply
+```
+
+It deletes one pod, which keeps its claim, waits for that claim to have its size and for the new pod (not the old
+one on its way out) to be Ready, and only then takes the next. It deletes no pod while another is not Ready, and no
+pod whose claim does not wait.
+
+| If it says | It means | Do |
+| --- | --- | --- |
+| `no claim of ... waits for its pod: no pod is restarted` | Every file system has grown | Nothing: step 5 |
+| `pod ... is not Ready: a pod is restarted only while every pod is` | A pod is down for another reason | Find out why; run it again when every pod is Ready |
+| `not at ... within ... s of its pod being deleted`, exit 2 | The pod did not come back, or its volume was not mounted | `oc describe pod`, `oc describe pvc`. The pod keeps its claim; the other pods answer |
+
+Not run on a cluster. On the lab's NFS class a claim never waits for its pod (the driver has no file system to
+grow), so this step has run only in the script's tests, against a stand-in.
 
 ### 5. Sync or upgrade again
 
@@ -333,7 +369,7 @@ One run from start to finish, with every command's output and the OpenShift cons
 | Step 5: the same upgrade again | The lab | Passed in 31 and 36 s; the release `deployed` |
 | Backing out of step 2: the old size put back | The lab | The resource `Running` again and the upgrade passed in 32 s; the StatefulSet and the pods untouched |
 | A pod deleted keeps its claim | The lab | The same claim, Ready in 24 s |
-| The script | `test/expand-volumes.sh`, 53 checks against a stand-in `oc`, under bash 5 and bash 3.2, in CI on Linux and macOS | Every refusal changes nothing; one claim at a time; a pending or failed resize stops before the next pod; the one delete always has `--cascade=orphan` |
+| The script | `test/expand-volumes.sh`, 65 checks against a stand-in `oc`, under bash 5 and bash 3.2, in CI on Linux and macOS | Every refusal changes nothing; one claim at a time; a pending or failed resize stops before the next pod; the one delete always has `--cascade=orphan` |
 | The script's `--check` and `--dry-run` | The lab | Read the three sizes, the class, the volumes and the pods' file systems |
 | A class that does not allow expansion | The lab: its NFS class as it was found, 2026-10-10, and its hostpath class the day before | The API refused: "only dynamically provisioned pvc can be resized and the storageclass that provisions the pvc must support resize". On the NFS class the script refused first: "allowVolumeExpansion is false: Kubernetes will not grow it. Nothing was changed for this claim" |
 | **The whole runbook, steps 0 to 6, under Argo CD**, 4Gi to 5Gi | The lab, 2026-10-10, 15:25Z to 15:28Z, on an NFS class (driver `nfs.csi.k8s.io`, csi-driver-nfs 4.13.4 with csi-resizer 2.2.0) once `allowVolumeExpansion: true` had been set on it; automated sync | The sync stopped at the gate about 50 s after it began. `--expand --pod 0`, then `--expand` for the rest: each claim had 5Gi within a second of being asked, with the events `Resizing` and `VolumeResizeSuccessful`. `--recreate-statefulset`, 7 s: "made again at 5Gi; MongoDBSearch mongot is Running", "the pods are the same pods: none was restarted", "the volume claims are the same claims". Argo CD's first retry passed the gate: `Succeeded` 2 min 4 s after the sync began (15:25:54Z to 15:27:58Z), with no sync by hand. 27 searches through mongod were tried, one every 5 to 6 s, and all were answered |
@@ -351,6 +387,7 @@ not show is exactly what differs on vSphere.
 
 ## Sources
 
+- Google Kubernetes Engine: [Managing volume expansions in StatefulSets](https://cloud.google.com/kubernetes-engine/docs/how-to/volume-expansion).
 - Kubernetes: [Expanding Persistent Volumes Claims](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#expanding-persistent-volumes-claims), with "Resizing an in-use PersistentVolumeClaim" and "Recovering from Failure when Expanding Volumes"; [StatefulSets](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/).
 - OpenShift 4.20: [Expanding persistent volumes](https://docs.redhat.com/en/documentation/openshift_container_platform/4.20/html/storage/expanding-persistent-volumes); [CSI drivers supported](https://docs.redhat.com/en/documentation/openshift_container_platform/4.20/html/storage/using-container-storage-interface-csi) for the vSphere versions.
 - VMware: *Expanding a Volume with vSphere Container Storage Plug-in* (3.0), on techdocs.broadcom.com.

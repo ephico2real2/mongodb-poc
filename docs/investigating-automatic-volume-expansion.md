@@ -24,7 +24,7 @@ flag is in the chart, in the runbook, under "Letting the chart take steps 3 to 5
   or an upgrade, mounts the runbook's script from the chart, and acts only when the operator has refused the new
   size. On the lab it grew the volumes five times, from 8Gi to 13Gi, with the size synced first and the flag set
   after, and with both in one change: the same pods and claims throughout, and 494 of 494 searches answered. Two defects showed
-  only there, and are corrected: the Job hung inside `oc delete`, and the flag alone did not start a sync. It is one template of 183 lines, changes one flag of the script, and needs no image and no cluster-wide
+  only there, and are corrected: the Job hung inside `oc delete`, and the flag alone did not start a sync. It is one template of 203 lines, changes one flag of the script, and needs no image and no cluster-wide
   install.
 - **A controller of our own would do the same three steps, at a much higher cost.** A custom resource is not
   needed at all (the size already has a place, the MongoDBSearch); what a controller adds is that it acts without
@@ -120,7 +120,7 @@ Its role, in the release's namespace only:
 | The MongoDBSearch, by name | read | the size asked for, the phase, the operator's message |
 | The mongot StatefulSet, by name | read, delete | the size the StatefulSet has, its pods; the one delete of the runbook, always with `--cascade=orphan` |
 | Pods | read, list | each pod Ready before and after its claim grows; the same pods afterwards |
-| The mongot pods, by name | delete | only where a claim's file system waits for its pod to be started again: that one pod, which keeps its claim (chart 0.3.26) |
+| The mongot pods, by name | delete | only where a claim's file system waits for its pod to be started again: that pod, after the StatefulSet has been made again; it keeps its claim (chart 0.3.26) |
 | Volume claims | read, list, ask for more | Kubernetes lets a claim's size only grow, and nothing else of a claim be changed |
 
 It may not delete another pod, or a claim, and it holds no right outside the namespace. Asked of the lab's API
@@ -239,12 +239,16 @@ or more available.
 
 ### What the Job does not do
 
-- **It restarts a pod only when its volume asks for it**, since chart 0.3.26 (the owner, 2026-10-11: the Job must
-  be able to delete a pod, or the file system is not grown). A driver that cannot grow a file system in use leaves a
-  claim at `FileSystemResizePending`; after two minutes the script deletes that one pod (`--restart-if-pending`),
-  which keeps its claim, and waits for it before the next. In 0.3.25 the Job stopped there and the pod was deleted
-  by hand. This path has not run on a cluster: the lab's NFS driver has no file system to grow, so no claim ever
-  waits there. It is covered by the script's tests against a stand-in.
+- **It restarts a pod only when its volume asks for it, and last**, since chart 0.3.26 (the owner, 2026-10-11: the
+  Job must be able to delete a pod, or the file system is not grown; and the pods are restarted after the
+  StatefulSet has been made again). A driver that cannot grow a file system in use leaves a claim at
+  `FileSystemResizePending`. The Job asks every claim, has the StatefulSet made again, and then deletes, one at a
+  time, each pod whose claim still waits (`--restart-pending`); the pod keeps its claim and is waited for before the
+  next. In 0.3.25 the Job stopped at the first such claim and the pod was deleted by hand. What the sources say on
+  whether a pod must be restarted is in the runbook, step 4b. This path has not run on a cluster: the lab's NFS
+  driver has no file system to grow, so no claim ever waits there. It is covered by the script's tests against a
+  stand-in, which includes a deleted pod that still reads Ready while it stops (found in review: the script now
+  tells the new pod from the old one by its uid).
 - **It does not pick the size, the moment or the cluster.** It runs in a sync or an upgrade that somebody started
   by changing the values.
 - **It does not report progress** beyond its log. Under Argo CD the Application reads `Progressing` while it runs.
@@ -298,7 +302,7 @@ part that does what three lines of the Job's script do.
 | | By hand (today) | The Job | A controller (shell-operator) | A controller with our own resource (Go, Python) | MongoDB's operator does it |
 | --- | --- | --- | --- | --- | --- |
 | Steps after the values change | 3 (two runs of the script, one more sync) | 0 | 0 | 0, and a second object to write | 0 |
-| New code | none | one template of 183 lines; one flag changed in the script | a Deployment, an image with our script, hook bindings | a controller, its tests, its image, its release | none of ours |
+| New code | none | one template of 203 lines; one flag changed in the script | a Deployment, an image with our script, hook bindings | a controller, its tests, its image, its release | none of ours |
 | New image to own | no | no (the Jobs' `ose-cli`) | yes | yes | no |
 | Runs | when a person runs it | inside a sync or an upgrade | all year | all year | all year, already |
 | Cluster administrator needed to install | no | no | no | yes, for the definition | no |
@@ -316,7 +320,8 @@ The owner, 2026-10-10:
    afterwards.
 3. **A smaller volume is not supported.** The preflight refuses it before anything is changed.
 4. **No controller and no custom resource of our own.**
-5. **The Job restarts a pod whose file system waits for it** (2026-10-11; chart 0.3.26).
+5. **The Job restarts a pod whose file system waits for it, after the StatefulSet has been made again**
+   (2026-10-11; chart 0.3.26).
 
 Still open:
 

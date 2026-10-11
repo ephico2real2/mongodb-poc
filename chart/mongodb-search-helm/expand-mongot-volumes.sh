@@ -10,6 +10,7 @@
 #   bash $X --check                --statefulset <name>
 #   bash $X --expand               --statefulset <name> [--size <size>] [--pod <n>]   --dry-run | --apply
 #   bash $X --recreate-statefulset --statefulset <name>                               --dry-run | --apply
+#   bash $X --restart-pending      --statefulset <name> [--pod <n>]                   --dry-run | --apply
 #
 # --check reads and reports: the size the MongoDBSearch asks for, the StatefulSet's, and for each pod its claim's
 #   request, capacity, storage class and conditions. It changes nothing.
@@ -20,6 +21,15 @@
 # --recreate-statefulset deletes the StatefulSet with --cascade=orphan, and only so, once every claim has the size:
 #   the operator makes it again at the new size and adopts the pods and the claims, none of which is restarted or
 #   deleted.
+# --restart-pending deletes, one at a time, each pod whose claim waits for it (FileSystemResizePending): the volume
+#   has grown, and its file system grows when the pod starts again. The pod keeps its claim and comes back on it;
+#   the next is deleted only once that one is Ready. A claim that does not wait is left alone, and so is its pod.
+#
+# Storage that grows a file system in use needs no pod restarted, and none of the three deletes one. Storage that
+# cannot leaves the claim waiting. Then, either of:
+#   --expand --restart-if-pending                      the pod is restarted there, before the next claim;
+#   --expand --restart-later, --recreate-statefulset --restart-later, then --restart-pending
+#                                                      every claim first, the StatefulSet made again, the pods last.
 #
 # --dry-run prints what --apply would do and changes nothing. --apply asks for the namespace to be typed back;
 # --yes skips that. --wait <seconds> is how long one claim may take (900). --restart-if-pending lets --expand
@@ -35,7 +45,7 @@ say()  { printf '%s\n' "$*"; }
 usage() { sed -n '2,/^set -euo/p' "$0" | sed -e '$d' -e 's/^# \{0,1\}//'; }
 
 # ---------------------------------------------------------------------------------------------------- arguments
-ACTION="" MODE="" NS_FLAG="" STS="" SIZE="" POD="" YES=no WAIT=900 RESTART_IF_PENDING=no
+ACTION="" MODE="" NS_FLAG="" STS="" SIZE="" POD="" YES=no WAIT=900 RESTART_IF_PENDING=no RESTART_LATER=no
 action() { [[ -z "${ACTION}" || "${ACTION}" == "$1" ]] || die "one action a run: --${ACTION} and --$1 were both given"; ACTION="$1"; }
 mode()   { [[ -z "${MODE}" || "${MODE}" == "$1" ]] || die "--dry-run or --apply, not both"; MODE="$1"; }
 value()  { [[ $# -ge 2 && -n "$2" && "$2" != --* ]] || die "$1 needs a value"; }
@@ -44,6 +54,7 @@ while [[ $# -gt 0 ]]; do
     --check)                action check ;;
     --expand)               action expand ;;
     --recreate-statefulset) action recreate-statefulset ;;
+    --restart-pending)      action restart-pending ;;
     --dry-run)              mode dry-run ;;
     --apply)                mode apply ;;
     --target-namespace)     value "$@"; NS_FLAG="$2"; shift ;;
@@ -52,6 +63,7 @@ while [[ $# -gt 0 ]]; do
     --pod)                  value "$@"; POD="$2"; shift ;;
     --wait)                 value "$@"; WAIT="$2"; shift ;;
     --restart-if-pending)   RESTART_IF_PENDING=yes ;;
+    --restart-later)        RESTART_LATER=yes ;;
     --yes)                  YES=yes ;;
     -h|--help)              usage; exit 0 ;;
     *)                      die "unknown argument: $1 (--help lists them)" ;;
@@ -75,7 +87,11 @@ case "${ACTION}" in
   check) [[ -z "${MODE}" ]] || die "--check changes nothing and takes neither --dry-run nor --apply" ;;
   *)     [[ -n "${MODE}" ]] || die "--${ACTION} needs --dry-run or --apply" ;;
 esac
-[[ "${ACTION}" == expand || ( -z "${SIZE}" && -z "${POD}" ) ]] || die "--size and --pod belong to --expand"
+[[ "${ACTION}" == expand || -z "${SIZE}" ]] || die "--size belongs to --expand"
+[[ "${ACTION}" == expand || "${ACTION}" == restart-pending || -z "${POD}" ]] || die "--pod belongs to --expand and --restart-pending"
+[[ "${RESTART_IF_PENDING}" == no || "${RESTART_LATER}" == no ]] || die "--restart-if-pending or --restart-later, not both: a pod is restarted there, or after the StatefulSet is made again"
+[[ "${RESTART_IF_PENDING}" == no || "${ACTION}" == expand ]] || die "--restart-if-pending belongs to --expand"
+[[ "${RESTART_LATER}" == no || "${ACTION}" == expand || "${ACTION}" == recreate-statefulset ]] || die "--restart-later belongs to --expand and --recreate-statefulset"
 INTERVAL="${EXPAND_INTERVAL:-5}"          # seconds between two looks at a claim; the tests shorten it
 PENDING_GRACE="${EXPAND_PENDING_GRACE:-120}"   # how long FileSystemResizePending may stand before it counts
 
@@ -116,6 +132,8 @@ WANTED=""
 
 claim_of() { say "${TEMPLATE}-${STS}-$1"; }
 pod_of()   { say "${STS}-$1"; }
+# new_pod <pod> <uid of the pod that was deleted>: there is a pod of that name again, and it is another pod.
+new_pod() { local uid; uid="$(get pod "$1" '{.metadata.uid}')"; [[ -n "${uid}" && "${uid}" != "$2" ]]; }
 pod_ready() { [[ "$(get pod "$(pod_of "$1")" '{.status.conditions[?(@.type=="Ready")].status}')" == True ]]; }
 conditions_of() { get persistentvolumeclaim "$1" '{.status.conditions[*].type}'; }
 # reclaim_of <claim>: the volume behind it and its reclaim policy. "Delete" means the disk goes with the claim.
@@ -218,7 +236,7 @@ expand_one() {  # $1 = pod number, $2 = size
     say "pod ${i}: claim ${claim} asks for ${asks} already and has ${have}: waiting for it"
   fi
 
-  local waited=0 pending=0 conditions last="" restarted=no
+  local waited=0 pending=0 conditions last="" restarted=no old_pod_uid=""
   while :; do
     have="$(get persistentvolumeclaim "${claim}" '{.status.capacity.storage}')"
     conditions="$(conditions_of "${claim}")"
@@ -235,11 +253,19 @@ expand_one() {  # $1 = pod number, $2 = size
     if [[ " ${conditions} " == *" FileSystemResizePending "* ]]; then
       pending=$(( pending + INTERVAL ))
       if (( pending >= PENDING_GRACE )) && [[ "${restarted}" == no ]]; then
-        [[ "${RESTART_IF_PENDING}" == yes ]] || { say "  ${claim}: FileSystemResizePending for ${pending} s. Its file system grows when pod ${pod} starts again: run again with --restart-if-pending, or delete that pod yourself (it keeps its claim). Stopped before the next pod." >&2; exit 3; }
+        # The volume itself has grown: the next claim can be asked. The pod is restarted after the StatefulSet has
+        # been made again, by --restart-pending.
+        if [[ "${RESTART_LATER}" == yes ]]; then
+          say "pod ${i}: claim ${claim} waits for its pod (FileSystemResizePending for ${pending} s): the volume has grown, and its file system grows when pod ${pod} starts again. Left for --restart-pending"
+          return 0
+        fi
+        [[ "${RESTART_IF_PENDING}" == yes ]] || { say "  ${claim}: FileSystemResizePending for ${pending} s. Its file system grows when pod ${pod} starts again: run again with --restart-if-pending, or with --restart-later and then --restart-pending once the StatefulSet is made again, or delete that pod yourself (it keeps its claim). Stopped before the next pod." >&2; exit 3; }
         say "  ${claim}: FileSystemResizePending for ${pending} s: deleting pod ${pod}, which keeps its claim"
         # --wait=false, as for the StatefulSet below: oc would wait for a pod of that name to be gone, and the
         # StatefulSet makes one of the same name. This loop waits instead: for the claim, whose file system grows
-        # when the new pod mounts it, and then for that pod to be Ready.
+        # when the new pod mounts it, and then for that pod to be Ready. The uid tells the new pod from the old
+        # one, which can still read Ready while it stops.
+        old_pod_uid="$(get pod "${pod}" '{.metadata.uid}')"
         oc delete pod "${pod}" -n "${NS}" --wait=false >/dev/null
         restarted=yes
       fi
@@ -248,7 +274,8 @@ expand_one() {  # $1 = pod number, $2 = size
     sleep "${INTERVAL}"; waited=$(( waited + INTERVAL ))
   done
   waited=0
-  until pod_ready "$i"; do
+  # After a delete, the pod that is Ready must be the new one, not the old one on its way out.
+  until pod_ready "$i" && { [[ "${restarted}" == no ]] || new_pod "${pod}" "${old_pod_uid}"; }; do
     (( waited < WAIT )) || { say "  pod ${pod} is not Ready within ${WAIT} s of its claim growing. Stopped before the next pod" >&2; exit 2; }
     sleep "${INTERVAL}"; waited=$(( waited + INTERVAL ))
   done
@@ -268,7 +295,11 @@ expand() {
   [[ "${MODE}" == dry-run ]] || confirm "About to grow the volume claims of StatefulSet ${STS}, pod ${first} to ${last}, to ${size}, one at a time."
   for (( i = first; i <= last; i++ )); do expand_one "$i" "${size}"; done
   [[ "${MODE}" == dry-run ]] && { say "dry run: nothing was changed"; return 0; }
-  say "done. When every claim of ${STS} has ${size} and the values ask for it: --recreate-statefulset"
+  if [[ "${RESTART_LATER}" == yes ]]; then
+    say "done. When the values ask for ${size}: --recreate-statefulset --restart-later, then --restart-pending for the claims that wait for their pod"
+  else
+    say "done. When every claim of ${STS} has ${size} and the values ask for it: --recreate-statefulset"
+  fi
 }
 
 # ---------------------------------------------------------------------------------------------------- --recreate-statefulset
@@ -286,12 +317,21 @@ recreate() {
   fi
   (( $(bytes "${WANTED}") > $(bytes "${STS_SIZE}") )) || die "MongoDBSearch ${OWNER} asks for ${WANTED}, less than the StatefulSet's ${STS_SIZE}: a volume cannot be made smaller. Correct the values"
   [[ "${READY}" == "${REPLICAS}" ]] || die "${READY} of ${REPLICAS} pods of ${STS} are Ready: make it again only when every pod is"
-  local i claim have selector
+  local i claim have asks selector waiting=""
   for (( i = 0; i < REPLICAS; i++ )); do
     claim="$(claim_of "$i")"; have="$(get persistentvolumeclaim "${claim}" '{.status.capacity.storage}')"
     [[ -n "${have}" ]] || die "no claim ${claim} in ${NS}"
+    # A claim that waits for its pod, and for nothing else: its volume has grown to what it asks for, and its
+    # capacity follows when the pod starts again. With --restart-later that is enough here.
+    if [[ "${RESTART_LATER}" == yes && "$(conditions_of "${claim}")" == FileSystemResizePending ]]; then
+      asks="$(get persistentvolumeclaim "${claim}" '{.spec.resources.requests.storage}')"
+      is_size "${asks}" || die "claim ${claim} asks for a size this script cannot read ('${asks}')"
+      (( $(bytes "${asks}") >= $(bytes "${WANTED}") )) || die "claim ${claim} asks for ${asks}, less than ${WANTED}: grow the claims first (--expand)"
+      waiting="${waiting} ${i}"
+      continue
+    fi
     (( $(bytes "${have}") >= $(bytes "${WANTED}") )) || die "claim ${claim} has ${have}, less than ${WANTED}: grow the claims first (--expand)"
-    [[ -z "$(conditions_of "${claim}")" ]] || die "claim ${claim} is still being resized [$(conditions_of "${claim}")]: wait for it"
+    [[ -z "$(conditions_of "${claim}")" ]] || die "claim ${claim} is still being resized [$(conditions_of "${claim}")]: wait for it, or with only FileSystemResizePending: --restart-later here and --restart-pending after"
   done
 
   if [[ "${MODE}" == dry-run ]]; then
@@ -335,11 +375,80 @@ recreate() {
   else
     say "WARNING: the volume claims of ${NS} are not the same as before. Compare: oc get pvc -n ${NS}" >&2; exit 4
   fi
-  say "done. Sync or upgrade the chart again: its gate passes now"
+  if [[ -n "${waiting}" ]]; then
+    say "done, but for the file systems of pod${waiting}: their claims wait for their pods. Next: --restart-pending"
+  else
+    say "done. Sync or upgrade the chart again: its gate passes now"
+  fi
+}
+
+# ---------------------------------------------------------------------------------------------------- --restart-pending
+pending_now() { [[ " $(conditions_of "$1") " == *" FileSystemResizePending "* ]]; }
+restart_pending() {
+  local i j first=0 last=$(( REPLICAS - 1 )) claim pod asks have conditions owner waited list="" fs old_pod_uid
+  [[ "${REPLICAS}" -gt 0 ]] || die "StatefulSet ${STS} has no pods: nothing to restart"
+  if [[ -n "${POD}" ]]; then
+    (( POD <= last )) || die "--pod ${POD}: StatefulSet ${STS} has pods 0 to ${last}"
+    first="${POD}"; last="${POD}"
+  fi
+  for (( i = first; i <= last; i++ )); do
+    claim="$(claim_of "$i")"
+    [[ -n "$(get persistentvolumeclaim "${claim}" '{.status.phase}')" ]] || die "no claim ${claim} in ${NS}: is pod ${i} one of StatefulSet ${STS}'s?"
+    owner="$(get persistentvolumeclaim "${claim}" '{.metadata.ownerReferences[?(@.kind=="StatefulSet")].name}')"
+    [[ -z "${owner}" || "${owner}" == "${STS}" ]] || die "claim ${claim} belongs to StatefulSet ${owner}, not ${STS}"
+    if pending_now "${claim}"; then list="${list} ${i}"; fi
+  done
+  if [[ -z "${list}" ]]; then
+    say "no claim of ${STS} waits for its pod (FileSystemResizePending): no pod is restarted"
+    return 0
+  fi
+  if [[ "${MODE}" == dry-run ]]; then
+    for i in ${list}; do
+      say "pod ${i}: would delete pod $(pod_of "$i"), whose claim $(claim_of "$i") waits for it, and wait for it to be Ready on that claim:"
+      say "    oc delete pod $(pod_of "$i") -n ${NS} --wait=false"
+    done
+    say "dry run: nothing was changed"
+    return 0
+  fi
+  confirm "About to delete, one at a time, the pods of StatefulSet ${STS} whose claims wait for them: pod${list}. Each keeps its claim and comes back on it."
+  for i in ${list}; do
+    claim="$(claim_of "$i")"; pod="$(pod_of "$i")"
+    # One pod away at a time: every pod of the StatefulSet is Ready before this one is deleted.
+    for (( j = 0; j < REPLICAS; j++ )); do
+      pod_ready "$j" || die "pod $(pod_of "$j") is not Ready: a pod is restarted only while every pod is. Pod ${pod} was not deleted; run this again when they are"
+    done
+    if ! pending_now "${claim}"; then say "pod ${i}: claim ${claim} no longer waits for its pod: nothing to do"; continue; fi
+    asks="$(get persistentvolumeclaim "${claim}" '{.spec.resources.requests.storage}')"
+    is_size "${asks}" || die "claim ${claim} asks for a size this script cannot read ('${asks}')"
+    say "pod ${i}: deleting pod ${pod}, which keeps its claim ${claim}"
+    # --wait=false: as in --expand, this loop waits, for the claim and then for the new pod, told from the old one
+    # by its uid.
+    old_pod_uid="$(get pod "${pod}" '{.metadata.uid}')"
+    oc delete pod "${pod}" -n "${NS}" --wait=false >/dev/null
+    waited=0
+    while :; do
+      have="$(get persistentvolumeclaim "${claim}" '{.status.capacity.storage}')"; conditions="$(conditions_of "${claim}")"
+      if is_size "${have}" && (( $(bytes "${have}") >= $(bytes "${asks}") )) && [[ -z "${conditions}" ]]; then break; fi
+      if [[ "${conditions}" == *Error* ]]; then
+        say "  ${claim}: the resize has failed [${conditions}]. Stopped before the next pod. 'oc describe pvc ${claim} -n ${NS}' says why" >&2; exit 2
+      fi
+      (( waited < WAIT )) || { say "  ${claim}: not at ${asks} within ${WAIT} s of its pod being deleted (has ${have}, conditions [${conditions}]). Stopped before the next pod. See 'oc describe pod ${pod} -n ${NS}' and 'oc describe pvc ${claim} -n ${NS}'" >&2; exit 2; }
+      sleep "${INTERVAL}"; waited=$(( waited + INTERVAL ))
+    done
+    waited=0
+    until pod_ready "$i" && new_pod "${pod}" "${old_pod_uid}"; do
+      (( waited < WAIT )) || { say "  pod ${pod} is not Ready within ${WAIT} s of its claim growing. Stopped before the next pod" >&2; exit 2; }
+      sleep "${INTERVAL}"; waited=$(( waited + INTERVAL ))
+    done
+    fs="$(file_system_of "$i")"; [[ -z "${fs}" ]] || fs="; the pod's file system: ${fs}"
+    say "pod ${i}: claim ${claim} has ${have}, pod ${pod} is Ready${fs}"
+  done
+  say "done. Every claim that waited for its pod has its size"
 }
 
 case "${ACTION}" in
   check)                report ;;
   expand)               expand ;;
   recreate-statefulset) recreate ;;
+  restart-pending)      restart_pending ;;
 esac
