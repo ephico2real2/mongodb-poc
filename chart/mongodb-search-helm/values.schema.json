@@ -57,7 +57,7 @@
             "storage": {"type": "string", "minLength": 1}, "storageClass": {"type": "string"},
             "autoExpand": {
               "type": "object", "additionalProperties": false,
-              "properties": {"enabled": {"type": "boolean"}, "claimWaitSeconds": {"type": "integer", "minimum": 30}}
+              "properties": {"enabled": {"type": "boolean"}, "claimWaitSeconds": {"type": "integer", "minimum": 180}}
             }
           }
         },

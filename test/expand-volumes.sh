@@ -35,7 +35,8 @@ case "$1" in
     kind="$2"; name="$3"
     case "${kind}" in
       statefulset)
-        [[ ! -e "${FAKE}/sts.forbidden" ]] || { echo 'Error from server (Forbidden): statefulsets.apps "mongot-search-0" is forbidden' >&2; exit 1; }
+        # As RBAC refuses where a binding's role is gone: a Forbidden that ends in "not found".
+        [[ ! -e "${FAKE}/sts.forbidden" ]] || { echo 'Error from server (Forbidden): statefulsets.apps "mongot-search-0" is forbidden: User "system:serviceaccount:x:y" cannot get resource "statefulsets" in API group "apps" in the namespace "x": RBAC: role.rbac.authorization.k8s.io "y" not found' >&2; exit 1; }
         [[ -e "${FAKE}/sts.replicas" && "${name}" == mongot-search-0 ]] || { echo "Error from server (NotFound): statefulsets.apps \"${name}\" not found" >&2; exit 1; }
         case "$*" in *go-template=*) printf 'app=mongot-search-0-svc,'; exit 0 ;; esac
         case "${path}" in
@@ -57,8 +58,11 @@ case "$1" in
         esac ;;
       storageclass) [[ -e "${FAKE}/class.${name}" ]] || { echo "Error from server (NotFound): storageclasses \"${name}\" not found" >&2; exit 1; }; f "class.${name}" ;;
       persistentvolumeclaim)
-        i="$(n_of "${name}")"; [[ -e "${FAKE}/pvc.${i}.phase" ]] || exit 1
+        i="$(n_of "${name}")"
+        [[ ! -e "${FAKE}/pvc.${i}.forbidden" ]] || { echo "Error from server (Forbidden): persistentvolumeclaims \"${name}\" is forbidden" >&2; exit 1; }
+        [[ -e "${FAKE}/pvc.${i}.phase" ]] || { echo "Error from server (NotFound): persistentvolumeclaims \"${name}\" not found" >&2; exit 1; }
         case "${path}" in
+          '') printf 'persistentvolumeclaim/%s\n' "${name}" ;;
           '{.status.phase}') f "pvc.${i}.phase" ;;
           '{.spec.resources.requests.storage}') f "pvc.${i}.asks" ;;
           '{.spec.storageClassName}') f "pvc.${i}.class" ;;
@@ -431,6 +435,50 @@ cluster 300Gi 300Gi 300Gi; rm -f "${FAKE}/pvc.2.phase"; plan
 # The volumes ahead of the values (grown by hand first): said, and nothing to do.
 cluster 300Gi 300Gi 250Gi; printf 250Gi > "${FAKE}/sts.size"; plan
 [[ $rc == 0 && "$(grep -c 'the values are behind the volume' <<<"$out")" == 3 ]] && ok "--plan with the volumes ahead of the values says so, and has nothing to do" || bad "--plan with the volumes ahead (exit ${rc}): ${out##*$'\n'}"
+# A claim that has its size over a file system that has not: what --verify refuses and no step mends. Were it
+# "nothing to do", the sync after a failed verification would pass. A shared export says nothing either way.
+cluster 300Gi 300Gi 300Gi; printf 'xfs 262144000' > "${FAKE}/fs.1"; plan; rc1=$rc; o1="$out"
+out="$(run --verify --statefulset mongot-search-0)"; rc2=$?
+cluster 300Gi 300Gi 300Gi; for i in 0 1 2; do printf 'nfs4 10171392' > "${FAKE}/fs.${i}"; done; plan
+[[ $rc1 == 1 && $rc2 == 5 && "$o1" == *"pod 1:"*"the claim has its size and the file system its pod sees has not: for a person"*"NEEDS A PERSON: 1 of the above"* && "$o1" != *"nothing to do:"* && $rc == 0 ]] \
+  && ok "--plan does not say 'nothing to do' where --verify says NOT VERIFIED: a finished claim over a file system that has not grown is for a person" || bad "--plan and a file system that has not grown (exit ${rc1}, --verify ${rc2}, a shared export ${rc}): ${o1##*$'\n'}"
+# A claim whose volume is still being made (a first install, a pod added) needs nobody.
+cluster 300Gi 300Gi 300Gi; printf Pending > "${FAKE}/pvc.2.phase"; : > "${FAKE}/pvc.2.has"; plan
+[[ $rc == 0 && "$out" == *"pod 2: claim data-mongot-search-0-2 is Pending (its volume is being made): nothing to assess yet"* && "$out" != *"for a person"* ]] \
+  && ok "--plan takes a claim that is still Pending for a volume being made, not for a person's work" || bad "--plan and a Pending claim (exit ${rc}): ${out##*$'\n'}"
+# A claim that cannot be read is not a claim that is not made yet: the plan stops there, and passes nothing over.
+cluster 300Gi 250Gi 300Gi; for i in 0 1 2; do printf FileSystemResizePending > "${FAKE}/pvc.${i}.conds"; done; touch "${FAKE}/pvc.1.forbidden"; plan
+[[ $rc == 1 && "$out" == *"claim data-mongot-search-0-1 cannot be read"* && "$out" != *"nothing to do"* && "$out" != *"no claim data-mongot-search-0-1 yet"* ]] \
+  && ok "--plan stops at a claim it cannot read, instead of taking it for one that is not made yet" || bad "--plan and a claim that cannot be read (exit ${rc}): ${out##*$'\n'}"
+# The values ask for less than a claim already asks for, and something is to be done: --expand, the first of the
+# steps, would refuse. The plan says so itself, with 1, and does not send the Job on.
+cluster 400Gi 400Gi 300Gi; printf 250Gi > "${FAKE}/sts.size"; printf Failed > "${FAKE}/mdbs.phase"; plan; rc1=$rc; o1="$out"
+out="$(run --expand --statefulset mongot-search-0 --apply --yes --restart-later)"; rc2=$?
+cluster 300Gi 300Gi 300Gi; printf 400Gi > "${FAKE}/pvc.0.asks"; printf FileSystemResizePending > "${FAKE}/pvc.0.conds"; plan
+[[ $rc1 == 1 && $rc2 == 1 && "$o1" == *"NOT SUPPORTED: 3 claim(s) ask for more than the 300Gi of MongoDBSearch mongot"*"make the StatefulSet again"* && "$o1" != *"to do, in this order"* \
+   && $rc == 1 && "$out" == *"NOT SUPPORTED: 1 claim(s)"*"restart 1 pod(s)"* ]] \
+  && ok "--plan ends with 1, not with 'to do', where a claim asks for more than the values and something is to be done: --expand would refuse" || bad "--plan and claims ahead of the values with something to do (exit ${rc1}, --expand ${rc2}, ${rc}): ${o1##*$'\n'}"
+# A claim that asks for less and has as much already (a volume larger than its request): --expand has nothing to do
+# for it, and so has the plan. Were it "to grow", every sync would run the steps for nothing.
+cluster 250Gi 300Gi 300Gi; printf 300Gi > "${FAKE}/sts.size"; plan
+[[ $rc == 0 && "$(grep -c '^         nothing to do$' <<<"$out")" == 3 ]] && ok "--plan has nothing to do for a claim that has the size already, as --expand has" || bad "--plan and a claim that has more than it asks for (exit ${rc}): ${out##*$'\n'}"
+# The order of the tests on a claim: a failed resize is for a person even where the claim also asks for less; a claim
+# that asks for less is to grow even where it still waits for its pod from an earlier growth; a claim that was asked
+# and has not grown is waited for without a condition, and one at its size with a condition left is waited for too.
+cluster 250Gi 250Gi 300Gi; printf 'Resizing ControllerResizeError' > "${FAKE}/pvc.0.conds"; plan; rc1=$rc; o1="$out"
+cluster 250Gi 250Gi 300Gi; printf 300Gi > "${FAKE}/sts.size"; printf FileSystemResizePending > "${FAKE}/pvc.0.conds"; plan; rc2=$rc; o2="$out"
+cluster 300Gi 250Gi 300Gi; plan; rc3=$rc; o3="$out"
+cluster 300Gi 300Gi 300Gi; printf Resizing > "${FAKE}/pvc.0.conds"; plan
+[[ $rc1 == 1 && "$o1" == *"pod 0:"*"for a person"*"pod 1:"* && $rc2 == 10 && "$o2" == *"to do, in this order: grow 3 claim(s)"* && "$o2" != *"restart"* \
+   && $rc3 == 10 && "$o3" == *"to do, in this order: wait for 3 resize(s)"* && $rc == 10 && "$out" == *"to do, in this order: wait for 1 resize(s)"* ]] \
+  && ok "--plan's order: a failed resize before 'asks less', 'asks less' before a claim that waits for its pod, a resize under way by its size or by its condition" || bad "--plan's order (exit ${rc1}, ${rc2}, ${rc3}, ${rc})"
+# What it cannot read a size from, or has no size for, is refused and not guessed at.
+cluster 300Gi 300Gi 300Gi; printf big > "${FAKE}/pvc.1.asks"; plan; rc1=$rc; o1="$out"
+cluster 300Gi 300Gi 300Gi; printf Deployment > "${FAKE}/sts.owner_kind"; plan; rc2=$rc; o2="$out"
+out="$(run --verify --statefulset mongot-search-0)"; rc=$?
+[[ $rc1 == 1 && "$o1" == *"names sizes this script cannot read (asks 'big', has '300Gi'): for a person"* && $rc2 == 1 && "$o2" == *"not owned by a MongoDBSearch: there is no size to plan for"* \
+   && $rc == 1 && "$out" == *"not owned by a MongoDBSearch: there is no size to verify against"* ]] \
+  && ok "--plan and --verify refuse a claim whose size cannot be read, and a StatefulSet that no MongoDBSearch owns" || bad "--plan and --verify on what they cannot read (exit ${rc1}, ${rc2}, ${rc})"
 
 # ------------------------------------------------------------------------------------------------ --verify
 # Has the growth taken effect, down to the file system each pod sees? It reads, and changes nothing.
@@ -448,6 +496,21 @@ cluster 300Gi 300Gi 300Gi; for i in 0 1 2; do printf 'nfs4 10171392' > "${FAKE}/
 out="$(run --verify --statefulset mongot-search-0)"; rc=$?
 [[ $rc == 0 && "$out" == *"the pod sees a shared export (nfs4, 9.7 GiB at /mongot/data)"*"file systems compared with their claims: 0; shared exports that cannot show it: 3"* ]] \
   && ok "--verify says a shared export cannot show the growth, and counts it as not compared" || bad "--verify on shared exports (exit ${rc}): ${out##*$'\n'}"
+# SMB by its type, and any file system larger than its claim: no volume holds a file system larger than itself, so
+# that one is not the volume's own (a directory of a node's disk, a file system shared in another way).
+cluster 300Gi 300Gi 300Gi; printf 'cifs 10171392' > "${FAKE}/fs.0"; printf 'smb3 10171392' > "${FAKE}/fs.1"; printf 'xfs 1073741824' > "${FAKE}/fs.2"
+out="$(run --verify --statefulset mongot-search-0)"; rc=$?
+[[ $rc == 0 && "$out" == *"shared export (cifs,"*"shared export (smb3,"*"pod 2: claim data-mongot-search-0-2 has 300Gi; the pod sees a file system larger than that (xfs, 1024.0 GiB at /mongot/data): not this volume's own"*"file systems compared with their claims: 0; shared exports that cannot show it: 3"* ]] \
+  && ok "--verify counts SMB, and a file system larger than its claim, as unable to show the growth and not as compared" || bad "--verify on SMB and on a file system larger than its claim (exit ${rc}): ${out##*$'\n'}"
+# The 95%, to the KiB: at it a file system has its claim's size, one KiB under it has not. (300Gi: 298844160 KiB.)
+cluster 300Gi 300Gi 300Gi; printf 'ext4 298844160' > "${FAKE}/fs.0"; out="$(run --verify --statefulset mongot-search-0)"; rc1=$?
+cluster 300Gi 300Gi 300Gi; printf 'ext4 298844159' > "${FAKE}/fs.0"; out="$(run --verify --statefulset mongot-search-0)"; rc2=$?
+[[ $rc1 == 0 && $rc2 == 5 && "$out" == *"NOT VERIFIED: pod 0:"*"the file system has not grown"* ]] && ok "--verify draws its line at 95% of the claim, to the KiB" || bad "--verify at 95% (exit ${rc1}, ${rc2})"
+# It is its own claim a file system is held against, not the size the values ask for: claims grown ahead of the values.
+cluster 400Gi 400Gi 300Gi; printf 300Gi > "${FAKE}/sts.size"; for i in 0 1 2; do printf 'xfs 311427072' > "${FAKE}/fs.${i}"; done
+out="$(run --verify --statefulset mongot-search-0)"; rc=$?
+[[ $rc == 5 && "$out" == *"claim data-mongot-search-0-0 has 400Gi, and the file system the pod sees has 297.0 GiB"* ]] \
+  && ok "--verify holds a file system against its own claim, not against the size the values ask for" || bad "--verify and claims ahead of the values (exit ${rc}): ${out##*$'\n'}"
 # Each of the other things that must hold.
 cluster 300Gi 300Gi 300Gi; printf FileSystemResizePending > "${FAKE}/pvc.0.conds"; out="$(run --verify --statefulset mongot-search-0)"; rc1=$?
 [[ "$out" == *"NOT VERIFIED: pod 0: claim data-mongot-search-0-0 is not finished [FileSystemResizePending]: its file system grows when its pod starts again: --restart-pending"* ]] || rc1=wrong

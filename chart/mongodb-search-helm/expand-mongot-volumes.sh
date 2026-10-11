@@ -19,7 +19,9 @@
 # --plan reads the same, compares the sizes, and says for each claim and for the StatefulSet what has to be done,
 #   if anything: a claim to grow, a resize to wait for, the StatefulSet to make again, a pod to restart. It changes
 #   nothing. It ends with 0 when nothing is to be done, with 10 when something is, and with 1 when what is asked
-#   is not supported (a smaller size) or needs a person (a resize the cluster reports as failed).
+#   is not supported (a smaller size, also one smaller than a claim already asks for while something is to be done)
+#   or needs a person (a resize the cluster reports as failed, a claim that cannot be read, a claim that has its
+#   size over a file system that has not).
 # --expand asks each volume claim of the StatefulSet for the new size, one claim at a time, the lowest pod first,
 #   and waits for that claim's capacity and for its pod before the next. --pod <n> does that one pod's claim only.
 #   The size is the one the MongoDBSearch asks for (the chart's search.persistence.storage, once synced); --size
@@ -35,7 +37,8 @@
 # --verify says whether the growth has taken effect, and changes nothing: the MongoDBSearch Running and the
 #   StatefulSet at its size, every claim at that size with no resize waiting, every pod Ready, and the file system
 #   each pod sees (df, inside the pod) as large as its claim. It ends with 5 when one of these is not so. A shared
-#   export (NFS) has the export's size whatever the claim says: said, and not counted against it.
+#   export (NFS) has the export's size whatever the claim says, and a file system larger than its claim is not that
+#   volume's own: said, and not counted against it.
 #
 # Storage that grows a file system in use needs no pod restarted, and none of the three deletes one. Storage that
 # cannot leaves the claim waiting. Then, either of:
@@ -129,14 +132,16 @@ bytes() {
   }'
 }
 is_size() { bytes "$1" >/dev/null 2>&1; }
+# absent <kind> <name>: true only when the API server says there is no such object. One that cannot be read (no
+# right to, the API away) is not absent, and RBAC's own refusal can end in "not found" too (a binding whose role is
+# gone): only the server's NotFound of that kind counts.
+absent() { local e; e="$(oc get "$1" "$2" -n "${NS}" -o name 2>&1)" && return 1; [[ "${e}" == "Error from server (NotFound): $1"* ]]; }
 
 REPLICAS="$(get statefulset "${STS}" '{.spec.replicas}')"
-# --plan before there is a StatefulSet (a first install): nothing to assess, and not an error. Only "not found"
-# counts as that; a StatefulSet that cannot be read is refused like everywhere else.
-if [[ -z "${REPLICAS}" && "${ACTION}" == plan ]]; then
-  if missing="$(oc get statefulset "${STS}" -n "${NS}" -o name 2>&1)"; then :; else
-    case "${missing}" in *NotFound*|*"not found"*) say "no StatefulSet ${STS} in ${NS} yet: nothing to assess, and nothing to do"; exit 0 ;; esac
-  fi
+# --plan before there is a StatefulSet (a first install): nothing to assess, and not an error. A StatefulSet that
+# cannot be read is refused like everywhere else.
+if [[ -z "${REPLICAS}" && "${ACTION}" == plan ]] && absent statefulset "${STS}"; then
+  say "no StatefulSet ${STS} in ${NS} yet: nothing to assess, and nothing to do"; exit 0
 fi
 [[ -n "${REPLICAS}" ]] || die "no StatefulSet ${STS} in ${NS} (or it cannot be read)"
 READY="$(get statefulset "${STS}" '{.status.readyReplicas}')"; READY="${READY:-0}"
@@ -185,12 +190,28 @@ fs_of() {
   oc exec "${pod}" -n "${NS}" -- df -PkT "${path}" 2>/dev/null | awk 'NR == 2 && $3 ~ /^[0-9]+$/ { printf "%s %.0f %s\n", $2, $3 * 1024, $7 }' || true
 }
 gib() { awk -v b="$1" 'BEGIN { printf "%.1f GiB", b / 1073741824 }'; }
+# fs_against <type> <bytes> <the claim's capacity>: what the file system a pod sees says of its claim.
+#   shared  an export (NFS, SMB): the export's size, whatever the claim says;
+#   larger  more than a twentieth over the claim: no volume holds a file system larger than itself, so it is not
+#           this volume's own (a directory of a node's disk, a file system shared in another way);
+#   short   under 95% of the claim: it has not grown;
+#   grown   otherwise. A file system is a little smaller than its volume (its own tables), so 95% counts; a growth
+#           of less than a twentieth cannot be told from that by size, and the claim's own status says it then.
+# In twentieths (19, 20, 21), not hundredths: bash counts in 64 bits, and the smaller factors keep that exact for
+# every size bytes() reads.
+fs_against() {
+  local claim; claim="$(bytes "$3")"
+  case "$1" in nfs*|cifs|smb*) say shared; return ;; esac
+  if (( $2 * 20 > claim * 21 )); then say larger
+  elif (( $2 * 20 < claim * 19 )); then say short
+  else say grown; fi
+}
 
 # ---------------------------------------------------------------------------------------------------- --plan
 # The sizes, compared: what the MongoDBSearch asks for, what the StatefulSet's volumes were made at, and for each
 # claim what it asks for and what it has. From them, what is to be done to each, in the order it is done.
 plan() {
-  local i claim asks have conditions fs type fsbytes path want phase seen grow=0 await=0 restart=0 remake=0 people=0 todo=""
+  local i claim bound asks have conditions fs type fsbytes path want phase seen short grow=0 await=0 restart=0 remake=0 people=0 ahead=0 todo=""
   [[ "${OWNER_KIND}" == MongoDBSearch ]] || die "StatefulSet ${STS} is not owned by a MongoDBSearch: there is no size to plan for"
   is_size "${WANTED}" || die "MongoDBSearch ${OWNER} names no size this script can read"
   is_size "${STS_SIZE}" || die "StatefulSet ${STS} names no size this script can read"
@@ -203,8 +224,16 @@ plan() {
   (( want == $(bytes "${STS_SIZE}") )) || remake=1
   for (( i = 0; i < REPLICAS; i++ )); do
     claim="$(claim_of "$i")"
-    if [[ -z "$(get persistentvolumeclaim "${claim}" '{.status.phase}')" ]]; then
+    bound="$(get persistentvolumeclaim "${claim}" '{.status.phase}')"
+    if [[ -z "${bound}" ]]; then
+      # Not there, as the API server says: not "could not be read", which would pass a claim over unseen.
+      absent persistentvolumeclaim "${claim}" || die "claim ${claim} cannot be read: nothing can be said of it, and nothing is done"
       say "  pod ${i}: no claim ${claim} yet (its pod has not been made): nothing to assess"
+      continue
+    fi
+    # A claim whose volume is still being made (a first install, a pod added) has no size yet, and needs nobody.
+    if [[ "${bound}" == Pending ]]; then
+      say "  pod ${i}: claim ${claim} is Pending (its volume is being made): nothing to assess yet"
       continue
     fi
     asks="$(get persistentvolumeclaim "${claim}" '{.spec.resources.requests.storage}')"
@@ -213,17 +242,25 @@ plan() {
     if ! is_size "${asks}" || ! is_size "${have}"; then
       say "  pod ${i}: claim ${claim} names sizes this script cannot read (asks '${asks}', has '${have}'): for a person"; people=$(( people + 1 )); continue
     fi
-    seen=""; fs="$(fs_of "$i")"
-    if [[ -n "${fs}" ]]; then read -r type fsbytes path <<<"${fs}"; seen="; the pod sees $(gib "${fsbytes}") (${type})"; fi
+    seen=""; short=no; fs="$(fs_of "$i")"
+    if [[ -n "${fs}" ]]; then
+      read -r type fsbytes path <<<"${fs}"; seen="; the pod sees $(gib "${fsbytes}") (${type})"
+      [[ "$(fs_against "${type}" "${fsbytes}" "${have}")" != short ]] || short=yes
+    fi
     say "  pod ${i}: claim ${claim} asks ${asks}, has ${have}${conditions:+, conditions [${conditions}]}${seen}"
+    (( $(bytes "${asks}") <= want )) || ahead=$(( ahead + 1 ))
     if [[ "${conditions}" == *Error* ]]; then
       say "         the cluster reports its resize as failed: for a person ('oc describe pvc ${claim} -n ${NS}')"; people=$(( people + 1 ))
-    elif (( $(bytes "${asks}") < want )); then
+    # As --expand has it: a claim that has the size already is not asked again, whatever it asks for.
+    elif (( $(bytes "${asks}") < want && $(bytes "${have}") < want )); then
       say "         to grow to ${WANTED}: --expand"; grow=$(( grow + 1 ))
     elif [[ " ${conditions} " == *" FileSystemResizePending "* ]]; then
       say "         its volume has grown; its file system grows when its pod starts again: --restart-pending"; restart=$(( restart + 1 ))
     elif (( $(bytes "${have}") < want )) || [[ -n "${conditions}" ]]; then
       say "         its resize is under way: --expand waits for it"; await=$(( await + 1 ))
+    # The one thing the claim cannot say, and --verify would refuse: none of the steps mends it (no claim waits).
+    elif [[ "${short}" == yes ]]; then
+      say "         the claim has its size and the file system its pod sees has not: for a person (--verify says the same; that pod started again may grow it, and it keeps its claim)"; people=$(( people + 1 ))
     elif (( $(bytes "${asks}") > want )); then
       say "         nothing to do (it asks for more than the values do: the values are behind the volume)"
     else
@@ -239,6 +276,12 @@ plan() {
   (( await == 0 )) || todo="${todo}wait for ${await} resize(s); "
   (( remake == 0 )) || todo="${todo}make the StatefulSet again; "
   (( restart == 0 )) || todo="${todo}restart ${restart} pod(s); "
+  # --expand, the first of the steps, refuses a size under what a claim asks for: with something to do, that is said
+  # here, before anything is changed. With nothing to do the values are only behind the volumes (grown by hand first).
+  if [[ -n "${todo}" ]] && (( ahead > 0 )); then
+    say "NOT SUPPORTED: ${ahead} claim(s) ask for more than the ${WANTED} of MongoDBSearch ${OWNER}, and there is something to do (${todo%; }): --expand refuses a size under a claim's. Correct the values to what the claims ask for. Nothing is to be done until then" >&2
+    exit 1
+  fi
   if [[ -z "${todo}" ]]; then
     say "nothing to do: the StatefulSet and every claim there is have what MongoDBSearch ${OWNER} asks for"
     return 0
@@ -248,8 +291,7 @@ plan() {
 }
 
 # ---------------------------------------------------------------------------------------------------- --verify
-# A file system is a little smaller than its volume (its own tables): one at 95% of the claim or more counts as
-# grown. A growth of less than a twentieth cannot be told from that by size; the claim's own status says it then.
+# Each file system is judged by fs_against, above: the same test --plan uses.
 verify() {
   local i claim have conditions fs type bytes path phase problems=0 compared=0 shared=0
   [[ "${OWNER_KIND}" == MongoDBSearch ]] || die "StatefulSet ${STS} is not owned by a MongoDBSearch: there is no size to verify against"
@@ -274,17 +316,19 @@ verify() {
       continue
     fi
     read -r type bytes path <<<"${fs}"
-    case "${type}" in
-      nfs*|cifs|smb*)
+    case "$(fs_against "${type}" "${bytes}" "${have}")" in
+      shared)
         shared=$(( shared + 1 ))
         say "  pod ${i}: claim ${claim} has ${have}; the pod sees a shared export (${type}, $(gib "${bytes}") at ${path}): the export's size, whatever the claim says, so it cannot show the growth" ;;
+      larger)
+        shared=$(( shared + 1 ))
+        say "  pod ${i}: claim ${claim} has ${have}; the pod sees a file system larger than that (${type}, $(gib "${bytes}") at ${path}): not this volume's own, so it cannot show the growth" ;;
+      short)
+        compared=$(( compared + 1 ))
+        not "pod ${i}: claim ${claim} has ${have}, and the file system the pod sees has $(gib "${bytes}") (${type} at ${path}): the file system has not grown. Its pod started again grows it: --restart-pending, or delete that pod (it keeps its claim)" ;;
       *)
         compared=$(( compared + 1 ))
-        if (( bytes * 100 >= $(bytes "${have}") * 95 )); then
-          say "  pod ${i}: claim ${claim} has ${have}; the file system the pod sees has $(gib "${bytes}") (${type} at ${path}): it has the claim's size"
-        else
-          not "pod ${i}: claim ${claim} has ${have}, and the file system the pod sees has $(gib "${bytes}") (${type} at ${path}): the file system has not grown. Its pod started again grows it: --restart-pending, or delete that pod (it keeps its claim)"
-        fi ;;
+        say "  pod ${i}: claim ${claim} has ${have}; the file system the pod sees has $(gib "${bytes}") (${type} at ${path}): it has the claim's size" ;;
     esac
   done
   if (( problems > 0 )); then

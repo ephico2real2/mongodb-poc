@@ -52,8 +52,8 @@ metadata:
 # claim can be changed), and delete the mongot StatefulSet, by name. It may delete a mongot pod, by name, and no other
 # pod: where a volume's file system grows only when its pod is started again, the script deletes that one pod, after
 # the StatefulSet has been made again; the pod keeps its claim and comes back on it. It may not delete a claim.
-# It may run a command in a mongot pod, by name: df, to compare the file system the pod sees with its claim once
-# the growth is done. (A right to run a command in a pod is a right to read what the pod mounts.)
+# It may run a command in a mongot pod, by name: df, to compare the file system the pod sees with its claim. (A right
+# to run a command in a pod is a right to do there what mongot's user can: read its secrets, write to its indexes.)
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -224,7 +224,7 @@ spec:
               script --expand --apply --yes --restart-later --wait "$CLAIM_WAIT" \
                 || fail "the volume claims were not all grown (the script ended with $?). No pod, claim or StatefulSet was deleted, and the mongot pods run as before. What the script said is above; volume-expansion-runbook.md, step 3, says what each ending means. The next sync or upgrade goes on from here."
               script --recreate-statefulset --apply --yes --restart-later --wait "$CLAIM_WAIT" \
-                || fail "the StatefulSet was not made again (the script ended with $?). What the script said is above; volume-expansion-runbook.md, step 4. Do NOT delete the mongot pods."
+                || fail "the step that makes the StatefulSet again did not end well (the script ended with $?). What the script said is above, and it says whether the StatefulSet was deleted and whether it was made again; volume-expansion-runbook.md, step 4. Do NOT delete the mongot pods."
               # The StatefulSet has its size and the operator has its resource back. Now the pods whose claims
               # still wait for them, one at a time; where the storage grew every file system in use, none.
               script --restart-pending --apply --yes --wait "$CLAIM_WAIT" \

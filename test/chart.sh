@@ -729,7 +729,9 @@ if command -v yq >/dev/null; then
 fi
 refused "an autoExpand.enabled that is not true or false" --set search.persistence.autoExpand.enabled=perhaps
 refused "an unknown key under autoExpand" --set search.persistence.autoExpand.restart=true
-refused "a claim wait under 30 s" "${AE[@]}" --set search.persistence.autoExpand.claimWaitSeconds=5
+# A claim that waits for its pod is watched for 120 s before it is left for the restart: a claim wait that ends before
+# that would stop the Job at the claim, on the very storage the restart is for.
+refused "a claim wait no longer than the two minutes a waiting claim is watched" "${AE[@]}" --set search.persistence.autoExpand.claimWaitSeconds=120
 
 # The Job's script, run here against the stand-in oc and a stand-in for expand-mongot-volumes.sh that writes down how
 # it was called and ends as it is told to. (The script itself is tested by test/expand-volumes.sh.)
@@ -785,8 +787,10 @@ out="$(grow "${REFUSED[@]}" FAKE_EXPAND_RC=2)"; rc=$?
 [[ $rc == 1 && "$(calls)" != *recreate* && "$(calls)" != *restart-pending* && "$(calls)" != *verify* && "$out" == *"FAILED: the volume claims were not all grown (the script ended with 2). No pod, claim or StatefulSet was deleted"* ]] \
   && ok "when a claim does not grow the Job fails before the StatefulSet is touched, and says so" || bad "the Job and a claim that does not grow (exit ${rc}): $(calls)"
 out="$(grow "${REFUSED[@]}" FAKE_RECREATE_RC=4)"; rc=$?
-[[ $rc == 1 && "$out" == *"FAILED: the StatefulSet was not made again (the script ended with 4)"*"Do NOT delete the mongot pods"* && "$(calls)" != *restart-pending* && "$(calls)" != *verify* ]] \
-  && ok "when the StatefulSet is not made again it fails, says not to delete the pods, and restarts none" || bad "the Job and a StatefulSet not made again (exit ${rc}): $(calls)"
+# The script ends that step with 4 after the StatefulSet HAS been made again (a claim is not the same afterwards): the
+# Job's sentence must not say that it was not.
+[[ $rc == 1 && "$out" == *"FAILED: the step that makes the StatefulSet again did not end well (the script ended with 4)"*"Do NOT delete the mongot pods"* && "$out" != *"was not made again"* && "$(calls)" != *restart-pending* && "$(calls)" != *verify* ]] \
+  && ok "when the StatefulSet step does not end well it fails without saying more than it knows, says not to delete the pods, and restarts none" || bad "the Job and a StatefulSet step that did not end well (exit ${rc}): ${out##*$'\n'}"
 # A pod that does not come back: the Job fails, and says the next sync plans again.
 out="$(grow "${REFUSED[@]}" FAKE_RESTART_RC=2)"; rc=$?
 [[ $rc == 1 && "$(calls)" != *verify* && "$out" == *"FAILED: a pod whose volume waits for it was not restarted, or did not come back (the script ended with 2)"*"step 4b"*"A pod that was deleted keeps its claim"*"The next sync or upgrade plans again and takes up what is left, once the resource is Running"* ]] \

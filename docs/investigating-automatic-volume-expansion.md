@@ -21,10 +21,10 @@ flag is in the chart, in the runbook, under "Letting the chart take steps 3 to 5
   place, make it again); the search part of the operator does not call that code. The lasting fix is a small one,
   and it is MongoDB's.
 - **A Job in the chart does it with what we already have.** It runs between the MongoDBSearch and the gate of a sync
-  or an upgrade, mounts the runbook's script from the chart, and acts only when the operator has refused the new
-  size. On the lab it grew the volumes eight times, from 8Gi to 16Gi, with the size synced first and the flag set
+  or an upgrade, mounts the runbook's script from the chart, and acts when the operator has refused the new
+  size (and, since 0.3.26, to finish a growth that stopped before its end). On the lab it grew the volumes eight times, from 8Gi to 16Gi, with the size synced first and the flag set
   after, and with both in one change: the same pods and claims throughout, and 566 of 566 searches answered. Two defects showed
-  only there, and are corrected: the Job hung inside `oc delete`, and the flag alone did not start a sync. It is one template of 237 lines, changes one flag of the script, and needs no image and no cluster-wide
+  only there, and are corrected: the Job hung inside `oc delete`, and the flag alone did not start a sync. It is one template of 237 lines; in the script it changed one flag in 0.3.25, and 0.3.26 added the plan, the verification and the restart (`--plan`, `--verify`, `--restart-pending`, `--restart-later`: 281 lines). It needs no image and no cluster-wide
   install.
 - **A controller of our own would do the same three steps, at a much higher cost.** A custom resource is not
   needed at all (the size already has a place, the MongoDBSearch); what a controller adds is that it acts without
@@ -91,11 +91,14 @@ values: search.persistence.storage 300Gi -> 400Gi          (autoExpand.enabled: 
   wave 1   the MongoDBSearch now asks for 400Gi; the operator is refused; the resource is Failed
   wave 2   the Job
              waits until the operator has seen the resource as it is now
-             is the resource Failed, with Kubernetes' refusal of the StatefulSet update, and the sizes different?
-               no:  "nothing to grow", and it ends well        (a first install, any other sync, any other failure)
-               yes: expand-mongot-volumes.sh --check
-                    expand-mongot-volumes.sh --expand --apply --yes                each claim, one pod at a time
-                    expand-mongot-volumes.sh --recreate-statefulset --apply --yes  the operator makes it again
+             expand-mongot-volumes.sh --plan                     the sizes compared; it changes nothing
+               nothing to do:           it ends well               (a sync that changes no size)
+               not supported, a person: it fails; nothing changed  (a smaller size, a failed resize)
+               something to do:         only when the operator has refused the size, or the resource is Running
+                    expand-mongot-volumes.sh --expand --apply --yes --restart-later                each claim, one pod at a time
+                    expand-mongot-volumes.sh --recreate-statefulset --apply --yes --restart-later  the operator makes it again
+                    expand-mongot-volumes.sh --restart-pending --apply --yes                       the pods whose claims wait
+                    expand-mongot-volumes.sh --verify                                              it fails the sync when not
   wave 3   the gate: the resource is Running, the pods ready, the certificates mounted, the Route admitted
 ```
 
@@ -117,7 +120,7 @@ values: search.persistence.storage 300Gi -> 400Gi          (autoExpand.enabled: 
   same file.) What the script refuses by hand it refuses here: a class that cannot grow a volume, a pod that is not
   Ready, a smaller size, a claim that belongs to another StatefulSet.
 - **It retires itself.** When MongoDB's operator grows search volumes itself, the resource is never Failed for this
-  reason, and the Job only ever says "nothing to grow".
+  reason, the StatefulSet follows the resource, and the Job's plan finds nothing to do.
 - **Off, the chart is what it was.** With the flag off the render differs from chart 0.3.24 in one line: the gate's
   Helm hook weight, 0 before and 1 now, so that the gate stays the last hook.
 
@@ -131,7 +134,7 @@ Its role, in the release's namespace only:
 | The mongot StatefulSet, by name | read, delete | the size the StatefulSet has, its pods; the one delete of the runbook, always with `--cascade=orphan` |
 | Pods | read, list | each pod Ready before and after its claim grows; the same pods afterwards |
 | The mongot pods, by name | delete | only where a claim's file system waits for its pod to be started again: that pod, after the StatefulSet has been made again; it keeps its claim (chart 0.3.26) |
-| The mongot pods, by name | run a command in | `df`, for the plan and the verification. It is a right to read what the pod mounts (chart 0.3.26) |
+| The mongot pods, by name | run a command in | `df`, for the plan and the verification. It is a right to do in the pod what mongot's own user can: read what it mounts (the sync user's password, the certificate's key) and write to its indexes (chart 0.3.26) |
 | Volume claims | read, list, ask for more | Kubernetes lets a claim's size only grow, and nothing else of a claim be changed |
 
 It may not delete another pod, or a claim, and it holds no right outside the namespace. Asked of the lab's API
@@ -192,7 +195,7 @@ git each time; no claim was patched and no StatefulSet was deleted by hand.
 Over all of it, from run 3 to run 13 (every reading in the recorded timelines): the same three mongot pods (started
 16:50Z, one restart each, from the machine's restart before run 2) and the same three claims, under nine
 StatefulSets in turn; 566 searches through mongod tried,
-one every 12 to 14 s while a run was watched, 0 failed; no restart of the control plane.
+one every 13 to 14 s while a run was watched, 0 failed; no restart of the control plane.
 
 The Job's log in run 6:
 
@@ -273,8 +276,9 @@ or more available.
   measured; the Job allows each claim 15 minutes (`autoExpand.claimWaitSeconds`).
 - **It was not run under Helm on a cluster.** The lab is run by Argo CD. Helm's order is covered by the chart's
   tests only. Under Helm an upgrade runs its hooks whatever changed, so the flag alone starts the Job.
-- **A first install with the flag on was not run.** The Job's "nothing to grow" was seen on an existing search
-  (run 4) and is tested for a resource that is not `Failed`; a namespace with no StatefulSet yet was not tried.
+- **A first install with the flag on was not run.** The plan's "nothing to do" was seen on an existing search
+  (run 14); a namespace with no StatefulSet yet, and a claim whose volume is still being made, were tried against a
+  stand-in only.
 
 ## Way 2: a controller of our own
 
@@ -319,7 +323,7 @@ part that does what three lines of the Job's script do.
 | | By hand (today) | The Job | A controller (shell-operator) | A controller with our own resource (Go, Python) | MongoDB's operator does it |
 | --- | --- | --- | --- | --- | --- |
 | Steps after the values change | 3 (two runs of the script, one more sync) | 0 | 0 | 0, and a second object to write | 0 |
-| New code | none | one template of 237 lines; one flag changed in the script | a Deployment, an image with our script, hook bindings | a controller, its tests, its image, its release | none of ours |
+| New code | none | one template of 237 lines; in the script one flag changed (0.3.25) and 281 lines added (0.3.26: the plan, the verification, the restart) | a Deployment, an image with our script, hook bindings | a controller, its tests, its image, its release | none of ours |
 | New image to own | no | no (the Jobs' `ose-cli`) | yes | yes | no |
 | Runs | when a person runs it | inside a sync or an upgrade | all year | all year | all year, already |
 | Cluster administrator needed to install | no | no | no | yes, for the definition | no |
