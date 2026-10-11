@@ -22,9 +22,9 @@ flag is in the chart, in the runbook, under "Letting the chart take steps 3 to 5
   and it is MongoDB's.
 - **A Job in the chart does it with what we already have.** It runs between the MongoDBSearch and the gate of a sync
   or an upgrade, mounts the runbook's script from the chart, and acts only when the operator has refused the new
-  size. On the lab it grew the volumes from 8Gi to 9Gi with its own rights, with the same pods and every search
-  answered, and then never ended, waiting inside `oc delete` for a delete that had already happened; the script no
-  longer waits there, and the corrected Job is not yet run. It is one template of 178 lines, changes one flag of the script, and needs no image and no cluster-wide
+  size. On the lab it grew the volumes three times, to 9Gi, 10Gi and 11Gi, the last with the size synced first
+  and the flag set after: the same pods and claims throughout, and 474 of 474 searches answered. Two defects showed
+  only there, and are corrected: the Job hung inside `oc delete`, and the flag alone did not start a sync. It is one template of 178 lines, changes one flag of the script, and needs no image and no cluster-wide
   install.
 - **A controller of our own would do the same three steps, at a much higher cost.** A custom resource is not
   needed at all (the size already has a place, the MongoDBSearch); what a controller adds is that it acts without
@@ -148,42 +148,47 @@ by a controller or a workflow engine that can report progress on its own."
 
 ### What was run on the lab
 
-OpenShift Local 4.22.7, Argo CD (OpenShift GitOps 1.22.0) following the branch, three mongot pods on the NFS class
-`ipsec-nas-csi`, 2026-10-10.
+OpenShift Local 4.22.7, Argo CD (OpenShift GitOps 1.22.0) with automated sync following the branch, three mongot
+pods on the NFS class `ipsec-nas-csi`, 2026-10-10 21:40Z to 2026-10-11 00:50Z. The size and the flag were changed in
+git each time; no claim was patched and no StatefulSet was deleted by hand.
 
-Three syncs ran the Job. The size was changed in git each time and nothing was done by hand to a claim or to the
-StatefulSet.
+| # | In git | What happened |
+| --- | --- | --- |
+| 1 | 4Gi, less than the volumes' 8Gi; the flag on | The Job refused with the script's words and failed the sync. Nothing was changed. (The preflight now refuses this earlier, before the MongoDBSearch is touched: added after this run) |
+| 2 | 8Gi again; the flag on | The sync, with the Job in it, passed in 67 s. The Job's log was not kept |
+| 3 | 9Gi; the flag on | The Job grew the three claims one pod at a time and deleted the StatefulSet with the orphan policy; the operator made it again at 9Gi 11 s after the Job had started. **The Job then never ended**: below |
+| 4 | 9Gi, chart 0.3.25 (the corrected script); the flag on | "MongoDBSearch mongot is Running, with no changed volume size waiting: nothing to grow". The sync passed in 53 s |
+| 5 | 10Gi, the flag off; then the flag on | The gate stopped the first sync, and its five retries. **The flag started nothing**: Argo CD read `Synced` for the 21 minutes watched after the retries. Below |
+| 6 | The same, with the size written on the script's ConfigMap | Argo CD began a sync by itself. The Job ran for 12 s: three claims to 10Gi, the StatefulSet made again, "the pods are the same pods: none was restarted", "the volume claims are the same claims". The gate passed; the operation `Succeeded` in 65 s |
+| 7 | **The size first, then the flag**: 11Gi with the flag off; then the flag on; then the flag off | The gate stopped the first sync ("search.persistence.storage is now 11Gi and the StatefulSet mongot-search-0 still has 10Gi") and its five retries. The flag was pushed during the retries; its sync began when they were spent, 6 min 45 s after the push, and `Succeeded` in 67 s with the volumes at 11Gi. With the flag off again Argo CD began nothing and listed the Job's four objects as requiring pruning; one sync with pruning removed them, and nothing else |
 
-| The values asked for | What the Job did | Pods and claims | Searches through mongod |
-| --- | --- | --- | --- |
-| 4Gi, less than the volumes' 8Gi | Refused, with the script's words, and failed the sync. Nothing was changed. (The preflight now refuses this earlier, before the MongoDBSearch is touched; that was added after this run) | The same three pods and three claims | Answered |
-| 8Gi again, what the volumes have | Passed with the rest of the sync, which took 67 s. Its log was not kept | The same | Answered |
-| 9Gi | Grew the three claims one pod at a time and deleted the StatefulSet with the orphan policy; the operator made it again at 9Gi, 11 s after the Job had started. **The Job then never ended** | The same three pods (no restart) and the same three claims, now 9Gi | 136 tried in the 30 minutes watched, 0 failed |
+Over all of it, from run 3 on: the same three mongot pods (started 16:50Z, one restart each, from the machine's
+restart before run 2) and the same three claims, under four StatefulSets in turn; 474 searches through mongod tried,
+one every 12 to 14 s while a run was watched, 0 failed; no restart of the control plane.
 
-The refusal:
+The Job's log in run 6:
 
 ```text
-About to grow the volume claims of StatefulSet mongot-search-0, pod 0 to 2, to 4Gi, one at a time.
-expand-mongot-volumes.sh: claim data-mongot-search-0-0 already asks for 8Gi, more than 4Gi: a volume cannot be made smaller
-[expand] FAILED: the volume claims were not all grown (the script ended with 1). No pod, claim or StatefulSet was
-deleted, and the mongot pods run as before. [...]
+[expand 00:22:41] search.persistence.storage is now 10Gi and StatefulSet mongot-search-0 has 9Gi: taking the steps of volume-expansion-runbook.md, with its script
+MongoDBSearch mongot: asks for 10Gi, is Failed
+pod 0: asking claim data-mongot-search-0-0 for 10Gi (it asks 9Gi, has 9Gi)
+  data-mongot-search-0-0: has 10Gi
+pod 0: claim data-mongot-search-0-0 has 10Gi, pod mongot-search-0-0 is Ready
+[the same for pod 1 and pod 2]
+About to delete StatefulSet mongot-search-0 with --cascade=orphan. Its 3 pods and their claims stay; the operator makes the StatefulSet again at 10Gi.
+StatefulSet mongot-search-0 was made again at 10Gi; MongoDBSearch mongot is Running
+the pods are the same pods: none was restarted
+the volume claims are the same claims
+[expand 00:22:53] the volumes of mongot-search-0 are at 10Gi and MongoDBSearch mongot is Running: the gate decides the rest
 ```
 
-The growth, from the Job's log, with lines left out and the long ones shortened (the service account is the Job's own):
+#### Run 3: the Job that never ended
+
+After "About to delete StatefulSet", every 30 to 50 s, for as long as it was watched:
 
 ```text
-[expand 22:25:19] search.persistence.storage is now 9Gi and StatefulSet mongot-search-0 has 8Gi: taking the steps of volume-expansion-runbook.md, with its script
-MongoDBSearch mongot: asks for 9Gi, is Failed
-  pod 0: claim data-mongot-search-0-0 Bound, asks 8Gi, has 8Gi, class ipsec-nas-csi (expands: true), conditions [], pod Ready
-[...]
-pod 0: asking claim data-mongot-search-0-0 for 9Gi (it asks 8Gi, has 8Gi)
-  data-mongot-search-0-0: has 9Gi
-pod 0: claim data-mongot-search-0-0 has 9Gi, pod mongot-search-0-0 is Ready
-[the same for pod 1 and pod 2]
-About to delete StatefulSet mongot-search-0 with --cascade=orphan. Its 3 pods and their claims stay; the operator makes the StatefulSet again at 9Gi.
 W1010 22:25:26 reflector.go:535] failed to list *unstructured.Unstructured: statefulsets.apps "mongot-search-0" is forbidden:
   User "system:serviceaccount:mongodb-poc:mongot-mongodb-search-helm-expand-volumes" cannot list resource "statefulsets"
-[the same every 30 to 50 s, for as long as it was watched]
 ```
 
 **What went wrong.** `oc delete` waits for the object to be gone, and the script let it. It first reads the
@@ -197,20 +202,29 @@ of the first refused list.
 The refusals stopped, and the command still did not return: its watch began 39 minutes after the old StatefulSet
 had gone, saw the new one of the same name, and waited for that to be deleted. The same can happen to anyone, with
 every right, if the operator makes the StatefulSet again between the command's read and its list; on the lab the
-operator did so within a second. Run by hand it had not happened in the earlier runs.
+operator did so within a second. Run by hand it had not happened in the earlier runs. The operation was ended by
+hand at 23:43Z.
 
 **What was changed.** The script now sends the delete with `--wait=false` and does the waiting itself, as it
 already did for the next thing it needs: the new StatefulSet, for no longer than `--wait` (15 minutes). The role is
-as it was: it needs neither `list` nor `watch` on StatefulSets.
+as it was: it needs neither `list` nor `watch` on StatefulSets. Runs 6 and 7 are with that script.
 
-**Not yet shown.** The Job with the corrected script has not run on the lab: Argo CD's sync was still waiting for
-the hung Job when this was written. So the lab shows that the steps work with the Job's own rights, and that
-searches are answered throughout; it does not yet show a sync that passes from the new size to the gate with nobody
-touching it.
+#### Run 5: the flag that started nothing
 
-**The lab that day.** The first sync ran while the node was out of memory (about 2 GiB available, the
-controller-manager restarting); the machine was then given 4 GiB and 2 CPUs more and restarted. The growth to 9Gi
-ran after that, with 8.7 GiB available and no restart of the control plane during it.
+Argo CD starts a sync by itself only when an object it compares differs from git, and a hook Job is not compared.
+The Job's four other objects (its script in a ConfigMap, its service account, role and binding) are compared, so on
+a cluster that never had them the flag makes the Application `OutOfSync`. On the lab they were still there from run
+3, exactly as git had them once the flag was on again: this Application does not prune, so the flag going off in
+between had removed nothing. Argo CD read `Synced`, with the MongoDBSearch `Failed`.
+
+**What was changed.** The script's ConfigMap now carries the size asked for
+(`mongodb-search-helm/grows-to`). In run 7 the ConfigMap left in the cluster said 10Gi and git said 11Gi, and the
+sync began by itself. Where the Application still reads `Synced` after the flag is set (the same size as the last
+time the flag was on), a sync by hand runs the Job: a hook runs in every sync.
+
+**The lab that day.** Run 1 ran while the node was out of memory (about 2 GiB available, the controller-manager
+restarting); the machine was then given 4 GiB and 2 CPUs more and restarted. Everything from run 2 on ran with 8 GiB
+or more available.
 
 ### What the Job does not do
 
@@ -223,7 +237,9 @@ ran after that, with 8.7 GiB available and no restart of the control plane durin
 - **It has not grown a real disk.** On NFS a claim's size is a number. How long vSphere takes for 300Gi is not
   measured; the Job allows each claim 15 minutes (`autoExpand.claimWaitSeconds`).
 - **It was not run under Helm on a cluster.** The lab is run by Argo CD. Helm's order is covered by the chart's
-  tests only.
+  tests only. Under Helm an upgrade runs its hooks whatever changed, so the flag alone starts the Job.
+- **A first install with the flag on was not run.** The Job's "nothing to grow" was seen on an existing search
+  (run 4) and is tested for a resource that is not `Failed`; a namespace with no StatefulSet yet was not tried.
 
 ## Way 2: a controller of our own
 
@@ -290,8 +306,8 @@ The owner, 2026-10-10:
 Still open:
 
 - One growth on QA, on `thin-csi`, with the flag on, before production relies on it: how long a real disk takes, and
-  whether its file system grows under a running mongot. Until then the steps by hand remain the proven way, and they
-  remain the way on whenever the Job stops.
+  whether its file system grows under a running mongot. On the lab's NFS a claim's size is only a number. The steps
+  by hand remain the way on whenever the Job stops.
 - Whether the Job may restart a pod whose file system waits for it (`--restart-if-pending`): today it stops and
   says so.
 - Whether to tell MongoDB that their search reconciler does not call their own resize code.
