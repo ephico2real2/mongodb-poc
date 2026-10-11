@@ -608,6 +608,7 @@ case "$*" in
   *mongodbsearch*"{.spec.clusters[0].persistence.single.storage}"*) printf '%s' "${FAKE_WANT_SIZE:-}" ;;
   *statefulsets.apps*volumeClaimTemplates*) [ -z "${FAKE_STS_ERR:-}" ] || { echo "$FAKE_STS_ERR" >&2; exit 1; }; printf '%s' "${FAKE_HAVE_SIZE:-}" ;;
   *mongodbsearch*"{.status.phase}"*) printf '%s' "${FAKE_PHASE:-Running}" ;;
+  *persistentvolumeclaims*range*) printf '%b' "${FAKE_CLAIMS:-}" ;;
   *mongodbsearch*"{.status.message}"*) printf '%s' "${FAKE_MESSAGE:-}" ;;
   *"{.status.observedGeneration}"*) printf '%s' "${FAKE_OBSERVED:-7}" ;;
   *"{.metadata.generation}"*) printf 7 ;;
@@ -710,17 +711,22 @@ below "$(annotation mongot-mongodb-search-helm-approver helm.sh/hook-weight)" "$
   && ok "the gate is still Helm's last hook" || bad "the gate's hook weight"
 if command -v yq >/dev/null; then
   rules="$(render "${AE[@]}" | yq -o=json -I=0 "select(.kind==\"Role\" and .metadata.name==\"${EXPAND}\") | .rules")"
-  [[ "${rules}" == '[{"apiGroups":["mongodb.com"],"resources":["mongodbsearch"],"resourceNames":["mongot"],"verbs":["get"]},{"apiGroups":["apps"],"resources":["statefulsets"],"resourceNames":["mongot-search-0"],"verbs":["get","delete"]},{"apiGroups":[""],"resources":["pods"],"verbs":["get","list"]},{"apiGroups":[""],"resources":["persistentvolumeclaims"],"verbs":["get","list","patch"]}]' ]] \
-    && ok "its role: read the one MongoDBSearch and the one StatefulSet by name, ask a claim for more, and delete that StatefulSet; it can list no StatefulSet and delete no pod and no claim" || bad "the role of the Job that grows the volumes: ${rules}"
+  [[ "${rules}" == '[{"apiGroups":["mongodb.com"],"resources":["mongodbsearch"],"resourceNames":["mongot"],"verbs":["get"]},{"apiGroups":["apps"],"resources":["statefulsets"],"resourceNames":["mongot-search-0"],"verbs":["get","delete"]},{"apiGroups":[""],"resources":["pods"],"verbs":["get","list"]},{"apiGroups":[""],"resources":["pods"],"resourceNames":["mongot-search-0-0","mongot-search-0-1","mongot-search-0-2"],"verbs":["delete"]},{"apiGroups":[""],"resources":["persistentvolumeclaims"],"verbs":["get","list","patch"]}]' ]] \
+    && ok "its role: read the one MongoDBSearch and the one StatefulSet by name, ask a claim for more, delete that StatefulSet and the mongot pods by name; it can list no StatefulSet and delete no other pod and no claim" || bad "the role of the Job that grows the volumes: ${rules}"
   rules="$(render "${AE[@]}" --set search.name=srch | yq -o=json -I=0 "select(.kind==\"Role\" and .metadata.name==\"${EXPAND}\") | .rules | map(select(.resources[0] == \"mongodbsearch\" or .resources[0] == \"statefulsets\") | .resourceNames[0])")"
   [[ "${rules}" == '["srch","srch-search-0"]' ]] && ok "the MongoDBSearch and the StatefulSet it may read and delete follow search.name" || bad "the names in the role under search.name=srch: ${rules}"
+  rules="$(render "${AE[@]}" --set search.name=srch --set search.replicas=2 | yq -o=json -I=0 "select(.kind==\"Role\" and .metadata.name==\"${EXPAND}\") | .rules | map(select(.resources[0] == \"pods\" and .verbs[0] == \"delete\") | .resourceNames)")"
+  [[ "${rules}" == '[["srch-search-0-0","srch-search-0-1"]]' ]] && ok "the pods it may delete are the mongot pods of search.name and search.replicas, by name" || bad "the pods in the role under search.name=srch, replicas 2: ${rules}"
+  # No pod, no rule: a rule with an empty list of names would be a rule for every pod of the namespace.
+  rules="$(render "${AE[@]}" --set search.replicas=0 --set search.allowVolumeLoss=true | yq -o=json -I=0 "select(.kind==\"Role\" and .metadata.name==\"${EXPAND}\") | .rules | map(select(.resources[0] == \"pods\") | .verbs)")"
+  [[ "${rules}" == '[["get","list"]]' ]] && ok "with no mongot pod the role holds no delete of pods at all" || bad "the role's pod rules with search.replicas=0: ${rules}"
   # Both are read without their last newline: yq prints one more after a value.
   [[ "$(render "${AE[@]}" | yq "select(.kind==\"ConfigMap\" and .metadata.name==\"${EXPAND}\") | .data.\"expand-mongot-volumes.sh\"")" == "$(cat "${CHART}/expand-mongot-volumes.sh")" ]] \
     && ok "the script the Job runs is the chart's expand-mongot-volumes.sh, byte for byte" || bad "the mounted script differs from expand-mongot-volumes.sh"
   [[ "$(render "${AE[@]}" --set search.persistence.storage=400Gi | yq "select(.kind==\"ConfigMap\" and .metadata.name==\"${EXPAND}\") | .metadata.annotations.\"mongodb-search-helm/grows-to\"")" == 400Gi ]] \
     && ok "the script's ConfigMap carries the size asked for, so that under Argo CD a flag set after an earlier growth still differs from what was left" || bad "the size on the script's ConfigMap"
-  [[ "$(render "${AE[@]}" --set search.replicas=3 --set search.persistence.autoExpand.claimWaitSeconds=600 --set wait.waitSeconds=900 | yq "select(.kind==\"Job\" and .metadata.name==\"${EXPAND}\") | .spec.activeDeadlineSeconds")" == 5220 ]] \
-    && ok "the Job's deadline covers the reconcile, each pod's claim and readiness, and the StatefulSet made again" || bad "the deadline of the Job that grows the volumes"
+  [[ "$(render "${AE[@]}" --set search.replicas=3 --set search.persistence.autoExpand.claimWaitSeconds=600 --set wait.waitSeconds=900 | yq "select(.kind==\"Job\" and .metadata.name==\"${EXPAND}\") | .spec.activeDeadlineSeconds")" == 9180 ]] \
+    && ok "the Job's deadline covers the reconcile, each pod's claim and readiness, the StatefulSet made again, and for each pod the watch of its claim, its restart and its readiness" || bad "the deadline of the Job that grows the volumes"
 fi
 refused "an autoExpand.enabled that is not true or false" --set search.persistence.autoExpand.enabled=perhaps
 refused "an unknown key under autoExpand" --set search.persistence.autoExpand.restart=true
@@ -731,7 +737,7 @@ refused "a claim wait under 30 s" "${AE[@]}" --set search.persistence.autoExpand
 hook_script 12-volume-expansion.yaml "${AE[@]}" > "${hooks}/expand.sh"
 cat > "${hooks}/script.sh" <<'SC'
 printf '%s\n' "$*" >> "${CALLS}"
-case "$1" in --expand) exit "${FAKE_EXPAND_RC:-0}" ;; --recreate-statefulset) exit "${FAKE_RECREATE_RC:-0}" ;; esac
+case "$1" in --expand) exit "${FAKE_EXPAND_RC:-0}" ;; --recreate-statefulset) exit "${FAKE_RECREATE_RC:-0}" ;; --restart-pending) exit "${FAKE_RESTART_RC:-0}" ;; esac
 SC
 grow() { : > "${hooks}/calls"; env PATH="${hooks}/bin:${PATH}" NAMESPACE=x SEARCH=mongot MONGOT_STS=mongot-search-0 WAIT_SECONDS=3 INTERVAL=1 CLAIM_WAIT=77 \
            SCRIPT="${hooks}/script.sh" CALLS="${hooks}/calls" "$@" bash "${hooks}/expand.sh" 2>&1; }
@@ -749,19 +755,37 @@ out="$(grow FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=250Gi FAK
 # The operator has refused a larger size: the runbook's steps, in order, on this namespace and StatefulSet only.
 out="$(grow FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi)"; rc=$?
 T="--target-namespace x --statefulset mongot-search-0"
-[[ $rc == 0 && "$(calls)" == "--check ${T}|--expand --apply --yes --wait 77 ${T}|--recreate-statefulset --apply --yes --wait 77 ${T}|" && "$out" == *"is now 300Gi and StatefulSet mongot-search-0 has 250Gi"* ]] \
-  && ok "on the operator's refusal of a larger size it reports, grows the claims, then makes the StatefulSet again: three runs of the script, in that order" \
+[[ $rc == 0 && "$(calls)" == "--check ${T}|--expand --apply --yes --restart-later --wait 77 ${T}|--recreate-statefulset --apply --yes --restart-later --wait 77 ${T}|--restart-pending --apply --yes --wait 77 ${T}|" && "$out" == *"is now 300Gi and StatefulSet mongot-search-0 has 250Gi"* ]] \
+  && ok "on the operator's refusal of a larger size it reports, grows the claims, makes the StatefulSet again, and only then restarts the pods that wait: four runs of the script, in that order" \
   || bad "the Job on a changed size (exit ${rc}): $(calls)"
 # Its last line is what the cluster reads then (here the stand-in still says Failed and 250Gi), not what was asked for.
 [[ "$out" == *"StatefulSet mongot-search-0 now has 250Gi and MongoDBSearch mongot is Failed: the gate decides the rest"* ]] \
   && ok "the Job's last line reports the size and the phase as oc reads them, not a fixed Running" || bad "the Job's last line: ${out##*$'\n'}"
 # A claim that does not grow: the Job fails, says how the script ended, and never reaches the delete.
 out="$(grow FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi FAKE_EXPAND_RC=2)"; rc=$?
-[[ $rc == 1 && "$(calls)" != *recreate* && "$out" == *"FAILED: the volume claims were not all grown (the script ended with 2). No pod, claim or StatefulSet was deleted"* ]] \
+[[ $rc == 1 && "$(calls)" != *recreate* && "$(calls)" != *restart-pending* && "$out" == *"FAILED: the volume claims were not all grown (the script ended with 2). No pod, claim or StatefulSet was deleted"* ]] \
   && ok "when a claim does not grow the Job fails before the StatefulSet is touched, and says so" || bad "the Job and a claim that does not grow (exit ${rc}): $(calls)"
 out="$(grow FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi FAKE_RECREATE_RC=4)"; rc=$?
 [[ $rc == 1 && "$out" == *"FAILED: the StatefulSet was not made again at 300Gi (the script ended with 4)"*"Do NOT delete the mongot pods"* ]] \
-  && ok "when the StatefulSet is not made again it fails and says not to delete the pods" || bad "the Job and a StatefulSet not made again (exit ${rc})"
+  && [[ "$(calls)" != *restart-pending* ]] \
+  && ok "when the StatefulSet is not made again it fails, says not to delete the pods, and restarts none" || bad "the Job and a StatefulSet not made again (exit ${rc}): $(calls)"
+# A pod that does not come back: the Job fails after the StatefulSet is made again, and says where things stand.
+out="$(grow FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi FAKE_RESTART_RC=2)"; rc=$?
+[[ $rc == 1 && "$out" == *"FAILED: a pod whose volume waits for it was not restarted, or did not come back (the script ended with 2). The volumes have grown and the StatefulSet is made again"*"step 4b"*"A pod that was deleted keeps its claim"*"The next sync or upgrade takes this step again"* ]] \
+  && ok "when a restarted pod does not come back the Job fails, says the volumes and the StatefulSet are done, and that the next sync takes the step again" || bad "the Job and a pod that does not come back (exit ${rc}): ${out##*$'\n'}"
+# And the next sync does: no size waits, the resource is Running, and a claim of this StatefulSet still waits for its
+# pod. Only then: not for another StatefulSet's claim, not while the resource is not Running (a first install).
+CLAIMS='data-mongot-search-0-0 \ndata-mongot-search-0-1 FileSystemResizePending\ndata-other-search-0-0 FileSystemResizePending\n'
+out="$(grow FAKE_PHASE=Running FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=300Gi FAKE_CLAIMS="$CLAIMS")"; rc=$?
+[[ $rc == 0 && "$(calls)" == "--restart-pending --apply --yes --wait 77 ${T}|" && "$out" == *"the file systems of these claims wait for their pods: data-mongot-search-0-1 : taking step 4b"* ]] \
+  && ok "with nothing to grow, the resource Running and a claim still waiting for its pod, the Job takes the last step, and that step only" || bad "the Job and a claim left waiting (exit ${rc}): $(calls) ${out##*$'\n'}"
+out="$(grow FAKE_PHASE=Running FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=300Gi FAKE_CLAIMS='data-other-search-0-0 FileSystemResizePending\ndata-mongot-search-0-0 Resizing\n')"; rc=$?; none="$(calls)"
+out2="$(grow FAKE_PHASE=Pending FAKE_WANT_SIZE=300Gi FAKE_CLAIMS="$CLAIMS")"; rc2=$?; none="${none}$(calls)"
+[[ $rc == 0 && $rc2 == 0 && -z "${none}" && "$out" == *"nothing to grow"* && "$out" != *"step 4b"* && "$out2" == *"not Running: no pod is restarted until it is"*"nothing to grow"* ]] \
+  && ok "it restarts nothing for another StatefulSet's claim, for a claim that is only resizing, or while the resource is not Running" || bad "the Job restarted, or failed, where it should not (exit ${rc}, ${rc2}): ${none}"
+out="$(grow FAKE_PHASE=Running FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=300Gi FAKE_CLAIMS="$CLAIMS" FAKE_RESTART_RC=2)"; rc=$?
+[[ $rc == 1 && "$out" == *"FAILED: a pod whose volume waits for it was not restarted, or did not come back (the script ended with 2)"* ]] \
+  && ok "and when that step fails again the Job fails again" || bad "the Job and a last step that fails again (exit ${rc})"
 # The operator has not seen the change (it is down, or slow): nothing is touched.
 out="$(grow FAKE_OBSERVED=6 FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi)"; rc=$?
 [[ $rc == 1 && -z "$(calls)" && "$out" == *"has not reconciled MongoDBSearch mongot at its current generation within 3s. Nothing was changed."* ]] \

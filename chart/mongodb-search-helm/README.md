@@ -61,7 +61,7 @@ bash $P --clean                                       # removes the key files on
 From the package alone, with no clone:
 
 ```bash
-helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.25/mongodb-search-helm-0.3.25.tgz --untar
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.26/mongodb-search-helm-0.3.26.tgz --untar
 bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
 ```
 
@@ -69,7 +69,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.25/mongodb-search-helm-0.3.25.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.26/mongodb-search-helm-0.3.26.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -586,7 +586,7 @@ What the chart itself does about it:
 
 - **An upgrade to fewer mongot pods is refused** by the preflight, before anything is changed, unless `search.allowVolumeLoss: true` is set for that upgrade.
 - **A changed `search.persistence.storage` stops the upgrade's gate at once**, with the reason and the name of the runbook, instead of a timeout: the operator cannot grow a running StatefulSet's volumes, and the pods run on as they were.
-- **With `search.persistence.autoExpand.enabled: true` the chart grows the volumes itself**, in that sync or upgrade: a Job between the MongoDBSearch and the gate runs `expand-mongot-volumes.sh` when, and only when, the operator has refused the new size. Off unless set; meant to be set for that one change.
+- **With `search.persistence.autoExpand.enabled: true` the chart grows the volumes itself**, in that sync or upgrade: a Job between the MongoDBSearch and the gate runs `expand-mongot-volumes.sh` when, and only when, the operator has refused the new size. Where a volume's file system grows only when its pod is started again, it restarts that pod, after the StatefulSet has been made again and one at a time. Off unless set; meant to be set for that one change.
 - **A smaller `search.persistence.storage` is refused** by the preflight, before anything is changed: a volume cannot be made smaller.
 
 ## Maintaining the chart
