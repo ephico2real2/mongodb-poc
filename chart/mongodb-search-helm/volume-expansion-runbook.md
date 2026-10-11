@@ -66,6 +66,15 @@ search:
 sync stops at the gate as in step 2 below, the resource is `Failed`, and the sync that carries the flag finds it so
 and goes on from there.
 
+**Under Argo CD, what starts that sync.** A hook Job is not an object Argo CD compares, so the flag alone starts
+a sync only through the Job's four other objects: its script (a ConfigMap), service account, role and binding. Set
+after the size, on a cluster that never had them, they are new and the Application is `OutOfSync`. Where an earlier
+growth left them (an Application without automated pruning), the size written on the script's ConfigMap is what
+differs. If the Application still reads `Synced` after the flag is in git (the same size as the last time it was
+on), sync it by hand: a hook runs in every sync. With automated sync, a sync that stopped at the gate is first
+tried again five times (11 minutes on the lab) before the one that carries the flag begins; ending that operation
+in the console brings it forward.
+
 **What the Job acts on.** One state only: the MongoDBSearch is `Failed`, the operator names Kubernetes' refusal of
 the StatefulSet update, and the two sizes differ. On a first install, on a sync that changes no size and on any
 other failure it prints "nothing to grow" and ends well; the script is not run.

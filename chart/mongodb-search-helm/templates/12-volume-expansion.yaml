@@ -23,6 +23,11 @@ metadata:
     {{- include "mongodb-search-helm.labels" . | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "-2"
+    # The size this release asks for. Argo CD starts a sync only when an object it tracks differs, and a hook Job is
+    # not one: with the size synced first and the flag set after, these four objects are what differs. Where they
+    # were left by an earlier growth (an Application that does not prune), they would be as git has them, and
+    # nothing would start; the size written here is what then differs. (Seen on the lab.)
+    mongodb-search-helm/grows-to: {{ .Values.search.persistence.storage | quote }}
 data:
   expand-mongot-volumes.sh: |
     {{- .Files.Get "expand-mongot-volumes.sh" | trimSuffix "\n" | nindent 4 }}

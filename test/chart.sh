@@ -714,6 +714,8 @@ if command -v yq >/dev/null; then
   # Both are read without their last newline: yq prints one more after a value.
   [[ "$(render "${AE[@]}" | yq "select(.kind==\"ConfigMap\" and .metadata.name==\"${EXPAND}\") | .data.\"expand-mongot-volumes.sh\"")" == "$(cat "${CHART}/expand-mongot-volumes.sh")" ]] \
     && ok "the script the Job runs is the chart's expand-mongot-volumes.sh, byte for byte" || bad "the mounted script differs from expand-mongot-volumes.sh"
+  [[ "$(render "${AE[@]}" --set search.persistence.storage=400Gi | yq "select(.kind==\"ConfigMap\" and .metadata.name==\"${EXPAND}\") | .metadata.annotations.\"mongodb-search-helm/grows-to\"")" == 400Gi ]] \
+    && ok "the script's ConfigMap carries the size asked for, so that under Argo CD a flag set after an earlier growth still differs from what was left" || bad "the size on the script's ConfigMap"
   [[ "$(render "${AE[@]}" --set search.replicas=3 --set search.persistence.autoExpand.claimWaitSeconds=600 --set wait.waitSeconds=900 | yq "select(.kind==\"Job\" and .metadata.name==\"${EXPAND}\") | .spec.activeDeadlineSeconds")" == 5220 ]] \
     && ok "the Job's deadline covers the reconcile, each pod's claim and readiness, and the StatefulSet made again" || bad "the deadline of the Job that grows the volumes"
 fi
