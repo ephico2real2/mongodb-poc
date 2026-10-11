@@ -54,9 +54,9 @@ spec:
   source:
     external:
       hostAndPorts:
-      - "192.168.64.4:27017"
-      - "192.168.64.4:27018"
-      - "192.168.64.4:27019"
+      - "192.168.64.9:27017"
+      - "192.168.64.9:27018"
+      - "192.168.64.9:27019"
       # REQUIRED, and not only for the sync leg: Envoy's certificate volumes are gated on
       # it (see 20). Every hop verifies against this one ca.crt - Envoy's listener, Envoy's
       # upstream, and mongot in mTLS mode - so it bundles the company root (mongod's

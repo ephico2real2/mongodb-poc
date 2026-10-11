@@ -29,7 +29,7 @@ prove all three pods serve traffic.
 ```bash
 cd ~/gitRepos/mongodb-poc
 export KUBECONFIG="$HOME/.crc/machines/crc/kubeconfig"
-export DOCKER_CONTEXT=colima-bgp-fabric
+export DOCKER_CONTEXT=colima-mongodb-poc
 ```
 
 Three checks. All three must pass before continuing.

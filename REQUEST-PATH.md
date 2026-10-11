@@ -29,7 +29,7 @@ connection round-robins the individual gRPC streams across all three `mongot` po
 second mutual-TLS leg.*
 
 ```text
-  colima VM 192.168.64.4
+  colima VM 192.168.64.9
     (1) mongod rs0, 3 members             mongotHost = grpc-search.apps-crc.testing:443
          |                                useGrpcForSearch = true
          |                                searchTLSMode   = requireTLS
@@ -66,7 +66,7 @@ second mutual-TLS leg.*
   10.217.1.38:27028    10.217.1.37:27028    10.217.1.36:27028
 
   (8) reverse leg: each mongot opens its OWN change stream straight back to
-      192.168.64.4:27017-19 - not through Envoy, not the Route, not balanced
+      192.168.64.9:27017-19 - not through Envoy, not the Route, not balanced
 
   also deployed, carrying no traffic today:
       Service mongot-grpc-lb, MetalLB L2, 192.168.127.100:27028

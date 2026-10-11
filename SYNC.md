@@ -100,7 +100,7 @@ collection**. mongot's own metrics name the phase and the strategy:
 
 ```text
 mongot_initialsync_dispatcher_collectionScan_total{replicationType="DEFAULT",scan_type="id_order"} 8
-mongot_initialsync_dispatcher_syncSource_total{hostName="192.168.64.4"}                            8
+mongot_initialsync_dispatcher_syncSource_total{hostName="192.168.64.9"}                            8
 mongot_initialsync_dispatcher_completedSyncDuration_seconds_count                                  8
 ```
 
@@ -155,9 +155,9 @@ own `config.yml` points straight at the replica set:
 syncSource:
   replicaSet:
     hostAndPort:
-      - 192.168.64.4:27017
-      - 192.168.64.4:27018
-      - 192.168.64.4:27019
+      - 192.168.64.9:27017
+      - 192.168.64.9:27018
+      - 192.168.64.9:27019
     scramAuth:
       authSource: admin
 ```

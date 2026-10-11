@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 set -a; . ./.env; set +a
 : "${DB:=sample_mflix}" "${COLL:=movies}" "${BATCH:=2000}"
-export DOCKER_CONTEXT="${DOCKER_CONTEXT:-colima-bgp-fabric}"
+export DOCKER_CONTEXT="${DOCKER_CONTEXT:-colima-mongodb-poc}"
 URI="mongodb://${ROOT_USER}:${ROOT_PASSWORD}@localhost:${PORT1}/admin?directConnection=true"
 SRC="${1:-data/bulk-movies.json}"
 

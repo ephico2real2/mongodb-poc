@@ -1,7 +1,7 @@
 # Give the external replica set a stable in-cluster FQDN WITHOUT touching CoreDNS.
 # A selector-less headless Service + a hand-written EndpointSlice is the supported
 # Kubernetes pattern for naming an off-cluster endpoint.
-#   -> mongod-external.mongodb-poc.svc.cluster.local resolves to 192.168.64.4
+#   -> mongod-external.mongodb-poc.svc.cluster.local resolves to 192.168.64.9
 apiVersion: v1
 kind: Service
 metadata:
@@ -27,5 +27,5 @@ ports:
 - { name: member2, port: 27018, protocol: TCP }
 - { name: member3, port: 27019, protocol: TCP }
 endpoints:
-- addresses: ["192.168.64.4"]
+- addresses: ["192.168.64.9"]
   conditions: { ready: true }

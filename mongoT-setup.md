@@ -261,7 +261,7 @@ spec:
                                           #    lab-mongot-search-lb-0-client-cert
   source:
     external:
-      hostAndPorts: ["192.168.64.4:27017", "...:27018", "...:27019"]
+      hostAndPorts: ["192.168.64.9:27017", "...:27018", "...:27019"]
       tls:
         ca: { name: external-mongod-ca }  # ConfigMap with ca.crt - REQUIRED, or the
                                           # Envoy cert volumes are never mounted

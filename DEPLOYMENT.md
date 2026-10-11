@@ -81,9 +81,9 @@ directly, and that constraint drives the whole design.
                                                │ unix socket        │ vmnet bridge
                                                │ crc-unixgram.sock  │
                     ┌──────────────────────────┴────────┐  ┌────────┴──────────────────────┐
-                    │        CRC VM (OpenShift)         │  │   colima VM "bgp-fabric"      │
+                    │        CRC VM (OpenShift)         │  │   colima VM "mongodb-poc"     │
                     │                                   │  │                               │
-                    │ br-ex   192.168.127.2/24          │  │ col0   192.168.64.4           │
+                    │ br-ex   192.168.127.2/24          │  │ col0   192.168.64.9           │
                     │ eth10   192.168.126.11/24         │  │ eth0   192.168.5.3 (slirp)    │
                     │ pods    10.217.0.0/22 (OVN)       │  │                               │
                     │                                   │  │ Docker Engine 29.5.2          │
@@ -97,10 +97,10 @@ directly, and that constraint drives the whole design.
 
 | From | To | Result |
 |---|---|---|
-| macOS | `192.168.64.4` (colima) | ✅ routed via `bridge100` |
+| macOS | `192.168.64.9` (colima) | ✅ routed via `bridge100` |
 | macOS | `192.168.126.11` / `192.168.127.2` (CRC) | ❌ **timeout — no route exists** |
-| CRC node | `192.168.64.4` | ✅ `via 192.168.127.1 dev br-ex` (transits the Mac; `net.inet.ip.forwarding=1`) |
-| **mongot pod** | `192.168.64.4:27017/18/19` | ✅ **all three TCP CONNECTED** |
+| CRC node | `192.168.64.9` | ✅ `via 192.168.127.1 dev br-ex` (transits the Mac; `net.inet.ip.forwarding=1`) |
+| **mongot pod** | `192.168.64.9:27017/18/19` | ✅ **all three TCP CONNECTED** |
 | colima | `192.168.127.x` | ❌ no route |
 | colima | `192.168.64.1:27028` (Mac forwarder) | ✅ reaches the MetalLB VIP |
 
@@ -158,7 +158,7 @@ mongot-search-0-svc  (headless -> DNS returns all 3 pod IPs)
   ▼
 mongot x3   10.217.0.253 / 10.217.1.6 / 10.217.1.7
   │
-  └─ sync source ──▶ 192.168.64.4:27017,27018,27019  (back to colima)
+  └─ sync source ──▶ 192.168.64.9:27017,27018,27019  (back to colima)
 ```
 
 The sync leg runs in the **opposite** direction to the query leg. Both had to be proven
@@ -210,10 +210,19 @@ Also confirm the node is not excluded from external load balancers:
 
 ### 5. MongoDB replica set in colima — `mongodb/compose.yaml`
 
+The replica set has a colima machine of its own, `mongodb-poc`, with nothing else in it
+(until 2026-10-11 it shared the machine `bgp-fabric`, at 192.168.64.4, with other labs; the
+measurements on this page were taken there). `mongodb/vm.sh` defines it:
+
 ```bash
+mongodb/vm.sh up          # 2 CPUs, 3 GiB, 20 GiB; prints the address: ADVERTISED_HOST in .env
 cd mongodb
-DOCKER_CONTEXT=colima-bgp-fabric docker compose --env-file .env up -d
+DOCKER_CONTEXT=colima-mongodb-poc docker compose --env-file .env up -d
 ```
+
+The address is the machine's, given by the Mac's shared network and kept across restarts. A
+new machine has a new address: `ADVERTISED_HOST`, the `ipAddresses` of the mongod certificate
+(`manifests/70-tls-certs.yaml`), and `source.hostAndPorts` of the search all carry it.
 
 `network_mode: host` with three distinct ports is deliberate: replica-set members talk
 to each other using the addresses in the rs config, and on a bridge with published ports
@@ -330,7 +339,7 @@ The gRPC path is faithful; the availability story is not.*
   Production                             This lab
   three failure domains                  ONE failure domain
   ---------------------------            ------------------------------
-  host A  mongod-1.corp:27017  PRIMARY   colima VM 192.168.64.4
+  host A  mongod-1.corp:27017  PRIMARY   colima VM 192.168.64.9
   host B  mongod-2.corp:27017  SECONDARY   one kernel / one NIC
   host C  mongod-3.corp:27017  SECONDARY   :27017 PRIMARY    (mongo1)
   each: own kernel, NIC, power             :27018 SECONDARY  (mongo2)
@@ -370,7 +379,7 @@ The native pattern is a **selector-less headless Service + hand-written Endpoint
 (`manifests/40-external-mongod-dns.yaml`). Verified:
 
 ```
-mongod-external.mongodb-poc.svc.cluster.local -> 192.168.64.4
+mongod-external.mongodb-poc.svc.cluster.local -> 192.168.64.9
   :27017 CONNECTED   :27018 CONNECTED   :27019 CONNECTED
 ```
 
@@ -378,7 +387,7 @@ mongod-external.mongodb-poc.svc.cluster.local -> 192.168.64.4
 
 `spec.source.external.hostAndPorts` is only a **seed list**. The driver connects, reads
 the replica-set config, and then uses the **advertised** member hostnames for all further
-traffic. Pointing the seed at an FQDN while the rs config still says `192.168.64.4:27017`
+traffic. Pointing the seed at an FQDN while the rs config still says `192.168.64.9:27017`
 changes nothing after discovery.
 
 To genuinely use FQDNs, all three must line up:
@@ -474,7 +483,7 @@ answering a non-gRPC path — a real response, not a timeout.*
 
   Reachability, both directions:
     VIP:27028 -> http=404 (Envoy)
-    pod -> 192.168.64.4:27017/18/19 -> CONNECTED
+    pod -> 192.168.64.9:27017/18/19 -> CONNECTED
     colima -> 192.168.64.1:27028 -> http=404
 
   VERIFIED: $search returns correct results, and 41 requests over ONE mongod

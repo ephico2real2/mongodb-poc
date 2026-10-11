@@ -17,7 +17,7 @@ set -a; . ./.env; set +a
 # neighbour assertions start failing the moment load-bulk.sh runs. Scope them by _id,
 # which vector_index.json declares as a filter field.
 : "${VEC_INDEX:=vector_index}" "${CURATED_MAX_ID:=1001}"
-export DOCKER_CONTEXT="${DOCKER_CONTEXT:-colima-bgp-fabric}"
+export DOCKER_CONTEXT="${DOCKER_CONTEXT:-colima-mongodb-poc}"
 URI="mongodb://${ROOT_USER}:${ROOT_PASSWORD}@localhost:${PORT1}/admin?directConnection=true"
 
 TB=$(oc get pods -n "$NS" -l app=mongot-toolbox -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)

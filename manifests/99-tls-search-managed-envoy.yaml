@@ -44,9 +44,9 @@ spec:
   source:
     external:
       hostAndPorts:
-      - "192.168.64.4:27017"
-      - "192.168.64.4:27018"
-      - "192.168.64.4:27019"
+      - "192.168.64.9:27017"
+      - "192.168.64.9:27018"
+      - "192.168.64.9:27019"
       # REQUIRED, and not only for the sync leg: Envoy's certificate volumes are gated on
       # it (see 20). This ConfigMap is also Envoy's ca-cert and mongot's ca volume, so it
       # must hold the anchor every certificate on all three legs chains to - here, the

@@ -10,7 +10,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 set -a; . ./mongodb/.env 2>/dev/null || true; set +a
 : "${NS:=mongodb-poc}" "${DB:=platform_ops}" "${COLL:=incidents}" "${REPLICAS:=3}"
-export DOCKER_CONTEXT="${DOCKER_CONTEXT:-colima-bgp-fabric}"
+export DOCKER_CONTEXT="${DOCKER_CONTEXT:-colima-mongodb-poc}"
 export KUBECONFIG="${KUBECONFIG:-$HOME/.crc/machines/crc/kubeconfig}"
 URI="mongodb://${ROOT_USER:-labAdmin}:${ROOT_PASSWORD:-x}@localhost:${PORT1:-27017}/admin?directConnection=true"
 

@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 set -a; . ./.env; set +a
 : "${DB:=platform_ops}" "${COLL:=incidents}"
-export DOCKER_CONTEXT="${DOCKER_CONTEXT:-colima-bgp-fabric}"
+export DOCKER_CONTEXT="${DOCKER_CONTEXT:-colima-mongodb-poc}"
 URI="mongodb://${ROOT_USER}:${ROOT_PASSWORD}@localhost:${PORT1}/admin?directConnection=true"
 
 DOCS=$(cat data/incidents.json)
