@@ -21,9 +21,10 @@
 # --recreate-statefulset deletes the StatefulSet with --cascade=orphan, and only so, once every claim has the size:
 #   the operator makes it again at the new size and adopts the pods and the claims, none of which is restarted or
 #   deleted.
-# --restart-pending deletes, one at a time, each pod whose claim waits for it (FileSystemResizePending): the volume
-#   has grown, and its file system grows when the pod starts again. The pod keeps its claim and comes back on it;
-#   the next is deleted only once that one is Ready. A claim that does not wait is left alone, and so is its pod.
+# --restart-pending deletes, one at a time, each pod whose claim waits for it (FileSystemResizePending, seen for two
+#   minutes): the volume has grown, and its file system grows when the pod starts again. The pod keeps its claim
+#   and comes back on it; the next is deleted only once that one is Ready. A claim that does not wait is left
+#   alone, and so is its pod.
 #
 # Storage that grows a file system in use needs no pod restarted, and none of the three deletes one. Storage that
 # cannot leaves the claim waiting. Then, either of:
@@ -266,6 +267,7 @@ expand_one() {  # $1 = pod number, $2 = size
         # when the new pod mounts it, and then for that pod to be Ready. The uid tells the new pod from the old
         # one, which can still read Ready while it stops.
         old_pod_uid="$(get pod "${pod}" '{.metadata.uid}')"
+        [[ -n "${old_pod_uid}" ]] || { say "  pod ${pod} cannot be read (no uid): nothing was deleted. Stopped before the next pod" >&2; exit 2; }
         oc delete pod "${pod}" -n "${NS}" --wait=false >/dev/null
         restarted=yes
       fi
@@ -413,6 +415,10 @@ restart_pending() {
   confirm "About to delete, one at a time, the pods of StatefulSet ${STS} whose claims wait for them: pod${list}. Each keeps its claim and comes back on it."
   for i in ${list}; do
     claim="$(claim_of "$i")"; pod="$(pod_of "$i")"
+    # Storage that grows a file system in use shows the claim waiting for a moment and then finishes by itself:
+    # only a claim that is seen waiting for the whole grace has its pod deleted.
+    waited=0
+    while pending_now "${claim}" && (( waited < PENDING_GRACE )); do sleep "${INTERVAL}"; waited=$(( waited + INTERVAL )); done
     # One pod away at a time: every pod of the StatefulSet is Ready before this one is deleted.
     for (( j = 0; j < REPLICAS; j++ )); do
       pod_ready "$j" || die "pod $(pod_of "$j") is not Ready: a pod is restarted only while every pod is. Pod ${pod} was not deleted; run this again when they are"
@@ -420,10 +426,17 @@ restart_pending() {
     if ! pending_now "${claim}"; then say "pod ${i}: claim ${claim} no longer waits for its pod: nothing to do"; continue; fi
     asks="$(get persistentvolumeclaim "${claim}" '{.spec.resources.requests.storage}')"
     is_size "${asks}" || die "claim ${claim} asks for a size this script cannot read ('${asks}')"
-    say "pod ${i}: deleting pod ${pod}, which keeps its claim ${claim}"
+    # The cluster says the resize has failed (NodeResizeError beside FileSystemResizePending): a restart would not
+    # help, and the Error is said first, as in --expand.
+    conditions="$(conditions_of "${claim}")"
+    if [[ "${conditions}" == *Error* ]]; then
+      say "  ${claim}: the resize has failed [${conditions}]. Pod ${pod} was not deleted. 'oc describe pvc ${claim} -n ${NS}' says why" >&2; exit 2
+    fi
     # --wait=false: as in --expand, this loop waits, for the claim and then for the new pod, told from the old one
-    # by its uid.
+    # by its uid. Without the uid the two could not be told apart: then nothing is deleted.
     old_pod_uid="$(get pod "${pod}" '{.metadata.uid}')"
+    [[ -n "${old_pod_uid}" ]] || { say "  pod ${pod} cannot be read (no uid): nothing was deleted. Stopped before the next pod" >&2; exit 2; }
+    say "pod ${i}: deleting pod ${pod}, which keeps its claim ${claim}"
     oc delete pod "${pod}" -n "${NS}" --wait=false >/dev/null
     waited=0
     while :; do

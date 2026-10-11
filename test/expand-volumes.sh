@@ -63,7 +63,14 @@ case "$1" in
           '{.spec.storageClassName}') f "pvc.${i}.class" ;;
           '{.spec.volumeName}') printf 'pv-%s' "$i" ;;
           '{.metadata.ownerReferences[?(@.kind=="StatefulSet")].name}') f "pvc.${i}.owner" ;;
-          '{.status.conditions[*].type}') f "pvc.${i}.conds" ;;
+          '{.status.conditions[*].type}')
+            # pvc.<n>.clears: the claim stops waiting by itself after that many looks (storage that grows a file
+            # system in use, a little late).
+            if [[ -e "${FAKE}/pvc.${i}.clears" ]]; then
+              left="$(f "pvc.${i}.clears")"
+              if (( left > 0 )); then set_f "pvc.${i}.clears" $(( left - 1 )); else set_f "pvc.${i}.conds" ""; set_f "pvc.${i}.has" "$(f "pvc.${i}.asks")"; rm -f "${FAKE}/pvc.${i}.clears" "${FAKE}/pvc.${i}.growing"; fi
+            fi
+            f "pvc.${i}.conds" ;;
           '{.status.capacity.storage}')
             # The volume grows a few looks after it was asked to, unless this cluster's driver waits for the pod.
             if [[ -e "${FAKE}/pvc.${i}.growing" ]]; then
@@ -98,9 +105,16 @@ case "$1" in
     case "$2" in
       pod)
         i="$(n_of "$3")"; touch "${FAKE}/pod.${i}.restarted"
-        # pending-late: the file system grows while the old pod is still stopping, and that pod stays Ready for
-        # three more looks before the new one takes its name.
-        if [[ "$(f behaviour)" == pending-late ]]; then set_f "pod.${i}.stopping" 3; else set_f "pod.${i}.uid" "pod-${i}-again"; fi ;;
+        case "$(f behaviour)" in
+          # pending-late: the file system grows while the old pod is still stopping, and that pod stays Ready for
+          # three more looks before the new one takes its name.
+          pending-late) set_f "pod.${i}.stopping" 3 ;;
+          # pending-shared: the one restart finishes every claim that waited (the others stop waiting before their turn).
+          pending-shared) set_f "pod.${i}.uid" "pod-${i}-again"; for k in 0 1 2; do set_f "pvc.${k}.has" "$(f "pvc.${k}.asks")"; set_f "pvc.${k}.conds" ""; rm -f "${FAKE}/pvc.${k}.growing"; done ;;
+          # pending-fails: the node's resize fails when the new pod mounts the volume; the claim keeps waiting, with an Error.
+          pending-fails) set_f "pod.${i}.uid" "pod-${i}-again"; set_f "pvc.${i}.conds" "FileSystemResizePending NodeResizeError"; rm -f "${FAKE}/pvc.${i}.growing" ;;
+          *) set_f "pod.${i}.uid" "pod-${i}-again" ;;
+        esac ;;
       statefulset)
         case "$*" in *--cascade=orphan*) ;; *) touch "${FAKE}/DISASTER"; exit 0 ;; esac
         # The operator makes it again at the size its resource asks for, and is Running again.
@@ -294,6 +308,40 @@ cluster 300Gi 250Gi 300Gi; printf pending-late > "${FAKE}/behaviour"; printf Fil
 out="$(run --restart-pending --statefulset mongot-search-0 --pod 0 --apply --yes)"; rc=$?
 [[ $rc == 0 && "$(grep -c '^delete pod ' "${FAKE}/calls")" == 1 && ! -e "${FAKE}/pod.0.stopping" && "$(cat "${FAKE}/pod.0.uid")" == pod-0-again && "$out" == *"pod mongot-search-0-0 is Ready"* ]] \
   && ok "--restart-pending also waits for the new pod, not for the old one still stopping" || bad "--restart-pending and a pod still stopping (exit ${rc}; looks left: $(cat "${FAKE}/pod.0.stopping" 2>/dev/null || echo none)): ${out##*$'\n'}"
+# A claim that waits for its pod AND whose resize has failed (two conditions) is not "only FileSystemResizePending":
+# the StatefulSet is not made again over it, and --restart-pending deletes no pod on it (the Error is said first).
+cluster 300Gi 300Gi 300Gi; printf 250Gi > "${FAKE}/sts.size"; printf 250Gi > "${FAKE}/pvc.0.has"; printf 'FileSystemResizePending NodeResizeError' > "${FAKE}/pvc.0.conds"
+refuses "grow the claims first" "--recreate-statefulset --restart-later over a claim with FileSystemResizePending and an Error" run --recreate-statefulset --statefulset mongot-search-0 --restart-later --apply --yes
+cluster 300Gi 250Gi 300Gi; printf 'FileSystemResizePending NodeResizeError' > "${FAKE}/pvc.0.conds"
+out="$(run --restart-pending --statefulset mongot-search-0 --pod 0 --apply --yes)"; rc=$?
+[[ $rc == 2 && "$(writes)" == 0 && "$out" == *"the resize has failed [FileSystemResizePending NodeResizeError]"*"was not deleted"* ]] \
+  && ok "--restart-pending deletes no pod whose resize the cluster says has failed, and says so" || bad "--restart-pending on a failed resize (exit ${rc}, $(writes) writes): ${out##*$'\n'}"
+# A pod whose uid cannot be read is not deleted: the new pod could not be told from the old one afterwards.
+cluster 300Gi 250Gi 300Gi; printf pending > "${FAKE}/behaviour"; printf FileSystemResizePending > "${FAKE}/pvc.0.conds"; printf 0 > "${FAKE}/pvc.0.growing"; rm -f "${FAKE}/pod.0.uid"
+out="$(run --restart-pending --statefulset mongot-search-0 --pod 0 --apply --yes)"; rc=$?
+[[ $rc == 2 && "$(writes)" == 0 && "$out" == *"cannot be read"*"nothing was deleted"* ]] \
+  && ok "--restart-pending deletes no pod whose uid it cannot read" || bad "--restart-pending and an unreadable pod (exit ${rc}, $(writes) writes): ${out##*$'\n'}"
+cluster 250Gi 250Gi 300Gi; printf pending > "${FAKE}/behaviour"; rm -f "${FAKE}/pod.0.uid"
+out="$(run --expand --statefulset mongot-search-0 --pod 0 --restart-if-pending --apply --yes)"; rc=$?
+[[ $rc == 2 && "$(grep -c '^delete ' "${FAKE}/calls")" == 0 && "$out" == *"cannot be read"*"nothing was deleted"* ]] \
+  && ok "--expand --restart-if-pending deletes no pod whose uid it cannot read" || bad "--restart-if-pending and an unreadable pod (exit ${rc}): ${out##*$'\n'}"
+# A claim that is seen waiting and then finishes by itself within the grace keeps its pod.
+cluster 300Gi 250Gi 300Gi; printf FileSystemResizePending > "${FAKE}/pvc.0.conds"; printf 2 > "${FAKE}/pvc.0.clears"
+out="$(run --restart-pending --statefulset mongot-search-0 --pod 0 --apply --yes)"; rc=$?
+[[ $rc == 0 && "$(writes)" == 0 && "$out" == *"claim data-mongot-search-0-0 no longer waits for its pod: nothing to do"* ]] \
+  && ok "--restart-pending watches a waiting claim for the grace first: one that finishes by itself keeps its pod" || bad "a claim that finished within the grace (exit ${rc}, $(writes) writes): ${out##*$'\n'}"
+# The claims of the pods still to come stop waiting after the first restart: their pods are left alone.
+cluster 250Gi 250Gi 300Gi; printf pending-shared > "${FAKE}/behaviour"
+out="$(run --expand --statefulset mongot-search-0 --restart-later --apply --yes)"; rc=$?
+: > "${FAKE}/calls"; out="$(run --restart-pending --statefulset mongot-search-0 --apply --yes)"; rc=$?
+[[ $rc == 0 && "$(grep -c '^delete pod ' "${FAKE}/calls")" == 1 && "$(grep -o 'no longer waits for its pod: nothing to do' <<<"$out" | wc -l | tr -d ' ')" == 2 ]] \
+  && ok "--restart-pending looks at each claim again before its pod goes: a claim that stopped waiting keeps its pod" || bad "a claim that stopped waiting in --restart-pending (exit ${rc}, $(grep -c '^delete pod ' "${FAKE}/calls") deletes): ${out##*$'\n'}"
+# The restart makes the resize fail: it stops at once, before the next pod.
+cluster 250Gi 250Gi 300Gi; printf pending-fails > "${FAKE}/behaviour"
+out="$(run --expand --statefulset mongot-search-0 --restart-later --apply --yes)"; rc=$?
+: > "${FAKE}/calls"; started=$SECONDS; out="$(run --restart-pending --statefulset mongot-search-0 --wait 60 --apply --yes)"; rc=$?
+[[ $rc == 2 && $((SECONDS - started)) -lt 20 && "$(grep -c '^delete pod ' "${FAKE}/calls")" == 1 && "$out" == *"the resize has failed [FileSystemResizePending NodeResizeError]"*"Stopped before the next pod"* ]] \
+  && ok "a resize that fails after the pod is deleted stops --restart-pending at once, before the next pod" || bad "a failed resize in --restart-pending (exit ${rc}, $((SECONDS - started)) s, $(grep -c '^delete pod ' "${FAKE}/calls") deletes): ${out##*$'\n'}"
 cluster 250Gi 250Gi 300Gi
 refuses "--restart-if-pending or --restart-later, not both" "--restart-if-pending with --restart-later" run --expand --statefulset mongot-search-0 --restart-if-pending --restart-later --dry-run
 refuses "--restart-later belongs to --expand and --recreate-statefulset" "--restart-later given to --restart-pending" run --restart-pending --statefulset mongot-search-0 --restart-later --dry-run

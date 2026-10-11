@@ -608,6 +608,7 @@ case "$*" in
   *mongodbsearch*"{.spec.clusters[0].persistence.single.storage}"*) printf '%s' "${FAKE_WANT_SIZE:-}" ;;
   *statefulsets.apps*volumeClaimTemplates*) [ -z "${FAKE_STS_ERR:-}" ] || { echo "$FAKE_STS_ERR" >&2; exit 1; }; printf '%s' "${FAKE_HAVE_SIZE:-}" ;;
   *mongodbsearch*"{.status.phase}"*) printf '%s' "${FAKE_PHASE:-Running}" ;;
+  *persistentvolumeclaims*range*) printf '%b' "${FAKE_CLAIMS:-}" ;;
   *mongodbsearch*"{.status.message}"*) printf '%s' "${FAKE_MESSAGE:-}" ;;
   *"{.status.observedGeneration}"*) printf '%s' "${FAKE_OBSERVED:-7}" ;;
   *"{.metadata.generation}"*) printf 7 ;;
@@ -724,8 +725,8 @@ if command -v yq >/dev/null; then
     && ok "the script the Job runs is the chart's expand-mongot-volumes.sh, byte for byte" || bad "the mounted script differs from expand-mongot-volumes.sh"
   [[ "$(render "${AE[@]}" --set search.persistence.storage=400Gi | yq "select(.kind==\"ConfigMap\" and .metadata.name==\"${EXPAND}\") | .metadata.annotations.\"mongodb-search-helm/grows-to\"")" == 400Gi ]] \
     && ok "the script's ConfigMap carries the size asked for, so that under Argo CD a flag set after an earlier growth still differs from what was left" || bad "the size on the script's ConfigMap"
-  [[ "$(render "${AE[@]}" --set search.replicas=3 --set search.persistence.autoExpand.claimWaitSeconds=600 --set wait.waitSeconds=900 | yq "select(.kind==\"Job\" and .metadata.name==\"${EXPAND}\") | .spec.activeDeadlineSeconds")" == 7020 ]] \
-    && ok "the Job's deadline covers the reconcile, each pod's claim, the StatefulSet made again, and each pod's restart and readiness" || bad "the deadline of the Job that grows the volumes"
+  [[ "$(render "${AE[@]}" --set search.replicas=3 --set search.persistence.autoExpand.claimWaitSeconds=600 --set wait.waitSeconds=900 | yq "select(.kind==\"Job\" and .metadata.name==\"${EXPAND}\") | .spec.activeDeadlineSeconds")" == 9180 ]] \
+    && ok "the Job's deadline covers the reconcile, each pod's claim and readiness, the StatefulSet made again, and for each pod the watch of its claim, its restart and its readiness" || bad "the deadline of the Job that grows the volumes"
 fi
 refused "an autoExpand.enabled that is not true or false" --set search.persistence.autoExpand.enabled=perhaps
 refused "an unknown key under autoExpand" --set search.persistence.autoExpand.restart=true
@@ -770,8 +771,21 @@ out="$(grow FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=300Gi FAK
   && ok "when the StatefulSet is not made again it fails, says not to delete the pods, and restarts none" || bad "the Job and a StatefulSet not made again (exit ${rc}): $(calls)"
 # A pod that does not come back: the Job fails after the StatefulSet is made again, and says where things stand.
 out="$(grow FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi FAKE_RESTART_RC=2)"; rc=$?
-[[ $rc == 1 && "$out" == *"FAILED: a pod whose volume waits for it was not restarted, or did not come back (the script ended with 2). The volumes have grown and the StatefulSet is made again"*"A pod that was deleted keeps its claim"* ]] \
-  && ok "when a restarted pod does not come back the Job fails and says the volumes and the StatefulSet are done" || bad "the Job and a pod that does not come back (exit ${rc})"
+[[ $rc == 1 && "$out" == *"FAILED: a pod whose volume waits for it was not restarted, or did not come back (the script ended with 2). The volumes have grown and the StatefulSet is made again"*"step 4b"*"A pod that was deleted keeps its claim"*"The next sync or upgrade takes this step again"* ]] \
+  && ok "when a restarted pod does not come back the Job fails, says the volumes and the StatefulSet are done, and that the next sync takes the step again" || bad "the Job and a pod that does not come back (exit ${rc}): ${out##*$'\n'}"
+# And the next sync does: no size waits, the resource is Running, and a claim of this StatefulSet still waits for its
+# pod. Only then: not for another StatefulSet's claim, not while the resource is not Running (a first install).
+CLAIMS='data-mongot-search-0-0 \ndata-mongot-search-0-1 FileSystemResizePending\ndata-other-search-0-0 FileSystemResizePending\n'
+out="$(grow FAKE_PHASE=Running FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=300Gi FAKE_CLAIMS="$CLAIMS")"; rc=$?
+[[ $rc == 0 && "$(calls)" == "--restart-pending --apply --yes --wait 77 ${T}|" && "$out" == *"the file systems of these claims wait for their pods: data-mongot-search-0-1 : taking step 4b"* ]] \
+  && ok "with nothing to grow, the resource Running and a claim still waiting for its pod, the Job takes the last step, and that step only" || bad "the Job and a claim left waiting (exit ${rc}): $(calls) ${out##*$'\n'}"
+out="$(grow FAKE_PHASE=Running FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=300Gi FAKE_CLAIMS='data-other-search-0-0 FileSystemResizePending\ndata-mongot-search-0-0 Resizing\n')"; rc=$?; none="$(calls)"
+out2="$(grow FAKE_PHASE=Pending FAKE_WANT_SIZE=300Gi FAKE_CLAIMS="$CLAIMS")"; rc2=$?; none="${none}$(calls)"
+[[ $rc == 0 && $rc2 == 0 && -z "${none}" && "$out" == *"nothing to grow"* && "$out" != *"step 4b"* && "$out2" == *"not Running: no pod is restarted until it is"*"nothing to grow"* ]] \
+  && ok "it restarts nothing for another StatefulSet's claim, for a claim that is only resizing, or while the resource is not Running" || bad "the Job restarted, or failed, where it should not (exit ${rc}, ${rc2}): ${none}"
+out="$(grow FAKE_PHASE=Running FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=300Gi FAKE_CLAIMS="$CLAIMS" FAKE_RESTART_RC=2)"; rc=$?
+[[ $rc == 1 && "$out" == *"FAILED: a pod whose volume waits for it was not restarted, or did not come back (the script ended with 2)"* ]] \
+  && ok "and when that step fails again the Job fails again" || bad "the Job and a last step that fails again (exit ${rc})"
 # The operator has not seen the change (it is down, or slow): nothing is touched.
 out="$(grow FAKE_OBSERVED=6 FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi)"; rc=$?
 [[ $rc == 1 && -z "$(calls)" && "$out" == *"has not reconciled MongoDBSearch mongot at its current generation within 3s. Nothing was changed."* ]] \

@@ -24,7 +24,7 @@ flag is in the chart, in the runbook, under "Letting the chart take steps 3 to 5
   or an upgrade, mounts the runbook's script from the chart, and acts only when the operator has refused the new
   size. On the lab it grew the volumes six times, from 8Gi to 14Gi, with the size synced first and the flag set
   after, and with both in one change: the same pods and claims throughout, and 533 of 533 searches answered. Two defects showed
-  only there, and are corrected: the Job hung inside `oc delete`, and the flag alone did not start a sync. It is one template of 203 lines, changes one flag of the script, and needs no image and no cluster-wide
+  only there, and are corrected: the Job hung inside `oc delete`, and the flag alone did not start a sync. It is one template of 229 lines, changes one flag of the script, and needs no image and no cluster-wide
   install.
 - **A controller of our own would do the same three steps, at a much higher cost.** A custom resource is not
   needed at all (the size already has a place, the MongoDBSearch); what a controller adds is that it acts without
@@ -99,9 +99,12 @@ values: search.persistence.storage 300Gi -> 400Gi          (autoExpand.enabled: 
   wave 3   the gate: the resource is Running, the pods ready, the certificates mounted, the Route admitted
 ```
 
-- **One signal, the gate's own.** The Job and the gate share one test (`mongodb-search-helm.volumeSizeChanged` in
+- **One signal to grow, the gate's own.** The Job and the gate share one test (`mongodb-search-helm.volumeSizeChanged` in
   `templates/_helpers.tpl`). The Job never decides by itself that a volume should grow: it acts where the gate would
-  have stopped and sent a person to the runbook.
+  have stopped and sent a person to the runbook. Since 0.3.26 one more state makes it act, for the last step alone:
+  the resource `Running` and a claim of the StatefulSet still waiting for its pod. Without it a growth whose last
+  step failed would never be finished by the chart: the StatefulSet has the new size by then, and the first signal
+  is gone (found in review).
 - **The same script, not a copy.** The chart's tests compare the mounted script with the chart's file, byte for
   byte. (One flag of the script changed because of what the lab showed, below; by hand and in the Job it is the
   same file.) What the script refuses by hand it refuses here: a class that cannot grow a volume, a pod that is not
@@ -303,7 +306,7 @@ part that does what three lines of the Job's script do.
 | | By hand (today) | The Job | A controller (shell-operator) | A controller with our own resource (Go, Python) | MongoDB's operator does it |
 | --- | --- | --- | --- | --- | --- |
 | Steps after the values change | 3 (two runs of the script, one more sync) | 0 | 0 | 0, and a second object to write | 0 |
-| New code | none | one template of 203 lines; one flag changed in the script | a Deployment, an image with our script, hook bindings | a controller, its tests, its image, its release | none of ours |
+| New code | none | one template of 229 lines; one flag changed in the script | a Deployment, an image with our script, hook bindings | a controller, its tests, its image, its release | none of ours |
 | New image to own | no | no (the Jobs' `ose-cli`) | yes | yes | no |
 | Runs | when a person runs it | inside a sync or an upgrade | all year | all year | all year, already |
 | Cluster administrator needed to install | no | no | no | yes, for the definition | no |
