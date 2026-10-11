@@ -13,10 +13,10 @@ search:
     # the chart's own Job (autoExpand, below; the repository's docs/investigating-automatic-volume-expansion.md). A
     # volume cannot be made smaller: do not lower this number. Each claim is a directory of one NAS export: a pod
     # sees the export's size, not this.
-    storage: 13Gi
+    storage: 14Gi
     storageClass: ipsec-nas-csi
     autoExpand:
-      enabled: false
+      enabled: true
 loadBalancer:
   externalHostname: grpc-search.apps-crc.testing
 source:
