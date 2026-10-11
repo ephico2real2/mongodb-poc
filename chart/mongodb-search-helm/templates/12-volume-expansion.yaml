@@ -44,7 +44,9 @@ metadata:
 ---
 # In this namespace only. It reads the one MongoDBSearch and the one StatefulSet by name, as the preflight does, and
 # the pods and claims. It may ask a volume claim for more (a claim cannot be made smaller, and nothing else of a
-# claim can be changed), and delete one object: the mongot StatefulSet, by name. It may not delete a pod or a claim.
+# claim can be changed), and delete the mongot StatefulSet, by name. It may delete a mongot pod, by name, and no other
+# pod: where a volume's file system grows only when its pod is started again, the script deletes that one pod, which
+# keeps its claim and comes back on it. It may not delete a claim.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -66,6 +68,16 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list"]
+  {{- /* Never without names: a rule with an empty resourceNames is a rule for every pod. */}}
+  {{- if gt (int .Values.search.replicas) 0 }}
+  - apiGroups: [""]
+    resources: ["pods"]
+    resourceNames:
+      {{- range $i := until (int .Values.search.replicas) }}
+      - {{ printf "%s-%d" (include "mongodb-search-helm.mongotStatefulSet" $) $i | quote }}
+      {{- end }}
+    verbs: ["delete"]
+  {{- end }}
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
     verbs: ["get", "list", "patch"]
@@ -172,10 +184,12 @@ spec:
               log "search.persistence.storage is now ${WANT_SIZE} and StatefulSet ${MONGOT_STS} has ${HAVE_SIZE}: taking the steps of volume-expansion-runbook.md, with its script"
 
               # 3. The runbook's steps 3 and 4. The script stops at the first claim or pod that is not as it
-              #    should be, and before it has deleted anything.
+              #    should be. --restart-if-pending: a claim whose file system waits for its pod to be started again
+              #    (FileSystemResizePending for two minutes) has that one pod deleted; the pod keeps its claim, and
+              #    the script waits for it to be Ready before the next claim.
               script --check
-              script --expand --apply --yes --wait "$CLAIM_WAIT" \
-                || fail "the volume claims were not all grown (the script ended with $?). No pod, claim or StatefulSet was deleted, and the mongot pods run as before. What the script said is above; volume-expansion-runbook.md, step 3, says what each ending means. The next sync or upgrade goes on from here."
+              script --expand --apply --yes --restart-if-pending --wait "$CLAIM_WAIT" \
+                || fail "the volume claims were not all grown (the script ended with $?). No claim and no StatefulSet was deleted; a pod was deleted only if the lines above say so, and it keeps its claim. What the script said is above; volume-expansion-runbook.md, step 3, says what each ending means. The next sync or upgrade goes on from here."
               script --recreate-statefulset --apply --yes --wait "$CLAIM_WAIT" \
                 || fail "the StatefulSet was not made again at ${WANT_SIZE} (the script ended with $?). What the script said is above; volume-expansion-runbook.md, step 4. Do NOT delete the mongot pods."
               # What the cluster says now, not what was asked for: --recreate-statefulset also ends well with "nothing to do".

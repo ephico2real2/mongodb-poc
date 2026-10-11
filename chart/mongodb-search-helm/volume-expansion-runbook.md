@@ -80,7 +80,8 @@ the StatefulSet update, and the two sizes differ. On a first install, on a sync 
 other failure it prints "nothing to grow" and ends well; the script is not run.
 
 **What the Job may do.** In the release's namespace: read the MongoDBSearch, the StatefulSet, the pods and the
-claims; ask a claim for more; and delete the mongot StatefulSet, by name. It may not delete a pod or a claim. The
+claims; ask a claim for more; delete the mongot StatefulSet, by name; and delete a mongot pod, by name. It may not
+delete another pod, or a claim. The
 delete of the StatefulSet is the one the script sends with `--cascade=orphan`; a role cannot say "with that flag
 only", which is why the flag is on for one change and not always.
 
@@ -93,8 +94,13 @@ repeat what is done.
 oc logs job/<release>-mongodb-search-helm-expand-volumes -n $TargetNamespace
 ```
 
-It does not restart a pod: a claim that waits for its pod (`FileSystemResizePending`, step 3) stops the Job, and
-that pod is deleted by hand as step 3 says, before the next sync.
+**It restarts a pod only when its volume asks for it.** Where the storage grows a file system in use, no pod is
+touched. Where it cannot, the claim reads `FileSystemResizePending` (step 3) and its file system grows when its pod
+is started again: after two minutes of that, the Job deletes that one pod (the script's `--restart-if-pending`).
+The pod keeps its claim and comes back on it; the script waits for it to be Ready before it asks the next claim, so
+one mongot pod is away at a time and the others answer. How long a pod with large indexes takes to be Ready again is
+not measured: on the lab, with 16 MiB of indexes, 24 s. A deleted pod is not an eviction, so the disruption budget
+does not hold it back.
 
 ## 0. Before starting
 

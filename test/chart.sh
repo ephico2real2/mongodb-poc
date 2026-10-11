@@ -710,10 +710,15 @@ below "$(annotation mongot-mongodb-search-helm-approver helm.sh/hook-weight)" "$
   && ok "the gate is still Helm's last hook" || bad "the gate's hook weight"
 if command -v yq >/dev/null; then
   rules="$(render "${AE[@]}" | yq -o=json -I=0 "select(.kind==\"Role\" and .metadata.name==\"${EXPAND}\") | .rules")"
-  [[ "${rules}" == '[{"apiGroups":["mongodb.com"],"resources":["mongodbsearch"],"resourceNames":["mongot"],"verbs":["get"]},{"apiGroups":["apps"],"resources":["statefulsets"],"resourceNames":["mongot-search-0"],"verbs":["get","delete"]},{"apiGroups":[""],"resources":["pods"],"verbs":["get","list"]},{"apiGroups":[""],"resources":["persistentvolumeclaims"],"verbs":["get","list","patch"]}]' ]] \
-    && ok "its role: read the one MongoDBSearch and the one StatefulSet by name, ask a claim for more, and delete that StatefulSet; it can list no StatefulSet and delete no pod and no claim" || bad "the role of the Job that grows the volumes: ${rules}"
+  [[ "${rules}" == '[{"apiGroups":["mongodb.com"],"resources":["mongodbsearch"],"resourceNames":["mongot"],"verbs":["get"]},{"apiGroups":["apps"],"resources":["statefulsets"],"resourceNames":["mongot-search-0"],"verbs":["get","delete"]},{"apiGroups":[""],"resources":["pods"],"verbs":["get","list"]},{"apiGroups":[""],"resources":["pods"],"resourceNames":["mongot-search-0-0","mongot-search-0-1","mongot-search-0-2"],"verbs":["delete"]},{"apiGroups":[""],"resources":["persistentvolumeclaims"],"verbs":["get","list","patch"]}]' ]] \
+    && ok "its role: read the one MongoDBSearch and the one StatefulSet by name, ask a claim for more, delete that StatefulSet and the mongot pods by name; it can list no StatefulSet and delete no other pod and no claim" || bad "the role of the Job that grows the volumes: ${rules}"
   rules="$(render "${AE[@]}" --set search.name=srch | yq -o=json -I=0 "select(.kind==\"Role\" and .metadata.name==\"${EXPAND}\") | .rules | map(select(.resources[0] == \"mongodbsearch\" or .resources[0] == \"statefulsets\") | .resourceNames[0])")"
   [[ "${rules}" == '["srch","srch-search-0"]' ]] && ok "the MongoDBSearch and the StatefulSet it may read and delete follow search.name" || bad "the names in the role under search.name=srch: ${rules}"
+  rules="$(render "${AE[@]}" --set search.name=srch --set search.replicas=2 | yq -o=json -I=0 "select(.kind==\"Role\" and .metadata.name==\"${EXPAND}\") | .rules | map(select(.resources[0] == \"pods\" and .verbs[0] == \"delete\") | .resourceNames)")"
+  [[ "${rules}" == '[["srch-search-0-0","srch-search-0-1"]]' ]] && ok "the pods it may delete are the mongot pods of search.name and search.replicas, by name" || bad "the pods in the role under search.name=srch, replicas 2: ${rules}"
+  # No pod, no rule: a rule with an empty list of names would be a rule for every pod of the namespace.
+  rules="$(render "${AE[@]}" --set search.replicas=0 --set search.allowVolumeLoss=true | yq -o=json -I=0 "select(.kind==\"Role\" and .metadata.name==\"${EXPAND}\") | .rules | map(select(.resources[0] == \"pods\") | .verbs)")"
+  [[ "${rules}" == '[["get","list"]]' ]] && ok "with no mongot pod the role holds no delete of pods at all" || bad "the role's pod rules with search.replicas=0: ${rules}"
   # Both are read without their last newline: yq prints one more after a value.
   [[ "$(render "${AE[@]}" | yq "select(.kind==\"ConfigMap\" and .metadata.name==\"${EXPAND}\") | .data.\"expand-mongot-volumes.sh\"")" == "$(cat "${CHART}/expand-mongot-volumes.sh")" ]] \
     && ok "the script the Job runs is the chart's expand-mongot-volumes.sh, byte for byte" || bad "the mounted script differs from expand-mongot-volumes.sh"
@@ -749,7 +754,7 @@ out="$(grow FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=250Gi FAK
 # The operator has refused a larger size: the runbook's steps, in order, on this namespace and StatefulSet only.
 out="$(grow FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi)"; rc=$?
 T="--target-namespace x --statefulset mongot-search-0"
-[[ $rc == 0 && "$(calls)" == "--check ${T}|--expand --apply --yes --wait 77 ${T}|--recreate-statefulset --apply --yes --wait 77 ${T}|" && "$out" == *"is now 300Gi and StatefulSet mongot-search-0 has 250Gi"* ]] \
+[[ $rc == 0 && "$(calls)" == "--check ${T}|--expand --apply --yes --restart-if-pending --wait 77 ${T}|--recreate-statefulset --apply --yes --wait 77 ${T}|" && "$out" == *"is now 300Gi and StatefulSet mongot-search-0 has 250Gi"* ]] \
   && ok "on the operator's refusal of a larger size it reports, grows the claims, then makes the StatefulSet again: three runs of the script, in that order" \
   || bad "the Job on a changed size (exit ${rc}): $(calls)"
 # Its last line is what the cluster reads then (here the stand-in still says Failed and 250Gi), not what was asked for.
@@ -757,7 +762,7 @@ T="--target-namespace x --statefulset mongot-search-0"
   && ok "the Job's last line reports the size and the phase as oc reads them, not a fixed Running" || bad "the Job's last line: ${out##*$'\n'}"
 # A claim that does not grow: the Job fails, says how the script ended, and never reaches the delete.
 out="$(grow FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi FAKE_EXPAND_RC=2)"; rc=$?
-[[ $rc == 1 && "$(calls)" != *recreate* && "$out" == *"FAILED: the volume claims were not all grown (the script ended with 2). No pod, claim or StatefulSet was deleted"* ]] \
+[[ $rc == 1 && "$(calls)" != *recreate* && "$out" == *"FAILED: the volume claims were not all grown (the script ended with 2). No claim and no StatefulSet was deleted"* ]] \
   && ok "when a claim does not grow the Job fails before the StatefulSet is touched, and says so" || bad "the Job and a claim that does not grow (exit ${rc}): $(calls)"
 out="$(grow FAKE_PHASE=Failed FAKE_MESSAGE="$FORBIDDEN" FAKE_WANT_SIZE=300Gi FAKE_HAVE_SIZE=250Gi FAKE_RECREATE_RC=4)"; rc=$?
 [[ $rc == 1 && "$out" == *"FAILED: the StatefulSet was not made again at 300Gi (the script ended with 4)"*"Do NOT delete the mongot pods"* ]] \

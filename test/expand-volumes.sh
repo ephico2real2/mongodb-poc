@@ -235,8 +235,9 @@ out="$(run --expand --statefulset mongot-search-0 --apply --yes)"; rc=$?
 cluster 250Gi 250Gi 300Gi; printf pending > "${FAKE}/behaviour"
 out="$(run --expand --statefulset mongot-search-0 --restart-if-pending --apply --yes)"; rc=$?
 [[ $rc == 0 && "$(patched)" == "0 1 2 " && "$(grep -c '^delete pod ' "${FAKE}/calls")" == 3 && "$(grep -c '^delete ' "${FAKE}/calls")" == 3 ]] && never_harmful \
+  && [[ "$(grep '^delete pod ' "${FAKE}/calls" | tr '\n' '|')" == "delete pod mongot-search-0-0 -n ${NS} --wait=false|delete pod mongot-search-0-1 -n ${NS} --wait=false|delete pod mongot-search-0-2 -n ${NS} --wait=false|" ]] \
   && [[ "$out" == *"deleting pod mongot-search-0-0, which keeps its claim"* && "$(cat "${FAKE}/pvc.2.has")" == 300Gi ]] \
-  && ok "with --restart-if-pending it deletes that pod, and only pods, and goes on" || bad "--restart-if-pending (exit ${rc}, patched $(patched)): ${out##*$'\n'}"
+  && ok "with --restart-if-pending it deletes that pod, and only pods, one after the other and without waiting inside oc, and goes on" || bad "--restart-if-pending (exit ${rc}, patched $(patched)): ${out##*$'\n'}"
 
 # A claim that has the size already and still waits for its file system is not done: the same stop, and no "nothing to do".
 cluster 300Gi 300Gi 300Gi; printf FileSystemResizePending > "${FAKE}/pvc.0.conds"

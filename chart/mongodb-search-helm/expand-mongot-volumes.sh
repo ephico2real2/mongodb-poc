@@ -237,7 +237,10 @@ expand_one() {  # $1 = pod number, $2 = size
       if (( pending >= PENDING_GRACE )) && [[ "${restarted}" == no ]]; then
         [[ "${RESTART_IF_PENDING}" == yes ]] || { say "  ${claim}: FileSystemResizePending for ${pending} s. Its file system grows when pod ${pod} starts again: run again with --restart-if-pending, or delete that pod yourself (it keeps its claim). Stopped before the next pod." >&2; exit 3; }
         say "  ${claim}: FileSystemResizePending for ${pending} s: deleting pod ${pod}, which keeps its claim"
-        oc delete pod "${pod}" -n "${NS}" --wait=true >/dev/null
+        # --wait=false, as for the StatefulSet below: oc would wait for a pod of that name to be gone, and the
+        # StatefulSet makes one of the same name. This loop waits instead: for the claim, whose file system grows
+        # when the new pod mounts it, and then for that pod to be Ready.
+        oc delete pod "${pod}" -n "${NS}" --wait=false >/dev/null
         restarted=yes
       fi
     fi

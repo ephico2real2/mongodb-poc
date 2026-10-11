@@ -82,8 +82,10 @@ search:
     # true: a Job of the chart takes those steps by hand itself, with the same script, between the MongoDBSearch
     # and the gate of a sync or an upgrade: a larger `storage` above is then all it takes. It acts only when the
     # operator has refused the new size, and on nothing else. It needs a storage class that can grow a volume
-    # (allowVolumeExpansion), and its service account may then ask this namespace's claims for more and delete
-    # the mongot StatefulSet, by name. false: the gate stops and names the runbook, as before.
+    # (allowVolumeExpansion), and its service account may then ask this namespace's claims for more, delete the
+    # mongot StatefulSet, by name, and delete a mongot pod, by name: where a volume's file system grows only when
+    # its pod is started again, that one pod is deleted, keeps its claim and comes back on it, one pod at a time.
+    # false: the gate stops and names the runbook, as before.
     autoExpand:
       enabled: false
       # How long one claim may take to reach the new size, and its pod to be Ready again, in seconds.

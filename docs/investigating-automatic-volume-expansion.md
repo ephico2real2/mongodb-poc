@@ -121,9 +121,10 @@ Its role, in the release's namespace only:
 | The MongoDBSearch, by name | read | the size asked for, the phase, the operator's message |
 | The mongot StatefulSet, by name | read, delete | the size the StatefulSet has, its pods; the one delete of the runbook, always with `--cascade=orphan` |
 | Pods | read, list | each pod Ready before and after its claim grows; the same pods afterwards |
+| The mongot pods, by name | delete | only where a claim's file system waits for its pod to be started again: that one pod, which keeps its claim (chart 0.3.26) |
 | Volume claims | read, list, ask for more | Kubernetes lets a claim's size only grow, and nothing else of a claim be changed |
 
-It may not delete a pod or a claim, and it holds no right outside the namespace. Storage classes are read with what
+It may not delete another pod, or a claim, and it holds no right outside the namespace. Storage classes are read with what
 OpenShift gives every signed-in identity (the `basic-user` cluster role, bound to `system:authenticated`).
 
 The right that deserves thought is the delete of the StatefulSet: the script only ever sends it with the orphan
@@ -229,9 +230,12 @@ or more available.
 
 ### What the Job does not do
 
-- **It does not restart a pod.** A driver that cannot grow a file system in use leaves a claim at
-  `FileSystemResizePending`; the script then stops (its `--restart-if-pending` is not passed), the Job fails and says
-  so, and that pod is restarted by hand, as the runbook says. vSphere's driver grows a file system in use.
+- **It restarts a pod only when its volume asks for it**, since chart 0.3.26 (the owner, 2026-10-11: the Job must
+  be able to delete a pod, or the file system is not grown). A driver that cannot grow a file system in use leaves a
+  claim at `FileSystemResizePending`; after two minutes the script deletes that one pod (`--restart-if-pending`),
+  which keeps its claim, and waits for it before the next. In 0.3.25 the Job stopped there and the pod was deleted
+  by hand. This path has not run on a cluster: the lab's NFS driver has no file system to grow, so no claim ever
+  waits there. It is covered by the script's tests against a stand-in.
 - **It does not pick the size, the moment or the cluster.** It runs in a sync or an upgrade that somebody started
   by changing the values.
 - **It does not report progress** beyond its log. Under Argo CD the Application reads `Progressing` while it runs.
@@ -303,14 +307,13 @@ The owner, 2026-10-10:
    afterwards.
 3. **A smaller volume is not supported.** The preflight refuses it before anything is changed.
 4. **No controller and no custom resource of our own.**
+5. **The Job restarts a pod whose file system waits for it** (2026-10-11; chart 0.3.26).
 
 Still open:
 
 - One growth on QA, on `thin-csi`, with the flag on, before production relies on it: how long a real disk takes, and
   whether its file system grows under a running mongot. On the lab's NFS a claim's size is only a number. The steps
   by hand remain the way on whenever the Job stops.
-- Whether the Job may restart a pod whose file system waits for it (`--restart-if-pending`): today it stops and
-  says so.
 - Whether to tell MongoDB that their search reconciler does not call their own resize code.
 
 ## Sources
