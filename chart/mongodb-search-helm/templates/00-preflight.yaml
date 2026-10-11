@@ -60,6 +60,11 @@ rules:
     resources: ["mongodbsearch"]
     resourceNames: [{{ .Values.search.name | quote }}]
     verbs: ["get"]
+  # The mongot StatefulSet as it runs, for the size its volumes were made at: a smaller one is refused.
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    resourceNames: [{{ include "mongodb-search-helm.mongotStatefulSet" . | quote }}]
+    verbs: ["get"]
   {{- if .Values.operator.install }}
   # A second OperatorGroup in a namespace stops OLM for every operator in it.
   - apiGroups: ["operators.coreos.com"]
@@ -151,6 +156,10 @@ spec:
               value: {{ .Values.search.replicas | quote }}
             - name: ALLOW_VOLUME_LOSS
               value: {{ .Values.search.allowVolumeLoss | quote }}
+            - name: MONGOT_STS
+              value: {{ include "mongodb-search-helm.mongotStatefulSet" . | quote }}
+            - name: WANT_STORAGE
+              value: {{ .Values.search.persistence.storage | quote }}
             - name: OPERATOR_INSTALL
               value: {{ .Values.operator.install | quote }}
             - name: OPERATORGROUP
@@ -234,6 +243,39 @@ spec:
                   log "note: search.replicas goes from ${have} to ${WANT_REPLICAS} with search.allowVolumeLoss=true: the volumes of the pods that go are deleted"
                 else
                   printf '[preflight] REFUSED: search.replicas would go from %s to %s. The operator deletes the volume of every mongot pod that is scaled away, and a pod that comes back builds every index again from the collection (hours on a large deployment; see volumes.md in the chart). To do it knowingly, set search.allowVolumeLoss=true for this one upgrade. Nothing was changed.\n' "$have" "$WANT_REPLICAS" >&2
+                  exit 1
+                fi
+              fi
+
+              # A smaller volume. Not supported: Kubernetes refuses a smaller volume claim, the operator cannot
+              # change the StatefulSet, and the MongoDBSearch would stay Failed. Refused here, before the resource is
+              # touched. The size compared with is the one the StatefulSet's volumes were made at; a larger one is
+              # let through (the gate, or the Job of search.persistence.autoExpand, takes it from there). As for the
+              # replica count, only "there is no StatefulSet" counts as nothing to compare.
+              # bytes <quantity>: a Kubernetes size as a whole number of bytes, or nothing when it is not one this reads.
+              bytes() {
+                awk -v q="$1" 'BEGIN {
+                  n = q; u = ""
+                  if (match(q, /[A-Za-z]+$/)) { u = substr(q, RSTART); n = substr(q, 1, RSTART - 1) }
+                  if (n !~ /^[0-9]+(\.[0-9]+)?$/) exit 1
+                  m["Ki"] = 1024; m["Mi"] = 1024^2; m["Gi"] = 1024^3; m["Ti"] = 1024^4; m["Pi"] = 1024^5
+                  m["k"] = 1000; m["M"] = 1000^2; m["G"] = 1000^3; m["T"] = 1000^4; m["P"] = 1000^5; m[""] = 1
+                  if (!(u in m)) exit 1
+                  printf "%.0f\n", n * m[u]
+                }' 2>/dev/null
+              }
+              if made="$(oc get statefulsets.apps "$MONGOT_STS" -n "$NAMESPACE" -o jsonpath='{.spec.volumeClaimTemplates[0].spec.resources.requests.storage}' 2>&1)"; then :; else
+                case "$made" in
+                  *NotFound*|*"not found"*) made="" ;;
+                  *) printf '[preflight] REFUSED: cannot read StatefulSet %s for the size of its volumes, so a smaller search.persistence.storage cannot be ruled out: %s. Nothing was changed.\n' "$MONGOT_STS" "$(printf '%s' "$made" | tail -1)" >&2; exit 1 ;;
+                esac
+              fi
+              if [ -n "$made" ]; then
+                made_bytes="$(bytes "$made")"; want_bytes="$(bytes "$WANT_STORAGE")"
+                if [ -z "$made_bytes" ] || [ -z "$want_bytes" ]; then
+                  log "note: search.persistence.storage ${WANT_STORAGE} and the StatefulSet's ${made} were not compared: one of them is written in a way this check does not read"
+                elif [ "$(awk -v w="$want_bytes" -v m="$made_bytes" 'BEGIN { print (w + 0 < m + 0) ? "smaller" : "ok" }')" = "smaller" ]; then
+                  printf '[preflight] REFUSED: search.persistence.storage would go from %s to %s. A volume cannot be made smaller, and the chart does not support it: Kubernetes refuses a smaller volume claim, and the MongoDBSearch would stay Failed. Set search.persistence.storage to %s or more (volumes.md in the chart). Nothing was changed.\n' "$made" "$WANT_STORAGE" "$made" >&2
                   exit 1
                 fi
               fi

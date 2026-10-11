@@ -73,10 +73,21 @@ search:
     # The size of each pod's volume. Raising it here does not grow a volume that exists: Kubernetes forbids a
     # change of a StatefulSet's volume claim template, the MongoDBSearch goes Failed (the pods keep running and
     # answering), and the upgrade's gate stops and says so. The volumes are then grown by hand:
-    # volume-expansion-runbook.md, with expand-mongot-volumes.sh, both beside this file. It cannot be lowered.
+    # volume-expansion-runbook.md, with expand-mongot-volumes.sh, both beside this file. It cannot be lowered: a
+    # smaller size than the volumes were made at is not supported, and the preflight refuses it before anything is
+    # changed.
     storage: 10Gi
     # Empty: the cluster's default storage class.
     storageClass: thin-csi
+    # true: a Job of the chart takes those steps by hand itself, with the same script, between the MongoDBSearch
+    # and the gate of a sync or an upgrade: a larger `storage` above is then all it takes. It acts only when the
+    # operator has refused the new size, and on nothing else. It needs a storage class that can grow a volume
+    # (allowVolumeExpansion), and its service account may then ask this namespace's claims for more and delete
+    # the mongot StatefulSet, by name. false: the gate stops and names the runbook, as before.
+    autoExpand:
+      enabled: false
+      # How long one claim may take to reach the new size, and its pod to be Ready again, in seconds.
+      claimWaitSeconds: 900
   # true: `helm uninstall` leaves the MongoDBSearch, its pods and its volumes in place (helm.sh/resource-policy:
   # keep) and removes the rest of the release, the Route included. Under Argo CD the resource is also kept when the
   # Application is deleted and when a sync would prune it (Delete=false, Prune=false). It does not stop

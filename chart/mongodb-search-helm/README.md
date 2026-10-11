@@ -61,7 +61,7 @@ bash $P --clean                                       # removes the key files on
 From the package alone, with no clone:
 
 ```bash
-helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.24/mongodb-search-helm-0.3.24.tgz --untar
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.25/mongodb-search-helm-0.3.25.tgz --untar
 bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
 ```
 
@@ -69,7 +69,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.24/mongodb-search-helm-0.3.24.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.25/mongodb-search-helm-0.3.25.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -96,7 +96,8 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 | `search.replicas` | `3` | Step 6a. Lowering it deletes the volumes of the pods that go: [volumes.md](volumes.md) |
 | `search.allowVolumeLoss` | `false` | `true` for the one upgrade that lowers `search.replicas` on purpose; otherwise the preflight refuses it |
 | `search.resources` | 1 CPU / 3Gi to 3 CPU / 5Gi | Step 6a |
-| `search.persistence.storage`, `.storageClass` | `10Gi`, `thin-csi` | Step 6a. Raising the size later takes the [expansion runbook](volume-expansion-runbook.md) |
+| `search.persistence.storage`, `.storageClass` | `10Gi`, `thin-csi` | Step 6a. Raising the size later takes the [expansion runbook](volume-expansion-runbook.md). Lowering it is not supported: the preflight refuses it |
+| `search.persistence.autoExpand.enabled` | `false` | `true` for the one change that grows the volumes: a Job of the chart then takes the runbook's steps by hand, with its script. `.claimWaitSeconds` (900): how long one claim, and then its pod, may take |
 | `search.podDisruptionBudget` | `enabled: true`, `maxUnavailable: 1` | A PodDisruptionBudget for the mongot pods: a node drain takes one at a time. The operator creates none: [disruption-budgets.md](disruption-budgets.md) |
 | `loadBalancer.podDisruptionBudget` | `enabled: true`, `maxUnavailable: 1` | The same for the Envoy pods |
 | `loadBalancer.resources` | requests `100m`, `128Mi`; limits `500m`, `512Mi` | CPU and memory of each Envoy pod: the operator's own defaults, written out. What is given replaces them whole; `null` leaves the field to the operator |
@@ -585,6 +586,8 @@ What the chart itself does about it:
 
 - **An upgrade to fewer mongot pods is refused** by the preflight, before anything is changed, unless `search.allowVolumeLoss: true` is set for that upgrade.
 - **A changed `search.persistence.storage` stops the upgrade's gate at once**, with the reason and the name of the runbook, instead of a timeout: the operator cannot grow a running StatefulSet's volumes, and the pods run on as they were.
+- **With `search.persistence.autoExpand.enabled: true` the chart grows the volumes itself**, in that sync or upgrade: a Job between the MongoDBSearch and the gate runs `expand-mongot-volumes.sh` when, and only when, the operator has refused the new size. Off unless set; meant to be set for that one change.
+- **A smaller `search.persistence.storage` is refused** by the preflight, before anything is changed: a volume cannot be made smaller.
 
 ## Maintaining the chart
 

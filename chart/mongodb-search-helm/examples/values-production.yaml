@@ -21,10 +21,15 @@ search:
   allowVolumeLoss: false
   persistence:
     # TO DECIDE. At least 1.47 times the indexes of one pod: 300Gi holds 190 GB of indexes with room for a full
-    # rebuild. The operator cannot grow it; growing it later is volume-expansion-runbook.md.
+    # rebuild. The operator cannot grow it; growing it later is volume-expansion-runbook.md. It cannot be lowered.
     storage: 300Gi
     # A class that allows expansion. It cannot be changed on a search that exists.
     storageClass: thin-csi
+    # false in git. Set to true for the one change that grows the volumes, with the larger `storage` above or after
+    # it: a Job of the chart then grows each claim and has the StatefulSet made again, in that sync. Back to false
+    # once the sync has passed. volume-expansion-runbook.md, "Letting the chart take steps 3 to 5".
+    autoExpand:
+      enabled: false
   # TO DECIDE, from QA's dashboard. The heap is half of the memory request; MongoDB: no more than about 30 GB of
   # heap, so no more than about 56Gi requested. A memory limit equal to the request.
   resources:

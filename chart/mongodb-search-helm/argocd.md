@@ -61,13 +61,13 @@ for the ClusterServiceVersion an uninstall leaves.
 
 | Phase and wave | What | Notes |
 | --- | --- | --- |
-| PreSync | The preflight Job, with its own ServiceAccount, Role and RoleBinding | Stops the sync if a prerequisite is missing, or if `search.replicas` would go down |
+| PreSync | The preflight Job, with its own ServiceAccount, Role and RoleBinding | Stops the sync if a prerequisite is missing, if `search.replicas` would go down, or if `search.persistence.storage` would |
 | Sync, wave -3 | The csv-reclaim Job and its access | Removes the operator's ClusterServiceVersion a previous uninstall left, when the namespace holds no Subscription of the operator's package. Otherwise it exits at once |
 | Sync, wave -2 | The OperatorGroup; the access of the approver and of the gate | |
 | Sync, wave -1 | The Subscription; the approver Job | The Subscription is on Manual approval; the approver approves the InstallPlan of `operator.version`, and no other |
 | Sync, wave 0 | ServiceMonitors, the alert rules, the index info exporter, the Grafana ConfigMap | |
 | Sync, wave 1 | The MongoDBSearch; the two PodDisruptionBudgets; the Perses dashboard and datasource | The operator makes the mongot StatefulSet, the Envoy Deployment and their Services. Argo CD read both budgets `Healthy` ("PodDisruptionBudget has SufficientPods") on the lab, where their pods already existed |
-| Sync, wave 2 | The Route | |
+| Sync, wave 2 | The Route; with `search.persistence.autoExpand.enabled`, the Job that grows the volumes (its ServiceAccount, Role, RoleBinding and script are in wave -2) | The Job acts only when the operator has refused a larger volume size; otherwise it ends at once. [volume-expansion-runbook.md](volume-expansion-runbook.md) |
 | Sync, wave 3 | The gate Job | Ends only when the operator, the mongot pods, Envoy and the Route are ready. It does not wait for the indexes to be built |
 
 **The csv-reclaim hook under Argo CD.** The csv-reclaim hook runs in wave -3, ahead of the

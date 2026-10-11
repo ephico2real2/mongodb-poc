@@ -193,7 +193,7 @@ out="$(run --expand --statefulset mongot-search-0 --dry-run)"; rc=$?
   && ok "--expand --dry-run prints the three requests, with the size the MongoDBSearch asks for, and changes nothing" || bad "--expand --dry-run (exit ${rc}, $(writes) writes)"
 cluster 300Gi 300Gi 300Gi; printf 250Gi > "${FAKE}/sts.size"
 out="$(run --recreate-statefulset --statefulset mongot-search-0 --dry-run)"; rc=$?
-[[ $rc == 0 && "$(writes)" == 0 && "$out" == *"oc delete statefulset mongot-search-0 -n ${NS} --cascade=orphan"*"dry run: nothing was changed"* ]] \
+[[ $rc == 0 && "$(writes)" == 0 && "$out" == *"oc delete statefulset mongot-search-0 -n ${NS} --cascade=orphan --wait=false"*"dry run: nothing was changed"* ]] \
   && ok "--recreate-statefulset --dry-run prints the one delete, with --cascade=orphan, and changes nothing" || bad "--recreate-statefulset --dry-run (exit ${rc})"
 
 # ------------------------------------------------------------------------------------------------ --expand --apply
@@ -261,9 +261,9 @@ out="$(run --expand --statefulset mongot-search-0 --wait 3 --apply --yes)"; rc=$
 # ------------------------------------------------------------------------------------------------ --recreate-statefulset --apply
 cluster 300Gi 300Gi 300Gi; printf 250Gi > "${FAKE}/sts.size"; printf Failed > "${FAKE}/mdbs.phase"
 out="$(run --recreate-statefulset --statefulset mongot-search-0 --apply --yes)"; rc=$?
-[[ $rc == 0 && "$(writes)" == 1 && "$(grep '^delete ' "${FAKE}/calls")" == "delete statefulset mongot-search-0 -n ${NS} --cascade=orphan" ]] && never_harmful \
+[[ $rc == 0 && "$(writes)" == 1 && "$(grep '^delete ' "${FAKE}/calls")" == "delete statefulset mongot-search-0 -n ${NS} --cascade=orphan --wait=false" ]] && never_harmful \
   && [[ "$out" == *"was made again at 300Gi; MongoDBSearch mongot is Running"*"the pods are the same pods"*"the volume claims are the same claims"* ]] \
-  && ok "--recreate-statefulset deletes the StatefulSet with --cascade=orphan, once, and nothing else" || bad "--recreate-statefulset --apply (exit ${rc}, $(writes) writes): ${out##*$'\n'}"
+  && ok "--recreate-statefulset deletes the StatefulSet with --cascade=orphan, once, without waiting inside oc, and nothing else" || bad "--recreate-statefulset --apply (exit ${rc}, $(writes) writes): ${out##*$'\n'}"
 : > "${FAKE}/calls"; out="$(run --recreate-statefulset --statefulset mongot-search-0 --apply --yes)"; rc=$?
 [[ $rc == 0 && "$(writes)" == 0 && "$out" == *"nothing to do"* ]] && ok "run again, it deletes nothing" || bad "--recreate-statefulset a second time (exit ${rc}, $(writes) writes)"
 # An operator whose new StatefulSet differs in more than the size restarts the pods: said, not hidden.
@@ -279,8 +279,8 @@ mv "${work}/bin/oc.bak" "${work}/bin/oc"; chmod +x "${work}/bin/oc"
 
 # ------------------------------------------------------------------------------------------------ the script itself
 "${SH}" -n "${SCRIPT}" && ok "bash -n" || bad "bash -n"
-[[ "$(grep -c 'oc delete statefulset' "${SCRIPT}")" == 2 && "$(grep 'oc delete statefulset' "${SCRIPT}" | grep -c -- '--cascade=orphan')" == 2 ]] \
-  && ok "every 'oc delete statefulset' in the script has --cascade=orphan (the command, and the line that prints it)" || bad "a delete of the StatefulSet without --cascade=orphan"
+[[ "$(grep -c 'oc delete statefulset' "${SCRIPT}")" == 2 && "$(grep 'oc delete statefulset' "${SCRIPT}" | grep -c -- '--cascade=orphan --wait=false')" == 2 ]] \
+  && ok "every 'oc delete statefulset' in the script has --cascade=orphan and --wait=false (the command, and the line that prints it)" || bad "a delete of the StatefulSet without --cascade=orphan, or without --wait=false"
 ! grep -q -E 'oc (scale|apply|replace|edit)|delete (pvc|persistentvolumeclaim)|"replicas"' "${SCRIPT}" && ok "the script holds no command that scales, or deletes a claim" || bad "the script holds a command it must not"
 if command -v shellcheck >/dev/null 2>&1; then shellcheck "${SCRIPT}" && ok "shellcheck" || bad "shellcheck"; fi
 out="$(env PATH="${work}/bin:${PATH}" "${SH}" "${SCRIPT}" --help)"; [[ "$out" == *"--recreate-statefulset --statefulset <name>"*"Needs oc"* ]] && ok "--help prints the usage" || bad "--help"

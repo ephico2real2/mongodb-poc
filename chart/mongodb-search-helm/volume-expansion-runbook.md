@@ -39,6 +39,63 @@ X=<the chart>/expand-mongot-volumes.sh       # helm pull <chart> --untar, or a c
 STS=<search name>-search-0                   # mongot-search-0 with the chart's default name
 ```
 
+## Letting the chart take steps 3 to 5: `search.persistence.autoExpand`
+
+With `search.persistence.autoExpand.enabled: true` a Job of the chart takes steps 3 and 4 itself, with the same
+script, and the gate passes in that same sync or upgrade: step 5 is not needed. The flag is `false` in the chart and
+is meant to stay `false` in git: it is set for the change that grows the volumes, and taken out after.
+
+| # | Step | Changes |
+| --- | --- | --- |
+| 0 | Check before starting: step 0 below, all of it | Nothing |
+| 1 | In the values: the larger `search.persistence.storage` | The values |
+| 2 | In the values: `search.persistence.autoExpand.enabled: true`. In the same change as the size, or in a later one | The values |
+| 3 | Sync, or `helm upgrade`. The Job runs after the MongoDBSearch and before the gate | Each claim, one pod at a time; then the StatefulSet object |
+| 4 | Verify: step 6 below | Nothing |
+| 5 | `autoExpand.enabled: false` again, and sync or upgrade | The Job's service account, role and script are removed. Under Argo CD without automated pruning nothing starts by itself: the Application reads `OutOfSync` with those four objects "requiring pruning", and one sync with pruning removes them (the MongoDBSearch is never pruned with `search.keepOnUninstall`) |
+
+```yaml
+search:
+  persistence:
+    storage: 400Gi        # was 300Gi
+    autoExpand:
+      enabled: true       # for this change only
+```
+
+**Either order works.** With the size and the flag in one change, one sync does everything. With the size first, that
+sync stops at the gate as in step 2 below, the resource is `Failed`, and the sync that carries the flag finds it so
+and goes on from there.
+
+**Under Argo CD, what starts that sync.** A hook Job is not an object Argo CD compares, so the flag alone starts
+a sync only through the Job's four other objects: its script (a ConfigMap), service account, role and binding. Set
+after the size, on a cluster that never had them, they are new and the Application is `OutOfSync`. Where an earlier
+growth left them (an Application without automated pruning), the size written on the script's ConfigMap is what
+differs. If the Application still reads `Synced` after the flag is in git (the same size as the last time it was
+on), sync it by hand: a hook runs in every sync. With automated sync, a sync that stopped at the gate is first
+tried again five times (11 minutes on the lab) before the one that carries the flag begins; ending that operation
+in the console brings it forward.
+
+**What the Job acts on.** One state only: the MongoDBSearch is `Failed`, the operator names Kubernetes' refusal of
+the StatefulSet update, and the two sizes differ. On a first install, on a sync that changes no size and on any
+other failure it prints "nothing to grow" and ends well; the script is not run.
+
+**What the Job may do.** In the release's namespace: read the MongoDBSearch, the StatefulSet, the pods and the
+claims; ask a claim for more; and delete the mongot StatefulSet, by name. It may not delete a pod or a claim. The
+delete of the StatefulSet is the one the script sends with `--cascade=orphan`; a role cannot say "with that flag
+only", which is why the flag is on for one change and not always.
+
+**When the Job fails**, the sync or upgrade fails with it, nothing has been deleted unless its log says the
+StatefulSet was, and the pods run as before. Its log holds the script's own words: the tables of steps 3 and 4 below
+say what each means. Put right what it names and sync again, or go on by hand from step 3: the script does not
+repeat what is done.
+
+```bash
+oc logs job/<release>-mongodb-search-helm-expand-volumes -n $TargetNamespace
+```
+
+It does not restart a pod: a claim that waits for its pod (`FileSystemResizePending`, step 3) stops the Job, and
+that pod is deleted by hand as step 3 says, before the next sync.
+
 ## 0. Before starting
 
 All of these must hold. Stop if one does not.
@@ -49,7 +106,7 @@ All of these must hold. Stop if one does not.
 | Every index is `STEADY` on every pod | The dashboard: *Indexes not STEADY* is green; *Indexes being built* is 0 | No build or recovery under way |
 | The operator runs | `oc get pods -n <the operator's namespace> \| grep mongodb-kubernetes-operator` | `1/1 Running`. It is what makes the StatefulSet again in step 4 |
 | The storage class can grow a volume | The same `--check`: "(expands: true)" on every line | `true`. OpenShift's `thin-csi` for vSphere ships with `allowVolumeExpansion: true`; a cluster may have changed it. `true` says the class permits it, not that its driver can: step 3's table has what a driver without a resizer does |
-| The new size is larger than what every claim has | The same `--check`: "has ..." | A volume cannot be made smaller, ever |
+| The new size is larger than what every claim has | The same `--check`: "has ..." | A volume cannot be made smaller, ever, and the chart does not support it: the preflight refuses a size under the one the StatefulSet's volumes were made at, before anything is changed |
 | No claim is being resized | The same `--check`: "conditions []" | Empty |
 | No snapshot of the disks | Ask the vSphere administrator | VMware: "Expanding volume is not supported when volume snapshot is present, and when a Node VM snapshot is present with the volume attached to it" |
 | The datastore has room for the growth of every pod's volume | Ask the vSphere administrator: it cannot be seen from the cluster | Pods times (new size less old size) |
@@ -187,8 +244,10 @@ bash $X --recreate-statefulset --statefulset $STS --apply
 ```
 
 It refuses unless every pod is Ready and every claim has the size the resource asks for. Then it runs one command,
-`oc delete statefulset <name> -n <namespace> --cascade=orphan`, waits for the operator to make the StatefulSet again,
-and compares the pods and the claims with what they were:
+`oc delete statefulset <name> -n <namespace> --cascade=orphan --wait=false`, waits itself for the operator to make
+the StatefulSet again (no longer than `--wait`), and compares the pods and the claims with what they were. It does
+not let `oc` do the waiting: `oc` waits for a StatefulSet of that name to be gone, and the operator makes one of the
+same name within a second.
 
 ```text
 StatefulSet mongot-search-0 was made again at 300Gi; MongoDBSearch mongot is Running
@@ -276,6 +335,8 @@ One run from start to finish, with every command's output and the OpenShift cons
 | **The other order**, 5Gi to 6Gi: `--expand --size 6Gi` one pod at a time, then the values | The lab, 15:29Z to 15:50Z, the same class | The three claims had 6Gi within 5 s in all; the resource stayed `Running` at 5Gi and the Application `Synced`. `--size 4Gi` was refused: "a volume cannot be made smaller". Then the size in git: the sync stopped at the gate |
 | **The steps by hand outlasting Argo CD's retries** | The lab, in that run: step 4 was held back on purpose | Five retries, each stopped at the gate; the operation `Failed` 10 min 59 s after it began, the Application `Synced` and `Healthy` throughout. No new operation in the 200 s after a refresh. Step 4, 2 s, the resource `Running`: still no operation in 210 s. A sync by hand: `Succeeded` in 63 s. 225 searches tried in the 21 minutes, all answered; the same pods, not restarted, and the same claims from the first install to the end |
 | **The same again, recorded**, 6Gi to 7Gi, values first | The lab, 15:56Z to 16:01Z, the same class | [docs/testing-mongot-storage-resize.md](docs/testing-mongot-storage-resize.md). Argo CD's second retry passed the gate, 3 min 36 s after the push; 42 searches tried, all answered; the same pods and claims |
+| **The Job of `search.persistence.autoExpand`**, 8Gi to 9Gi, 10Gi, 11Gi and 12Gi | The lab, 2026-10-10 22:25Z to 2026-10-11 01:25Z, the same class, Argo CD with automated sync | Four growths with nothing done by hand after the commit. With the size and the flag in one change (to 12Gi): one sync, begun 55 s after the push, passed in 58 s. With the size first (to 11Gi): the size alone (the gate stopped, and five retries), then the flag (its sync began when the retries were spent, 6 min 45 s after the push, and passed in 67 s), then the flag off and one sync with pruning (the Job's four objects removed, nothing else). The Job itself: 8 and 12 s. The same three pods and claims throughout; 486 searches tried, 0 failed. Two defects found there and corrected: the Job hung inside `oc delete` (now `--wait=false`), and the flag alone started no sync where the Job's objects had been left from an earlier growth (the size is now written on its ConfigMap). The record: `docs/investigating-automatic-volume-expansion.md` in the repository |
+| A smaller size with the Job | The lab, 4Gi asked of 8Gi volumes | Refused by the script, nothing changed. The preflight's own refusal, which now comes first, is in the chart's tests only |
 | **What that class cannot show** | | An NFS volume is a directory of an export. The driver's answer to a resize is the size it was asked for and nothing else (its `ControllerExpandVolume`; its node part has no expansion), so only the claim's number changed: the pods read "9.8G at /mongot/data, 20% used" before and after, and *Data volume used* did not fall. A disk that takes time to grow, `FileSystemResizePending`, `--restart-if-pending` and a failed resize were **run nowhere by this repository**: they rest on Kubernetes', OpenShift's and VMware's documents below, on MongoDB's own test of the same steps (pull request 1621, open), and on the script's tests against a stand-in |
 | Argo CD | Everything above. The back-out of step 2 was run under Argo CD earlier that day: [argocd.md](argocd.md). The hooks carry Argo CD's annotations (PreSync, and Sync at waves -3, -1 and 3) | |
 

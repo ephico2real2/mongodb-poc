@@ -149,4 +149,9 @@ So this chart has no value that keeps a volume through a scale-down: there is no
 ## Growing a volume
 
 Raising `search.persistence.storage` does not grow a volume that exists, and never deletes one. The steps are in
-[volume-expansion-runbook.md](volume-expansion-runbook.md).
+[volume-expansion-runbook.md](volume-expansion-runbook.md): by hand with the script, or by a Job of the chart when
+`search.persistence.autoExpand.enabled` is set for that change.
+
+Lowering it is not supported. A volume cannot be made smaller, and the preflight refuses a size under the one the
+StatefulSet's volumes were made at, before anything is changed. A search on smaller volumes is a new search: the
+resource deleted and installed again, and every index built again.

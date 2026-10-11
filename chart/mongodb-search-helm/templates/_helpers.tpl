@@ -73,3 +73,18 @@ securityContext:
     drop: [ALL]
 command: ["/bin/bash", "-c"]
 {{- end -}}
+
+{{- /*
+A shell function for the Jobs that read the MongoDBSearch (the gate, and the Job that grows the volumes): true when
+the resource is Failed because its volume size was changed. It needs field(), MDBS, SEARCH and MONGOT_STS, and
+leaves the two sizes in WANT_SIZE and HAVE_SIZE.
+*/ -}}
+{{- define "mongodb-search-helm.volumeSizeChanged" -}}
+volume_size_changed() {
+  [ "$(field "$MDBS" "$SEARCH" .status.phase)" = "Failed" ] || return 1
+  case "$(field "$MDBS" "$SEARCH" .status.message)" in *"updates to statefulset spec for fields other than"*) ;; *) return 1 ;; esac
+  WANT_SIZE="$(field "$MDBS" "$SEARCH" '.spec.clusters[0].persistence.single.storage')"
+  HAVE_SIZE="$(field statefulsets.apps "$MONGOT_STS" '.spec.volumeClaimTemplates[0].spec.resources.requests.storage')"
+  [ -n "$WANT_SIZE" ] && [ -n "$HAVE_SIZE" ] && [ "$WANT_SIZE" != "$HAVE_SIZE" ]
+}
+{{- end -}}

@@ -78,7 +78,7 @@ metadata:
     argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
     helm.sh/hook: post-install,post-upgrade
-    helm.sh/hook-weight: "0"
+    helm.sh/hook-weight: "1"
     helm.sh/hook-delete-policy: before-hook-creation
 spec:
   backoffLimit: 0
@@ -179,13 +179,7 @@ spec:
               # A changed volume size cannot reach the StatefulSet: Kubernetes forbids a change of its volume claim
               # template, the operator says so, and the resource stays Failed until the volumes are grown and the
               # StatefulSet is made again by hand. Waiting does not help: say what it is and where the steps are.
-              volume_size_changed() {
-                [ "$(field "$MDBS" "$SEARCH" .status.phase)" = "Failed" ] || return 1
-                case "$(field "$MDBS" "$SEARCH" .status.message)" in *"updates to statefulset spec for fields other than"*) ;; *) return 1 ;; esac
-                WANT_SIZE="$(field "$MDBS" "$SEARCH" '.spec.clusters[0].persistence.single.storage')"
-                HAVE_SIZE="$(field statefulsets.apps "$MONGOT_STS" '.spec.volumeClaimTemplates[0].spec.resources.requests.storage')"
-                [ -n "$WANT_SIZE" ] && [ -n "$HAVE_SIZE" ] && [ "$WANT_SIZE" != "$HAVE_SIZE" ]
-              }
+              {{- include "mongodb-search-helm.volumeSizeChanged" . | nindent 14 }}
               phase_ok() {
                 [ "$(field "$MDBS" "$SEARCH" .status.phase)" = "Running" ] && return 0
                 if volume_size_changed; then

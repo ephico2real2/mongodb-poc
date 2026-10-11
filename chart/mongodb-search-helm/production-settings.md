@@ -12,7 +12,9 @@ it is: `search.resources` holds the word `TO-DECIDE`, which the chart refuses, u
 
 ## In short
 
-- **Size the volumes once, with room.** The operator cannot grow a volume; growing one is a runbook by hand.
+- **Size the volumes once, with room.** The operator cannot grow a volume. Growing one is a runbook, by hand or by
+  the chart's own Job when `search.persistence.autoExpand.enabled` is set for that change. A volume is never made
+  smaller: the preflight refuses a smaller size.
 - **Keep the search through an uninstall**: `search.keepOnUninstall: true`. Without it an uninstall, a prune or
   the deletion of the Application deletes every index.
 - **Never lower `search.replicas` in passing.** The volume of every pod that goes is deleted.
@@ -26,7 +28,7 @@ it is: `search.resources` holds the word `TO-DECIDE`, which the chart refuses, u
 
 | The limit | Where it is seen | What covers it |
 | --- | --- | --- |
-| **A volume cannot be grown through the resource.** A new size goes into the StatefulSet's volume claim template, which Kubernetes does not let change; the MongoDBSearch reads `Failed` and the operator can change nothing on mongot until the StatefulSet is made again. The pods keep answering | lab; Kubernetes; [mongodb-kubernetes #1621](https://github.com/mongodb/mongodb-kubernetes/pull/1621) | `search.persistence.storage` sized for growth (below). The chart's gate stops the sync and names the runbook: [volume-expansion-runbook.md](volume-expansion-runbook.md) with `expand-mongot-volumes.sh` |
+| **A volume cannot be grown through the resource.** A new size goes into the StatefulSet's volume claim template, which Kubernetes does not let change; the MongoDBSearch reads `Failed` and the operator can change nothing on mongot until the StatefulSet is made again. The pods keep answering | lab; Kubernetes; [mongodb-kubernetes #1621](https://github.com/mongodb/mongodb-kubernetes/pull/1621) | `search.persistence.storage` sized for growth (below). The chart's gate stops the sync and names the runbook: [volume-expansion-runbook.md](volume-expansion-runbook.md) with `expand-mongot-volumes.sh`. With `search.persistence.autoExpand.enabled: true`, set for that one change, a Job of the chart takes the runbook's steps by hand itself. `false` in the production example |
 | **The storage class cannot be changed** on a search that exists: it is in the same template | Kubernetes. Not run: on the lab it was changed only after the search had been deleted | `search.persistence.storageClass` chosen once: a class that allows expansion |
 | **The volume of a pod that is scaled away is deleted, and every volume when the resource is deleted.** The operator sets `whenScaled: Delete` and `whenDeleted: Delete` on the StatefulSet, and puts them back when they are changed; the resource's own override of them is ignored | lab; the operator's source: [volumes.md](volumes.md) | `search.keepOnUninstall: true`; `search.allowVolumeLoss: false`, with the preflight refusing fewer pods; the volumes set to `Retain` by a cluster administrator |
 | **One volume a pod.** `persistence.multiple` (data, journal, logs) is in the schema and ignored for search | MongoDB: the operator's source at tag 1.13.0, `controllers/searchcontroller/search_construction.go`, lines 135 to 141, reads the single volume only | `search.persistence` has the single volume only |
@@ -57,7 +59,7 @@ it is: `search.resources` holds the word `TO-DECIDE`, which the chart refuses, u
 **The volume's size.** mongot builds no index above 85% used, stops following the source above 90% and exits at
 95%; MongoDB: "Plan for roughly 125% of the expected steady-state footprint during a rebuild." A rebuild of
 everything on a volume therefore fits only while the indexes are under 68% of it (0.85 / 1.25), and the chart's
-first alert is at 70%. Growing the volume later is the runbook, which has not been run on vSphere yet.
+first alert is at 70%. Growing the volume later is the runbook, by hand or with `autoExpand`; neither has been run on vSphere yet.
 
 | Indexes on one pod | The smallest volume a full rebuild fits on | On `300Gi` | On `400Gi` |
 | --- | --- | --- | --- |
@@ -259,9 +261,10 @@ None of these can be shown on the lab, whose indexes are 16 MiB a pod on one nod
 
 - **A first install with the real data**: how long until every pod is Ready and every index `STEADY`, and whether
   the gate's 900 s are enough.
-- **A volume that grows on vSphere**: the runbook with `--pod 0` first. On the lab's NFS class a claim's size is a
-  number; a disk that takes time, a file system that waits for its pod, and *Data volume used* falling were not
-  seen.
+- **A volume that grows on vSphere**: the runbook with `--pod 0` first, by hand. On the lab's NFS class a claim's
+  size is a number; a disk that takes time, a file system that waits for its pod, and *Data volume used* falling
+  were not seen. Then one growth with `search.persistence.autoExpand.enabled: true`, before production relies on it:
+  how long the Job takes on real disks, and that its sync passes.
 - **One pod deleted**: that it comes back on its volume and goes on, with 190 GB.
 - **A node drained**, with the two disruption budgets: that one mongot pod and one Envoy pod go at a time, how long a
   mongot pod with its vSphere disk takes to be Ready on another node, and so how long a node update takes.
