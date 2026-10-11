@@ -8,11 +8,13 @@ hand, with the runbook's own script, expand-mongot-volumes.sh, mounted from the 
 at a time, the StatefulSet is then deleted with --cascade=orphan for the operator to make again, and last, where a
 volume's file system grows only when its pod is started again, that pod is restarted, one at a time.
 
-It grows volumes on one signal only: the resource is Failed, the operator names the forbidden StatefulSet update, and
-the two sizes differ. A first install, an upgrade that changes no size and any other failure pass through untouched.
-Argo CD and Helm run a hook on every sync and upgrade: run a second time it finds nothing to grow. One thing it does
-without that signal: where the resource is Running and a claim of the StatefulSet still waits for its pod (a growth
-whose last step did not finish), it takes that last step.
+It begins with a plan: the script compares what the resource asks for, what the StatefulSet's volumes were made at,
+and what each claim asks for and has, and says what is to be done, if anything. Nothing to do (a first install, a
+sync that changes no size, volumes that have their size) ends there. Something to do is done in two states only:
+the operator has refused the new size (the resource Failed, with Kubernetes' sentence, the two sizes different), or
+the resource is Running and what is left is the end of a growth. It ends by verifying that the growth has taken
+effect, down to the file system each pod sees. Argo CD and Helm run a hook on every sync and upgrade: run a second
+time, its plan finds nothing to do.
 */ -}}
 {{- if .Values.search.persistence.autoExpand.enabled }}
 {{- $name := printf "%s-expand-volumes" (include "mongodb-search-helm.fullname" .) }}
@@ -50,6 +52,8 @@ metadata:
 # claim can be changed), and delete the mongot StatefulSet, by name. It may delete a mongot pod, by name, and no other
 # pod: where a volume's file system grows only when its pod is started again, the script deletes that one pod, after
 # the StatefulSet has been made again; the pod keeps its claim and comes back on it. It may not delete a claim.
+# It may run a command in a mongot pod, by name: df, to compare the file system the pod sees with its claim once
+# the growth is done. (A right to run a command in a pod is a right to read what the pod mounts.)
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -80,6 +84,14 @@ rules:
       - {{ printf "%s-%d" (include "mongodb-search-helm.mongotStatefulSet" $) $i | quote }}
       {{- end }}
     verbs: ["delete"]
+  # kubectl asks for create (SPDY) or get (WebSocket), by version.
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    resourceNames:
+      {{- range $i := until (int .Values.search.replicas) }}
+      - {{ printf "%s-%d" (include "mongodb-search-helm.mongotStatefulSet" $) $i | quote }}
+      {{- end }}
+    verbs: ["create", "get"]
   {{- end }}
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
@@ -180,50 +192,46 @@ spec:
                 sleep "$INTERVAL"
               done
 
-              # The runbook's step 4b: the pods whose claims still wait for them, one at a time; where the storage
-              # grew every file system in use, none.
-              restart_waiting() {
-                script --restart-pending --apply --yes --wait "$CLAIM_WAIT" \
-                  || fail "a pod whose volume waits for it was not restarted, or did not come back (the script ended with $?). The volumes have grown and the StatefulSet is made again. What the script said is above; volume-expansion-runbook.md, step 4b. A pod that was deleted keeps its claim. The next sync or upgrade takes this step again, for the claims that still wait."
-              }
-              # The claims of this StatefulSet (<template>-<StatefulSet>-<n>) whose file system waits for its pod.
-              waiting_claims() {
-                oc get persistentvolumeclaims -n "$NAMESPACE" -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.conditions[*].type}{"\n"}{end}' 2>/dev/null \
-                  | grep -E -- "-${MONGOT_STS}-[0-9]+ .*FileSystemResizePending" | cut -d' ' -f1 | tr '\n' ' '
-              }
+              # 2. The plan: the sizes compared (what the resource asks for, what the StatefulSet's volumes were made
+              #    at, what each claim asks for and has), and from them what is to be done, if anything. It reads only.
+              script --plan; PLAN=$?
+              case "$PLAN" in
+                0)  log "the plan found nothing to do"; exit 0 ;;
+                10) ;;
+                *)  fail "the volumes could not be assessed, or what is asked is not supported or needs a person (the script ended with ${PLAN}): what it said is above. Nothing was changed." ;;
+              esac
 
-              # 2. Is there a changed volume size to act on? The gate's own test.
+              # 3. Is it ours to do now? Either the operator has refused the new size (the gate's own test: Failed,
+              #    with Kubernetes' sentence, the sizes different), or the resource is Running and what is left is
+              #    the end of a growth (a resize to wait for, a pod to restart). In any other state (still being
+              #    reconciled, Failed for another reason) nothing is touched, and the gate judges.
               {{- include "mongodb-search-helm.volumeSizeChanged" . | nindent 14 }}
-              if ! volume_size_changed; then
-                PHASE="$(field "$MDBS" "$SEARCH" .status.phase)"
-                # No size to grow. A growth that got as far as the StatefulSet and no further (a pod that did not
-                # come back in time, a Job that was stopped) has left the resource Running and claims that wait:
-                # this sync takes that last step.
-                WAITING="$(waiting_claims)"
-                if [ -n "$WAITING" ] && [ "$PHASE" = "Running" ]; then
-                  log "no changed volume size waits, and the file systems of these claims wait for their pods: ${WAITING}: taking step 4b of volume-expansion-runbook.md"
-                  restart_waiting
-                  log "MongoDBSearch ${SEARCH} is $(field "$MDBS" "$SEARCH" .status.phase): the gate decides the rest"
-                  exit 0
-                fi
-                [ -z "$WAITING" ] || log "note: the file systems of these claims wait for their pods: ${WAITING}. MongoDBSearch ${SEARCH} is ${PHASE}, not Running: no pod is restarted until it is"
-                log "MongoDBSearch ${SEARCH} is ${PHASE}, with no changed volume size waiting: nothing to grow"
+              PHASE="$(field "$MDBS" "$SEARCH" .status.phase)"
+              if volume_size_changed; then
+                log "the operator has refused the new size (${WANT_SIZE}; StatefulSet ${MONGOT_STS} has ${HAVE_SIZE}): taking the steps of volume-expansion-runbook.md, with its script"
+              elif [ "$PHASE" = "Running" ]; then
+                log "MongoDBSearch ${SEARCH} is Running and the plan has something left to do: taking the steps of volume-expansion-runbook.md, with its script"
+              else
+                log "note: the plan has something to do, and MongoDBSearch ${SEARCH} is ${PHASE:-unknown} without the operator having refused a volume size: nothing is done in this state"
                 exit 0
               fi
-              log "search.persistence.storage is now ${WANT_SIZE} and StatefulSet ${MONGOT_STS} has ${HAVE_SIZE}: taking the steps of volume-expansion-runbook.md, with its script"
 
-              # 3. The runbook's steps 3, 4 and 5, in that order. The script stops at the first claim or pod that
+              # 4. The runbook's steps 3, 4, 4b and 6, in that order. Each does what the plan left for it and no
+              #    more: a claim that has its size is not asked again, a StatefulSet that has it is not made again, a
+              #    pod whose claim does not wait is not restarted. The script stops at the first claim or pod that
               #    is not as it should be. --restart-later: a claim whose volume has grown and whose file system
-              #    waits for its pod to be started again (FileSystemResizePending for two minutes) is left as it
-              #    is, and the next claim is asked.
-              script --check
+              #    waits for its pod (FileSystemResizePending for two minutes) is left, and the next claim is asked.
               script --expand --apply --yes --restart-later --wait "$CLAIM_WAIT" \
                 || fail "the volume claims were not all grown (the script ended with $?). No pod, claim or StatefulSet was deleted, and the mongot pods run as before. What the script said is above; volume-expansion-runbook.md, step 3, says what each ending means. The next sync or upgrade goes on from here."
               script --recreate-statefulset --apply --yes --restart-later --wait "$CLAIM_WAIT" \
-                || fail "the StatefulSet was not made again at ${WANT_SIZE} (the script ended with $?). What the script said is above; volume-expansion-runbook.md, step 4. Do NOT delete the mongot pods."
-              # The StatefulSet is made again and the operator has its resource back. Now the pods whose claims
-              # still wait for them.
-              restart_waiting
-              # What the cluster says now, not what was asked for: --recreate-statefulset also ends well with "nothing to do".
+                || fail "the StatefulSet was not made again (the script ended with $?). What the script said is above; volume-expansion-runbook.md, step 4. Do NOT delete the mongot pods."
+              # The StatefulSet has its size and the operator has its resource back. Now the pods whose claims
+              # still wait for them, one at a time; where the storage grew every file system in use, none.
+              script --restart-pending --apply --yes --wait "$CLAIM_WAIT" \
+                || fail "a pod whose volume waits for it was not restarted, or did not come back (the script ended with $?). What the script said is above; volume-expansion-runbook.md, step 4b. A pod that was deleted keeps its claim. The next sync or upgrade plans again and takes up what is left, once the resource is Running."
+              # Has it taken effect? The resource Running, the StatefulSet and every claim at the size, every pod
+              # Ready, and the file system each pod sees as large as its claim.
+              script --verify \
+                || fail "the growth is not verified (the script ended with $?): what is not as it should be is named above, each with what to do. Nothing was deleted by this step. volume-expansion-runbook.md, step 6."
               log "StatefulSet ${MONGOT_STS} now has $(field statefulsets.apps "$MONGOT_STS" '.spec.volumeClaimTemplates[0].spec.resources.requests.storage') and MongoDBSearch ${SEARCH} is $(field "$MDBS" "$SEARCH" .status.phase): the gate decides the rest"
 {{- end }}

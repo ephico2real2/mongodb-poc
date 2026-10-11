@@ -76,14 +76,44 @@ on), sync it by hand: a hook runs in every sync. With automated sync, a sync tha
 tried again five times (11 minutes on the lab) before the one that carries the flag begins; ending that operation
 in the console brings it forward.
 
-**What the Job acts on.** To grow, one state only: the MongoDBSearch is `Failed`, the operator names Kubernetes'
-refusal of the StatefulSet update, and the two sizes differ. On a first install, on a sync that changes no size and
-on any other failure it prints "nothing to grow" and ends well; the script is not run. One more state makes it act,
-for the last step alone: the resource is `Running` and a claim of this StatefulSet still waits for its pod.
+**How the Job decides: the plan first.** Before it changes anything the Job runs the script's `--plan`, which
+reads and compares the sizes: what the MongoDBSearch asks for, what the StatefulSet's volumes were made at, and for
+each claim what it asks for and what it has (and, where it can be read, the file system its pod sees).
+
+| The plan finds | It says | The Job then |
+| --- | --- | --- |
+| No StatefulSet yet, or every claim there is and the StatefulSet at the size asked for | nothing to do | Ends well. Nothing was changed (a first install, a sync that changes no size) |
+| A claim that asks for less than the resource does | to grow: `--expand` | Takes the steps below |
+| A claim whose resize is under way | to wait for | The same: `--expand` waits for it |
+| The StatefulSet at a smaller size than the resource asks for | to be made again: `--recreate-statefulset` | The same, once the claims have their size |
+| A claim whose volume has grown and whose file system waits for its pod | pod to restart: `--restart-pending` | The same, after the StatefulSet is made again |
+| The resource asks for less than the volumes were made at | NOT SUPPORTED | Fails. Nothing was changed |
+| A resize the cluster reports as failed, or sizes it cannot read | NEEDS A PERSON | Fails. Nothing was changed |
+
+Something to do is done in two states only: the operator has refused the new size (the MongoDBSearch `Failed` with
+Kubernetes' refusal of the StatefulSet update, the two sizes different), or the resource is `Running` and what is
+left is the end of a growth. In any other state (the resource still being reconciled, or `Failed` for another
+reason) the Job prints the plan, changes nothing, and leaves the verdict to the gate. Then, in order: steps 3, 4
+and 4b, each of which does only what the plan left for it; and last `--verify` (step 6): the resource `Running`, the
+StatefulSet and every claim at the size, every pod Ready, and the file system each pod sees as large as its claim.
+A growth that has not taken effect fails the Job, and so the sync.
+
+```text
+MongoDBSearch mongot asks for 300Gi and is Failed; StatefulSet mongot-search-0 has 250Gi, 3 of 3 pods ready
+  pod 0: claim data-mongot-search-0-0 asks 250Gi, has 250Gi; the pod sees 249.9 GiB (xfs)
+         to grow to 300Gi: --expand
+  [the same for pod 1 and pod 2]
+  StatefulSet mongot-search-0: has 250Gi, to be made again at 300Gi once the claims have it: --recreate-statefulset
+to do, in this order: grow 3 claim(s); make the StatefulSet again
+```
+
+(The sizes and the file system in this example are made up; the form is the script's.)
 
 **What the Job may do.** In the release's namespace: read the MongoDBSearch, the StatefulSet, the pods and the
-claims; ask a claim for more; delete the mongot StatefulSet, by name; and delete a mongot pod, by name. It may not
-delete another pod, or a claim. The
+claims; ask a claim for more; delete the mongot StatefulSet, by name; delete a mongot pod, by name; and run a
+command in a mongot pod, by name, which it uses for `df` alone (to compare the file system the pod sees with its
+claim). A right to run a command in a pod is a right to read what that pod mounts, the sync user's password
+included: one more reason the flag is on for one change. It may not touch another pod, or delete a claim. The
 delete of the StatefulSet is the one the script sends with `--cascade=orphan`; a role cannot say "with that flag
 only", which is why the flag is on for one change and not always.
 
@@ -106,10 +136,12 @@ the lab, with 16 MiB of indexes, 24 s. A deleted pod is not an eviction, so the 
 back. This restart has not run on a cluster: step 4b says why.
 
 **If that last step fails** (a pod did not come back in time, or a pod was not Ready when its turn came), the Job
-fails and says so. By then the StatefulSet has the new size and the resource is `Running`, so there is nothing left
-to grow; the next sync or upgrade, with the flag still on, sees the claims that still read
-`FileSystemResizePending` and takes that step again, and that step only. Or by hand: step 4b
-(`--restart-pending`). Leave the flag on until the claims have their size.
+fails and says so. By then the StatefulSet has the new size and the resource is `Running`. The next sync or
+upgrade, with the flag still on, plans again, finds the claims that still read `FileSystemResizePending`, and takes
+up what is left: only while the resource is `Running`. Or by hand: step 4b (`--restart-pending`). Leave the flag on
+until `--verify` passes. Each time that step is taken, a pod whose claim still waits is deleted again: where a
+restart did not finish the claim (`not at ... within ... s of its pod being deleted`), find out why before the next
+sync, and under automated sync, whose retries are syncs too, take the flag out first.
 
 ## 0. Before starting
 
@@ -333,8 +365,22 @@ oc get application <name> -n <argo cd's namespace> -o jsonpath='{.status.operati
 ### 6. Verify, and write down
 
 ```bash
-bash $X --check --statefulset $STS
+bash $X --verify --statefulset $STS      # the verdict: has the growth taken effect?
+bash $X --check --statefulset $STS       # the readings, to keep
 ```
+
+`--verify` ends with 0 only when the resource is `Running`, the StatefulSet and every claim have the size, no
+resize waits, every pod is Ready, and the file system each pod sees (`df`, inside the pod) is as large as its
+claim. Otherwise it ends with 5 and names what is not so, each with what to do:
+
+```text
+NOT VERIFIED: pod 1: claim data-mongot-search-0-1 has 300Gi, and the file system the pod sees has 250.0 GiB (xfs at /mongot/data): the file system has not grown. Its pod started again grows it: --restart-pending, or delete that pod (it keeps its claim)
+```
+
+A file system is a little smaller than its volume, so one at 95% of its claim or more counts as grown; a growth of
+less than a twentieth cannot be told by size, and the claim's own status says it then. On a shared export (NFS,
+as on the lab) every pod sees the export's size whatever its claim says: `--verify` says so, and counts that file
+system as not compared.
 
 | Must be | |
 | --- | --- |
@@ -379,7 +425,7 @@ One run from start to finish, with every command's output and the OpenShift cons
 | Step 5: the same upgrade again | The lab | Passed in 31 and 36 s; the release `deployed` |
 | Backing out of step 2: the old size put back | The lab | The resource `Running` again and the upgrade passed in 32 s; the StatefulSet and the pods untouched |
 | A pod deleted keeps its claim | The lab | The same claim, Ready in 24 s |
-| The script | `test/expand-volumes.sh`, 72 checks against a stand-in `oc`, under bash 5 and bash 3.2, in CI on Linux and macOS | Every refusal changes nothing; one claim at a time; a pending or failed resize stops before the next pod; the one delete always has `--cascade=orphan` |
+| The script | `test/expand-volumes.sh`, 84 checks against a stand-in `oc`, under bash 5 and bash 3.2, in CI on Linux and macOS | Every refusal changes nothing; one claim at a time; a pending or failed resize stops before the next pod; the one delete always has `--cascade=orphan` |
 | The script's `--check` and `--dry-run` | The lab | Read the three sizes, the class, the volumes and the pods' file systems |
 | A class that does not allow expansion | The lab: its NFS class as it was found, 2026-10-10, and its hostpath class the day before | The API refused: "only dynamically provisioned pvc can be resized and the storageclass that provisions the pvc must support resize". On the NFS class the script refused first: "allowVolumeExpansion is false: Kubernetes will not grow it. Nothing was changed for this claim" |
 | **The whole runbook, steps 0 to 6, under Argo CD**, 4Gi to 5Gi | The lab, 2026-10-10, 15:25Z to 15:28Z, on an NFS class (driver `nfs.csi.k8s.io`, csi-driver-nfs 4.13.4 with csi-resizer 2.2.0) once `allowVolumeExpansion: true` had been set on it; automated sync | The sync stopped at the gate about 50 s after it began. `--expand --pod 0`, then `--expand` for the rest: each claim had 5Gi within a second of being asked, with the events `Resizing` and `VolumeResizeSuccessful`. `--recreate-statefulset`, 7 s: "made again at 5Gi; MongoDBSearch mongot is Running", "the pods are the same pods: none was restarted", "the volume claims are the same claims". Argo CD's first retry passed the gate: `Succeeded` 2 min 4 s after the sync began (15:25:54Z to 15:27:58Z), with no sync by hand. 27 searches through mongod were tried, one every 5 to 6 s, and all were answered |

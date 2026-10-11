@@ -24,7 +24,7 @@ flag is in the chart, in the runbook, under "Letting the chart take steps 3 to 5
   or an upgrade, mounts the runbook's script from the chart, and acts only when the operator has refused the new
   size. On the lab it grew the volumes seven times, from 8Gi to 15Gi, with the size synced first and the flag set
   after, and with both in one change: the same pods and claims throughout, and 552 of 552 searches answered. Two defects showed
-  only there, and are corrected: the Job hung inside `oc delete`, and the flag alone did not start a sync. It is one template of 229 lines, changes one flag of the script, and needs no image and no cluster-wide
+  only there, and are corrected: the Job hung inside `oc delete`, and the flag alone did not start a sync. It is one template of 237 lines, changes one flag of the script, and needs no image and no cluster-wide
   install.
 - **A controller of our own would do the same three steps, at a much higher cost.** A custom resource is not
   needed at all (the size already has a place, the MongoDBSearch); what a controller adds is that it acts without
@@ -99,12 +99,19 @@ values: search.persistence.storage 300Gi -> 400Gi          (autoExpand.enabled: 
   wave 3   the gate: the resource is Running, the pods ready, the certificates mounted, the Route admitted
 ```
 
-- **One signal to grow, the gate's own.** The Job and the gate share one test (`mongodb-search-helm.volumeSizeChanged` in
-  `templates/_helpers.tpl`). The Job never decides by itself that a volume should grow: it acts where the gate would
-  have stopped and sent a person to the runbook. Since 0.3.26 one more state makes it act, for the last step alone:
-  the resource `Running` and a claim of the StatefulSet still waiting for its pod. Without it a growth whose last
-  step failed would never be finished by the chart: the StatefulSet has the new size by then, and the first signal
-  is gone (found in review).
+- **It plans first, and grows on the gate's own signal.** Since 0.3.26 the Job begins with the script's `--plan`:
+  the sizes of the resource, the StatefulSet and each claim compared, and what follows from them. Nothing to do
+  ends there. Something to do is done in two states: the operator has refused the new size (the test the Job and
+  the gate share, `mongodb-search-helm.volumeSizeChanged` in `templates/_helpers.tpl`), or the resource is `Running`
+  and what is left is the end of a growth. So the Job never decides by itself that a volume should grow: it acts
+  where the gate would have stopped and sent a person to the runbook. And a growth whose last step failed is
+  taken up by the next sync: without the second state the chart would never finish it, since the StatefulSet has
+  the new size by then and the first signal is gone (found in review).
+- **It ends by verifying.** `--verify`: the resource `Running`, the StatefulSet and every claim at the size, every
+  pod Ready, and the file system each pod sees as large as its claim (`df` in the pod). On the lab that last
+  comparison cannot be made: the claims say 15Gi and each pod sees the NAS export, "nfs4, 9.7 GiB", so `--verify`
+  reports "file systems compared with their claims: 0; shared exports that cannot show it: 3". A file system that
+  grows has still to be seen, on QA.
 - **The same script, not a copy.** The chart's tests compare the mounted script with the chart's file, byte for
   byte. (One flag of the script changed because of what the lab showed, below; by hand and in the Job it is the
   same file.) What the script refuses by hand it refuses here: a class that cannot grow a volume, a pod that is not
@@ -124,6 +131,7 @@ Its role, in the release's namespace only:
 | The mongot StatefulSet, by name | read, delete | the size the StatefulSet has, its pods; the one delete of the runbook, always with `--cascade=orphan` |
 | Pods | read, list | each pod Ready before and after its claim grows; the same pods afterwards |
 | The mongot pods, by name | delete | only where a claim's file system waits for its pod to be started again: that pod, after the StatefulSet has been made again; it keeps its claim (chart 0.3.26) |
+| The mongot pods, by name | run a command in | `df`, for the plan and the verification. It is a right to read what the pod mounts (chart 0.3.26) |
 | Volume claims | read, list, ask for more | Kubernetes lets a claim's size only grow, and nothing else of a claim be changed |
 
 It may not delete another pod, or a claim, and it holds no right outside the namespace. Asked of the lab's API
@@ -309,7 +317,7 @@ part that does what three lines of the Job's script do.
 | | By hand (today) | The Job | A controller (shell-operator) | A controller with our own resource (Go, Python) | MongoDB's operator does it |
 | --- | --- | --- | --- | --- | --- |
 | Steps after the values change | 3 (two runs of the script, one more sync) | 0 | 0 | 0, and a second object to write | 0 |
-| New code | none | one template of 229 lines; one flag changed in the script | a Deployment, an image with our script, hook bindings | a controller, its tests, its image, its release | none of ours |
+| New code | none | one template of 237 lines; one flag changed in the script | a Deployment, an image with our script, hook bindings | a controller, its tests, its image, its release | none of ours |
 | New image to own | no | no (the Jobs' `ose-cli`) | yes | yes | no |
 | Runs | when a person runs it | inside a sync or an upgrade | all year | all year | all year, already |
 | Cluster administrator needed to install | no | no | no | yes, for the definition | no |

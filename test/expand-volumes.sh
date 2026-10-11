@@ -35,7 +35,8 @@ case "$1" in
     kind="$2"; name="$3"
     case "${kind}" in
       statefulset)
-        [[ -e "${FAKE}/sts.replicas" && "${name}" == mongot-search-0 ]] || exit 1
+        [[ ! -e "${FAKE}/sts.forbidden" ]] || { echo 'Error from server (Forbidden): statefulsets.apps "mongot-search-0" is forbidden' >&2; exit 1; }
+        [[ -e "${FAKE}/sts.replicas" && "${name}" == mongot-search-0 ]] || { echo "Error from server (NotFound): statefulsets.apps \"${name}\" not found" >&2; exit 1; }
         case "$*" in *go-template=*) printf 'app=mongot-search-0-svc,'; exit 0 ;; esac
         case "${path}" in
           '{.spec.replicas}') f sts.replicas ;;
@@ -96,7 +97,17 @@ case "$1" in
       persistentvolumeclaims) for i in 0 1 2; do [[ -e "${FAKE}/pvc.${i}.uid" ]] && printf 'data-mongot-search-0-%s=%s ' "$i" "$(f "pvc.${i}.uid")"; done ;;
       *) echo "the stand-in oc does not know: $*" >&2; exit 64 ;;
     esac ;;
-  exec) i="$(n_of "$2")"; printf 'Filesystem Size Used Avail Use%% Mounted on\n/dev/sdb %s 190G 110G 64%% /mongot/data\n' "$(f "pvc.${i}.has")" ;;
+  exec)
+    i="$(n_of "$2")"
+    [[ ! -e "${FAKE}/noexec" ]] || { echo 'Error from server (Forbidden): pods "x" is forbidden: cannot create resource "pods/exec"' >&2; exit 1; }
+    case "$*" in
+      # df -PkT: the type and the size in KiB. fs.<n> holds "<type> <KiB>"; without it, an xfs as large as the claim's
+      # capacity less one hundredth (a file system's own tables).
+      *-PkT*)
+        if [[ -e "${FAKE}/fs.${i}" ]]; then fs="$(f "fs.${i}")"; else fs="xfs $(f "pvc.${i}.has" | awk '{ sub(/Gi$/, ""); printf "%.0f", $1 * 1048576 * 0.99 }')"; fi
+        printf 'Filesystem Type 1024-blocks Used Available Capacity Mounted on\n/dev/sdb %s 1000 1000 1%% /mongot/data\n' "${fs}" ;;
+      *) printf 'Filesystem Size Used Avail Use%% Mounted on\n/dev/sdb %s 190G 110G 64%% /mongot/data\n' "$(f "pvc.${i}.has")" ;;
+    esac ;;
   patch)
     [[ "$2" == persistentvolumeclaim ]] || { echo "the stand-in oc lets nothing but a claim be patched: $*" >&2; exit 64; }
     i="$(n_of "$3")"; size="$(printf '%s' "$*" | sed -n 's/.*"storage":"\([^"]*\)".*/\1/p')"
@@ -326,7 +337,9 @@ out="$(run --expand --statefulset mongot-search-0 --pod 0 --restart-if-pending -
 [[ $rc == 2 && "$(grep -c '^delete ' "${FAKE}/calls")" == 0 && "$out" == *"cannot be read"*"nothing was deleted"* ]] \
   && ok "--expand --restart-if-pending deletes no pod whose uid it cannot read" || bad "--restart-if-pending and an unreadable pod (exit ${rc}): ${out##*$'\n'}"
 # A claim that is seen waiting and then finishes by itself within the grace keeps its pod.
-cluster 300Gi 250Gi 300Gi; printf FileSystemResizePending > "${FAKE}/pvc.0.conds"; printf 2 > "${FAKE}/pvc.0.clears"
+# Six looks at the claim come before the delete (the list, the failed-resize test, three in the grace of 2 s at
+# 1 s, the last test): it finishes on the sixth. A grace cut short deletes the pod.
+cluster 300Gi 250Gi 300Gi; printf FileSystemResizePending > "${FAKE}/pvc.0.conds"; printf 5 > "${FAKE}/pvc.0.clears"
 out="$(run --restart-pending --statefulset mongot-search-0 --pod 0 --apply --yes)"; rc=$?
 [[ $rc == 0 && "$(writes)" == 0 && "$out" == *"claim data-mongot-search-0-0 no longer waits for its pod: nothing to do"* ]] \
   && ok "--restart-pending watches a waiting claim for the grace first: one that finishes by itself keeps its pod" || bad "a claim that finished within the grace (exit ${rc}, $(writes) writes): ${out##*$'\n'}"
@@ -384,6 +397,68 @@ sed -i.bak 's|set_f sts.uid sts-again;|set_f sts.uid sts-again; set_f pvc.2.uid 
 out="$(run --recreate-statefulset --statefulset mongot-search-0 --apply --yes)"; rc=$?
 mv "${work}/bin/oc.bak" "${work}/bin/oc"; chmod +x "${work}/bin/oc"
 [[ $rc == 4 && "$out" == *"WARNING: the volume claims of ${NS} are not the same as before"* ]] && ok "a claim that is not the same afterwards is an error" || bad "a changed claim after the StatefulSet was made again (exit ${rc})"
+
+# ------------------------------------------------------------------------------------------------ --plan
+# The sizes compared, and what follows from them. It reads; it changes nothing.
+plan() { out="$(run --plan --statefulset mongot-search-0)"; rc=$?; }
+cluster 300Gi 300Gi 300Gi; plan
+[[ $rc == 0 && "$(writes)" == 0 && "$out" == *"pod 1: claim data-mongot-search-0-1 asks 300Gi, has 300Gi; the pod sees 297.0 GiB (xfs)"*"nothing to do: the StatefulSet and every claim there is have what MongoDBSearch mongot asks for"* ]] \
+  && ok "--plan on volumes that have what is asked: nothing to do, exit 0" || bad "--plan with nothing to do (exit ${rc}): ${out##*$'\n'}"
+# A larger size in the resource: every claim to grow, then the StatefulSet.
+cluster 250Gi 250Gi 300Gi; printf Failed > "${FAKE}/mdbs.phase"; plan
+[[ $rc == 10 && "$(writes)" == 0 && "$(grep -c 'to grow to 300Gi: --expand' <<<"$out")" == 3 && "$out" == *"StatefulSet mongot-search-0: has 250Gi, to be made again at 300Gi"*"to do, in this order: grow 3 claim(s); make the StatefulSet again"* ]] \
+  && ok "--plan on a larger size: three claims to grow and the StatefulSet to make again, exit 10" || bad "--plan on a larger size (exit ${rc}): ${out##*$'\n'}"
+# Part of the way: one claim grown, one under way, one that waits for its pod, one not asked yet... and the StatefulSet.
+cluster 300Gi 300Gi 300Gi; printf 250Gi > "${FAKE}/sts.size"
+printf 250Gi > "${FAKE}/pvc.1.has"; printf Resizing > "${FAKE}/pvc.1.conds"; printf 250Gi > "${FAKE}/pvc.2.has"; printf FileSystemResizePending > "${FAKE}/pvc.2.conds"; plan
+[[ $rc == 10 && "$out" == *"pod 0: claim data-mongot-search-0-0 asks 300Gi, has 300Gi"*"nothing to do"*"pod 1:"*"its resize is under way: --expand waits for it"*"pod 2:"*"its file system grows when its pod starts again: --restart-pending"*"to do, in this order: wait for 1 resize(s); make the StatefulSet again; restart 1 pod(s)"* ]] \
+  && ok "--plan part of the way: each claim gets its own answer, and the steps their order" || bad "--plan part of the way (exit ${rc}): ${out##*$'\n'}"
+# Only a pod to restart: the StatefulSet has its size already.
+cluster 300Gi 300Gi 300Gi; printf 250Gi > "${FAKE}/pvc.0.has"; printf FileSystemResizePending > "${FAKE}/pvc.0.conds"; plan
+[[ $rc == 10 && "$out" == *"to do, in this order: restart 1 pod(s)"* && "$out" != *"make the StatefulSet again"* ]] \
+  && ok "--plan with the StatefulSet done and one claim waiting for its pod: one pod to restart" || bad "--plan with one waiting claim (exit ${rc}): ${out##*$'\n'}"
+# A smaller size is not supported; a failed resize is for a person. Neither is something to do.
+cluster 300Gi 300Gi 250Gi; plan; rc1=$rc; o1="$out"
+cluster 250Gi 250Gi 300Gi; printf 300Gi > "${FAKE}/pvc.1.asks"; printf 'Resizing ControllerResizeError' > "${FAKE}/pvc.1.conds"; plan
+[[ $rc1 == 1 && "$o1" == *"NOT SUPPORTED: MongoDBSearch mongot asks for 250Gi, less than the 300Gi the StatefulSet's volumes were made at"* && $rc == 1 && "$out" == *"the cluster reports its resize as failed: for a person"*"NEEDS A PERSON: 1 of the above"* && "$(writes)" == 0 ]] \
+  && ok "--plan ends with 1 on a smaller size (not supported) and on a resize the cluster reports as failed (for a person)" || bad "--plan on what it does not do (exit ${rc1}, ${rc})"
+# A first install: no StatefulSet yet is nothing to do; one that cannot be read is refused; a pod not made yet is not assessed.
+cluster 300Gi 300Gi 300Gi; rm -f "${FAKE}/sts.replicas"; plan; rc1=$rc; o1="$out"
+cluster 300Gi 300Gi 300Gi; touch "${FAKE}/sts.forbidden"; plan; rc2=$rc
+cluster 300Gi 300Gi 300Gi; rm -f "${FAKE}/pvc.2.phase"; plan
+[[ $rc1 == 0 && "$o1" == *"no StatefulSet mongot-search-0 in ${NS} yet: nothing to assess, and nothing to do"* && $rc2 == 1 && $rc == 0 && "$out" == *"pod 2: no claim data-mongot-search-0-2 yet (its pod has not been made): nothing to assess"* ]] \
+  && ok "--plan before there is a StatefulSet, or a pod's claim, finds nothing to do; a StatefulSet it cannot read is refused" || bad "--plan on a first install (exit ${rc1}, ${rc2}, ${rc})"
+# The volumes ahead of the values (grown by hand first): said, and nothing to do.
+cluster 300Gi 300Gi 250Gi; printf 250Gi > "${FAKE}/sts.size"; plan
+[[ $rc == 0 && "$(grep -c 'the values are behind the volume' <<<"$out")" == 3 ]] && ok "--plan with the volumes ahead of the values says so, and has nothing to do" || bad "--plan with the volumes ahead (exit ${rc}): ${out##*$'\n'}"
+
+# ------------------------------------------------------------------------------------------------ --verify
+# Has the growth taken effect, down to the file system each pod sees? It reads, and changes nothing.
+cluster 300Gi 300Gi 300Gi
+out="$(run --verify --statefulset mongot-search-0)"; rc=$?
+[[ $rc == 0 && "$(writes)" == 0 && "$out" == *"pod 2: claim data-mongot-search-0-2 has 300Gi; the file system the pod sees has 297.0 GiB (xfs at /mongot/data): it has the claim's size"*"verified: MongoDBSearch mongot is Running at 300Gi"*"file systems compared with their claims: 3"* ]] \
+  && ok "--verify passes a growth that has taken effect, and says what it compared" || bad "--verify on a finished growth (exit ${rc}, $(writes) writes): ${out##*$'\n'}"
+# The claim has its size and the file system does not: the one thing the claim cannot say.
+cluster 300Gi 300Gi 300Gi; printf 'xfs 262144000' > "${FAKE}/fs.1"
+out="$(run --verify --statefulset mongot-search-0)"; rc=$?
+[[ $rc == 5 && "$(writes)" == 0 && "$out" == *"NOT VERIFIED: pod 1: claim data-mongot-search-0-1 has 300Gi, and the file system the pod sees has 250.0 GiB (xfs at /mongot/data): the file system has not grown"*"--restart-pending"* && "$out" != *"NOT VERIFIED: pod 0"* ]] \
+  && ok "--verify fails on a file system that is smaller than its claim, names the pod and what grows it" || bad "--verify and a file system that has not grown (exit ${rc}): ${out##*$'\n'}"
+# A shared export has the export's size: said, not counted against the growth, and not counted as compared.
+cluster 300Gi 300Gi 300Gi; for i in 0 1 2; do printf 'nfs4 10171392' > "${FAKE}/fs.${i}"; done
+out="$(run --verify --statefulset mongot-search-0)"; rc=$?
+[[ $rc == 0 && "$out" == *"the pod sees a shared export (nfs4, 9.7 GiB at /mongot/data)"*"file systems compared with their claims: 0; shared exports that cannot show it: 3"* ]] \
+  && ok "--verify says a shared export cannot show the growth, and counts it as not compared" || bad "--verify on shared exports (exit ${rc}): ${out##*$'\n'}"
+# Each of the other things that must hold.
+cluster 300Gi 300Gi 300Gi; printf FileSystemResizePending > "${FAKE}/pvc.0.conds"; out="$(run --verify --statefulset mongot-search-0)"; rc1=$?
+[[ "$out" == *"NOT VERIFIED: pod 0: claim data-mongot-search-0-0 is not finished [FileSystemResizePending]: its file system grows when its pod starts again: --restart-pending"* ]] || rc1=wrong
+cluster 300Gi 250Gi 300Gi; out="$(run --verify --statefulset mongot-search-0)"; rc2=$?; [[ "$out" == *"has 250Gi, less than 300Gi: --expand"* ]] || rc2=wrong
+cluster 300Gi 300Gi 300Gi; printf 250Gi > "${FAKE}/sts.size"; printf Failed > "${FAKE}/mdbs.phase"; out="$(run --verify --statefulset mongot-search-0)"; rc3=$?
+[[ "$out" == *"NOT VERIFIED: MongoDBSearch mongot is Failed, not Running"*"NOT VERIFIED: StatefulSet mongot-search-0 has 250Gi, and MongoDBSearch mongot asks for 300Gi: --recreate-statefulset"* ]] || rc3=wrong
+cluster 300Gi 300Gi 300Gi; printf False > "${FAKE}/pod.2.ready"; out="$(run --verify --statefulset mongot-search-0)"; rc4=$?; [[ "$out" == *"NOT VERIFIED: pod 2: pod mongot-search-0-2 is not Ready"* ]] || rc4=wrong
+cluster 300Gi 300Gi 300Gi; touch "${FAKE}/noexec"; out="$(run --verify --statefulset mongot-search-0)"; rc5=$?; [[ "$out" == *"could not be read (oc exec, df)"* && "$(writes)" == 0 ]] || rc5=wrong
+[[ "${rc1} ${rc2} ${rc3} ${rc4} ${rc5}" == "5 5 5 5 5" ]] \
+  && ok "--verify fails, and says which, on a claim that waits, a claim too small, a StatefulSet or a resource not there yet, a pod not Ready, and a pod it cannot ask" || bad "--verify and what must hold: ${rc1} ${rc2} ${rc3} ${rc4} ${rc5}"
+refuses "--verify changes nothing and takes neither --dry-run nor --apply" "--verify with --apply" run --verify --statefulset mongot-search-0 --apply
 
 # ------------------------------------------------------------------------------------------------ the script itself
 "${SH}" -n "${SCRIPT}" && ok "bash -n" || bad "bash -n"

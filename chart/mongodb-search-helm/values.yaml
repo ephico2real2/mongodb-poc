@@ -85,7 +85,9 @@ search:
     # (allowVolumeExpansion), and its service account may then ask this namespace's claims for more, delete the
     # mongot StatefulSet, by name, and delete a mongot pod, by name: where a volume's file system grows only when
     # its pod is started again, that pod is deleted once the StatefulSet has been made again, keeps its claim and
-    # comes back on it, one pod at a time.
+    # comes back on it, one pod at a time. It may also run a command in a mongot pod, by name: df, to verify at the
+    # end that the file system the pod sees is as large as its claim. The Job plans first (the sizes compared, and
+    # what follows from them) and changes nothing when the plan finds nothing to do.
     # false: the gate stops and names the runbook, as before.
     autoExpand:
       enabled: false
