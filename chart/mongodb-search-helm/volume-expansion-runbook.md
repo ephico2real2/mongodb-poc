@@ -42,6 +42,8 @@ STS=<search name>-search-0                   # mongot-search-0 with the chart's 
 
 ## Letting the chart take steps 3 to 5: `search.persistence.autoExpand`
 
+How it works, with a figure of the sync step by step: [volume-auto-expansion.md](volume-auto-expansion.md).
+
 With `search.persistence.autoExpand.enabled: true` a Job of the chart takes steps 3, 4 and 4b itself, with the same
 script, and step 6's verification, and the gate passes in that same sync or upgrade: step 5 is not needed. The flag is `false` in the chart and
 is meant to stay `false` in git: it is set for the change that grows the volumes, and taken out after.
