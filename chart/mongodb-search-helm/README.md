@@ -567,9 +567,9 @@ MongoDB's remedies, in its order, with where each is said and how it is done wit
 **Measured on the lab**, 2026-10-09: while two inserts a second were written to one index for 14 minutes, twice, its lag read 0 on two pods at each of 61 readings and 0 or 1 second on the third (1 second at 5 of 61 readings in the first run and 14 of 61 in the second). The document counts of the three pods read 17 to 24 apart during the same minutes: Prometheus reads the first pod 9 seconds after the other two. With nothing written, the gauge read 6 to 10 seconds for minutes at a time on one pod or another (Prometheus's 15-second samples of the same hours hold 10 s for up to 5 minutes running, once 11 s and once 17 s); why was not looked into.
 ## Volumes and scaling
 
-Five documents beside this one, two test records in `docs/`, and a script, for running mongot once it is installed.
-All of them are in the chart's package; the pictures of the test records are linked from the repository, since a
-chart with them in it is too large for `helm install`.
+Six documents beside this one, two test records in `docs/`, and a script, for running mongot once it is installed.
+All of them are in the chart's package; the pictures of the test records and of volume-auto-expansion.md are linked
+from the repository, since a chart with them in it is too large for `helm install`.
 
 | Document | For |
 | --- | --- |

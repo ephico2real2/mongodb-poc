@@ -39,8 +39,8 @@ search:
 | --- | --- |
 | 1 | Check before starting: step 0 of the [runbook](volume-expansion-runbook.md), all of it |
 | 2 | In the values: the larger size and the flag. In one change, or the size first and the flag after |
-| 3 | Sync (Argo CD) or `helm upgrade` |
-| 4 | Read the Job's verdict: `oc logs job/<release>-mongodb-search-helm-expand-volumes -n <namespace>`, while the Job is there (Argo CD removes it when the sync has succeeded) |
+| 3 | Sync (Argo CD) or `helm upgrade`. Helm waits for the Job only up to its `--timeout`, five minutes unless given: give one longer than the growth may take |
+| 4 | Read the Job's verdict: `oc logs job/<release>-mongodb-search-helm-expand-volumes -n <namespace>`, while the Job is there: Argo CD removes it when the sync has succeeded, and Kubernetes removes it ten minutes after it has ended, failed or not (`jobs.ttlSecondsAfterFinished`, 600) |
 | 5 | The flag `false` again, and sync. Under Argo CD without automated pruning, one sync with pruning removes the Job's service account, role and script |
 
 **The size first, the flag after** also works: the first sync stops at the gate, as it does without the flag, and
@@ -78,10 +78,10 @@ GIT AND ARGO CD                                   THE CLUSTER
 | Step | What it is | If it does not hold |
 | --- | --- | --- |
 | 4 Plan | The script's `--plan`: what the resource asks for, what the StatefulSet's volumes were made at, what each claim asks for and has. From them, what is to be done | Nothing to do (a first install, a sync that changes no size): the Job ends, having read only. A smaller size, or a resize the cluster reports as failed: the Job fails, nothing changed |
-| 5 Grow | `--expand`: each claim is asked for the new size, the lowest pod first, and waited for before the next | It stops at that claim. No pod, claim or StatefulSet was deleted |
+| 5 Grow | `--expand`: each claim is asked for the new size, the lowest pod first, and waited for before the next. A claim whose volume has grown and whose file system waits for its pod (`FileSystemResizePending`) is watched for two minutes and left for step 7 | It stops at that claim. No pod, claim or StatefulSet was deleted |
 | 6 The StatefulSet | `--recreate-statefulset`: deleted with `--cascade=orphan`, which leaves its pods and claims; the operator makes it again and adopts them | It stops and says not to delete the pods: they run on without a StatefulSet until the operator makes it |
-| 7 Restart | `--restart-pending`: a claim that has waited two minutes for its pod (`FileSystemResizePending`) has that pod deleted; the pod keeps its claim and is waited for before the next. Storage that grows a file system in use never waits, and no pod is touched | It stops before the next pod. The next sync plans again and takes up what is left |
-| 8 Verify | `--verify`: the resource `Running`, the StatefulSet and every claim at the size, no resize waiting, every pod Ready, and the file system each pod sees (`df`, inside the pod) at 95% of its claim or more | The Job fails and names what is not so, each with what to do |
+| 7 Restart | `--restart-pending`: a claim that still waits for its pod, watched for two more minutes, has that pod deleted; the pod keeps its claim and is waited for before the next. Storage that grows a file system in use never waits, and no pod is touched | It stops before the next pod. The next sync plans again and takes up what is left |
+| 8 Verify | `--verify`: the resource `Running`, the StatefulSet and every claim at the size, no resize waiting, every pod Ready, and the file system each pod sees (`df`, inside the pod) at 95% of its claim or more. A shared export (NFS, SMB), or a file system larger than its claim, is not the volume's own: it is said, and not compared | The Job fails and names what is not so, each with what to do |
 
 The Job acts in two states only: the operator has refused the new size, or the resource is `Running` and the plan
 shows the end of a growth left undone. In any other state (the resource still being reconciled, or `Failed` for
@@ -128,15 +128,16 @@ pod is a right to read what that pod mounts, the sync user's password included.
 
 | What | Where | Result |
 | --- | --- | --- |
-| A growth with the size and the flag in one change | The lab (OpenShift Local 4.22.7, Argo CD, NFS class), 2026-10-10 and 11, several times | One sync each, 57 to 65 s; the Job itself 7 to 14 s; the same pods and claims |
+| A growth with the size and the flag in one change | The lab (OpenShift Local 4.22.7, Argo CD, NFS class), 2026-10-10 and 11, several times | One sync each, 57 to 63 s; the Job itself 7 to 14 s; the same pods and claims |
 | The size first, then the flag | The lab, 10Gi to 11Gi | The gate stopped the first sync; the flag's sync began once the retries were spent, and passed in 67 s |
 | The plan and the verification, chart 0.3.26 | The lab, 15Gi to 16Gi | "to do, in this order: grow 3 claim(s); make the StatefulSet again"; then the steps; then "file systems compared with their claims: 0; shared exports that cannot show it: 3" |
 | A sync with the flag on and nothing to do | The lab, chart 0.3.26 | The plan: "nothing to do"; nothing else was run |
 | A smaller size | The lab, 4Gi asked of 8Gi volumes | Refused by the Job, nothing changed. The preflight's refusal, which now comes first, is in the chart's tests only |
-| Searches during all of it | The lab, through mongod | 566 tried while the growths from 8Gi to 16Gi were watched, 0 failed |
+| Searches during the growths from 8Gi to 16Gi | The lab, through mongod | 566 tried, one every 13 to 14 s while a run was watched, 0 failed |
 | **A pod restarted because its volume waits (step 7)** | Nowhere | Not run on a cluster. The lab's NFS volumes never wait for a pod. In the script's tests only |
 | **A file system that grows, and the verification comparing it** | Nowhere | Not run on a cluster. On the lab each pod sees the NAS export (9.7 GiB) whatever its claim says, and the verification says so |
 | Under Helm, without Argo CD | Nowhere | The chart's tests cover the order of the hooks only |
+| A first install with the flag on | Nowhere | The plan's "nothing to do" was seen on a search that existed. Where there is no StatefulSet yet: in the script's tests only |
 
 Run one growth on a cluster where it costs nothing, on the storage production uses, before relying on it there:
 what the lab could not show is exactly what differs on real disks. The record of the lab's runs, and why this is a

@@ -13,12 +13,14 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
     --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
     --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
   }
 }
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
   --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
   --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
@@ -122,7 +124,7 @@ a { color: var(--remote); }
     <h2>By hand, and with the flag</h2>
     <figure>
       <div class="fig-scroll">
-        <svg viewBox="0 0 980 520" role="img" aria-label="The same steps by hand and with the flag: by hand a person runs the script four times and syncs twice; with autoExpand on, one sync does all of it and nobody runs anything.">
+        <svg viewBox="0 0 980 520" role="img" aria-label="The same steps by hand and with the flag: by hand a person runs the script up to four times and syncs twice; with autoExpand on, one sync does all of it and nobody runs anything.">
           <g font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600">
             <rect x="200" y="14" width="370" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/>
             <text x="385" y="34" text-anchor="middle" fill="var(--none)">BY HAND  ·  the flag off</text>
