@@ -1,7 +1,9 @@
 # The request path, in diagrams
 
 The implementation diagrams for this deployment. Every label was read from the running
-objects on CRC 4.22 on 2026-09-24 — not from the specification, and not from memory.
+objects on CRC 4.22 on 2026-09-24 — not from the specification, and not from memory. One
+label is later: the replica set's machine and its address, `mongodb-poc` at 192.168.64.9, are
+those of 2026-10-11, when it left the shared machine `bgp-fabric` at 192.168.64.4.
 
 > **There is no Gateway API here.** No `Gateway`, no `GRPCRoute`, no `BackendTLSPolicy`.
 > The load balancer is a plain Envoy that the MCK operator deploys itself when a
@@ -29,7 +31,7 @@ connection round-robins the individual gRPC streams across all three `mongot` po
 second mutual-TLS leg.*
 
 ```text
-  colima VM 192.168.64.4
+  colima VM 192.168.64.9
     (1) mongod rs0, 3 members             mongotHost = grpc-search.apps-crc.testing:443
          |                                useGrpcForSearch = true
          |                                searchTLSMode   = requireTLS
@@ -66,7 +68,7 @@ second mutual-TLS leg.*
   10.217.1.38:27028    10.217.1.37:27028    10.217.1.36:27028
 
   (8) reverse leg: each mongot opens its OWN change stream straight back to
-      192.168.64.4:27017-19 - not through Envoy, not the Route, not balanced
+      192.168.64.9:27017-19 - not through Envoy, not the Route, not balanced
 
   also deployed, carrying no traffic today:
       Service mongot-grpc-lb, MetalLB L2, 192.168.127.100:27028

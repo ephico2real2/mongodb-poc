@@ -14,7 +14,7 @@ cd "$(dirname "$0")/.."
 set -a; . ./mongodb/.env 2>/dev/null || true; set +a
 : "${NS:=mongodb-poc}"
 export KUBECONFIG="${KUBECONFIG:-$HOME/.crc/machines/crc/kubeconfig}"
-export DOCKER_CONTEXT="${DOCKER_CONTEXT:-colima-bgp-fabric}"
+export DOCKER_CONTEXT="${DOCKER_CONTEXT:-colima-mongodb-poc}"
 C_B=$'\033[1m'; C_D=$'\033[2m'; C_G=$'\033[32m'; C_Y=$'\033[33m'; C_0=$'\033[0m'
 [ -t 1 ] || { C_B= C_D= C_G= C_Y= C_0=; }
 step() { printf "\n${C_B}%s${C_0}\n" "$1"; }

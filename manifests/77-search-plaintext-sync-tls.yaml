@@ -56,9 +56,9 @@ spec:
   source:
     external:
       hostAndPorts:
-      - "192.168.64.4:27017"
-      - "192.168.64.4:27018"
-      - "192.168.64.4:27019"
+      - "192.168.64.9:27017"
+      - "192.168.64.9:27018"
+      - "192.168.64.9:27019"
       # The CA that issued mongod's certificate, key ca.crt. Only the sync leg reads it
       # here; without security.tls it gates no Envoy mounts and adds no mTLS.
       tls:

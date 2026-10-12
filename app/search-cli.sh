@@ -14,7 +14,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../mongodb"
 set -a; . ./.env; set +a
-export DOCKER_CONTEXT="${DOCKER_CONTEXT:-colima-bgp-fabric}"
+export DOCKER_CONTEXT="${DOCKER_CONTEXT:-colima-mongodb-poc}"
 : "${DB:=sample_mflix}" "${COLL:=movies}" "${LIMIT:=5}"
 
 MODE=text YEAR=0

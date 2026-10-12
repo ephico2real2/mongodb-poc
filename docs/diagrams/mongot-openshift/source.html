@@ -110,12 +110,12 @@ a { color: var(--remote); }
             <text x="44" y="474" fill="var(--gap)">Not reachable from the Mac or colima without a stitch.</text>
 
             <rect x="514" y="150" width="440" height="126" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
-            <text x="532" y="172" font-weight="600" fill="var(--remote)">colima VM · &quot;bgp-fabric&quot;</text>
-            <text x="532" y="190" fill="currentColor">socket_vmnet → a real bridge the Mac can route to</text>
-            <text x="532" y="210" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">col0  192.168.64.4     (host-routable)</text>
-            <text x="532" y="228" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">eth0  192.168.5.3      (lima slirp)</text>
-            <text x="532" y="250" fill="currentColor">Docker Engine 29.5.2 · 6 GiB · separate from CRC</text>
-            <text x="532" y="268" fill="var(--muted)">Also hosts a containerlab FRR/BGP fabric.</text>
+            <text x="532" y="172" font-weight="600" fill="var(--remote)">colima VM · &quot;mongodb-poc&quot;</text>
+            <text x="532" y="190" fill="currentColor">vzNAT → a real bridge the Mac can route to</text>
+            <text x="532" y="210" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">col0  192.168.64.9     (host-routable)</text>
+            <text x="532" y="228" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">eth0  192.168.5.1      (lima slirp)</text>
+            <text x="532" y="250" fill="currentColor">Docker Engine 29.5.2 · 3 GiB · separate from CRC</text>
+            <text x="532" y="268" fill="var(--muted)">Nothing else runs in it (mongodb/vm.sh).</text>
 
             <rect x="514" y="292" width="440" height="212" rx="8" fill="var(--surface)" stroke="var(--rule)" stroke-width="1.5"/>
             <text x="532" y="314" fill="currentColor" font-weight="600">MongoDB replica set rs0 — outside Kubernetes</text>
@@ -123,13 +123,13 @@ a { color: var(--remote); }
             <text x="532" y="350" fill="var(--muted)">so three ports avoid hairpin NAT on a bridge.</text>
             <g font-family="IBM Plex Mono, monospace" font-size="12">
               <rect x="532" y="364" width="404" height="30" rx="6" fill="var(--remote-wash)" stroke="var(--remote)"/>
-              <text x="548" y="384" fill="var(--remote)">mongo1  192.168.64.4:27017   PRIMARY</text>
+              <text x="548" y="384" fill="var(--remote)">mongo1  192.168.64.9:27017   PRIMARY</text>
               <rect x="532" y="400" width="404" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/>
-              <text x="548" y="420" fill="var(--none)">mongo2  192.168.64.4:27018   SECONDARY</text>
+              <text x="548" y="420" fill="var(--none)">mongo2  192.168.64.9:27018   SECONDARY</text>
               <rect x="532" y="436" width="404" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/>
-              <text x="548" y="456" fill="var(--none)">mongo3  192.168.64.4:27019   SECONDARY</text>
+              <text x="548" y="456" fill="var(--none)">mongo3  192.168.64.9:27019   SECONDARY</text>
             </g>
-            <text x="532" y="486" fill="var(--remote)" font-weight="600">All three verified reachable from mongot pods.</text>
+            <text x="532" y="486" fill="var(--remote)" font-weight="600">All three ports reachable from the CRC node.</text>
           </g>
 
           <g font-family="IBM Plex Sans, sans-serif" font-size="12">
@@ -205,7 +205,7 @@ a { color: var(--remote); }
           <g font-family="IBM Plex Sans, sans-serif" font-size="12" fill="var(--none)">
             <text x="772" y="292" font-weight="600">sync leg — opposite direction</text>
             <text x="772" y="310">mongot pods pull from</text>
-            <text x="772" y="328" font-family="IBM Plex Mono, monospace" font-size="12">192.168.64.4:27017-19</text>
+            <text x="772" y="328" font-family="IBM Plex Mono, monospace" font-size="12">192.168.64.9:27017-19</text>
             <text x="772" y="346">SCRAM · search-sync-source</text>
             <text x="772" y="364">does NOT cross Envoy</text>
           </g>
@@ -244,10 +244,10 @@ a { color: var(--remote); }
       <table>
         <thead><tr><th>From</th><th>To</th><th>Result</th><th>How</th></tr></thead>
         <tbody>
-          <tr><td>macOS</td><td>192.168.64.4 (colima)</td><td class="yes">routed</td><td>directly connected via bridge100</td></tr>
+          <tr><td>macOS</td><td>192.168.64.9 (colima)</td><td class="yes">routed</td><td>directly connected via bridge100</td></tr>
           <tr><td>macOS</td><td>192.168.126.11 / 192.168.127.2</td><td class="no">timeout</td><td>no route exists — no host interface</td></tr>
-          <tr><td>CRC node</td><td>192.168.64.4</td><td class="yes">ICMP ok</td><td>via 192.168.127.1 dev br-ex, Mac forwards</td></tr>
-          <tr><td><strong>mongot pod</strong></td><td><strong>192.168.64.4:27017 / 27018 / 27019</strong></td><td class="yes">all three connected</td><td>the sync leg</td></tr>
+          <tr><td>CRC node</td><td>192.168.64.9</td><td class="yes">ICMP ok</td><td>via 192.168.127.1 dev br-ex, Mac forwards</td></tr>
+          <tr><td><strong>mongot pod</strong></td><td><strong>192.168.64.9:27017 / 27018 / 27019</strong></td><td class="yes">all three connected</td><td>the sync leg</td></tr>
           <tr><td>colima</td><td>192.168.127.x direct</td><td class="no">no route</td><td>disjoint L2</td></tr>
           <tr><td>colima</td><td>192.168.64.1:27028</td><td class="yes">reaches the VIP</td><td>gvproxy forwarder entry</td></tr>
           <tr><td>CRC node</td><td>192.168.127.100:27028</td><td class="yes">Envoy answers</td><td>MetalLB L2 on br-ex</td></tr>
@@ -289,19 +289,19 @@ a { color: var(--remote); }
             <text x="540" y="40" font-weight="600" fill="var(--gap)">This lab — ONE failure domain</text>
             <text x="540" y="58" fill="var(--muted)">same IP, separated only by port number</text>
             <rect x="540" y="74" width="400" height="222" rx="8" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.5" stroke-dasharray="4 3"/>
-            <text x="556" y="95" font-weight="600" fill="var(--gap)">colima VM 192.168.64.4</text>
+            <text x="556" y="95" font-weight="600" fill="var(--gap)">colima VM 192.168.64.9</text>
             <text x="556" y="112" fill="var(--gap)" font-size="12">one kernel · one NIC · one process to kill</text>
             <g font-family="IBM Plex Mono, monospace" font-size="12">
               <rect x="556" y="124" width="368" height="46" rx="6" fill="var(--surface)" stroke="var(--remote)"/>
-              <text x="572" y="143" fill="var(--remote)">192.168.64.4:27017</text>
+              <text x="572" y="143" fill="var(--remote)">192.168.64.9:27017</text>
               <text x="908" y="143" text-anchor="end" fill="var(--remote)">PRIMARY</text>
               <text x="572" y="161" fill="var(--muted)" font-size="11">container mongo1</text>
               <rect x="556" y="178" width="368" height="46" rx="6" fill="var(--surface)" stroke="var(--none)"/>
-              <text x="572" y="197" fill="var(--none)">192.168.64.4:27018</text>
+              <text x="572" y="197" fill="var(--none)">192.168.64.9:27018</text>
               <text x="908" y="197" text-anchor="end" fill="var(--none)">SECONDARY</text>
               <text x="572" y="215" fill="var(--muted)" font-size="11">container mongo2</text>
               <rect x="556" y="232" width="368" height="46" rx="6" fill="var(--surface)" stroke="var(--none)"/>
-              <text x="572" y="251" fill="var(--none)">192.168.64.4:27019</text>
+              <text x="572" y="251" fill="var(--none)">192.168.64.9:27019</text>
               <text x="908" y="251" text-anchor="end" fill="var(--none)">SECONDARY</text>
               <text x="572" y="269" fill="var(--muted)" font-size="11">container mongo3</text>
             </g>

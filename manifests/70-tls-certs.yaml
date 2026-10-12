@@ -87,6 +87,6 @@ spec:
   dnsNames:
   - mongod.lab.internal
   ipAddresses:
-  - 192.168.64.4                             # what the replica set advertises
+  - 192.168.64.9                             # what the replica set advertises
   usages: [server auth, client auth, digital signature, key encipherment]
   issuerRef: { name: enterprise-ca, kind: ClusterIssuer, group: cert-manager.io }

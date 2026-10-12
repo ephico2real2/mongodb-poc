@@ -50,9 +50,9 @@ spec:
   source:
     external:
       hostAndPorts:
-      - "192.168.64.4:27017"
-      - "192.168.64.4:27018"
-      - "192.168.64.4:27019"
+      - "192.168.64.9:27017"
+      - "192.168.64.9:27018"
+      - "192.168.64.9:27019"
       # Every hop verifies against this one ca.crt, so it bundles the company root
       # (mongod's certificates) and the internal root (Envoy <-> mongot). See
       # ENTERPRISE-TLS.md section 4 for the one-root failure measured without it.

@@ -148,7 +148,7 @@ spec:
   dnsNames:
   - mongod.lab.internal
   ipAddresses:
-  - 192.168.64.4                             # what the replica set advertises
+  - 192.168.64.9                             # what the replica set advertises
   duration: 8760h       # 1 year - Envoy does not reload a renewed Secret, so after each
   renewBefore: 720h     # renewal: oc rollout restart deploy/mongot-search-lb-0 (TLS.md s8)
   usages: [server auth, client auth, digital signature, key encipherment]

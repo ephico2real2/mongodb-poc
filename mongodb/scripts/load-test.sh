@@ -12,7 +12,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 set -a; . ./.env; set +a
 : "${NS:=mongodb-poc}" "${DB:=sample_mflix}" "${COLL:=movies}" "${REPLICAS:=3}"
-export DOCKER_CONTEXT="${DOCKER_CONTEXT:-colima-bgp-fabric}"
+export DOCKER_CONTEXT="${DOCKER_CONTEXT:-colima-mongodb-poc}"
 CONC=4 NUM=100 MODE=text
 while getopts "c:n:m:" o; do case $o in c) CONC=$OPTARG;; n) NUM=$OPTARG;; m) MODE=$OPTARG;; esac; done
 EXPECTED=$((CONC*NUM))

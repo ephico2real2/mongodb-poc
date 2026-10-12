@@ -91,13 +91,14 @@ expected to retry **against a different replica**.
 <img alt="One long-lived HTTP/2 connection from mongod is pinned by the Route's source hashing to a single Envoy replica, which then round-robins each individual gRPC stream across all three mongot pods over a second mutual-TLS leg." src="docs/diagrams/grpc-through-envoy/request-path.light.png">
 <!-- markdownlint-enable MD033 -->
 
-*Every value in the figure was read from the running objects on 2026-09-24 — `getCmdLineOpts`
+*Every value in the figure was read from the running objects on 2026-09-24 (the replica set's
+machine and address are those of 2026-10-11) — `getCmdLineOpts`
 on the replica set, the router's `haproxy.config`, ConfigMap `mongot-search-lb-0-config`, and
 the Envoy access logs. There is **no Gateway API object** in this cluster: the Envoy is a plain
 Deployment the MCK operator creates from `spec.clusters[].loadBalancer.managed`.*
 
 ```text
-  colima VM 192.168.64.4
+  colima VM 192.168.64.9
     (1) mongod rs0, 3 members             mongotHost = grpc-search.apps-crc.testing:443
          |                                useGrpcForSearch = true
          |                                searchTLSMode   = requireTLS
@@ -134,7 +135,7 @@ Deployment the MCK operator creates from `spec.clusters[].loadBalancer.managed`.
   10.217.1.38:27028    10.217.1.37:27028    10.217.1.36:27028
 
   (8) reverse leg: each mongot opens its OWN change stream straight back to
-      192.168.64.4:27017-19 - not through Envoy, not the Route, not balanced
+      192.168.64.9:27017-19 - not through Envoy, not the Route, not balanced
 
   also deployed, carrying no traffic today:
       Service mongot-grpc-lb, MetalLB L2, 192.168.127.100:27028

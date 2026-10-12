@@ -21,9 +21,9 @@ spec:
   source:
     external:
       hostAndPorts:
-      - "192.168.64.4:27017"
-      - "192.168.64.4:27018"
-      - "192.168.64.4:27019"
+      - "192.168.64.9:27017"
+      - "192.168.64.9:27018"
+      - "192.168.64.9:27019"
     username: search-sync-source
     passwordSecretRef:
       name: mongot-search-sync-source-password

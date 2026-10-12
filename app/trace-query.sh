@@ -16,7 +16,7 @@ cd "$(dirname "$0")/.."
 set -a; . ./mongodb/.env 2>/dev/null || true; set +a
 : "${NS:=mongodb-poc}" "${DB:=platform_ops}" "${COLL:=incidents}" "${FLUSH_WAIT:=15}"
 export KUBECONFIG="${KUBECONFIG:-$HOME/.crc/machines/crc/kubeconfig}"
-export DOCKER_CONTEXT="${DOCKER_CONTEXT:-colima-bgp-fabric}"
+export DOCKER_CONTEXT="${DOCKER_CONTEXT:-colima-mongodb-poc}"
 URI="mongodb://${ROOT_USER:-labAdmin}:${ROOT_PASSWORD:-x}@localhost:${PORT1:-27017}/admin?directConnection=true"
 
 MODE=text N=1 DOMAIN=performance QUIET=

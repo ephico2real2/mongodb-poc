@@ -2,7 +2,8 @@
 
 Written for a team that has the deployment running and does not yet have a mental model
 of what is happening inside it. Every number and every claim below was measured on the
-running cluster; the commands are included so you can reproduce them.
+running cluster; the commands are included so you can reproduce them. The replica set was
+then at 192.168.64.4; the address shown is the one it has since 2026-10-11, 192.168.64.9.
 
 ### The figures
 
@@ -100,7 +101,7 @@ collection**. mongot's own metrics name the phase and the strategy:
 
 ```text
 mongot_initialsync_dispatcher_collectionScan_total{replicationType="DEFAULT",scan_type="id_order"} 8
-mongot_initialsync_dispatcher_syncSource_total{hostName="192.168.64.4"}                            8
+mongot_initialsync_dispatcher_syncSource_total{hostName="192.168.64.9"}                            8
 mongot_initialsync_dispatcher_completedSyncDuration_seconds_count                                  8
 ```
 
@@ -155,9 +156,9 @@ own `config.yml` points straight at the replica set:
 syncSource:
   replicaSet:
     hostAndPort:
-      - 192.168.64.4:27017
-      - 192.168.64.4:27018
-      - 192.168.64.4:27019
+      - 192.168.64.9:27017
+      - 192.168.64.9:27018
+      - 192.168.64.9:27019
     scramAuth:
       authSource: admin
 ```

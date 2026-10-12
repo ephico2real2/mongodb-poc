@@ -84,9 +84,9 @@ spec:
   source:
     external:
       hostAndPorts:
-      - "192.168.64.4:27017"
-      - "192.168.64.4:27018"
-      - "192.168.64.4:27019"
+      - "192.168.64.9:27017"
+      - "192.168.64.9:27018"
+      - "192.168.64.9:27019"
       # REQUIRED, and not only for the sync leg. mongodbsearchenvoy_controller.go gates
       # Envoy's certificate volume mounts on this being set:
       #

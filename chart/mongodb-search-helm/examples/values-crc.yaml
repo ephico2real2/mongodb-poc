@@ -7,13 +7,13 @@ search:
     requests: {cpu: 200m, memory: 1100Mi}
     limits: {cpu: "1", memory: 2Gi}
   persistence:
-    # The lab's NFS class (driver nfs.csi.k8s.io, csi-driver-nfs 4.13.4 with its resizer), since 2026-10-10: a
-    # class whose claims can grow, which the lab's default hostpath class cannot. It was 4Gi when installed and
-    # was grown to 5Gi, 6Gi, 7Gi and 8Gi with volume-expansion-runbook.md, and from there to 16Gi, 1Gi at a time, by
-    # the chart's own Job (autoExpand, below; the repository's docs/investigating-automatic-volume-expansion.md). A
-    # volume cannot be made smaller: do not lower this number. Each claim is a directory of one NAS export: a pod
-    # sees the export's size, not this.
-    storage: 16Gi
+    # The lab's NFS class (driver nfs.csi.k8s.io, csi-driver-nfs 4.13.4 with its resizer): a class whose claims can
+    # grow, which the lab's default hostpath class cannot. The search was installed again on 2026-10-11 at 12Gi
+    # and grown to 13Gi by the chart's own Job (autoExpand, below). The volumes before that, grown from 4Gi to
+    # 16Gi, went with the uninstall (the repository's docs/investigating-automatic-volume-expansion.md). A volume
+    # cannot be made smaller: do not lower this number. Each claim is a directory of one NAS export: a pod sees
+    # the export's size, not this.
+    storage: 13Gi
     storageClass: ipsec-nas-csi
     autoExpand:
       enabled: false
@@ -21,9 +21,9 @@ loadBalancer:
   externalHostname: grpc-search.apps-crc.testing
 source:
   hostAndPorts:
-    - 192.168.64.4:27017
-    - 192.168.64.4:27018
-    - 192.168.64.4:27019
+    - 192.168.64.9:27017
+    - 192.168.64.9:27018
+    - 192.168.64.9:27019
   username: search-sync-source
   passwordSecret:
     name: mongot-search-sync-source-password
