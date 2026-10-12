@@ -91,7 +91,8 @@ expected to retry **against a different replica**.
 <img alt="One long-lived HTTP/2 connection from mongod is pinned by the Route's source hashing to a single Envoy replica, which then round-robins each individual gRPC stream across all three mongot pods over a second mutual-TLS leg." src="docs/diagrams/grpc-through-envoy/request-path.light.png">
 <!-- markdownlint-enable MD033 -->
 
-*Every value in the figure was read from the running objects on 2026-09-24 — `getCmdLineOpts`
+*Every value in the figure was read from the running objects on 2026-09-24 (the replica set's
+machine and address are those of 2026-10-11) — `getCmdLineOpts`
 on the replica set, the router's `haproxy.config`, ConfigMap `mongot-search-lb-0-config`, and
 the Envoy access logs. There is **no Gateway API object** in this cluster: the Envoy is a plain
 Deployment the MCK operator creates from `spec.clusters[].loadBalancer.managed`.*

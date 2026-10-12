@@ -1,7 +1,9 @@
 # The request path, in diagrams
 
 The implementation diagrams for this deployment. Every label was read from the running
-objects on CRC 4.22 on 2026-09-24 — not from the specification, and not from memory.
+objects on CRC 4.22 on 2026-09-24 — not from the specification, and not from memory. One
+label is later: the replica set's machine and its address, `mongodb-poc` at 192.168.64.9, are
+those of 2026-10-11, when it left the shared machine `bgp-fabric` at 192.168.64.4.
 
 > **There is no Gateway API here.** No `Gateway`, no `GRPCRoute`, no `BackendTLSPolicy`.
 > The load balancer is a plain Envoy that the MCK operator deploys itself when a

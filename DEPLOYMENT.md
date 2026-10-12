@@ -9,7 +9,10 @@ Reproduces, on a single MacBook, the architecture MongoDB's vendor team specifie
 **an L7 proxy (Envoy) load-balancing gRPC across 3 `mongot` pods**, with MongoDB
 itself running *outside* Kubernetes.
 
-Every value below was verified on the running system. Nothing is estimated.
+Every value below was verified on the running system. Nothing is estimated. The replica set
+ran then in the colima machine `bgp-fabric`, at 192.168.64.4. Since 2026-10-11 it has a machine
+of its own, at 192.168.64.9 (step 5), and that is the address written on this page: what is
+given as measured or verified at it was measured at the old one.
 
 | Component | Version | Source |
 |---|---|---|
@@ -84,7 +87,7 @@ directly, and that constraint drives the whole design.
                     │        CRC VM (OpenShift)         │  │   colima VM "mongodb-poc"     │
                     │                                   │  │                               │
                     │ br-ex   192.168.127.2/24          │  │ col0   192.168.64.9           │
-                    │ eth10   192.168.126.11/24         │  │ eth0   192.168.5.3 (slirp)    │
+                    │ eth10   192.168.126.11/24         │  │ eth0   192.168.5.1 (slirp)    │
                     │ pods    10.217.0.0/22 (OVN)       │  │                               │
                     │                                   │  │ Docker Engine 29.5.2          │
                     │ MetalLB VIP 192.168.127.100       │  │  ├─ mongo1 :27017  PRIMARY    │
@@ -211,8 +214,8 @@ Also confirm the node is not excluded from external load balancers:
 ### 5. MongoDB replica set in colima — `mongodb/compose.yaml`
 
 The replica set has a colima machine of its own, `mongodb-poc`, with nothing else in it
-(until 2026-10-11 it shared the machine `bgp-fabric`, at 192.168.64.4, with other labs; the
-measurements on this page were taken there). `mongodb/vm.sh` defines it:
+(until 2026-10-11 it shared the machine `bgp-fabric`, at 192.168.64.4, with other labs).
+`mongodb/vm.sh` defines it:
 
 ```bash
 mongodb/vm.sh up          # 2 CPUs, 3 GiB, 20 GiB; prints the address: ADVERTISED_HOST in .env
@@ -220,9 +223,12 @@ cd mongodb
 DOCKER_CONTEXT=colima-mongodb-poc docker compose --env-file .env up -d
 ```
 
-The address is the machine's, given by the Mac's shared network and kept across restarts. A
-new machine has a new address: `ADVERTISED_HOST`, the `ipAddresses` of the mongod certificate
-(`manifests/70-tls-certs.yaml`), and `source.hostAndPorts` of the search all carry it.
+The address is the machine's: a lease of the Mac's shared network (`/var/db/dhcpd_leases`),
+which `mongodb/vm.sh address` prints. Read it again when the machine is made again. These
+carry it: `ADVERTISED_HOST`, the `ipAddresses` of the mongod certificate
+(`manifests/70-tls-certs.yaml`), `source.hostAndPorts` of the search, the EndpointSlice of
+`manifests/40-external-mongod-dns.yaml`, and the GUI's Secret `mongot-gui-mongo-uri`
+(`app/gui/deploy.sh`).
 
 `network_mode: host` with three distinct ports is deliberate: replica-set members talk
 to each other using the addresses in the rs config, and on a bridge with published ports

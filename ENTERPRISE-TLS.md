@@ -21,8 +21,9 @@ Pick **88** when policy requires encryption and mutual authentication on every h
 Pick **77** when TLS to the cluster edge is enough and you want the fewest certificates.
 
 > **Environment measured.** CRC on macOS, OpenShift 4.22.7, MongoDB Controllers for
-> Kubernetes 1.12.0, `mongot` 1.70.1, CRC at 12 vCPU. The external replica set `rs0` runs
-> in colima at `192.168.64.9`. The lab's `enterprise-ca` root stands in for the company CA.
+> Kubernetes 1.12.0, `mongot` 1.70.1, CRC at 12 vCPU. The external replica set `rs0` ran
+> in colima at `192.168.64.4` (since 2026-10-11 it is at `192.168.64.9`, the address the figures
+> show). The lab's `enterprise-ca` root stands in for the company CA.
 > Every number below comes from these runs; statements taken from reading the operator
 > source or the router template, rather than from a run, say so.
 
