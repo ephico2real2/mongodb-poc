@@ -36,7 +36,7 @@ grep -qx 'mongodb-search-helm/generate-mongodbsearch-prerequisites.sh' <<<"${pac
   && ok "the package holds generate-mongodbsearch-prerequisites.sh" || bad "the package lacks the prerequisites script"
 # The volume script and the documents on volumes, scaling and production settings travel with the chart too: they are what an
 # operator of the chart reads beside its values.
-for f in expand-mongot-volumes.sh volumes.md scaling.md volume-expansion-runbook.md production-settings.md disruption-budgets.md \
+for f in expand-mongot-volumes.sh volumes.md scaling.md volume-expansion-runbook.md volume-auto-expansion.md production-settings.md disruption-budgets.md \
          docs/envoy-performance-testing.md docs/testing-mongot-storage-resize.md; do
   grep -qx "mongodb-search-helm/${f}" <<<"${packed}" || bad "the package lacks ${f}"
 done

@@ -31,6 +31,7 @@ python3 -m venv .venv
 | [`route-tls-options/`](route-tls-options/source.html) | The two Route TLS options, edge (77) and passthrough (88) | `option-77-edge,option-88-passthrough` |
 | [`search-and-sync/`](search-and-sync/source.html) | A `$search` from the application through mongod to mongot; how each mongot replica replicates | `search-execution,index-sync` |
 | [`storage-nfs/`](storage-nfs/source.html) | Two pods mounting one ReadWriteMany NFS claim | `nfs` |
+| [`volume-expansion/`](volume-expansion/source.html) | Growing mongot's volumes with `autoExpand`: the one sync step by step, and the same steps by hand against with the flag | `one-sync,by-hand-and-flag` |
 
 Rendered with kit 0.2.0 on 2026-10-07, all seven pages exit 0 and all 21 light pictures are byte-identical to the
 committed ones.
