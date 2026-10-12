@@ -67,7 +67,7 @@ for the ClusterServiceVersion an uninstall leaves.
 | Sync, wave -1 | The Subscription; the approver Job | The Subscription is on Manual approval; the approver approves the InstallPlan of `operator.version`, and no other |
 | Sync, wave 0 | ServiceMonitors, the alert rules, the index info exporter, the Grafana ConfigMap | |
 | Sync, wave 1 | The MongoDBSearch; the two PodDisruptionBudgets; the Perses dashboard and datasource | The operator makes the mongot StatefulSet, the Envoy Deployment and their Services. Argo CD read both budgets `Healthy` ("PodDisruptionBudget has SufficientPods") on the lab, where their pods already existed |
-| Sync, wave 2 | The Route; with `search.persistence.autoExpand.enabled`, the Job that grows the volumes (its ServiceAccount, Role, RoleBinding and script are in wave -2) | The Job acts only when the operator has refused a larger volume size; otherwise it ends at once. [volume-expansion-runbook.md](volume-expansion-runbook.md) |
+| Sync, wave 2 | The Route; with `search.persistence.autoExpand.enabled`, the Job that grows the volumes (its ServiceAccount, Role, RoleBinding and script are in wave -2) | The Job plans first (it reads the sizes, and asks each mongot pod for its file system's), and acts when the operator has refused a larger volume size or to finish a growth that stopped before its end; otherwise it ends there. [volume-expansion-runbook.md](volume-expansion-runbook.md) |
 | Sync, wave 3 | The gate Job | Ends only when the operator, the mongot pods, Envoy and the Route are ready. It does not wait for the indexes to be built |
 
 **The csv-reclaim hook under Argo CD.** The csv-reclaim hook runs in wave -3, ahead of the
