@@ -1,0 +1,53 @@
+{{- /*
+The Ops Manager project ConfigMap and agent API key Secret that the metrics forwarder reads
+(observability.metricsForwarder.opsManager): the ConfigMap when projectConfig.create is true, the Secret when
+agentCredentials.agentApiKey is set. Both are kept by an
+uninstall and by an Argo CD prune or delete: the operator reads them while it deletes the MongoDBSearch, to remove
+mongot's hosts from Ops Manager, and the resource would otherwise stay stuck in deletion.
+*/ -}}
+{{- with .Values.observability.metricsForwarder.opsManager }}
+{{- if .enabled }}
+{{- if .projectConfig.create }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .projectConfig.name }}
+  namespace: {{ include "mongodb-search-helm.namespace" $ }}
+  labels:
+    {{- include "mongodb-search-helm.labels" $ | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  baseUrl: {{ .projectConfig.baseUrl | quote }}
+  orgId: {{ .projectConfig.orgId | quote }}
+  {{- with .projectConfig.projectName }}
+  projectName: {{ . | quote }}
+  {{- end }}
+  {{- with .projectConfig.sslMMSCAConfigMap }}
+  sslMMSCAConfigMap: {{ . | quote }}
+  {{- end }}
+  {{- if kindIs "bool" .projectConfig.sslRequireValidMMSServerCertificates }}
+  sslRequireValidMMSServerCertificates: {{ .projectConfig.sslRequireValidMMSServerCertificates | toString | quote }}
+  {{- end }}
+{{- end }}
+{{- if .agentCredentials.agentApiKey }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .agentCredentials.name }}
+  namespace: {{ include "mongodb-search-helm.namespace" $ }}
+  labels:
+    {{- include "mongodb-search-helm.labels" $ | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "0"
+type: Opaque
+stringData:
+  agentApiKey: {{ .agentCredentials.agentApiKey | quote }}
+{{- end }}
+{{- end }}
+{{- end }}

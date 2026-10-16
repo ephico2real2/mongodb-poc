@@ -59,6 +59,11 @@ spec:
       resourceRequirements:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with (.Values.source.syncSourceSelector | default dict).matchTagSets }}
+      syncSourceSelector:
+        matchTagSets:
+          {{- toYaml . | nindent 10 }}
+      {{- end }}
   {{- with .Values.observability }}
   observability:
     {{- with .metricsForwarder }}
@@ -67,6 +72,13 @@ spec:
       {{- with .resources }}
       resourceRequirements:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if and .opsManager .opsManager.enabled }}
+      opsManager:
+        agentCredentials:
+          name: {{ .opsManager.agentCredentials.name }}
+        projectConfigMapRef:
+          name: {{ .opsManager.projectConfig.name }}
       {{- end }}
     {{- end }}
     {{- with .prometheus }}

@@ -56,6 +56,23 @@ source:
     - mongod-1.company.net:27017
     - mongod-2.company.net:27017
     - mongod-3.company.net:27017
+  # TO DECIDE. The members mongot syncs from, by their replica-set tags; left out, any member.
+  # syncSourceSelector:
+  #   matchTagSets:
+  #     - region: us-east-1
+  #       workload: search
+
+# TO DECIDE. mongot's metrics in Ops Manager. The agent key Secret is made by hand, out of git.
+# observability:
+#   metricsForwarder:
+#     opsManager:
+#       enabled: true
+#       projectConfig:
+#         baseUrl: https://opsmanager.company.net
+#         orgId: <the organization's id>
+#         projectName: <the project>
+#       agentCredentials:
+#         name: om-agent-api-key
 
 operator:
   # The only version the chart's approver approves. To upgrade the operator, change it here.
