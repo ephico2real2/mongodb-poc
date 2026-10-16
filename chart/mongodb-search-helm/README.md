@@ -61,7 +61,7 @@ bash $P --clean                                       # removes the key files on
 From the package alone, with no clone:
 
 ```bash
-helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.27/mongodb-search-helm-0.3.27.tgz --untar
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.28/mongodb-search-helm-0.3.28.tgz --untar
 bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
 ```
 
@@ -69,7 +69,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.27/mongodb-search-helm-0.3.27.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.28/mongodb-search-helm-0.3.28.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -92,7 +92,7 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 | `operator.channel`, `.package`, `.source`, `.sourceNamespace` | `stable`, `mongodb-kubernetes`, `certified-operators`, `openshift-marketplace` | |
 | `operatorGroup.create` | `true` | `false` when the namespace already has an OperatorGroup |
 | `search.name` | `mongot` | Step 6a, `metadata.name` |
-| `search.version` | empty | mongot follows the operator's default; set it to pin mongot |
+| `search.version` | `1.70.1` | mongot, pinned to operator 1.13.0's own default, so an operator upgrade does not move it; empty follows the operator's default |
 | `search.replicas` | `3` | Step 6a. Lowering it deletes the volumes of the pods that go: [volumes.md](volumes.md) |
 | `search.allowVolumeLoss` | `false` | `true` for the one upgrade that lowers `search.replicas` on purpose; otherwise the preflight refuses it |
 | `search.resources` | 1 CPU / 3Gi to 3 CPU / 5Gi | Step 6a |
@@ -101,9 +101,9 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 | `search.podDisruptionBudget` | `enabled: true`, `maxUnavailable: 1` | A PodDisruptionBudget for the mongot pods: a node drain takes one at a time. The operator creates none: [disruption-budgets.md](disruption-budgets.md) |
 | `loadBalancer.podDisruptionBudget` | `enabled: true`, `maxUnavailable: 1` | The same for the Envoy pods |
 | `loadBalancer.resources` | requests `100m`, `128Mi`; limits `500m`, `512Mi` | CPU and memory of each Envoy pod: the operator's own defaults, written out. What is given replaces them whole; `null` leaves the field to the operator |
-| `search.keepOnUninstall` | `false` | `true` keeps the resource, and so the index, on `helm uninstall`, and under Argo CD when the Application is deleted or a sync would prune it. The Route still goes: [volumes.md](volumes.md) |
+| `search.keepOnUninstall` | `true` | `true` keeps the resource, and so the index, on `helm uninstall`, and under Argo CD when the Application is deleted or a sync would prune it. The Route still goes: [volumes.md](volumes.md) |
 | `loadBalancer.externalHostname` | required | Step 6a; also the Route's host |
-| `loadBalancer.replicas` | `2` | Step 6a |
+| `loadBalancer.replicas` | `3` | Step 6a. Two stay through a node drain: [disruption-budgets.md](disruption-budgets.md) |
 | `loadBalancer.retryPolicy` | 2 retries, `60s` per try | Step 6a |
 | `loadBalancer.image` | empty | Step 6a, the Envoy image override |
 | `tls.certsSecretPrefix` | `ent` | Overview, the secret naming rule |
@@ -598,7 +598,8 @@ The script uses `percli` 0.54.0 from the PATH, or from the official Perses image
 are in [`docs/grafana-to-perses-conversion.md`](../../docs/grafana-to-perses-conversion.md).
 
 When you change `operator.version`, change `appVersion` in `Chart.yaml` to match and run
-`scripts/refresh-mongodbsearch-crd.sh` against a cluster on that version.
+`scripts/refresh-mongodbsearch-crd.sh` against a cluster on that version. It also prints the new operator's default
+mongot version: `search.version` stays where it is until you move it, as a change of its own.
 
 ## Argo CD
 

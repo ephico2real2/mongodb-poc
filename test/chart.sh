@@ -92,9 +92,9 @@ helm template mongot "${CHART}" -n elsewhere -f "${REMOTE}" | grep -A1 'name: NA
   && bad "a Job still reads the release namespace" || ok "the Jobs work in the namespace value"
 render --set namespace=Not_A_Namespace >/dev/null 2>&1 && bad "the schema refuses an invalid namespace" || ok "the schema refuses an invalid namespace"
 
-# search.version: left out when empty, present when set.
-! render -s templates/10-mongodbsearch.yaml | grep -q '^  version:' && ok "spec.version is left out by default" || bad "spec.version rendered by default"
-render -s templates/10-mongodbsearch.yaml --set search.version=1.70.1 | grep -q '^  version: "1.70.1"$' && ok "search.version reaches the resource" || bad "search.version"
+# search.version: pinned by default, left out when empty.
+render -s templates/10-mongodbsearch.yaml | grep -q '^  version: "1.70.1"$' && ok "spec.version is 1.70.1 by default" || bad "spec.version not pinned to 1.70.1 by default"
+! render -s templates/10-mongodbsearch.yaml --set search.version= | grep -q '^  version:' && ok "spec.version is left out when search.version is empty" || bad "spec.version rendered when empty"
 ! render -s templates/10-mongodbsearch.yaml --set loadBalancer.image= | grep -q 'deployment:' && ok "no Envoy override without loadBalancer.image" || bad "Envoy override rendered without an image"
 render -s templates/10-mongodbsearch.yaml | grep -q 'name: ent-trust-bundle' && ok "the source CA is always rendered" || bad "source.external.tls.ca missing"
 render -s templates/10-mongodbsearch.yaml --set search.keepOnUninstall=true | grep -q 'helm.sh/resource-policy: keep' && ok "keepOnUninstall keeps the resource" || bad "keepOnUninstall"
@@ -103,8 +103,10 @@ render -s templates/10-mongodbsearch.yaml --set search.keepOnUninstall=true | gr
 ms_annotations() { render -s templates/10-mongodbsearch.yaml "$@" | awk '/^  annotations:$/{f=1;next} f&&!/^    /{exit} f{print}' | LC_ALL=C sort; }
 [ "$(ms_annotations --set search.keepOnUninstall=true)" = "$(printf '%s\n' '    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true,Prune=false,Delete=false' '    argocd.argoproj.io/sync-wave: "1"' '    helm.sh/resource-policy: keep')" ] \
   && ok "keepOnUninstall also stops an Argo CD prune and delete, and changes nothing else in the annotations" || bad "keepOnUninstall under Argo CD: $(ms_annotations --set search.keepOnUninstall=true | tr '\n' ';')"
-[ "$(ms_annotations)" = "$(printf '%s\n' '    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true' '    argocd.argoproj.io/sync-wave: "1"')" ] \
-  && ok "without keepOnUninstall the resource can be pruned and is not kept" || bad "Prune=false or keep rendered by default: $(ms_annotations | tr '\n' ';')"
+[ "$(ms_annotations --set search.keepOnUninstall=false)" = "$(printf '%s\n' '    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true' '    argocd.argoproj.io/sync-wave: "1"')" ] \
+  && ok "without keepOnUninstall the resource can be pruned and is not kept" || bad "Prune=false or keep rendered with keepOnUninstall=false: $(ms_annotations --set search.keepOnUninstall=false | tr '\n' ';')"
+[ "$(ms_annotations)" = "$(ms_annotations --set search.keepOnUninstall=true)" ] \
+  && ok "keepOnUninstall is on by default" || bad "keepOnUninstall not on by default: $(ms_annotations | tr '\n' ';')"
 # Only the MongoDBSearch is kept: the Route and the rest of the release go with an uninstall or a prune (volumes.md).
 [ "$(render --set search.keepOnUninstall=true | grep -c 'resource-policy: keep\|Prune=false')" = 2 ] \
   && ok "only the MongoDBSearch carries keep and Prune=false" || bad "keep or Prune=false on another object: $(render --set search.keepOnUninstall=true | grep -n 'resource-policy: keep\|Prune=false' | tr '\n' ';')"
@@ -499,8 +501,8 @@ out="$(helm template mongot "${CHART}" -n some-namespace -f "${PROD}" 2>&1)" \
 p="$(helm template mongot "${CHART}" -n some-namespace -f "${PROD}" "${SIZED[@]}" -s templates/10-mongodbsearch.yaml 2>&1)"
 grep -q 'helm.sh/resource-policy: keep' <<<"$p" && grep -q 'sync-options: SkipDryRunOnMissingResource=true,Prune=false,Delete=false' <<<"$p" \
   && ok "the production example keeps the search through an uninstall, a prune and an Application delete" || bad "production example: keepOnUninstall"
-grep -q '^  version: "1.70.1"$' <<<"$p" && grep -q '^      replicas: 3$' <<<"$p" && grep -q '^          replicas: 2$' <<<"$p" \
-  && ok "the production example names mongot's version, three mongot pods and two Envoy pods" || bad "production example: version or replicas"
+grep -q '^  version: "1.70.1"$' <<<"$p" && grep -q '^      replicas: 3$' <<<"$p" && grep -q '^          replicas: 3$' <<<"$p" \
+  && ok "the production example names mongot's version, three mongot pods and three Envoy pods" || bad "production example: version or replicas"
 grep -q '^          storage: 300Gi$' <<<"$p" && grep -q '^          storageClass: thin-csi$' <<<"$p" \
   && ok "the production example asks for the page's volume size on a class that expands" || bad "production example: persistence"
 # Read from the rendered text like the checks around it, so that it runs where yq is not installed too (the Envoy

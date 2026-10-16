@@ -49,7 +49,7 @@ NS=$TargetNamespace                       # Part 2 uses $NS
 # The script is a file of the chart. From a checkout of this repository, at its root:
 PREREQ=chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
 # From the published chart, with no clone (chart 0.3.3 and later):
-#   helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.27/mongodb-search-helm-0.3.27.tgz --untar
+#   helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.28/mongodb-search-helm-0.3.28.tgz --untar
 #   PREREQ=mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
 
 mkdir -m 700 $TargetNamespace             # the script never creates it
@@ -166,7 +166,7 @@ From the published package, with no clone of the repository:
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.27/mongodb-search-helm-0.3.27.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.28/mongodb-search-helm-0.3.28.tgz \
   -n $NS -f my-values.yaml --timeout 20m
 ```
 
@@ -227,7 +227,7 @@ As in the runbook:
 helm upgrade mongot chart/mongodb-search-helm -n $NS -f my-values.yaml --timeout 20m
 ```
 
-**Upgrade the operator.** The Subscription is on Manual approval, so the operator never upgrades by itself. Set `operator.version` and run the same `helm upgrade`; the approver approves that version only. mongot follows the operator: with `search.version` empty it runs the operator's default mongot version, so it moves only when the operator does.
+**Upgrade the operator.** The Subscription is on Manual approval, so the operator never upgrades by itself. Set `operator.version` and run the same `helm upgrade`; the approver approves that version only. mongot does not move with it: `search.version` is `1.70.1` by default, so mongot is changed as a step of its own. With `search.version` empty mongot would run the operator's default version and move whenever the operator does.
 
 **Publish the index names as metrics (optional).** mongot's metrics name a search index by its id only. `monitoring.indexInfo.enabled=true` adds a small exporter that asks the source deployment for the names; it needs a sixth hand-made object, the password of a database user that may only list. The user, the Secret and what is published are in the chart's README, [Index names, as metrics](../chart/mongodb-search-helm/README.md#index-names-as-metrics).
 
@@ -239,7 +239,7 @@ helm upgrade mongot chart/mongodb-search-helm -n $NS -f my-values.yaml --timeout
 helm uninstall mongot -n $NS
 ```
 
-- **The search index is deleted.** The operator deletes the mongot volumes with the resource, so a reinstall syncs from the source again. Set `search.keepOnUninstall=true` to keep the resource, its pods and its volumes; the Route still goes ([volumes.md](../chart/mongodb-search-helm/volumes.md)).
+- **The search index is kept.** `search.keepOnUninstall` is `true` by default: the resource, its pods and its volumes stay, and the Route goes. With `search.keepOnUninstall=false` the operator deletes the mongot volumes with the resource, so a reinstall syncs from the source again ([volumes.md](../chart/mongodb-search-helm/volumes.md)).
 - **The operator keeps running.** OLM leaves it when its Subscription goes. The next `helm install` removes it and installs it again. To remove it now: `oc delete csv mongodb-kubernetes.v1.13.0 -n $NS`.
 - **The five prerequisites stay**, along with the CRDs.
 
