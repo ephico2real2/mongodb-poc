@@ -114,6 +114,14 @@
         "passwordSecret": {
           "type": "object", "additionalProperties": false, "required": ["name"],
           "properties": {"name": {"type": "string", "minLength": 1}, "key": {"type": "string"}}
+        },
+        "syncSourceSelector": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "matchTagSets": {"type": "array", "maxItems": 50,
+                             "items": {"type": "object", "additionalProperties": {"type": "string"}},
+                             "description": "Replica-set tag sets, in order; a last {} matches any member"}
+          }
         }
       }
     },
@@ -127,7 +135,32 @@
         },
         "metricsForwarder": {
           "type": "object", "additionalProperties": false,
-          "properties": {"mode": {"type": "string", "enum": ["auto", "enabled", "disabled"]}, "resources": {"type": "object"}}
+          "properties": {
+            "mode": {"type": "string", "enum": ["auto", "enabled", "disabled"]}, "resources": {"type": "object"},
+            "opsManager": {
+              "type": "object", "additionalProperties": false,
+              "properties": {
+                "enabled": {"type": "boolean"},
+                "projectConfig": {
+                  "type": "object", "additionalProperties": false, "required": ["name", "create"],
+                  "properties": {
+                    "name": {"type": "string", "minLength": 1}, "create": {"type": "boolean"},
+                    "baseUrl": {"type": "string", "pattern": "^$|^https?://[^\\s/?#]+(/[^\\s?#]*)?$"},
+                    "orgId": {"type": "string"}, "projectName": {"type": "string"},
+                    "sslMMSCAConfigMap": {"type": "string"}, "sslRequireValidMMSServerCertificates": {"type": ["boolean", "null"]}
+                  }
+                },
+                "agentCredentials": {
+                  "type": "object", "additionalProperties": false, "required": ["name"],
+                  "properties": {"name": {"type": "string", "minLength": 1}, "agentApiKey": {"type": "string"}}
+                }
+              },
+              "allOf": [
+                {"if": {"properties": {"enabled": {"const": true}, "projectConfig": {"properties": {"create": {"const": true}}}}, "required": ["enabled"]},
+                 "then": {"properties": {"projectConfig": {"properties": {"baseUrl": {"minLength": 1}, "orgId": {"minLength": 1}}, "required": ["baseUrl", "orgId"]}}}}
+              ]
+            }
+          }
         }
       }
     },

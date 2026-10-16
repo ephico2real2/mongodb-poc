@@ -153,6 +153,18 @@ source:
     name: search-sync-source-password
     # Empty: passwordSecretRef.key is left out and the operator uses its default.
     key: password
+  # Which members of the replica set mongot syncs from, by the tags in the replica set's configuration
+  # (rs.conf(), members[].tags). An ordered list of tag sets: mongot reads from a secondary that matches the first
+  # set with a match, and a last {} matches any member. A tag that no member carries is not an error to the
+  # chart. Rendered as spec.clusters[0].syncSourceSelector.matchTagSets; the operator writes it into mongot's
+  # syncSource.replicationReader.tagSets (operator 1.13.0). Empty: left out, and mongot reads from any member.
+  # For example:
+  #   matchTagSets:
+  #     - region: us-east-1
+  #       workload: search
+  #     - {}
+  syncSourceSelector:
+    matchTagSets: []
 
 observability:
   prometheus:
@@ -163,6 +175,41 @@ observability:
     resources:
       requests: {cpu: 100m, memory: 128Mi}
       limits: {cpu: 250m, memory: 256Mi}
+    # Ops Manager, for the metrics forwarder: a Deployment of the operator's that sends mongot's metrics to an Ops
+    # Manager project. With an external source the operator runs it only when this is set (mode auto). Ops Manager
+    # 8.0.25 or later (operator 1.13.0). Rendered as spec.observability.metricsForwarder.opsManager.
+    # The ConfigMap and the Secret are kept by an uninstall and an Argo CD prune or delete: the operator reads both
+    # while it deletes the MongoDBSearch, and without them the resource would stay stuck in deletion. Delete them
+    # by hand once the search is gone.
+    opsManager:
+      # false: no opsManager block, no ConfigMap, no Secret and no forwarder; mongot's metrics still reach
+      # Prometheus, the dashboard and the alerts. Nothing else below is read.
+      enabled: false
+      # The project ConfigMap (projectConfigMapRef).
+      projectConfig:
+        name: om-project-config
+        # true: the chart makes it from the values below. false: it exists already, with baseUrl and orgId.
+        create: true
+        # REQUIRED when created. Ops Manager's URL, http(s) with no query string: https://opsmanager.example.com
+        baseUrl: ""
+        # REQUIRED when created. The organization's id.
+        orgId: ""
+        projectName: ""
+        # The name of a ConfigMap holding Ops Manager's CA under the key mms-ca.crt, for an Ops Manager whose
+        # certificate the company CA signed (MongoDB: "Required only when using custom TLS certificates"). Empty:
+        # left out.
+        sslMMSCAConfigMap: ""
+        # Whether the operator and the forwarder check Ops Manager's certificate, written as "true" or "false".
+        # false by the owner's decision: Ops Manager is an internal service, signed by the company CA, and trusted.
+        # true checks it, and then needs sslMMSCAConfigMap. null leaves the key out (the operator then checks).
+        sslRequireValidMMSServerCertificates: false
+      # The Secret with the agent API key, under the key agentApiKey (agentCredentials).
+      agentCredentials:
+        name: om-agent-api-key
+        # The agent API key. Set: the chart makes the Secret from it (the key is then in this values file and in
+        # Helm's release record: keep the values in a repository only the operations team can read). Empty: the
+        # Secret exists already, made by hand or by another tool.
+        agentApiKey: ""
 
 # The passthrough Route to Envoy (runbook Step 6d). Its host is loadBalancer.externalHostname and its termination
 # is passthrough: Envoy presents the certificate, not the router.

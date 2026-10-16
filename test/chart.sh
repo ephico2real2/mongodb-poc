@@ -95,6 +95,39 @@ render --set namespace=Not_A_Namespace >/dev/null 2>&1 && bad "the schema refuse
 # search.version: pinned by default, left out when empty.
 render -s templates/10-mongodbsearch.yaml | grep -q '^  version: "1.70.1"$' && ok "spec.version is 1.70.1 by default" || bad "spec.version not pinned to 1.70.1 by default"
 ! render -s templates/10-mongodbsearch.yaml --set search.version= | grep -q '^  version:' && ok "spec.version is left out when search.version is empty" || bad "spec.version rendered when empty"
+# source.syncSourceSelector.matchTagSets: left out by default, rendered in order under the cluster, typed by the schema.
+! render -s templates/10-mongodbsearch.yaml | grep -q 'syncSourceSelector' && ok "no syncSourceSelector by default" || bad "syncSourceSelector rendered by default"
+[ "$(render -s templates/10-mongodbsearch.yaml --set-json 'source.syncSourceSelector.matchTagSets=[{"region":"us-east-1","workload":"search"},{}]' | yq -o=json -I=0 '.spec.clusters[0].syncSourceSelector')" = '{"matchTagSets":[{"region":"us-east-1","workload":"search"},{}]}' ] \
+  && ok "matchTagSets reaches spec.clusters[0].syncSourceSelector, in order, with a last {}" || bad "matchTagSets: $(render -s templates/10-mongodbsearch.yaml --set-json 'source.syncSourceSelector.matchTagSets=[{"region":"us-east-1"},{}]' | grep -A4 syncSourceSelector | tr '\n' ';')"
+render --set-json 'source.syncSourceSelector.matchTagSets=[{"zone":1}]' >/dev/null 2>&1 && bad "the schema refuses a tag value that is not a string" || ok "the schema refuses a tag value that is not a string"
+render --set source.syncSourceSelector.tags=x >/dev/null 2>&1 && bad "the schema refuses an unknown key under syncSourceSelector" || ok "the schema refuses an unknown key under syncSourceSelector"
+# observability.metricsForwarder.opsManager: off by default; on, the resource names both objects, the chart makes each
+# only when asked, keeps what it makes, and the schema refuses a created object without its required values.
+OM=observability.metricsForwarder.opsManager
+OMSET=(--set "$OM.enabled=true" --set "$OM.projectConfig.baseUrl=https://opsmanager.example.com" --set "$OM.projectConfig.orgId=0123456789abcdef01234567")
+kinds_named() { yq -N 'select(.metadata.name == "om-project-config" or .metadata.name == "om-agent-api-key") | .kind' | LC_ALL=C sort | tr '\n' ' '; }
+! render | grep -q 'opsManager\|om-project-config\|om-agent-api-key' && ok "no Ops Manager block, ConfigMap or Secret by default" || bad "Ops Manager rendered by default"
+[ "$(render -s templates/10-mongodbsearch.yaml "${OMSET[@]}" | yq -o=json -I=0 '.spec.observability.metricsForwarder.opsManager')" = '{"agentCredentials":{"name":"om-agent-api-key"},"projectConfigMapRef":{"name":"om-project-config"}}' ] \
+  && ok "opsManager names the agent Secret and the project ConfigMap on the resource" || bad "opsManager on the resource"
+[ "$(render "${OMSET[@]}" | kinds_named)" = "ConfigMap " ] && ok "the project ConfigMap is made, and an existing agent Secret is not" || bad "objects made by default: $(render "${OMSET[@]}" | kinds_named)"
+[ "$(render "${OMSET[@]}" --set "$OM.agentCredentials.agentApiKey=placeholder" | kinds_named)" = "ConfigMap Secret " ] \
+  && ok "an agentApiKey in the values makes the Secret" || bad "agentApiKey does not make the Secret"
+[ "$(render "${OMSET[@]}" --set "$OM.agentCredentials.agentApiKey=placeholder" | yq -o=json -I=0 'select(.kind == "Secret" and .metadata.name == "om-agent-api-key") | {"type": .type, "stringData": .stringData}')" = '{"type":"Opaque","stringData":{"agentApiKey":"placeholder"}}' ] \
+  && ok "the Secret is Opaque with the one key agentApiKey" || bad "the agent Secret's type or keys"
+[ "$(render "${OMSET[@]}" --set "$OM.projectConfig.projectName=EXAMPLE" | yq -o=json -I=0 'select(.kind == "ConfigMap" and .metadata.name == "om-project-config") | .data')" = '{"baseUrl":"https://opsmanager.example.com","orgId":"0123456789abcdef01234567","projectName":"EXAMPLE","sslRequireValidMMSServerCertificates":"false"}' ] \
+  && ok "by default the project ConfigMap is baseUrl, orgId, projectName and sslRequireValidMMSServerCertificates \"false\"" || bad "the project ConfigMap by default"
+! render "${OMSET[@]}" --set "$OM.projectConfig.sslRequireValidMMSServerCertificates=null" | grep -q 'sslRequireValidMMSServerCertificates' \
+  && ok "sslRequireValidMMSServerCertificates null leaves the key out" || bad "sslRequireValidMMSServerCertificates=null still written"
+[ "$(render "${OMSET[@]}" --set "$OM.projectConfig.sslRequireValidMMSServerCertificates=true" | yq 'select(.kind == "ConfigMap" and .metadata.name == "om-project-config") | .data.sslRequireValidMMSServerCertificates')" = "true" ] \
+  && ok "sslRequireValidMMSServerCertificates true is written when set" || bad "sslRequireValidMMSServerCertificates=true"
+[ "$(render "${OMSET[@]}" --set "$OM.projectConfig.create=false" | kinds_named)" = "" ] && ok "both existing: the chart makes neither" || bad "projectConfig.create=false still makes an object"
+[ "$(render "${OMSET[@]}" --set "$OM.agentCredentials.agentApiKey=placeholder" | yq -N 'select(.metadata.name == "om-project-config" or .metadata.name == "om-agent-api-key") | .metadata.annotations["helm.sh/resource-policy"] + " " + .metadata.annotations["argocd.argoproj.io/sync-options"]' | sort -u)" = "keep Prune=false,Delete=false" ] \
+  && ok "the ConfigMap and the Secret are kept by an uninstall and an Argo CD prune or delete" || bad "the Ops Manager objects are not kept"
+[ "$(render "${OMSET[@]}" --set "$OM.projectConfig.sslMMSCAConfigMap=om-ca" --set "$OM.projectConfig.sslRequireValidMMSServerCertificates=false" | yq -o=json -I=0 'select(.kind == "ConfigMap" and .metadata.name == "om-project-config") | .data')" = '{"baseUrl":"https://opsmanager.example.com","orgId":"0123456789abcdef01234567","sslMMSCAConfigMap":"om-ca","sslRequireValidMMSServerCertificates":"false"}' ] \
+  && ok "the ConfigMap carries the operator's key names" || bad "the project ConfigMap's keys"
+refused "Ops Manager on with a created ConfigMap and no baseUrl or orgId" --set "$OM.enabled=true"
+refused "an Ops Manager baseUrl with a query string" "${OMSET[@]}" --set "$OM.projectConfig.baseUrl=https://opsmanager.example.com/?a=1"
+refused "an unknown key under agentCredentials" "${OMSET[@]}" --set "$OM.agentCredentials.create=true"
 ! render -s templates/10-mongodbsearch.yaml --set loadBalancer.image= | grep -q 'deployment:' && ok "no Envoy override without loadBalancer.image" || bad "Envoy override rendered without an image"
 render -s templates/10-mongodbsearch.yaml | grep -q 'name: ent-trust-bundle' && ok "the source CA is always rendered" || bad "source.external.tls.ca missing"
 render -s templates/10-mongodbsearch.yaml --set search.keepOnUninstall=true | grep -q 'helm.sh/resource-policy: keep' && ok "keepOnUninstall keeps the resource" || bad "keepOnUninstall"
