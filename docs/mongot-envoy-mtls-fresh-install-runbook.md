@@ -370,6 +370,13 @@ spec:
           memory: 3Gi
   observability:
     metricsForwarder:
+      deployment:                         # the forwarder's image, copied from Docker Hub
+        spec:
+          template:
+            spec:
+              containers:
+                - image: 'quay.io/ephico2real/opentelemetry-collector-contrib:0.152.0'
+                  name: metrics-forwarder
       mode: auto
       resourceRequirements:
         limits:

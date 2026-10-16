@@ -68,6 +68,15 @@ spec:
   observability:
     {{- with .metricsForwarder }}
     metricsForwarder:
+      {{- with .image }}
+      deployment:
+        spec:
+          template:
+            spec:
+              containers:
+                - name: metrics-forwarder
+                  image: {{ . | quote }}
+      {{- end }}
       mode: {{ .mode }}
       {{- with .resources }}
       resourceRequirements:
