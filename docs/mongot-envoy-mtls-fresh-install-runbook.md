@@ -333,6 +333,7 @@ metadata:
   name: mongot                            # TLS secret names derive from this
   namespace: dvh-gp6-rnd                  # must equal $NS
 spec:
+  version: "1.70.1"                       # mongot, pinned: an operator upgrade does not move it
   clusters:
     - loadBalancer:
         managed:
@@ -344,7 +345,7 @@ spec:
                     - image: 'quay.io/ephico2real/envoy:v1.37-latest'
                       name: envoy
           externalHostname: mongot-search-rnd.company.net   # must be in the LB cert SAN
-          replicas: 2
+          replicas: 3
           resourceRequirements:              # the operator's own defaults, written out
             requests:
               cpu: 100m
