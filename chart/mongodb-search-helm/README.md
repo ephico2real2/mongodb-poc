@@ -61,7 +61,7 @@ bash $P --clean                                       # removes the key files on
 From the package alone, with no clone:
 
 ```bash
-helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.29/mongodb-search-helm-0.3.29.tgz --untar
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.30/mongodb-search-helm-0.3.30.tgz --untar
 bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
 ```
 
@@ -69,7 +69,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.29/mongodb-search-helm-0.3.29.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.30/mongodb-search-helm-0.3.30.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -103,11 +103,12 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 | `loadBalancer.resources` | requests `100m`, `128Mi`; limits `500m`, `512Mi` | CPU and memory of each Envoy pod: the operator's own defaults, written out. What is given replaces them whole; `null` leaves the field to the operator |
 | `search.keepOnUninstall` | `true` | `true` keeps the resource, and so the index, on `helm uninstall`, and under Argo CD when the Application is deleted or a sync would prune it. The Route still goes: [volumes.md](volumes.md) |
 | `source.syncSourceSelector.matchTagSets` | `[]`: left out | The members mongot syncs from, by their replica-set tags, in order; a last `{}` matches any member |
+| `observability.metricsForwarder.image` | `quay.io/ephico2real/opentelemetry-collector-contrib:0.152.0` | The forwarder's image, for a cluster that cannot pull `otel/opentelemetry-collector-contrib` from Docker Hub; overrides the container `metrics-forwarder`, as `loadBalancer.image` does for Envoy. A copy of operator 1.13.0's own image; empty: the operator's own |
 | `observability.metricsForwarder.opsManager.enabled` | `false` | `true` sends mongot's metrics to Ops Manager through the operator's forwarder. `.projectConfig` (ConfigMap `om-project-config`, made from `baseUrl`, `orgId`, `projectName`, `sslRequireValidMMSServerCertificates` (`false`) and, when set, `sslMMSCAConfigMap`, unless `create: false`) and `.agentCredentials` (Secret `om-agent-api-key`, key `agentApiKey`: made from `agentApiKey` when it is set, else existing). Both are kept on uninstall: delete them after the search |
 | `loadBalancer.externalHostname` | required | Step 6a; also the Route's host |
 | `loadBalancer.replicas` | `3` | Step 6a. Two stay through a node drain: [disruption-budgets.md](disruption-budgets.md) |
 | `loadBalancer.retryPolicy` | 2 retries, `60s` per try | Step 6a |
-| `loadBalancer.image` | empty | Step 6a, the Envoy image override |
+| `loadBalancer.image` | `quay.io/ephico2real/envoy:v1.37-latest` | Step 6a, the Envoy image override: a copy of the operator's own `envoyproxy/envoy:v1.37-latest`, for a cluster that cannot pull from Docker Hub; empty: the operator's own |
 | `tls.certsSecretPrefix` | `ent` | Overview, the secret naming rule |
 | `tls.trustBundleConfigMap` | `ent-trust-bundle` | Step 4 |
 | `source.hostAndPorts` | required | Step 6a |

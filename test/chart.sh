@@ -128,7 +128,15 @@ kinds_named() { yq -N 'select(.metadata.name == "om-project-config" or .metadata
 refused "Ops Manager on with a created ConfigMap and no baseUrl or orgId" --set "$OM.enabled=true"
 refused "an Ops Manager baseUrl with a query string" "${OMSET[@]}" --set "$OM.projectConfig.baseUrl=https://opsmanager.example.com/?a=1"
 refused "an unknown key under agentCredentials" "${OMSET[@]}" --set "$OM.agentCredentials.create=true"
-! render -s templates/10-mongodbsearch.yaml --set loadBalancer.image= | grep -q 'deployment:' && ok "no Envoy override without loadBalancer.image" || bad "Envoy override rendered without an image"
+! render -s templates/10-mongodbsearch.yaml --set loadBalancer.image= | yq -e '.spec.clusters[0].loadBalancer.managed.deployment' >/dev/null 2>&1 && ok "no Envoy override without loadBalancer.image" || bad "Envoy override rendered without an image"
+[ "$(helm template mongot "${CHART}" -n x --set loadBalancer.externalHostname=mongot-search.example.com --set 'source.hostAndPorts[0]=mongod-1.example.com:27017' -s templates/10-mongodbsearch.yaml | yq '.spec.clusters[0].loadBalancer.managed.deployment.spec.template.spec.containers[0] | .name + " " + .image')" = "envoy quay.io/ephico2real/envoy:v1.37-latest" ] \
+  && ok "Envoy runs the quay.io copy by default" || bad "Envoy's default image"
+[ "$(render -s templates/10-mongodbsearch.yaml | yq '.spec.observability.metricsForwarder.deployment.spec.template.spec.containers[0].image')" = "quay.io/ephico2real/opentelemetry-collector-contrib:0.152.0" ] \
+  && ok "the forwarder runs the mirrored collector image by default" || bad "the forwarder's default image"
+! render -s templates/10-mongodbsearch.yaml --set observability.metricsForwarder.image= | yq -e '.spec.observability.metricsForwarder.deployment' >/dev/null 2>&1 \
+  && ok "no forwarder override when observability.metricsForwarder.image is empty" || bad "forwarder override rendered without an image"
+[ "$(render -s templates/10-mongodbsearch.yaml --set observability.metricsForwarder.image=registry.example.com/otel/opentelemetry-collector-contrib:0.152.0 | yq -o=json -I=0 '.spec.observability.metricsForwarder.deployment')" = '{"spec":{"template":{"spec":{"containers":[{"name":"metrics-forwarder","image":"registry.example.com/otel/opentelemetry-collector-contrib:0.152.0"}]}}}}' ] \
+  && ok "observability.metricsForwarder.image overrides the container metrics-forwarder" || bad "forwarder image override: $(render -s templates/10-mongodbsearch.yaml --set observability.metricsForwarder.image=x | grep -A8 'metricsForwarder:' | tr '\n' ';')"
 render -s templates/10-mongodbsearch.yaml | grep -q 'name: ent-trust-bundle' && ok "the source CA is always rendered" || bad "source.external.tls.ca missing"
 render -s templates/10-mongodbsearch.yaml --set search.keepOnUninstall=true | grep -q 'helm.sh/resource-policy: keep' && ok "keepOnUninstall keeps the resource" || bad "keepOnUninstall"
 # The MongoDBSearch's annotations as one sorted block, so a key that landed under labels, a duplicated key, a lost

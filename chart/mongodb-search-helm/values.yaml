@@ -130,8 +130,10 @@ loadBalancer:
   resources:
     requests: {cpu: 100m, memory: 128Mi}
     limits: {cpu: 500m, memory: 512Mi}
-  # Envoy image override, as a full reference (name:tag or name@digest). Empty: the operator's own Envoy image.
-  image: ""
+  # Envoy image override, as a full reference (name:tag or name@digest). The default is a copy on quay.io of the
+  # operator's own envoyproxy/envoy:v1.37-latest, for clusters that cannot pull from Docker Hub; the copy is not
+  # refreshed when Docker Hub moves that tag. Empty: the operator's own Envoy image.
+  image: quay.io/ephico2real/envoy:v1.37-latest
   # The same for the Envoy pods. With three Envoy pods and 1 here, two always stay to carry the searches.
   podDisruptionBudget:
     enabled: true
@@ -175,6 +177,12 @@ observability:
     resources:
       requests: {cpu: 100m, memory: 128Mi}
       limits: {cpu: 250m, memory: 256Mi}
+    # The forwarder's image override, as a full reference (name:tag or name@digest). Rendered as the container
+    # metrics-forwarder under spec.observability.metricsForwarder.deployment, which the operator merges into its
+    # Deployment by container name, as for Envoy. The default is operator 1.13.0's own image,
+    # otel/opentelemetry-collector-contrib:0.152.0, copied from Docker Hub with all its architectures and the same
+    # digest, for clusters that cannot pull from Docker Hub. Empty: the operator's own image.
+    image: quay.io/ephico2real/opentelemetry-collector-contrib:0.152.0
     # Ops Manager, for the metrics forwarder: a Deployment of the operator's that sends mongot's metrics to an Ops
     # Manager project. With an external source the operator runs it only when this is set (mode auto). Ops Manager
     # 8.0.25 or later (operator 1.13.0). Rendered as spec.observability.metricsForwarder.opsManager.
