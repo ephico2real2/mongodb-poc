@@ -17,7 +17,9 @@ effect, down to the file system each pod sees. Argo CD and Helm run a hook on ev
 time, its plan finds nothing to do.
 */ -}}
 {{- if .Values.search.persistence.autoExpand.enabled }}
-{{- $name := printf "%s-expand-volumes" (include "mongodb-search-helm.fullname" .) }}
+{{- /* Kubernetes labels a Job's pods with the Job's name, and a label value holds at most 63 characters: the full name
+(up to 50) is cut to 48 to leave room for the suffix. A full name of 48 or fewer keeps the name it always had. */}}
+{{- $name := printf "%s-expand-volumes" (include "mongodb-search-helm.fullname" . | trunc 48 | trimSuffix "-") }}
 {{- $claimWait := int .Values.search.persistence.autoExpand.claimWaitSeconds }}
 apiVersion: v1
 kind: ConfigMap

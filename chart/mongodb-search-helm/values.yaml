@@ -52,7 +52,9 @@ preflight:
 # The MongoDBSearch resource (runbook Step 6a).
 search:
   # metadata.name. The TLS secret names and the operator's object names derive from it:
-  # <name>-search-0 (StatefulSet), <name>-search-lb-0 (Envoy), <name>-search-0-proxy-svc (Service).
+  # <name>-search-0 (StatefulSet), <name>-search-lb-0 (Envoy), <name>-search-0-proxy-svc (Service). At most 43
+  # characters (the StatefulSet's pod label controller-revision-hash), and 36 with Ops Manager on (the forwarder's
+  # pod label app=<name>-search-metrics-forwarder-0): a label value holds 63. The schema refuses a longer name.
   name: mongot
   # mongot version, pinned to the operator's own default for operator.version 1.13.0, so that an operator upgrade
   # does not move mongot by itself: change it as a step of its own. Empty: spec.version is left out and the operator
