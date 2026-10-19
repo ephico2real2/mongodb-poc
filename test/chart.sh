@@ -734,6 +734,11 @@ grep -q 'expand-volumes' <<<"$(objects)" && bad "autoExpand is off by default: n
 o="$(objects "${AE[@]}")"; missing=""
 for k in ConfigMap ServiceAccount Role RoleBinding Job; do has "$o" "${k}/${EXPAND}" || missing="${missing} ${k}"; done
 [[ -z "${missing}" ]] && ok "autoExpand.enabled=true renders the script, a service account, its role and the Job" || bad "autoExpand renders no:${missing}"
+# A long release name (a full name of 50, the most the chart makes): Kubernetes labels a Job's pods with the Job's
+# name, and refuses a label value over 63 characters. Seen on QA, 2026-10-19, with a name of 65.
+long="$(helm template a-very-long-release-name-for-the-search "${CHART}" -n dvh-gp6-rnd -f "${REMOTE}" "${AE[@]}" \
+  | yq -N 'select(.metadata.name | length > 63) | .kind + "/" + .metadata.name')"
+[[ -z "${long}" ]] && ok "with a long release name, no object's name passes 63 characters" || bad "names over 63 characters: ${long}"
 # Its place: after the resource (wave 1), before the gate (wave 3; for Helm a lower hook weight than the gate's).
 annotation() {  # <Job's name> <annotation> [helm arguments]
   render "${@:3}" | NAME="$1" KEY="$2" python3 -c '
