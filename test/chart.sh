@@ -128,6 +128,13 @@ kinds_named() { yq -N 'select(.metadata.name == "om-project-config" or .metadata
 refused "Ops Manager on with a created ConfigMap and no baseUrl or orgId" --set "$OM.enabled=true"
 refused "an Ops Manager baseUrl with a query string" "${OMSET[@]}" --set "$OM.projectConfig.baseUrl=https://opsmanager.example.com/?a=1"
 refused "an unknown key under agentCredentials" "${OMSET[@]}" --set "$OM.agentCredentials.create=true"
+# search.name against the label values the operator and Kubernetes derive from it (a label value holds 63):
+# controller-revision-hash=<name>-search-0-<hash of up to 10>, and with Ops Manager app=<name>-search-metrics-forwarder-0.
+N36="$(printf 'n%.0s' {1..36})"; N37="${N36}n"; N43="$(printf 'n%.0s' {1..43})"
+render --set "search.name=${N43}" >/dev/null 2>&1 && ok "a search.name of 43 characters renders" || bad "a search.name of 43 is refused"
+refused "a search.name of 44 characters (the StatefulSet's pod label would pass 63)" --set "search.name=${N43}n"
+render "${OMSET[@]}" --set "search.name=${N36}" >/dev/null 2>&1 && ok "with Ops Manager on, a search.name of 36 renders" || bad "with Ops Manager on, a search.name of 36 is refused"
+refused "a search.name of 37 with Ops Manager on (the forwarder's pod label would pass 63)" "${OMSET[@]}" --set "search.name=${N37}"
 ! render -s templates/10-mongodbsearch.yaml --set loadBalancer.image= | yq -e '.spec.clusters[0].loadBalancer.managed.deployment' >/dev/null 2>&1 && ok "no Envoy override without loadBalancer.image" || bad "Envoy override rendered without an image"
 [ "$(helm template mongot "${CHART}" -n x --set loadBalancer.externalHostname=mongot-search.example.com --set 'source.hostAndPorts[0]=mongod-1.example.com:27017' -s templates/10-mongodbsearch.yaml | yq '.spec.clusters[0].loadBalancer.managed.deployment.spec.template.spec.containers[0] | .name + " " + .image')" = "envoy quay.io/ephico2real/envoy:v1.37-latest" ] \
   && ok "Envoy runs the quay.io copy by default" || bad "Envoy's default image"
