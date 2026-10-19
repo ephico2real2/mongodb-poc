@@ -2,6 +2,11 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "additionalProperties": false,
+  "allOf": [
+    {"if": {"properties": {"observability": {"properties": {"metricsForwarder": {"properties": {"opsManager": {"properties": {"enabled": {"const": true}}, "required": ["enabled"]}}, "required": ["opsManager"]}}, "required": ["metricsForwarder"]}}, "required": ["observability"]},
+     "then": {"properties": {"search": {"properties": {"name": {"maxLength": 36,
+       "description": "At most 36 characters with Ops Manager on: the forwarder's pods are labelled app=<name>-search-metrics-forwarder-0, and a label value holds 63"}}}}}}
+  ],
   "properties": {
     "namespace": {"type": "string", "pattern": "^$|^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$",
                   "description": "Where every object goes; empty: the release's namespace"},
@@ -37,8 +42,8 @@
     "search": {
       "type": "object", "additionalProperties": false, "required": ["name", "replicas"],
       "properties": {
-        "name": {"type": "string", "maxLength": 44, "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
-                 "description": "At most 44 characters: the operator appends suffixes such as -search-0-proxy-svc"},
+        "name": {"type": "string", "maxLength": 43, "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+                 "description": "At most 43 characters: the StatefulSet is <name>-search-0, and Kubernetes labels its pods controller-revision-hash=<StatefulSet>-<hash of up to 10>, a label value of at most 63"},
         "version": {"type": "string", "pattern": "^$|^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$"},
         "replicas": {"type": "integer", "minimum": 0},
         "allowVolumeLoss": {"type": "boolean",
