@@ -30,11 +30,19 @@ search:
     # once the sync has passed. volume-expansion-runbook.md, "Letting the chart take steps 3 to 5".
     autoExpand:
       enabled: false
-  # TO DECIDE, from QA's dashboard. The heap is half of the memory request; MongoDB: no more than about 30 GB of
-  # heap, so no more than about 56Gi requested. A memory limit equal to the request.
+  # TO DECIDE, from QA's dashboard. The heap is half of the memory request, at most 30Gi (the operator's own cap,
+  # reached at 60Gi); everything above the heap is the JVM's own memory and the file-system cache, which MongoDB
+  # sizes to the index on disk "for optimal performance". Limits equal to requests, CPU and memory (QoS Guaranteed).
   resources:
     requests: {cpu: TO-DECIDE, memory: TO-DECIDE}
     limits: {cpu: TO-DECIDE, memory: TO-DECIDE}
+  # Only after every index is STEADY, if a rebuild of many indexes must be faster: how many indexes mongot builds at
+  # once (default 2). A change restarts every mongot pod, one at a time. See search.advancedMongotConfigs in
+  # values.yaml.
+  # advancedMongotConfigs:
+  #   replication:
+  #     mongodb:
+  #       numConcurrentInitialSyncs: 3
 
 loadBalancer:
   # TO DECIDE. The public name mongod connects to: the Route's host, and a name in the ...-search-lb-0-cert.

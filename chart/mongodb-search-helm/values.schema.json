@@ -56,6 +56,44 @@
             "limits": {"type": "object", "properties": {"cpu": {"type": ["string", "integer", "number"], "pattern": "^[+-]?([0-9]+(\\.[0-9]*)?|\\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|([eE][+-]?[0-9]+))?$"}, "memory": {"type": ["string", "integer", "number"], "pattern": "^[+-]?([0-9]+(\\.[0-9]*)?|\\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|([eE][+-]?[0-9]+))?$"}}}
           }
         },
+        "advancedMongotConfigs": {
+          "type": ["object", "null"], "additionalProperties": false,
+          "description": "mongot's advancedConfigs, as they are; null values in maps are left out. The keys at the top, under replication and under replication.mongodb are mongot 1.70.1's (AdvancedConfigs.java, CommunityReplicationConfig.java): mongot starts with a key it does not know and only logs that it ignores it",
+          "properties": {
+            "indexing": {"type": ["object", "null"]},
+            "querying": {"type": ["object", "null"]},
+            "replication": {
+              "type": ["object", "null"], "additionalProperties": false,
+              "properties": {
+                "mongodb": {
+                  "type": ["object", "null"], "additionalProperties": false,
+                  "properties": {
+                    "numConcurrentInitialSyncs": {"type": ["integer", "null"], "minimum": 1, "maximum": 2147483647},
+                    "numConcurrentChangeStreams": {"type": ["integer", "null"], "minimum": 1, "maximum": 2147483647},
+                    "numIndexingThreads": {"type": ["integer", "null"], "minimum": 1, "maximum": 2147483647},
+                    "numChangeStreamDecodingThreads": {"type": ["integer", "null"], "minimum": 1, "maximum": 2147483647},
+                    "numConcurrentSynonymSyncs": {"type": ["integer", "null"], "minimum": 1, "maximum": 2147483647},
+                    "changeStreamMaxTimeMs": {"type": ["integer", "null"], "minimum": 1, "maximum": 2147483647},
+                    "changeStreamCursorMaxTimeSec": {"type": ["integer", "null"], "minimum": 1, "maximum": 2147483647},
+                    "pauseAllInitialSyncs": {"type": ["boolean", "null"]},
+                    "pauseInitialSyncOnIndexIds": {"type": ["array", "null"], "items": {"type": "string", "pattern": "^[0-9a-fA-F]{24}$"}},
+                    "excludedChangestreamFields": {"type": ["array", "null"], "items": {"type": "string"}}
+                  }
+                }
+              }
+            },
+            "autoEmbedding": {"type": ["object", "null"]},
+            "cursor": {"type": ["object", "null"]},
+            "searchQueryAdmissionControl": {"type": ["object", "null"]},
+            "diskMonitor": {"type": ["object", "null"]},
+            "ftdc": {"type": ["object", "null"]}
+          }
+        },
+        "jvmFlags": {
+          "type": "array",
+          "description": "spec.clusters[0].jvmFlags. The operator 1.13.0 accepts a flag that starts with -X, -XX: or -D, with no space and only [a-zA-Z0-9._+:=-] (mongodbsearch_validation.go); this pattern also refuses a bare -X or -D, which the operator lets through",
+          "items": {"type": "string", "pattern": "^-[XD][a-zA-Z0-9._+:=-]+$"}
+        },
         "persistence": {
           "type": "object", "additionalProperties": false, "required": ["storage"],
           "properties": {

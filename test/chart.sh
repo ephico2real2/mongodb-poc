@@ -101,6 +101,47 @@ render -s templates/10-mongodbsearch.yaml | grep -q '^  version: "1.70.1"$' && o
   && ok "matchTagSets reaches spec.clusters[0].syncSourceSelector, in order, with a last {}" || bad "matchTagSets: $(render -s templates/10-mongodbsearch.yaml --set-json 'source.syncSourceSelector.matchTagSets=[{"region":"us-east-1"},{}]' | grep -A4 syncSourceSelector | tr '\n' ';')"
 render --set-json 'source.syncSourceSelector.matchTagSets=[{"zone":1}]' >/dev/null 2>&1 && bad "the schema refuses a tag value that is not a string" || ok "the schema refuses a tag value that is not a string"
 render --set source.syncSourceSelector.tags=x >/dev/null 2>&1 && bad "the schema refuses an unknown key under syncSourceSelector" || ok "the schema refuses an unknown key under syncSourceSelector"
+# search.advancedMongotConfigs: every value optional (null by default); nulls and the maps left empty are not
+# rendered, so an untouched block does not change mongot's config hash. mongot's top-level keys checked, and the
+# concurrency counts.
+! render -s templates/10-mongodbsearch.yaml | grep -q 'advancedMongotConfigs' && ok "no advancedMongotConfigs by default" || bad "advancedMongotConfigs rendered by default"
+[ "$(render -s templates/10-mongodbsearch.yaml --set search.advancedMongotConfigs.replication.mongodb.numConcurrentInitialSyncs=3 | yq -o=json -I=0 '.spec.clusters[0].advancedMongotConfigs')" = '{"replication":{"mongodb":{"numConcurrentInitialSyncs":3}}}' ] \
+  && ok "numConcurrentInitialSyncs alone reaches spec.clusters[0].advancedMongotConfigs, the other nulls left out" || bad "advancedMongotConfigs: $(render -s templates/10-mongodbsearch.yaml --set search.advancedMongotConfigs.replication.mongodb.numConcurrentInitialSyncs=3 | grep -A6 advancedMongotConfigs | tr '\n' ';')"
+[ "$(render -s templates/10-mongodbsearch.yaml --set-json 'search.advancedMongotConfigs={"replication":{"mongodb":{"numIndexingThreads":4,"changeStreamMaxTimeMs":2000,"excludedChangestreamFields":[]}},"ftdc":{"enabled":false},"cursor":null,"diskMonitor":{}}' | yq -o=json -I=0 '.spec.clusters[0].advancedMongotConfigs')" = '{"ftdc":{"enabled":false},"replication":{"mongodb":{"changeStreamMaxTimeMs":2000,"excludedChangestreamFields":[],"numIndexingThreads":4}}}' ] \
+  && ok "other mongot keys pass through; false and an empty list kept, a null and an empty map left out" || bad "advancedMongotConfigs pass-through: $(render -s templates/10-mongodbsearch.yaml --set search.advancedMongotConfigs.ftdc.enabled=false | grep -A3 advancedMongotConfigs | tr '\n' ';')"
+! render -s templates/10-mongodbsearch.yaml --set search.advancedMongotConfigs=null | grep -q 'advancedMongotConfigs' && ok "advancedMongotConfigs set to null renders nothing" || bad "a null advancedMongotConfigs rendered"
+refused "a top-level key mongot does not know under advancedMongotConfigs" --set search.advancedMongotConfigs.replicaton.x=1
+refused "numConcurrentInitialSyncs of 0" --set search.advancedMongotConfigs.replication.mongodb.numConcurrentInitialSyncs=0
+refused "numIndexingThreads that is not a whole number" --set search.advancedMongotConfigs.replication.mongodb.numIndexingThreads=two
+refused "numConcurrentChangeStreams as an empty list" --set-json 'search.advancedMongotConfigs.replication.mongodb.numConcurrentChangeStreams=[]'
+refused "numChangeStreamDecodingThreads as an empty map" --set-json 'search.advancedMongotConfigs.replication.mongodb.numChangeStreamDecodingThreads={}'
+refused "numIndexingThreads of 2.5" --set-json 'search.advancedMongotConfigs.replication.mongodb.numIndexingThreads=2.5'
+refused "a count above mongot's int (2147483647)" --set search.advancedMongotConfigs.replication.mongodb.numIndexingThreads=2147483648
+# Under replication only mongot's own keys: mongot starts with a misspelled one and only logs that it ignores it
+# (CommunityConfig.java:100-108), while the pods restart for it. Every key mongot 1.70.1 knows there still passes.
+refused "a misspelled count under replication.mongodb" --set search.advancedMongotConfigs.replication.mongodb.numConcurentInitialSyncs=3
+refused "a key under replication other than mongodb" --set search.advancedMongotConfigs.replication.mongod.numIndexingThreads=3
+refused "a pauseInitialSyncOnIndexIds entry that is not an ObjectId" --set-json 'search.advancedMongotConfigs.replication.mongodb.pauseInitialSyncOnIndexIds=["abc"]'
+amc='{"replication":{"mongodb":{"changeStreamCursorMaxTimeSec":1800,"changeStreamMaxTimeMs":1000,"excludedChangestreamFields":["updateDescription"],"pauseAllInitialSyncs":false,"pauseInitialSyncOnIndexIds":["0123456789abcdef01234567"]}}}'
+[ "$(render -s templates/10-mongodbsearch.yaml --set-json "search.advancedMongotConfigs=${amc}" | yq -o=json -I=0 '.spec.clusters[0].advancedMongotConfigs')" = "${amc}" ] \
+  && ok "replication.mongodb's other five keys pass through" || bad "replication.mongodb's other keys: $(render -s templates/10-mongodbsearch.yaml --set-json "search.advancedMongotConfigs=${amc}" | tail -2 | tr '\n' ';')"
+big="$(render -s templates/10-mongodbsearch.yaml --set search.advancedMongotConfigs.replication.mongodb.numIndexingThreads=1000000 --set search.advancedMongotConfigs.replication.mongodb.numConcurrentChangeStreams=2147483647 | grep -E '^ +num(IndexingThreads|ConcurrentChangeStreams): ' | tr -d ' ' | tr '\n' ' ')"
+[ "${big}" = "numConcurrentChangeStreams:2147483647 numIndexingThreads:1000000 " ] && ok "large counts render as plain integers" || bad "large counts: ${big}"
+# search.jvmFlags: left out by default (the operator's heap: half the memory request, at most 30Gi), rendered in
+# order; the schema holds the operator's own rule (mongodbsearch_validation.go): -X, -XX: or -D, no space; and it
+# refuses a bare -X or -D, which the operator lets through.
+! render -s templates/10-mongodbsearch.yaml | grep -q 'jvmFlags' && ok "no jvmFlags by default" || bad "jvmFlags rendered by default"
+[ "$(render -s templates/10-mongodbsearch.yaml --set-json 'search.jvmFlags=["-Xms6g","-Xmx6g","-XX:ActiveProcessorCount=2"]' | yq -o=json -I=0 '.spec.clusters[0].jvmFlags')" = '["-Xms6g","-Xmx6g","-XX:ActiveProcessorCount=2"]' ] \
+  && ok "jvmFlags reach spec.clusters[0].jvmFlags, in order" || bad "jvmFlags: $(render -s templates/10-mongodbsearch.yaml --set-json 'search.jvmFlags=["-Xmx6g"]' | grep -A2 jvmFlags | tr '\n' ';')"
+refused "a JVM flag with a space" --set-json 'search.jvmFlags=["-Xmx6g -Xms6g"]'
+refused "a JVM flag that does not start with -X or -D" --set-json 'search.jvmFlags=["--add-opens=java.base/java.lang=ALL-UNNAMED"]'
+refused "an empty JVM flag" --set-json 'search.jvmFlags=[""]'
+refused "a bare -X (java's help on its extra options)" --set-json 'search.jvmFlags=["-X"]'
+# What the documents say of mongot is what its source does (mongot 1.70.1): it ignores an unknown key with a warning,
+# logs no default for two of the five counts, and resumes an interrupted build when it can; and the chart passes JVM flags.
+claims='mongot itself refuses an unknown key|Unknown fields are refused|logs each at start|begins that index again from the start|an index being built starts again|never copies of one|Change streams kept open|Four of the five|startup log shows defaults|java:21-91|:280-292|the schema holds the same rule\.|this chart does not pass JVM flags|^\| JVM flags, a heap that is not half the request'
+! grep -q -E "${claims}" "${CHART}"/values.yaml "${CHART}"/values.schema.json "${CHART}"/README.md "${CHART}"/mongot-settings.md "${CHART}"/production-settings.md \
+  && ok "the documents' claims about mongot and the chart match their sources" || bad "a document still says: $(grep -h -o -E "${claims}" "${CHART}"/*.md "${CHART}"/values.yaml "${CHART}"/values.schema.json | sort -u | tr '\n' ';')"
 # observability.metricsForwarder.opsManager: off by default; on, the resource names both objects, the chart makes each
 # only when asked, keeps what it makes, and the schema refuses a created object without its required values.
 OM=observability.metricsForwarder.opsManager
