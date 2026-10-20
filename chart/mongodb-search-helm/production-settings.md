@@ -33,7 +33,7 @@ it is: `search.resources` holds the word `TO-DECIDE`, which the chart refuses, u
 | **The volume of a pod that is scaled away is deleted, and every volume when the resource is deleted.** The operator sets `whenScaled: Delete` and `whenDeleted: Delete` on the StatefulSet, and puts them back when they are changed; the resource's own override of them is ignored | lab; the operator's source: [volumes.md](volumes.md) | `search.keepOnUninstall: true`; `search.allowVolumeLoss: false`, with the preflight refusing fewer pods; the volumes set to `Retain` by a cluster administrator |
 | **One volume a pod.** `persistence.multiple` (data, journal, logs) is in the schema and ignored for search | MongoDB: the operator's source at tag 1.13.0, `controllers/searchcontroller/search_construction.go`, lines 135 to 141, reads the single volume only | `search.persistence` has the single volume only |
 | **No autoscaling.** The resource has no `scale` subresource, and the StatefulSet is the operator's | lab: [scaling.md](scaling.md) | `search.resources` and `search.replicas`, by hand, through git |
-| **The heap is half of the memory request**, unless JVM flags say otherwise; this chart does not pass JVM flags | MongoDB; lab: a request of 1100Mi gave `-Xmx550m -Xms550m` | Size the heap through `search.resources.requests.memory` |
+| **The heap is half of the memory request, at most 30Gi**, unless `search.jvmFlags` holds `-Xms` or `-Xmx` | MongoDB; lab: a request of 1100Mi gave `-Xmx550m -Xms550m`; the operator's source at tag 1.13.0, `controllers/searchcontroller/search_construction.go`, lines 64 to 66 and 272 to 293: `-Xmx30720m` from a request of 60Gi or more | Size the heap through `search.resources.requests.memory`, or give it in `search.jvmFlags`: [mongot-settings.md](mongot-settings.md) |
 | **Argo CD cannot tell a failing search from a healthy one.** It has no health check for the resource: the Application read `Synced` and `Healthy` while the MongoDBSearch read `Failed` | lab: [argocd.md](argocd.md) | The chart's gate fails the sync; read the operation and the resource, not the Application's two words |
 | **mongot's version follows the operator's** when the resource names none | The chart; MongoDB | `search.version` named |
 | **Pods are spread over nodes by preference only, and the operator creates no PodDisruptionBudget.** It gives the mongot pods and the Envoy pods a preferred anti-affinity on the node's name, weight 100; nothing requires it. MongoDB's documents say nothing on node drains | lab, read from the StatefulSet and the Deployment; MongoDB: the operator's source at 1.13.0 | The chart's two budgets, `search.podDisruptionBudget` and `loadBalancer.podDisruptionBudget`: [disruption-budgets.md](disruption-budgets.md). A required spread is not settable through the chart |
@@ -75,9 +75,10 @@ is 7% short.
 system memory, without exceeding a maximum of approximately 30GB" to the heap, the rest being the file system's
 cache, on which "query latency and throughput heavily depend"; and for CPU, a first estimate of "10 QPS per CPU
 core", with "Consistently seeing CPU usage above 80% suggests a need to scale up". With this chart the heap is half
-of the memory request, so:
+of the memory request (unless `search.jvmFlags` gives one), so:
 
-- the memory request is twice the heap that is wanted, and not above about 56Gi, where the heap reaches 30 GB;
+- the memory request is twice the heap that is wanted, up to 60Gi, where the operator's own cap holds the heap at
+  30Gi (`-Xmx30720m`); every GiB requested above 60Gi is left to the JVM's own memory and the file system's cache;
 - the memory limit is the ceiling for the heap, the JVM's own memory outside the heap and the file system's cache
   together, since Linux counts a pod's cache in its memory: what the limit leaves after the first two is the most
   cache the pod can have. A limit equal to the request means the pod is promised all it runs with. (All of this
@@ -238,7 +239,6 @@ setting.
 | --- | --- | --- |
 | mongot pods on different nodes, as a rule | `clusters[].nodeAffinity` places pods on kinds of node; a required pod anti-affinity would go through `clusters[].statefulSet` | The operator's preferred anti-affinity only. An override through `statefulSet` restarted every mongot pod on the lab when one was tried |
 | The number of Envoy's worker threads (`--concurrency`) | None. It would be an argument of the Envoy container, through `clusters[].loadBalancer.managed.deployment`, which would have to restate the operator's own arguments | One worker for every CPU of the node |
-| JVM flags, a heap that is not half the request | `clusters[].jvmFlags` | Half the request |
 | mongot's log level | `logLevel` | The operator's default |
 | How many mongot pods must be Ready before Envoy sends to them | `clusters[].loadBalancer.managed.minMongotReadyReplicas` | Not set. The CRD: "Defaults to 1 if not specified". The operator's source at 1.13.0 applies it to the shards of a sharded source only |
 

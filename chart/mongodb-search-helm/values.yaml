@@ -68,10 +68,47 @@ search:
   replicas: 3
   allowVolumeLoss: false
   # CPU and memory of each mongot pod. A change restarts the pods one at a time, each on its volume. Without
-  # -Xms or -Xmx among the JVM flags the operator sets the heap to half of the memory request.
+  # -Xms or -Xmx in jvmFlags the operator sets the heap to half of the memory REQUEST (never the limit), at most
+  # 30Gi (-Xmx30720m from a request of 60Gi or more; operator 1.13.0). The rest of the memory limit is the JVM's own
+  # memory outside the heap and the file-system cache that holds the index. mongot sizes its thread pools to the
+  # CPUs the JVM counts: the CPU LIMIT, rounded up (the request is never read), or every CPU of the node without one.
   resources:
     requests: {cpu: "1", memory: 3Gi}
     limits: {cpu: "3", memory: 5Gi}
+  # mongot's own settings, written as they are under advancedConfigs in mongot's config file
+  # (spec.clusters[0].advancedMongotConfigs; the operator neither reads nor changes them). Every value is optional:
+  # a null in a map is left out, and mongot's default applies; with every value null nothing is rendered. mongot
+  # logs "<name> not configured, defaulting to <n>." for three of the five counts below, never for
+  # numIndexingThreads or numConcurrentSynonymSyncs. The top-level keys are mongot 1.70.1's (indexing, querying,
+  # replication, autoEmbedding, cursor, searchQueryAdmissionControl, diskMonitor, ftdc), and so are the keys under
+  # replication and replication.mongodb: the schema refuses any other there. Below the other top-level keys a
+  # misspelled key reaches mongot, which starts anyway and only logs "Ignoring unrecognized field(s) in mongot
+  # config file". A CHANGE RESTARTS EVERY MONGOT POD, one at a time (the operator hashes the config file into the
+  # pods' mongotConfigHash), and interrupts every index being built (mongot resumes one from the progress it last
+  # committed, when it committed any): change it when every index is STEADY.
+  # The concurrency counts below are whole numbers of at least 1; "CPUs" is what the JVM counts, the CPU limit. The
+  # one worth changing is numConcurrentInitialSyncs: more is a faster rebuild of many indexes, at the cost of more
+  # CPU, memory, load on the source, and disk at once (each index being built is a second copy while the first is
+  # kept). The disk watermarks (diskMonitor) are MongoDB's documented values, and the chart's alerts follow them.
+  # Meanings, types, how each default follows the CPU limit, and how to change them: mongot-settings.md.
+  advancedMongotConfigs:
+    replication:
+      mongodb:
+        # How many indexes mongot builds at once. Default: the CPUs, at most 2.
+        numConcurrentInitialSyncs:
+        # Change streams that may have a getMore outstanding on the source at once. Default: 2 per CPU.
+        numConcurrentChangeStreams:
+        # Threads that write the indexes. Default: one per CPU.
+        numIndexingThreads:
+        # Threads that decode change-stream events. Default: half the CPUs, at least 1.
+        numChangeStreamDecodingThreads:
+        # Synonym collections synced at once. Default: 2.
+        numConcurrentSynonymSyncs:
+  # JVM flags of mongot (spec.clusters[0].jvmFlags), each a word of its own: ["-Xms16g", "-Xmx16g"]. With -Xms or
+  # -Xmx here the operator sets no heap of its own. MongoDB: a heap "below about 30GB allows the JVM to use
+  # compressed object pointers"; above it, 48GB or more. A change restarts the mongot pods one at a time. Empty: the
+  # operator's heap, described above.
+  jvmFlags: []
   persistence:
     # The size of each pod's volume. Raising it here does not grow a volume that exists: Kubernetes forbids a
     # change of a StatefulSet's volume claim template, the MongoDBSearch goes Failed (the pods keep running and

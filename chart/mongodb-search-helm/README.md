@@ -61,7 +61,7 @@ bash $P --clean                                       # removes the key files on
 From the package alone, with no clone:
 
 ```bash
-helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.31/mongodb-search-helm-0.3.31.tgz --untar
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.32/mongodb-search-helm-0.3.32.tgz --untar
 bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
 ```
 
@@ -69,7 +69,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.31/mongodb-search-helm-0.3.31.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.32/mongodb-search-helm-0.3.32.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
@@ -96,6 +96,8 @@ Each chart version is published as a GitHub release named `mongodb-search-helm-<
 | `search.replicas` | `3` | Step 6a. Lowering it deletes the volumes of the pods that go: [volumes.md](volumes.md) |
 | `search.allowVolumeLoss` | `false` | `true` for the one upgrade that lowers `search.replicas` on purpose; otherwise the preflight refuses it |
 | `search.resources` | 1 CPU / 3Gi to 3 CPU / 5Gi | Step 6a |
+| `search.jvmFlags` | `[]` | mongot's JVM flags (`spec.clusters[0].jvmFlags`), one word each, such as `["-Xms6g", "-Xmx6g"]`. Empty: the operator's heap, half the memory request, at most 30Gi. With `-Xms` or `-Xmx` the heap is what they say, whatever the request. A change restarts every mongot pod, one at a time. See [mongot-settings.md](mongot-settings.md) |
+| `search.advancedMongotConfigs` | the five `replication.mongodb` concurrency counts, each null | mongot's own settings, as they are under `advancedConfigs` in its config file (`spec.clusters[0].advancedMongotConfigs`). Every value is optional: a null is left out and mongot's default applies, and with every value null nothing is rendered. Only mongot 1.70.1's keys are accepted at the top, under `replication` and under `replication.mongodb`; below the other top-level keys mongot starts with a misspelled key and only logs that it ignores it. The one worth knowing: `replication.mongodb.numConcurrentInitialSyncs`, how many indexes are built at once (default: the CPUs, at most 2). A change restarts every mongot pod, one at a time, and interrupts every index being built: change it when every index is STEADY. Meanings and defaults: [mongot-settings.md](mongot-settings.md) |
 | `search.persistence.storage`, `.storageClass` | `10Gi`, `thin-csi` | Step 6a. Raising the size later takes the [expansion runbook](volume-expansion-runbook.md). Lowering it is not supported: the preflight refuses it |
 | `search.persistence.autoExpand.enabled` | `false` | `true` for the one change that grows the volumes: a Job of the chart then takes the runbook's steps by hand, with its script. `.claimWaitSeconds` (900): how long one claim, and then its pod, may take |
 | `search.podDisruptionBudget` | `enabled: true`, `maxUnavailable: 1` | A PodDisruptionBudget for the mongot pods: a node drain takes one at a time. The operator creates none: [disruption-budgets.md](disruption-budgets.md) |
@@ -581,6 +583,7 @@ from the repository, since a chart with them in it is too large for `helm instal
 | [disruption-budgets.md](disruption-budgets.md) | The two PodDisruptionBudgets the chart creates, for the mongot pods and the Envoy pods: what they do when nodes are drained on a cluster of several nodes, with figures; what was measured with and without them; what they do not cover; two Envoy pods or three |
 | [production-settings.md](production-settings.md) | Which values to run with in production, and why: what the MongoDBSearch resource does not let you set or change later, the value or the runbook that covers each, what is still to decide, and what to show on QA first. [examples/values-production.yaml](examples/values-production.yaml) is the same as a file |
 | [volumes.md](volumes.md) | Which actions keep a mongot pod's volume and which delete it. The operator deletes the volume of every pod that is scaled away, and a pod without its volume builds every index again: 4 to 5 hours for about 180 to 190 GB a pod, as the owner reports for a QA cluster. What the chart refuses, and what protects a volume |
+| [mongot-settings.md](mongot-settings.md) | mongot's own settings through `search.advancedMongotConfigs` and `search.jvmFlags`: how the resource carries them to mongot, the meaning, type and default of each concurrency count, how each default follows the CPU limit, what they have to do with memory, and how to change them |
 | [scaling.md](scaling.md) | How mongot is given more CPU, memory or pods through the values; that nothing scales it by itself; and why its StatefulSet is never scaled by hand |
 | [volume-auto-expansion.md](volume-auto-expansion.md) | How a resize works with `search.persistence.autoExpand.enabled`: the two values, what the chart's Job then does in the one sync and in which order, by hand against with the flag, what the Job may do, and what was and was not run. Two figures |
 | [volume-expansion-runbook.md](volume-expansion-runbook.md) | Growing the volumes: the size in the values, the sync, and then the steps by hand, in order, with what to check and what to do when one stops |

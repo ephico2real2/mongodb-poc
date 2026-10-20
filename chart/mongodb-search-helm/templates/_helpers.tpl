@@ -88,3 +88,21 @@ volume_size_changed() {
   [ -n "$WANT_SIZE" ] && [ -n "$HAVE_SIZE" ] && [ "$WANT_SIZE" != "$HAVE_SIZE" ]
 }
 {{- end -}}
+
+{{- /*
+A map without its null values and the maps left empty, as JSON. Helm keeps the empty maps around a null default,
+and an advancedMongotConfigs of empty maps would still change mongot's config hash and restart every pod. false, 0
+and an empty list are values and are kept.
+*/}}
+{{- define "mongodb-search-helm.withoutNulls" -}}
+{{- $out := dict -}}
+{{- range $key, $value := . -}}
+{{- if kindIs "map" $value -}}
+{{- $inner := include "mongodb-search-helm.withoutNulls" $value | fromJson -}}
+{{- if $inner -}}{{- $_ := set $out $key $inner -}}{{- end -}}
+{{- else if not (kindIs "invalid" $value) -}}
+{{- $_ := set $out $key $value -}}
+{{- end -}}
+{{- end -}}
+{{- toJson $out -}}
+{{- end -}}

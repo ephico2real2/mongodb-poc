@@ -59,6 +59,14 @@ spec:
       resourceRequirements:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.search.jvmFlags }}
+      jvmFlags:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with include "mongodb-search-helm.withoutNulls" (.Values.search.advancedMongotConfigs | default dict) | fromJson }}
+      advancedMongotConfigs:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with (.Values.source.syncSourceSelector | default dict).matchTagSets }}
       syncSourceSelector:
         matchTagSets:
