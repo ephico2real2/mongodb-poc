@@ -619,6 +619,19 @@ if command -v yq >/dev/null; then
 [ "$(lbhas --set loadBalancer.resources=null)" = false ] && ok "loadBalancer.resources null leaves the field out, for the operator's defaults" || bad "loadBalancer.resources null: the key is still rendered (has=$(lbhas --set loadBalancer.resources=null))"
 [ "$(lbres --set loadBalancer.resources.limits=null)" = '{"requests":{"cpu":"100m","memory":"128Mi"}}' ] && ok "limits null gives Envoy requests and no limits" || bad "limits null: $(lbres --set loadBalancer.resources.limits=null)"
 [ "$(render -s templates/10-mongodbsearch.yaml | yq -o=json -I=0 '.spec.clusters[0].resourceRequirements.requests.memory')" = '"3Gi"' ] && ok "mongot's resources are not Envoy's" || bad "mongot's resources changed with Envoy's"
+# Every container the chart makes, with every optional one on, requests and limits both CPU and memory: a namespace
+# whose ResourceQuota covers limits.cpu refused the preflight's pods ("must specify limits.cpu"), and the Job failed at
+# its deadline. So do the three the operator makes from the MongoDBSearch (mongot, Envoy, the metrics forwarder).
+ALL_PODS=(--set search.persistence.autoExpand.enabled=true --set monitoring.indexInfo.enabled=true --set monitoring.indexInfo.uriOptions=replicaSet=rs0)
+containers="$(render "${ALL_PODS[@]}" | yq -N 'select(.kind == "Job" or .kind == "CronJob" or .kind == "Deployment" or .kind == "StatefulSet" or .kind == "DaemonSet" or .kind == "Pod")
+  | (.kind + "/" + .metadata.name) as $o | (.spec.template.spec // .spec.jobTemplate.spec.template.spec // .spec) as $p
+  | (($p.containers // []) + ($p.initContainers // [])) | .[]
+  | $o + " " + .name + " " + ([.resources.requests.cpu, .resources.requests.memory, .resources.limits.cpu, .resources.limits.memory] | map(select(. != null)) | length | tostring)')"
+[[ "$(wc -l <<<"${containers}" | tr -d ' ')" -ge 6 ]] && ! grep -qv ' 4$' <<<"${containers}" \
+  && ok "every Job and Deployment container requests and limits CPU and memory ($(wc -l <<<"${containers}" | tr -d ' ') containers)" \
+  || bad "a container without all four of requests.cpu, requests.memory, limits.cpu, limits.memory: $(grep -v ' 4$' <<<"${containers}" | tr '\n' ';')"
+[ "$(render -s templates/10-mongodbsearch.yaml | yq -I=0 '[.spec.clusters[0].resourceRequirements, .spec.clusters[0].loadBalancer.managed.resourceRequirements, .spec.observability.metricsForwarder.resourceRequirements] | map(select(.requests.cpu and .requests.memory and .limits.cpu and .limits.memory)) | length')" = 3 ] \
+  && ok "mongot, Envoy and the metrics forwarder request and limit CPU and memory by default" || bad "a MongoDBSearch container lacks a CPU or memory request or limit by default"
 fi
 refused "an Envoy memory limit that is not a Kubernetes quantity (512MB)" --set-string loadBalancer.resources.limits.memory=512MB
 refused "an unknown key under loadBalancer.resources" --set loadBalancer.resources.request.cpu=100m

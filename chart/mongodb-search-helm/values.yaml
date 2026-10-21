@@ -336,9 +336,10 @@ monitoring:
     # The interval is at least 25s, the scrape timeout: Prometheus refuses a timeout longer than its interval.
     cacheSeconds: 60
     interval: 60s
+    # A CPU limit as well, for a namespace whose ResourceQuota requires one.
     resources:
       requests: {cpu: 10m, memory: 96Mi}
-      limits: {memory: 384Mi}
+      limits: {cpu: 500m, memory: 384Mi}
 
 # The post-install gate: returns when the operator's CSV is Succeeded, the MongoDBSearch has observed its current
 # generation and is Running, mongot and Envoy are rolled out to the requested replicas, Envoy mounts the expected
@@ -353,8 +354,9 @@ jobs:
   image:
     repository: registry.redhat.io/openshift4/ose-cli
     tag: latest
-  # A namespace whose ResourceQuota requires requests refuses a pod without them.
+  # Every request and limit is set: a namespace whose ResourceQuota covers requests or limits refuses a pod that
+  # leaves one out ("failed quota: ... must specify limits.cpu"), and the Job then fails at its deadline.
   resources:
-    requests: {cpu: 50m, memory: 64Mi}
-    limits: {memory: 256Mi}
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: 500m, memory: 1024Mi}
   ttlSecondsAfterFinished: 600

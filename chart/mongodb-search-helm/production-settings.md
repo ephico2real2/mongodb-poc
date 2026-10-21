@@ -211,7 +211,7 @@ change, one a second, and all were answered.
 | Value | Production | Why | From |
 | --- | --- | --- | --- |
 | `jobs.image` | `ose-cli` at a named tag or digest, matching the cluster's version | The default tag is `latest` | The chart |
-| `jobs.resources` | The chart's, or what the namespace's quota asks for | A namespace whose ResourceQuota requires requests refuses a Job without them | The chart |
+| `jobs.resources` | The chart's (requests 100m and 256Mi, limits 500m and 1024Mi), or what the namespace's quota asks for | A namespace whose ResourceQuota covers requests or limits refuses a pod that leaves one out: the Job's pods are never made, and the Job fails at its deadline | The chart |
 | `jobs.ttlSecondsAfterFinished` | `600` or longer | A failed hook's reason is only in its Job's log, and the log goes with the Job | lab |
 | `wait.waitSeconds` | **To show on QA.** The chart's is 900 | The gate waits for every mongot pod to be Ready. On the lab that is under 2 minutes; whether a pod with 190 GB to build is Ready before or after its indexes are built decides this number, and was not measured | Not run |
 
