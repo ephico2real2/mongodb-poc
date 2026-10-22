@@ -1,0 +1,12 @@
+== drill: the primary's cluster mesh0 lost by partition, mesh1 writes and searches (150 s); client options connectTimeoutMS=5000&socketTimeoutMS=5000
+[t+  1s] primary mongo-mesh0; lab.drill holds 4000 documents
+[t+ 15s] cut mesh0's mongod off from the other clusters (Cilium deny policy)
+[t+ 39s] primary now: mongo-mesh2 (elected 15.9 s after the partition, by its log)
+[t+ 75s] remove the deny policy
+[t+154s] primary after: mongo-mesh0
+  write failed at 12.8 s: Socket 'secureConnect' timed out after 5003ms (connectTimeoutMS: 5000)
+  write failed at 23.3 s: Socket 'secureConnect' timed out after 5003ms (connectTimeoutMS: 5000)
+  write failed at 28.9 s: Socket 'secureConnect' timed out after 5003ms (connectTimeoutMS: 5000)
+  write failed at 34.4 s: Socket 'secureConnect' timed out after 5003ms (connectTimeoutMS: 5000)
+RESULT {"search":{"ok":245,"fail":0,"maxMs":17,"maxAt":"94.2"},"write":{"ok":241,"fail":4,"maxMs":10027,"maxAt":"12.8"}}
+[t+155s] acknowledged writes: 241; lab.drill grew by 241 (4000 -> 4241): every acknowledged write is there, once

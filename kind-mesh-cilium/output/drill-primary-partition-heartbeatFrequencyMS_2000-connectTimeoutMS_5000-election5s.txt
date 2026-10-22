@@ -1,0 +1,8 @@
+== drill: the primary's cluster mesh0 lost by partition, mesh1 writes and searches (150 s); client options heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+[t+  1s] primary mongo-mesh0; lab.drill holds 5995 documents
+[t+ 15s] cut mesh0's mongod off from the other clusters (Cilium deny policy)
+[t+ 27s] primary now: mongo-mesh2 (elected 7.3 s after the partition, by its log)
+[t+ 75s] remove the deny policy
+[t+153s] primary after: mongo-mesh0
+RESULT {"search":{"ok":273,"fail":0,"maxMs":12,"maxAt":"0.5"},"write":{"ok":273,"fail":0,"maxMs":11332,"maxAt":"13.2"}}
+[t+154s] acknowledged writes: 273; lab.drill grew by 273 (5995 -> 6268): every acknowledged write is there, once

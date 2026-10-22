@@ -1,0 +1,9 @@
+# 2026-10-22T04:42:23Z: electionTimeoutMillis to 5000 for the drills tagged election5s
+$ cfg = rs.conf(); cfg.settings.electionTimeoutMillis = 5000; rs.reconfig(cfg)
+before: 10000 heartbeatIntervalMillis 2000
+reconfig ok: 1
+after: 5000 version 2
+
+# 2026-10-22T04:58:15Z: back to the default after the election5s drills
+reconfig ok: 1
+after: 10000 version 3 primary mongo-mesh0
