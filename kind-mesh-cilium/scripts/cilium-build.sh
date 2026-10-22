@@ -255,7 +255,7 @@ check_loads() {
 
 # Every agent of an inventory (agents) on CILIUM_VERSION and a commit starting with <commit>: see `commit` above.
 on_commit() { # <inventory> <commit>
-  awk -v v="$CILIUM_VERSION" -v h="$2" '$2 != v || index($3, h) != 1 {bad=1} END {exit bad}' <<<"$1"
+  awk -v v="$CILIUM_VERSION" -v h="$2" 'NF != 3 || $2 != v || $3 !~ /^[0-9a-f]+$/ || length($3) > 40 || index($3, h) != 1 {bad=1} END {exit bad}' <<<"$1"
 }
 # What Hubble names at <scope> (versions.env): mongod's flows to the mongot on the other node of its cluster (named
 # from cluster up), and to the other clusters' mongod (named at mesh only), as verdict's all or none.
@@ -389,8 +389,9 @@ gate() { # <cluster>
 # DaemonSet replaces both agents of a cluster at once: maxUnavailable 2, the chart's default). The nodes' /var is the
 # VM's one docker disk, which also holds mongot's volumes (local-path; kind-mesh/versions.env): mongot stops indexing
 # at 85% of it used (#182), so no image may take the disk there. The first cluster, allowed 4 GiB (two images on two
-# nodes; #145 allowed 2 GiB for one image on one node), measures what one cluster's copy costs, and the others are only
-# placed if the disk stays under 85% with all of them.
+# nodes; #145 allowed 2 GiB for one image on one node). Reserve at least that much for every cluster, even
+# when the first cluster is cached. This is a capacity budget, not an upper bound proved from image sizes; include
+# import scratch space in CILIUM_IMAGE_CLUSTER_BUDGET_KIB and exclude concurrent disk writers.
 disk_used() { # <node> [KiB more]: the % of the node's /var used, with that much more written; fails at 85% or above
   local df size avail
   df=$(docker exec "$1" df -k --output=size,avail /var | tail -1) || return 1
@@ -408,15 +409,21 @@ place_images() { # <cluster>: kind load from the VM's docker (CILIUM_IMAGES_LOCA
   done
 }
 prepull() { # <cluster...>
-  local c n first=$1 before per pct
+  local c n first=$1 before per pct reserve remaining=$#
+  # A cached first cluster cannot estimate a cold one. Reserve a budget for EVERY
+  # cluster before writing; increase this bound for larger images/import scratch space.
+  reserve=${CILIUM_IMAGE_CLUSTER_BUDGET_KIB:-4194304}
+  [[ "$reserve" =~ ^[1-9][0-9]*$ ]] || die "CILIUM_IMAGE_CLUSTER_BUDGET_KIB must be positive"
   n="$first-control-plane"
-  pct=$(disk_used "$n" $((4 * 1024 * 1024))) || die "the VM's disk would be ${pct:-?}% used after 4 GiB of images; mongot stops indexing at 85%"
+  pct=$(disk_used "$n" $((reserve * remaining))) || die "the VM's disk would be ${pct:-?}% used with the image budgets; mongot stops indexing at 85%"
   for c in "$@"; do
+    pct=$(disk_used "$n" $((reserve * remaining))) || die "$c: insufficient disk for remaining image budgets"
     before=$(avail_kib "$n")
     place_images "$c"
+    remaining=$((remaining - 1))
     if [ "$c" = "$first" ]; then
       per=$((before - $(avail_kib "$n")))
-      [ "$per" -ge 0 ] || per=0
+      [ "$per" -ge "$reserve" ] || per=$reserve
       pct=$(disk_used "$n" $((per * ($# - 1)))) \
         || die "the VM's disk would be ${pct:-?}% used once all $# clusters hold the images ($((per / 1024)) MiB each); mongot stops indexing at 85%"
       note "images on $c: $((per / 1024)) MiB; the VM's disk $pct% used once all $# clusters hold them"
@@ -430,12 +437,13 @@ prepull() { # <cluster...>
 # #187: an agent restart writes mongot-global's frontend as plain L4 for about a minute, and a connection mongod opens
 # then goes straight to one mongot, past Cilium's Envoy, until mongod reconnects. So once the frontend on mongod's node
 # is an L7 load balancer again, its Envoy must count 20 searches through mongod (drills.sh load-only, 10 s); the
-# upgrade's load only adds to the count, so a connection that half bypasses may pass, the full bypass of #187 does not.
+# harness loads are paused for this check. The aggregate delta is a smoke test: retries, fanout or external
+# traffic can still mask bypass. It is not per-request attribution or proof that every search crossed Envoy.
 mongot_frontend_l7() { # <cluster> <agent> <frontend ip>: every slot-0 entry of <ip>:27028 has the L7 flag
   kubectl --context "kind-$1" -n kube-system exec "$2" -c cilium-agent -- cilium-dbg bpf lb list -o json 2>/dev/null \
     | python3 -c '
 import json, sys
-fe = [v for k, v in json.load(sys.stdin).items() if k.startswith(sys.argv[1]) and k.endswith(" (0)")]
+fe = [v for k, v in json.load(sys.stdin).items() if k in (sys.argv[1] + " (0)", sys.argv[1] + "/i (0)")]
 sys.exit(0 if fe and all(any("l7-load-balancer" in e for e in v) for v in fe) else 1)' "$3:27028/TCP"
 }
 envoy_requests() { # <cluster> <agent>: upstream_rq_total of search/mongot-global in the Envoy of that agent's node
@@ -457,8 +465,8 @@ envoy_counts() { # <cluster>: true when Envoy on mongod's node counted the searc
   done
   note "$c: mongot-global $ip:27028 is an L7 load balancer on $node (check $i)"
   before=$(envoy_requests "$c" "$agent") || die "$c: no upstream_rq_total for search/mongot-global from $agent"
-  v=$("$here/drills.sh" load-only "$c" 10 2>&1 | sed -n 's/^RESULT //p')
-  ok=$(python3 -c 'import json,sys; r=json.loads(sys.argv[1]); assert r["ok"] > 0; print(r["ok"])' "$v") || die "$c: search load failed"
+  v=$("$here/drills.sh" load-only "$c" 10 2>&1 | sed -n 's/^RESULT //p') || die "$c: search command failed"
+  ok=$(python3 -c 'import json,sys; r=json.loads(sys.argv[1]); assert r["ok"] > 0 and r["fail"] == 0; print(r["ok"])' "$v") || die "$c: search load failed"
   after=$(envoy_requests "$c" "$agent") || die "$c: no upstream_rq_total for search/mongot-global from $agent"
   printf '%s L7 %s: %s searches answered, Envoy on %s counted %s (%s -> %s)\n' "$(date -u +%FT%TZ)" "$c" "$ok" "$node" \
     "$((after - before))" "$before" "$after" | tee -a "$l7_record"
@@ -470,10 +478,12 @@ rs_healthy() { # every member of rs0 up, PRIMARY or SECONDARY
 }
 mongod_restart() { # <cluster>: one member at a time, and only while every member is healthy
   local c=$1 uid i now
+  # l7_after_restart has drained every harness load; check health AFTER that wait.
   rs_healthy || die "$c: not restarting mongod while a member of rs0 is not healthy"
-  pause_load "$c"
   uid=$(kubectl --context "kind-$c" -n mongodb get pod mongo-0 -o jsonpath='{.metadata.uid}')
-  note "$c: Envoy did not count mongod's searches; restarting mongo-0 (#187)"
+  [ -n "$uid" ] || die "$c: cannot identify mongo-0 for restart"
+  note "$c: Envoy did not count mongod's searches; restarting mongo-0 (#187); if primary, this triggers an election (mesh0 is normally primary)"
+  rs_healthy || die "$c: rs0 health changed before deletion"
   kubectl --context "kind-$c" -n mongodb delete pod mongo-0 --wait=true --timeout=5m >/dev/null
   for i in $(seq 1 60); do
     now=$(kubectl --context "kind-$c" -n mongodb get pod mongo-0 -o jsonpath='{.metadata.uid}' 2>/dev/null || true)
@@ -488,13 +498,18 @@ mongod_restart() { # <cluster>: one member at a time, and only while every membe
     sleep 5
   done
   echo "RESTARTED $c $(date -u +%FT%TZ) mongo-0 $uid -> $now" | tee -a "$l7_record"
-  resume_load "$c"
 }
 # envoy_counts runs as a condition, where set -e is off: each of its steps dies on its own failure.
 l7_after_restart() { # <cluster>
-  envoy_counts "$1" && return 0
-  mongod_restart "$1"
-  envoy_counts "$1" || die "$1: Cilium's Envoy still does not count mongod's searches after mongod's restart (#187)"
+  local c
+  # Drain all harness traffic before sampling counters. Keep it paused through the
+  # restart and second check; any failure exits without launching another batch.
+  for c in "${clusters[@]}"; do pause_load "$c"; done
+  if ! envoy_counts "$1"; then
+    mongod_restart "$1"
+    envoy_counts "$1" || die "$1: Cilium's Envoy still does not count mongod's searches after mongod's restart (#187)"
+  fi
+  for c in "${clusters[@]}"; do resume_load "$c"; done
 }
 
 upgrade() { # <cluster...>
@@ -586,7 +601,8 @@ drill() {
     echo "  to any cluster:     $(named_count StatefulSet/mongot-search-0 <"$tmp/drill-flows.json") (named/flows, $c's own included)"
   } | tee "$out/cilium-build-drill.txt"
   cross=$(named_count StatefulSet/mongot-search-0 "$c" <"$tmp/drill-flows.json")
-  for t in L3_L4 L7; do
+  # Preserve the cluster-scope drill: reused connections need not emit L3/L4.
+  for t in L7 $([ "$CILIUM_SCOPE" = mesh ] && echo L3_L4); do
     [ "$(verdict "$cross" "$expect" "$t")" = PASS ] || die "cross-cluster drill: $t flows missing, or not $expect named: $cross"
   done
   # The drill measures attribution, not search reliability: 1 to 3 searches fail at the moment the mongot are deleted

@@ -481,9 +481,11 @@ the observing agent reads them. So both images change, and both are built in the
 - The gate also requires the clustermesh-apiserver Deployment rolled out with every container on the new image.
 - After each cluster's gate, #187's step: once `mongot-global`'s frontend on mongod's node has `l7-load-balancer`
   again (`cilium-dbg bpf lb list`), Cilium's Envoy there must count the 20 searches of `drills.sh load-only <c> 10`
-  (`upstream_rq_total` of `search/mongot-global`). If it does not, that cluster's mongod is restarted (`kubectl delete
-  pod mongo-0`, only while every member of rs0 is healthy; that cluster's load pauses meanwhile) and checked again; a
-  second miss stops the run. Each check and restart goes to `output/cilium-build-l7.txt`, and `measure after` accepts
+  (`upstream_rq_total` of `search/mongot-global`). All harness loads are drained and paused for the check, restart,
+  and recheck. This aggregate counter is a smoke test, not per-request proof: other clients, retries or fanout can
+  mask bypass. If it misses, that cluster's mongod is restarted (`kubectl delete pod mongo-0`), with rs0 health
+  checked after draining and again before deletion. Restarting a primary triggers an election; mesh0 is normally
+  primary. Health snapshots cannot exclude a concurrent failure. A second miss stops the run with loads paused. Each check and restart goes to `output/cilium-build-l7.txt`, and `measure after` accepts
   the restarted mongod's new UID and address only.
 
 | # | What | Command | Passes when | Result |
