@@ -1,0 +1,202 @@
+<!-- SPDX-License-Identifier: MIT-0. Started from the diagram-kit template, https://github.com/ephico2real2/diagram-kit -->
+<title>Mesh Shared Services</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --ground: #f5f6f8; --surface: #ffffff; --ink: #18212c; --muted: #58636f; --rule: #d7dce3;
+  --host: #a55a0b; --host-wash: #fbf1e4; --remote: #0e6f68; --remote-wash: #e3f3f1;
+  --gap: #b3261e; --gap-wash: #fbe9e7; --none: #5f6a77; --none-wash: #eef0f3;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+    --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+    --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+  --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+  --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55; margin: 0; }
+.page { max-width: 1060px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 72px; display: grid; gap: 44px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0 0 6px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+.lede { font-size: 17px; max-width: 70ch; }
+code { font-family: var(--font-mono); font-size: .9em; }
+section { display: grid; gap: 14px; }
+figure { margin: 0; display: grid; gap: 10px; }
+.fig-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px; }
+.fig-scroll svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--ink); }
+figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
+a { color: var(--remote); }
+:focus-visible { outline: 2px solid var(--remote); outline-offset: 2px; }
+</style>
+<div class="page">
+  <header>
+    <div class="eyebrow">mongodb-poc · kind mesh lab · 2026-10-22</div>
+    <h1>Shared services on Cilium Cluster Mesh, and a copy for disaster recovery</h1>
+    <p class="lede">The observability services run in one cluster and every cluster reaches them by name, through Cilium global Services. A global Service load-balances each connection to one backend; it does not copy. A second copy therefore comes from the writers, which send every record to both.</p>
+  </header>
+
+  <section>
+    <h2>Shared services, reached through global Services</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 474" role="img" aria-label="Three clusters. mesh0, in the middle, runs the shared services in its observability namespace: Loki, a Prometheus receiver (proposed), Grafana reading Loki locally (and the Prometheus receiver, proposed), and the Hubble UI, relay and observer; the relay sees all six nodes because one CA signs every cluster's Hubble certificates. mesh1 and mesh2 run only writers, an OTel Collector for flows and a Prometheus agent for metrics, which dial loki-primary and prometheus-primary. In mesh1 and mesh2 those names are global Services with no backend of their own, so Cilium sends the writes to mesh0. A global Service load-balances each connection to one backend in one cluster; it does not copy. Proposed and not built yet: Prometheus, the global Services, and the writers and their namespace in mesh1 and mesh2.">
+          <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+            <!-- mesh1: writers only -->
+            <rect x="30" y="40" width="266" height="346" rx="8" fill="none" stroke="currentColor" stroke-width="1.3"/>
+            <text x="44" y="62" font-weight="600">mesh1</text><text x="96" y="62" fill="var(--muted)">writers only</text>
+            <rect x="42" y="74" width="242" height="300" rx="6" fill="none" stroke="var(--rule)" stroke-width="1.2" stroke-dasharray="6 4"/>
+            <text x="52" y="92" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">ns observability</text>
+            <rect x="52" y="109" width="222" height="50" rx="6" fill="var(--none-wash)" stroke="var(--none)" stroke-width="1.3" stroke-dasharray="6 4"/>
+            <text x="64" y="129" font-family="IBM Plex Mono, monospace" font-size="12">loki-primary</text>
+            <text x="64" y="146" fill="var(--muted)">global, no backend here</text>
+            <rect x="52" y="176" width="222" height="50" rx="6" fill="var(--none-wash)" stroke="var(--none)" stroke-width="1.3" stroke-dasharray="6 4"/>
+            <text x="64" y="196" font-family="IBM Plex Mono, monospace" font-size="12">prometheus-primary</text>
+            <text x="64" y="213" fill="var(--muted)">global, no backend here</text>
+            <rect x="52" y="280" width="222" height="74" rx="6" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.3" stroke-dasharray="6 4"/>
+            <text x="64" y="300" font-weight="600" fill="var(--host)">OTel Collector: flows</text>
+            <text x="64" y="318" font-weight="600" fill="var(--host)">Prometheus agent: metrics</text>
+            <text x="64" y="336" fill="var(--muted)">dial the two names above</text>
+            <line x1="120" y1="280" x2="120" y2="228" stroke="var(--host)" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+            <text x="130" y="258" fill="var(--host)">proposed: writes</text>
+            <!-- mesh0: the shared services -->
+            <rect x="352" y="40" width="276" height="346" rx="8" fill="none" stroke="currentColor" stroke-width="1.3"/>
+            <text x="366" y="62" font-weight="600">mesh0</text><text x="418" y="62" fill="var(--muted)">shared services</text>
+            <rect x="364" y="74" width="252" height="300" rx="6" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+            <text x="374" y="92" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">ns observability</text>
+            <rect x="374" y="102" width="232" height="64" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="386" y="122" font-weight="600" fill="var(--remote)">Loki</text>
+            <text x="386" y="139" font-family="IBM Plex Mono, monospace" font-size="12">loki :3100 today</text>
+            <text x="386" y="156" fill="var(--host)">proposed: global loki-primary</text>
+            <rect x="374" y="176" width="232" height="50" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3" stroke-dasharray="6 4"/>
+            <text x="386" y="196" font-weight="600" fill="var(--remote)">Prometheus receiver</text>
+            <text x="386" y="213" font-family="IBM Plex Mono, monospace" font-size="12">prometheus-primary</text>
+            <rect x="374" y="236" width="232" height="50" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="386" y="256" font-weight="600" fill="var(--remote)">Grafana</text>
+            <text x="386" y="273" fill="var(--muted)">reads Loki<tspan fill="var(--host)">; proposed: Prometheus</tspan></text>
+            <rect x="374" y="296" width="232" height="66" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="386" y="316" font-weight="600" fill="var(--remote)">Hubble UI, relay, observer</text>
+            <text x="386" y="333" fill="var(--muted)">the relay sees all six nodes:</text>
+            <text x="386" y="350" fill="var(--muted)">one CA signs every cluster</text>
+            <!-- mesh2: writers only -->
+            <rect x="684" y="40" width="266" height="346" rx="8" fill="none" stroke="currentColor" stroke-width="1.3"/>
+            <text x="698" y="62" font-weight="600">mesh2</text><text x="750" y="62" fill="var(--muted)">writers only</text>
+            <rect x="696" y="74" width="242" height="300" rx="6" fill="none" stroke="var(--rule)" stroke-width="1.2" stroke-dasharray="6 4"/>
+            <text x="706" y="92" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">ns observability</text>
+            <rect x="706" y="109" width="222" height="50" rx="6" fill="var(--none-wash)" stroke="var(--none)" stroke-width="1.3" stroke-dasharray="6 4"/>
+            <text x="718" y="129" font-family="IBM Plex Mono, monospace" font-size="12">loki-primary</text>
+            <text x="718" y="146" fill="var(--muted)">global, no backend here</text>
+            <rect x="706" y="176" width="222" height="50" rx="6" fill="var(--none-wash)" stroke="var(--none)" stroke-width="1.3" stroke-dasharray="6 4"/>
+            <text x="718" y="196" font-family="IBM Plex Mono, monospace" font-size="12">prometheus-primary</text>
+            <text x="718" y="213" fill="var(--muted)">global, no backend here</text>
+            <rect x="706" y="280" width="222" height="74" rx="6" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.3" stroke-dasharray="6 4"/>
+            <text x="718" y="300" font-weight="600" fill="var(--host)">OTel Collector: flows</text>
+            <text x="718" y="318" font-weight="600" fill="var(--host)">Prometheus agent: metrics</text>
+            <text x="718" y="336" fill="var(--muted)">dial the two names above</text>
+            <line x1="860" y1="280" x2="860" y2="228" stroke="var(--host)" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+            <text x="850" y="258" text-anchor="end" fill="var(--host)">proposed: writes</text>
+            <!-- Cilium sends the writes to mesh0 -->
+            <line x1="274" y1="134" x2="372" y2="134" stroke="var(--remote)" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+            <text x="324" y="126" text-anchor="middle" fill="var(--remote)">logs</text>
+            <line x1="274" y1="201" x2="372" y2="201" stroke="var(--remote)" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+            <text x="324" y="193" text-anchor="middle" fill="var(--remote)">metrics</text>
+            <line x1="706" y1="134" x2="608" y2="134" stroke="var(--remote)" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+            <text x="656" y="126" text-anchor="middle" fill="var(--remote)">logs</text>
+            <line x1="706" y1="201" x2="608" y2="201" stroke="var(--remote)" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+            <text x="656" y="193" text-anchor="middle" fill="var(--remote)">metrics</text>
+            <text x="30" y="414">A global Service load-balances each connection to one backend in one cluster: it reaches mesh0, it does not copy.</text>
+            <text x="30" y="434" fill="var(--muted)">mesh1 and mesh2 dial the same names as mesh0. There the Service has no backend, so Cilium sends the writes to mesh0's.</text>
+            <text x="30" y="454" fill="var(--host)">Dashed: proposed, not built yet (Prometheus, the global Services, the writers and their namespace in mesh1 and mesh2).</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>mesh0 runs the shared services; the other clusters only write to them, by the same names. Built today: Loki, Grafana, the Hubble UI, one observer and its collector, in mesh0 and read there, and a Hubble relay in every cluster. The rest is the design of stories #147 (a collector per cluster) and #159 (the DR copy).</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>A copy for disaster recovery: the writers send to both</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 470" role="img" aria-label="In every cluster, mesh0, mesh1 and mesh2, an OTel Collector has two exporters, each with its own persistent queue, and a Prometheus agent has two remote_write entries, each with its own queue from the write-ahead log. Each sends every record twice: copy 1 to mesh0, the primary, as loki-primary and prometheus-primary, and copy 2 to mesh2, the DR copy, as loki-dr and prometheus-dr. Each cluster's Grafana reads its own cluster's copies, from the same provisioning files, and each cluster's Hubble UI and relay see all six nodes. A copy that is away loses nothing until its queue fills (OTel, retrying with no time limit) or two hours pass (Prometheus). Built today: Loki (its Service named loki), Grafana and the Hubble UI in mesh0, and a Hubble relay in every cluster; the rest is proposed.">
+          <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+            <!-- the writers, in every cluster -->
+            <rect x="30" y="40" width="280" height="300" rx="8" fill="none" stroke="currentColor" stroke-width="1.3"/>
+            <text x="44" y="62" font-weight="600">In every cluster</text><text x="158" y="62" fill="var(--muted)">mesh0, mesh1, mesh2</text>
+            <rect x="46" y="80" width="248" height="86" rx="6" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.3" stroke-dasharray="6 4"/>
+            <text x="58" y="100" font-weight="600" fill="var(--host)">OTel Collector: flows</text>
+            <text x="58" y="118">two exporters, each with its</text>
+            <text x="58" y="136">own persistent queue</text>
+            <text x="58" y="154" fill="var(--muted)">from hubble-observer, own nodes</text>
+            <rect x="46" y="216" width="248" height="86" rx="6" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.3" stroke-dasharray="6 4"/>
+            <text x="58" y="236" font-weight="600" fill="var(--host)">Prometheus agent: metrics</text>
+            <text x="58" y="254" font-family="IBM Plex Mono, monospace" font-size="12">remote_write: primary, dr</text>
+            <text x="58" y="272">a queue each, from the WAL</text>
+            <text x="58" y="290" fill="var(--muted)">external label cluster=meshN</text>
+            <!-- mesh0: primary -->
+            <rect x="380" y="40" width="260" height="300" rx="8" fill="none" stroke="currentColor" stroke-width="1.3"/>
+            <text x="394" y="62" font-weight="600">mesh0</text><text x="446" y="62" fill="var(--muted)">primary</text>
+            <rect x="396" y="80" width="228" height="50" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="408" y="100" font-weight="600" fill="var(--remote)">Loki</text>
+            <text x="408" y="117" font-family="IBM Plex Mono, monospace" font-size="12">loki-primary</text>
+            <text x="504" y="117" fill="var(--host)">proposed name</text>
+            <rect x="396" y="140" width="228" height="50" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="408" y="160" font-weight="600" fill="var(--remote)">Grafana</text>
+            <text x="408" y="177" fill="var(--muted)">reads this cluster's copies</text>
+            <rect x="396" y="200" width="228" height="50" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="408" y="220" font-weight="600" fill="var(--remote)">Hubble UI and relay</text>
+            <text x="408" y="237" fill="var(--muted)">see all six nodes</text>
+            <rect x="396" y="260" width="228" height="50" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3" stroke-dasharray="6 4"/>
+            <text x="408" y="280" font-weight="600" fill="var(--remote)">Prometheus receiver</text>
+            <text x="408" y="297" font-family="IBM Plex Mono, monospace" font-size="12">prometheus-primary</text>
+            <!-- mesh2: DR copy -->
+            <rect x="690" y="40" width="260" height="300" rx="8" fill="none" stroke="currentColor" stroke-width="1.3"/>
+            <text x="704" y="62" font-weight="600">mesh2</text><text x="756" y="62" fill="var(--muted)">DR copy</text>
+            <rect x="706" y="80" width="228" height="50" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3" stroke-dasharray="6 4"/>
+            <text x="718" y="100" font-weight="600" fill="var(--remote)">Loki</text>
+            <text x="718" y="117" font-family="IBM Plex Mono, monospace" font-size="12">loki-dr</text>
+            <rect x="706" y="140" width="228" height="50" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3" stroke-dasharray="6 4"/>
+            <text x="718" y="160" font-weight="600" fill="var(--remote)">Grafana</text>
+            <text x="718" y="177" fill="var(--muted)">same provisioning files</text>
+            <rect x="706" y="200" width="228" height="50" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3" stroke-dasharray="6 4"/>
+            <text x="718" y="220" font-weight="600" fill="var(--remote)">Hubble UI</text>
+            <text x="718" y="237" fill="var(--muted)">its relay sees all six nodes</text>
+            <rect x="706" y="260" width="228" height="50" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3" stroke-dasharray="6 4"/>
+            <text x="718" y="280" font-weight="600" fill="var(--remote)">Prometheus receiver</text>
+            <text x="718" y="297" font-family="IBM Plex Mono, monospace" font-size="12">prometheus-dr</text>
+            <!-- copy 1: to mesh0 -->
+            <line x1="294" y1="105" x2="394" y2="105" stroke="var(--host)" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ah2)"/>
+            <text x="344" y="122" text-anchor="middle" fill="var(--host)">copy 1</text>
+            <path d="M 294,259 C 344,259 344,285 394,285" fill="none" stroke="var(--host)" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ah2)"/>
+            <text x="344" y="252" text-anchor="middle" fill="var(--host)">copy 1</text>
+            <!-- copy 2: to mesh2, over the top and under the bottom -->
+            <path d="M 294,90 C 336,90 334,20 390,20 L 760,20 C 810,20 820,40 820,78" fill="none" stroke="var(--host)" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ah2)"/>
+            <text x="560" y="14" text-anchor="middle" fill="var(--host)">copy 2, to mesh2 (proposed)</text>
+            <path d="M 260,302 C 260,354 300,358 360,358 L 760,358 C 810,358 820,338 820,312" fill="none" stroke="var(--host)" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ah2)"/>
+            <text x="560" y="374" text-anchor="middle" fill="var(--host)">copy 2, to mesh2 (proposed)</text>
+            <text x="30" y="404">Every writer sends each record to both copies, each through its own queue. Never one Service over both: it splits the data.</text>
+            <text x="30" y="424" fill="var(--muted)">A copy away loses nothing until its queue fills (OTel, retrying with no time limit) or 2 h pass (Prometheus WAL).</text>
+            <text x="30" y="444" fill="var(--host)">Dashed: proposed, not built yet. Built today: Loki, Grafana and the Hubble UI in mesh0, and a Hubble relay in every cluster.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>The DR copy holds everything because every writer sends to both, not because of the global Services, which only route each write to the cluster that holds that name's backend. Role-named Services, one backend cluster each: loki-primary and prometheus-primary in mesh0, loki-dr and prometheus-dr in mesh2.</figcaption>
+    </figure>
+  </section>
+</div>

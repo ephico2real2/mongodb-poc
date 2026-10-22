@@ -203,6 +203,10 @@ What this trades:
     that received them: flows, not requests (Cilium reports an open connection at most every 5 s).
   - Measured: all nine pairs of clusters carry flows. After the Envoy drill the dashboard showed mesh2's searches
     still received by mesh1.
+- **Shared services and a DR copy** (proposed, `docs/shared-services-on-cluster-mesh.md`, story #159): the
+  observability services stay in mesh0 and every cluster reaches them through role-named global Services. A global
+  Service load-balances each connection to one backend and copies nothing, so a DR copy in mesh2 gets its data from
+  the writers, which send to both.
 
 ## Client guidance
 
