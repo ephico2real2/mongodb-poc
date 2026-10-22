@@ -70,6 +70,22 @@ subjectAltName = DNS:mongot-search-0-svc.${NS}.svc.cluster.local, DNS:*.mongot-s
 basicConstraints = CA:TRUE
 extendedKeyUsage = serverAuth, clientAuth
 subjectAltName = DNS:mongot-search-0-svc.${NS}.svc.cluster.local
+[publicboth]
+basicConstraints = CA:FALSE
+extendedKeyUsage = serverAuth, clientAuth
+subjectAltName = DNS:search-qa.example.test
+[publicnoeku]
+basicConstraints = CA:FALSE
+subjectAltName = DNS:search-qa.example.test
+[rootnobc]
+keyUsage = critical, keyCertSign, cRLSign
+[rootbare]
+subjectKeyIdentifier = hash
+[rootnotca]
+basicConstraints = critical, CA:FALSE
+keyUsage = critical, keyCertSign, cRLSign
+[rootns]
+nsCertType = sslCA
 [urispoof]
 basicConstraints = CA:FALSE
 extendedKeyUsage = serverAuth, clientAuth
@@ -106,7 +122,9 @@ printf 'the key passphrase\n' > "${pki}/pass"; printf 'another passphrase\n' > "
   leaf mongot61 mongot61 "mongot-search-0-svc.${NS}.svc.cluster.local"       # the mongot certificate of TLS.md, 6.1
   leaf leafca leafca "a leaf that is marked CA"
   leaf urispoof urispoof "a URI that reads like a name"
-  for n in mongot envoy lb lbtwo elsewhere serveronly noname soon both mongot61 leafca urispoof; do
+  leaf publicboth publicboth "dual purpose public certificate"
+  leaf publicnoeku publicnoeku "public certificate without EKU"
+  for n in publicboth publicnoeku mongot envoy lb lbtwo elsewhere serveronly noname soon both mongot61 leafca urispoof; do
     q "${OPENSSL}" pkcs8 -topk8 -v2 aes-256-cbc -in "$n.key" -out "$n.enc" -passout file:pass
     cat "$n.enc" inter.crt root.crt "$n.crt" > "$n.pem"                  # the company's layout
   done
@@ -118,9 +136,22 @@ printf 'the key passphrase\n' > "${pki}/pass"; printf 'another passphrase\n' > "
   sed $'s/$/\r/' mongot.pem > mongot-crlf.pem
   q "${OPENSSL}" pkcs8 -topk8 -nocrypt -in mongot.key -out mongot.plain
   cat mongot.plain inter.crt root.crt mongot.crt > mongot-nopassword.pem
+  # The root once more, with its own name and key, as an issuer may have made it: of version 3 with no basic
+  # constraints (with a key usage that allows certificate signing, with none, and with only a Netscape CA type), with
+  # CA:FALSE, and of version 1 (OpenSSL 3.2 and later write that with -x509v1; LibreSSL, and OpenSSL before 3.2, with
+  # "x509 -req" and no extensions).
+  for r in rootnobc rootbare rootnotca rootns; do
+    q "${OPENSSL}" req -new -x509 -key root.key -out "${r}.crt" -days 3650 -subj "/O=Example Test/CN=Example Test Root CA" -config pki.cnf -extensions "${r}"
+    cat mongot.enc inter.crt "${r}.crt" mongot.crt > "mongot-${r}.pem"
+  done
+  q "${OPENSSL}" req -new -x509 -x509v1 -key root.key -out rootv1.crt -days 3650 -subj "/O=Example Test/CN=Example Test Root CA" -config pki.cnf \
+    || { q "${OPENSSL}" req -new -key root.key -out root.csr -subj "/O=Example Test/CN=Example Test Root CA" -config pki.cnf
+         q "${OPENSSL}" x509 -req -in root.csr -signkey root.key -out rootv1.crt -days 3650; }
+  cat mongot.enc inter.crt rootv1.crt mongot.crt > mongot-rootv1.pem
   cat mongot.enc envoy.enc inter.crt root.crt mongot.crt > two-keys.pem
   cat mongot.enc inter.crt root.crt mongot.crt mongot.csr > with-csr.pem
   cat mongot.enc inter.crt mongot.crt > no-root.pem
+  cat inter.crt lb.crt > lb-no-root.pem                                    # a public certificate, its root left out
   cat mongot.enc other.crt mongot.crt > wrong-ca.pem
   cat envoy.enc inter.crt root.crt mongot.crt > key-of-another.pem
   # The issuing CA once more under the same name with another key, as a renewed CA is, and cross-signed by the other
@@ -239,6 +270,43 @@ refused "the Envoy PEM given to --route" "must allow server authentication" -- -
 refused "several hostnames and no --hostname" "say which with --hostname" -- --route "${pki}/lbtwo.pem" --dry-run "${P[@]}"
 refused "a --hostname the certificate does not name" "does not name search-z.example.test" -- --route "${pki}/lb.pem" --hostname search-z.example.test --dry-run "${P[@]}"
 refused "a file that is not a PEM" "holds no PEM block" -- --mongot "${pki}/pki.cnf" --dry-run "${P[@]}"
+# Ambiguity is refused even before any route Secret has been generated.
+for n in publicboth publicnoeku; do
+  refused "ambiguous ${n} as Envoy, no route file" "cannot be distinguished from the public certificate" -- --envoy "${pki}/${n}.pem" --dry-run "${P[@]}"
+  refused "ambiguous ${n} identified as the public PEM" "this is the public certificate named by --route-reference" -- --envoy "${pki}/${n}.pem" --route-reference "${pki}/${n}.pem" --dry-run "${P[@]}"
+  run --route "${pki}/${n}.pem" --dry-run "${P[@]}" || bad "cannot prepare route for ${n}"
+  refused "ambiguous ${n} with a generated route file" "cannot be distinguished from the public certificate" -- --envoy "${pki}/${n}.pem" --dry-run "${P[@]}"
+  rm -f "${here}/${NS}/ent-mongot-search-lb-0-cert.secret.yaml"
+  run --envoy "${pki}/${n}.pem" --route-reference "${pki}/lb.pem" --dry-run "${P[@]}" \
+    && ok "ambiguous ${n} accepted with a distinct explicit public PEM" || bad "explicit route reference for ${n}"
+  rm -f "${here}/${NS}/ent-mongot-search-lb-0-client-cert.secret.yaml"
+  run --check --envoy "${pki}/${n}.pem"
+  [[ $? -ne 0 ]] && ok "--check refuses ambiguous ${n}" || bad "--check accepted ambiguous ${n}"
+  grep -qF 'cannot be distinguished from the public certificate' "${work}/out" || bad "--check ambiguity message for ${n}"
+  run --check --envoy "${pki}/${n}.pem" --route-reference "${pki}/lb.pem" \
+    && ok "--check accepts ${n} with a distinct route reference" || bad "--check reference for ${n}"
+done
+refused "non-public route reference" "must allow server authentication" -- --envoy "${pki}/publicboth.pem" --route-reference "${pki}/envoy.pem" --dry-run "${P[@]}"
+# A reference whose chain is refused is named as the reference, not taken for the PEM of the role.
+refused "a route reference with no CA certificate, named as the reference" "--route-reference ${pki}/lb.crt: the PEM holds no CA certificate" -- --envoy "${pki}/publicboth.pem" --route-reference "${pki}/lb.crt" --dry-run "${P[@]}"
+refused "a route reference without its root, named as the reference" "--route-reference ${pki}/lb-no-root.pem: the leaf does not verify" -- --envoy "${pki}/publicboth.pem" --route-reference "${pki}/lb-no-root.pem" --dry-run "${P[@]}"
+# Match OpenSSL 3 across all builds, including the no-BC/keyCertSign and no-BC/Netscape CA exceptions.
+for r in rootbare rootnotca; do
+  for action in --mongot --trustca; do
+    refused "invalid v3 root ${r} (${action})" 'is version 3 and its basic constraints do not say CA:TRUE' -- "${action}" "${pki}/mongot-${r}.pem" --dry-run "${P[@]}"
+  done
+  run --check --mongot "${pki}/mongot-${r}.pem"
+  [[ $? -ne 0 ]] && grep -q 'PROBLEM: the root certificate CN=Example Test Root CA,O=Example Test is version 3' "${work}/out" \
+    && ok "--check refuses ${r} and names the root" || bad "--check invalid root ${r}"
+done
+for r in rootnobc rootv1 rootns; do
+  for action in --mongot --trustca; do
+    run "${action}" "${pki}/mongot-${r}.pem" --dry-run "${P[@]}" \
+      && ok "${r} accepted (${action})" || bad "${r} refused (${action}): $(said | head -3 | tr '\n' ' ')"
+  done
+  run --check --mongot "${pki}/mongot-${r}.pem" \
+    && ok "--check accepts ${r}" || bad "--check refuses ${r}"
+done
 # A key whose encryption this build does not have is not called a wrong passphrase. OpenSSL 3 can write the old
 # PBE cipher with its legacy provider and cannot read it without; LibreSSL cannot write a key it cannot read.
 if "${OPENSSL}" pkcs8 -topk8 -v1 PBE-MD5-DES -provider legacy -provider default -in "${pki}/mongot.key" -out "${pki}/old.enc" -passout "file:${pki}/pass" >/dev/null 2>&1; then
@@ -294,7 +362,7 @@ tls_file --route "${pki}/lbtwo.pem" ent-mongot-search-lb-0-cert "${pki}/lbtwo.ke
 refused "a --hostname two labels under the wildcard" "does not name a.b.apps.example.test" -- --route "${pki}/lbtwo.pem" --hostname a.b.apps.example.test --dry-run "${P[@]}"
 # One certificate that would fit two roles is taken for the first and refused for the second.
 run --mongot "${pki}/both.pem" --dry-run "${P[@]}" || bad "a certificate that fits mongot and Envoy, as mongot's: $(said | head -3 | tr '\n' ' ')"
-refused "one certificate for two roles" "already in ent-mongot-search-cert.secret.yaml" -- --envoy "${pki}/both.pem" --dry-run "${P[@]}"
+refused "one certificate for two roles" "already in ent-mongot-search-cert.secret.yaml" -- --envoy "${pki}/both.pem" --route-reference "${pki}/lb.pem" --dry-run "${P[@]}"
 # The same material in other shapes gives the same key.
 for shape in traditional reversed crlf nopassword; do
   tls_file --mongot "${pki}/mongot-${shape}.pem" ent-mongot-search-cert "${pki}/mongot.key" "a mongot PEM, ${shape}"

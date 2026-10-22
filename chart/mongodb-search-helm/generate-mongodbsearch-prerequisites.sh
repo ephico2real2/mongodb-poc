@@ -8,10 +8,10 @@
 #   mkdir -m 700 dvh-vectordb-qa                  # this script never creates the folder
 #   P=<the chart>/generate-mongodbsearch-prerequisites.sh
 #
-#   bash $P --check [--mongot <pem>] [--envoy <pem>] [--route <pem>]
+#   bash $P --check [--mongot <pem>] [--envoy <pem> [--route-reference <public pem>]] [--route <pem>]
 #   bash $P --trustca <pem> [--trustca <pem>...] [--check-source <host:port>]  --dry-run | --apply
 #   bash $P --mongot  <pem>                       --dry-run | --apply
-#   bash $P --envoy   <pem>                       --dry-run | --apply
+#   bash $P --envoy   <pem> [--route-reference <public pem>] --dry-run | --apply
 #   bash $P --route   <pem> [--hostname <fqdn>]   --dry-run | --apply
 #   bash $P --dbcred  [--username mongotuser]     --dry-run | --apply
 #   bash $P --clean
@@ -49,6 +49,7 @@ usage() { sed -n '2,/^set +x/p' "$0" | sed -e '$d' -e 's/^# \{0,1\}//'; }
 # ---------------------------------------------------------------------------------------------------- arguments
 ACTION="" MODE="" NS_FLAG="" PEM="" HOSTNAME_WANTED="" USERNAME=mongotuser PASSIN_FILE="" PASSWORD_FILE=""
 SOURCE_HOST="" REPLACE=no YES=no CHECK=no CHECK_MONGOT="" CHECK_ENVOY="" CHECK_ROUTE=""
+ROUTE_REFERENCE="" ROUTE_PRINT=""
 TRUST_PEMS=()
 action() { [[ -z "${ACTION}" || "${ACTION}" == "$1" ]] || die "one action a run: --${ACTION} and --$1 were both given"; ACTION="$1"; }
 value()  { [[ $# -ge 2 && -n "$2" ]] || die "$1 needs a value"; }
@@ -59,6 +60,7 @@ while [[ $# -gt 0 ]]; do
                if [[ "${CHECK:-no}" == yes ]]; then
                  case "$1" in --mongot) CHECK_MONGOT="$2" ;; --envoy) CHECK_ENVOY="$2" ;; --route) CHECK_ROUTE="$2" ;; esac
                else action "${1#--}"; PEM="$2"; fi; shift ;;
+    --route-reference) value "$@"; ROUTE_REFERENCE="$2"; shift ;;
     --trustca) value "$@"; action trustca; TRUST_PEMS+=("$2"); shift ;;
     --dbcred)  action dbcred ;;
     --clean)   action clean ;;
@@ -85,6 +87,8 @@ if [[ "${CHECK:-no}" == yes ]]; then
   esac
   ACTION=check
 fi
+[[ -z "${ROUTE_REFERENCE}" || "${ACTION}" == envoy || ( "${ACTION}" == check && -n "${CHECK_ENVOY}" ) ]] \
+  || die "--route-reference goes with --envoy only"
 [[ -n "${ACTION}" ]] || { usage >&2; exit 2; }
 # Both go into an annotation of the file, on one line: a newline in either would give YAML that oc reads otherwise.
 [[ "${USERNAME}${HOSTNAME_WANTED}" != *[[:cntrl:]]* ]] || die "--username and --hostname take no control character (a newline is one)"
@@ -180,6 +184,20 @@ print_of()   { "${OPENSSL}" x509 -in "$1" -noout -fingerprint -sha256 | sed 's/^
 # whole text: an issuer's alternative names and name constraints print "DNS:" too.
 extension() { "${OPENSSL}" x509 -in "$1" -noout -text | awk -v h="$2" 'index($0, h) {getline; sub(/^ +/, ""); print; exit}'; }
 is_ca()     { [[ "$(extension "$1" 'X509v3 Basic Constraints')" == CA:TRUE* || "$(subject_of "$1")" == "$(issuer_of "$1")" ]]; }
+# Match OpenSSL 3 for a self-issued root of version 3: it refuses one whose basic constraints say CA:FALSE, and one
+# with no basic constraints that has neither a key usage with Certificate Sign nor a Netscape CA type ("invalid CA
+# certificate", error 79), where LibreSSL takes most of them. Such a root is refused here on every build, so that
+# one PEM has one answer. A version 1 root has no extensions at all, and every build takes it.
+root_problem() {  # $1 = a CA certificate; prints why it cannot be a root, or nothing
+  local bc ku
+  [[ "$(subject_of "$1")" == "$(issuer_of "$1")" ]] || return 0
+  [[ "$("${OPENSSL}" x509 -in "$1" -noout -text | awk '/^ *Version:/ {print $2; exit}')" == 3 ]] || return 0
+  bc="$(extension "$1" 'X509v3 Basic Constraints')" ku="$(extension "$1" 'X509v3 Key Usage')"
+  [[ "${bc}" != CA:TRUE* ]] || return 0
+  [[ -n "${bc}" || "${ku}" != *"Certificate Sign"* ]] || return 0
+  [[ -n "${bc}${ku}" || "$(extension "$1" 'Netscape Cert Type')" != *" CA"* ]] || return 0
+  say "the root certificate $(subject_of "$1") is version 3 and its basic constraints do not say CA:TRUE, with either explicit non-CA constraints or no Certificate Sign key usage: the script refuses it with every openssl build. Ask its issuer for the root with basicConstraints CA:TRUE"
+}
 # The text reads "URI:http://x/a, DNS:y" the same whether y is a name of the certificate or the tail of its URI. The
 # DER does not: the names read from the text count only when the extension holds as many dNSName entries ([2]).
 dns_names() {
@@ -224,7 +242,7 @@ climb() {  # $1 = the certificate to go on from, then the path so far
 # ${WORK}/tls.crt (leaf, then chain) and ${WORK}/path.crt (what the leaf is verified against).
 sort_chain() {  # $1 = the leaf's file
   LEAF="$1"
-  local f print seen chain=()
+  local f print seen why chain=()
   REST=() PATH_UP=()
   seen=" $(print_of "${LEAF}") "
   for f in "${CERT_FILES[@]}"; do
@@ -233,6 +251,7 @@ sort_chain() {  # $1 = the leaf's file
     case "${seen}" in *" ${print} "*) continue ;; esac                       # the same certificate again: once
     seen="${seen}${print} "
     is_ca "${f}" || die "$(subject_of "${f}") is neither the certificate of this key nor a CA: one leaf to a PEM"
+    why="$(root_problem "${f}")"; [[ -z "${why}" ]] || die "${why}"
     REST+=("${f}")
   done
   [[ ${#REST[@]} -gt 0 ]] || die "the PEM holds no CA certificate: the leaf's chain is needed"
@@ -270,7 +289,12 @@ fits_role() {  # $1 = role, $2 = leaf; prints the problem, or nothing
       # mongot's own certificate names mongot's service by its full name, and may name Envoy's as well (TLS.md, 6.1).
       if [[ -n "$(dns_names "${leaf}" | grep -xF "${SEARCH}-search-0-svc${SERVICE_SUFFIX}" || true)" ]] \
          || { names "${leaf}" "${SEARCH}-search-0-svc${SERVICE_SUFFIX}" && ! names "${leaf}" "${SEARCH}-search-0-proxy-svc${SERVICE_SUFFIX}"; }; then
-        say "it names mongot's own service: this is the mongot PEM"
+        say "it names mongot's own service: this is the mongot PEM"; return
+      fi
+      if may "${leaf}" server && [[ -z "${ROUTE_PRINT}" ]]; then
+        say "a certificate allowing both server and client authentication, or with no EKU, cannot be distinguished from the public certificate: name the public PEM with --route-reference <pem>"
+      elif [[ -n "${ROUTE_PRINT}" && "$(print_of "${leaf}")" == "${ROUTE_PRINT}" ]]; then
+        say "this is the public certificate named by --route-reference: give --envoy its own client PEM"
       fi ;;
     route)
       may "${leaf}" server || { say "the public certificate must allow server authentication"; return; }
@@ -291,6 +315,23 @@ public_name() {  # $1 = leaf; prints the name, or says why there is none on stde
     0) say "it names no public hostname (it names: $(dns_names "$1" | tr '\n' ' ')): is this the public certificate?" >&2; return 1 ;;
     *) say "it names several hostnames ($(tr '\n' ' ' <<<"${real}")): say which with --hostname" >&2; return 1 ;;
   esac
+}
+route_reference() {
+  [[ -n "${ROUTE_REFERENCE}" ]] || return 0
+  local f leaf="" problem
+  read_pem "${ROUTE_REFERENCE}"
+  for f in ${CERT_FILES[@]+"${CERT_FILES[@]}"}; do
+    is_ca "${f}" && continue
+    [[ -z "${leaf}" ]] || die "--route-reference ${ROUTE_REFERENCE} must hold exactly one leaf certificate"
+    leaf="${f}"
+  done
+  [[ -n "${leaf}" ]] || die "--route-reference ${ROUTE_REFERENCE} holds no leaf certificate"
+  # In a subshell, so that a refusal of the chain says it is the reference's and not the PEM of the role.
+  problem="$( (sort_chain "${leaf}"; verify_chain) 2>&1 >/dev/null )" \
+    || die "--route-reference ${ROUTE_REFERENCE}: ${problem#"${ME}: "}"
+  problem="$(fits_role route "${leaf}")"
+  [[ -z "${problem}" ]] || die "--route-reference ${ROUTE_REFERENCE}: ${problem}"
+  ROUTE_PRINT="$(print_of "${leaf}")"
 }
 warn_if_soon() { "${OPENSSL}" x509 -in "$1" -noout -checkend 2592000 >/dev/null 2>&1 || say "WARNING: it expires within 30 days ($(expiry_of "$1"))" >&2; }
 
@@ -392,6 +433,7 @@ tls_secret() {  # $1 = role, $2 = secret name
   local role="$1" name="$2" file="$2.secret.yaml" f pub leaf="" problem other host=""
   [[ -n "${MODE}" ]] || die "--${role} needs --dry-run or --apply"
   need_folder; workdir; PARTIAL="$(partial_of "${file}")"
+  route_reference
   read_pem "${PEM}"
   [[ ${#CERT_FILES[@]} -gt 0 ]] || die "${PEM} holds no certificate"
   open_key "${PEM}"
@@ -440,13 +482,14 @@ tls_secret() {  # $1 = role, $2 = secret name
 }
 
 trust_bundle() {
-  local file="${TRUST_CM}.configmap.yaml" pem f print seen="" count=0 other said
+  local file="${TRUST_CM}.configmap.yaml" pem f print seen="" count=0 other said why
   [[ -n "${MODE}" ]] || die "--trustca needs --dry-run or --apply"
   need_folder; workdir; PARTIAL="$(partial_of "${file}")"; : > "${WORK}/bundle.crt"
   for pem in "${TRUST_PEMS[@]}"; do
     read_pem "${pem}"                                        # the key in it, if any, is not opened
     for f in ${CERT_FILES[@]+"${CERT_FILES[@]}"}; do
       is_ca "${f}" || continue
+      why="$(root_problem "${f}")"; [[ -z "${why}" ]] || die "${pem}: ${why}"
       print="$(print_of "${f}")"
       case " ${seen} " in *" ${print} "*) continue ;; esac
       seen="${seen} ${print}"; count=$((count + 1))
@@ -513,6 +556,9 @@ look_at() {  # $1 = role, $2 = pem: what it holds, without its passphrase
   read_pem "$2"
   say "  $2: ${KEY_BLOCKS} private key(s)$([[ "${KEY_ENCRYPTED}" == yes ]] && echo ', encrypted'), ${#CERT_FILES[@]} certificate(s)"
   [[ "${KEY_BLOCKS}" == 1 ]] || { say "    PROBLEM: it must hold exactly one private key"; PROBLEMS=$((PROBLEMS + 1)); }
+  for f in ${CERT_FILES[@]+"${CERT_FILES[@]}"}; do
+    problem="$(root_problem "${f}")"; [[ -z "${problem}" ]] || { say "    PROBLEM: ${problem}"; PROBLEMS=$((PROBLEMS + 1)); }
+  done
   for f in ${CERT_FILES[@]+"${CERT_FILES[@]}"}; do is_ca "${f}" || { first="${f}"; break; }; done
   [[ -n "${first}" ]] || { say "    PROBLEM: no leaf certificate"; PROBLEMS=$((PROBLEMS + 1)); return; }
   say "    leaf     $(subject_of "${first}")"
@@ -547,6 +593,7 @@ check() {
   else say "cluster    not logged in with oc (only --apply needs it)"; fi
   [[ -d "${DIR}" && ! -L "${DIR}" ]] || { say; say "${PROBLEMS} problem(s)"; return 1; }
   workdir
+  route_reference
   say "PEM files"
   [[ -z "${CHECK_MONGOT}" ]] || look_at mongot "${CHECK_MONGOT}"
   [[ -z "${CHECK_ENVOY}" ]]  || look_at envoy  "${CHECK_ENVOY}"
