@@ -509,6 +509,36 @@ all pass); its design was made twice, by two models, and reviewed by a third.
 | X4 | A search across clusters | `kind-mesh-cilium/scripts/cilium-build.sh drill` | mesh2's flows to another cluster's mongot, L3/L4 and L7, all name `StatefulSet/mongot-search-0` | **Passed**: to another cluster L3/L4 **72 of 72** and L7 **160 of 160** named (with #145's build: 0 of 72, 0 of 161); 237 searches answered, 0 failed (`cilium-build-190-drill.txt`) |
 | X5 | The lab is healthy | `kind-mesh/check.sh` | 0 failed | **Passed**: 0 failed (`cilium-build-190-check.txt`) |
 
+## Rebuilt from scratch (story #193)
+
+`kind-mesh/scripts/rebuild.sh --yes` deletes the three clusters and runs the lab's own scripts again in the order
+the lab was built ([building-the-kind-mesh-lab.md](building-the-kind-mesh-lab.md)): `down.sh`, `up.sh`,
+`mongo-up.sh`, `search-up.sh`, `data-load.sh`, `gui-up.sh`, `observability-up.sh`, `swap-search.sh`,
+`cleartext-l7.sh`, `chart-up.sh`, the policy in every cluster, `check.sh`. Orchestration only: no script's logic is
+repeated. Before any deletion it refuses when the VM is not running, a tool or one of our Cilium images
+(`versions.env`, in the VM's docker) is missing, or the lab chart's render tests fail. `--reclaim-docker` requires `--yes` and after the rebuild frees the
+VM docker's build cache and unused images, never `localhost/kind-mesh/oc`, the Cilium images or kind's node image.
+`up.sh` itself now refuses to run on a lab after step 2 (#166): its mesh step would render the Cilium release without
+WireGuard and the L7 backend.
+
+Offline checks cover Bash syntax, ShellCheck, local chart rendering, and stubbed orchestration. The initial
+stub review missed that standalone reclaim deleted without `--yes`, that disk usage was only printed, and that a
+policy failure in an early cluster could be hidden by a later successful apply. The follow-up fixes require
+`--yes` for reclaim too, gate the VM, network and disk budget before deletion, propagate policy failures, preserve
+tracked records in a unique output directory, and check every cluster's Cilium values before platform changes.
+These checks do not establish live readiness, available registry downloads, or a successful fresh replay; the
+live rows below remain pending.
+
+| # | What | Command | Passes when | Result |
+| --- | --- | --- | --- | --- |
+| R1 | The plan, nothing deleted | `kind-mesh/scripts/rebuild.sh` | it prints what is lost and kept and exits 1 | (run pending) |
+| R2 | The rebuild, with the owner's go-ahead | `kind-mesh/scripts/rebuild.sh --yes 2>&1 \| tee kind-mesh/output/rebuild.log` | every phase ok in `output/rebuild-<date>/summary.txt`; the VM's disk before and after, and each phase's time, recorded | (run pending) |
+| R3 | The lab is healthy | `kind-mesh/check.sh` (the last phase) | 0 failed | (run pending) |
+| R4 | Workloads named across the mesh | `kind-mesh-cilium/scripts/cilium-build.sh drill`; the agents' version and the CiliumEndpoints' `status.workloads` by hand | mesh2's flows to another cluster's mongot all named; every agent `9e5a34a525` | (run pending). On rebuilt pods use `CILIUM_PLACEMENT=fresh` for `measure after`, with a new `CILIUM_OUTPUT_DIR` for it and `drill`; see [step 15](building-the-kind-mesh-lab.md#15-our-cilium-build-stories-145-and-190-and-187s-check) |
+| R5 | A search drill | `kind-mesh-cilium/drills.sh mongot mesh2 both` | mesh2's searches go to the other clusters and come back by themselves (per-request balancing in effect, #187) | (run pending) |
+| R6 | The dashboard | Grafana screenshots as in C4 | flows from the three clusters, named | (run pending) |
+| R7 | The reclaim | `kind-mesh/scripts/rebuild.sh --yes --reclaim-docker`; `docker system df` before and after | the protected images listed as kept | (run pending) |
+
 ## Compared with the Envoy lab
 
 | mesh2 loses… | With the operator's Envoy | Step 1: per connection | Step 2: per request |

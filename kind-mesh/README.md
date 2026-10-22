@@ -40,6 +40,23 @@ From the repository's root. Each script is idempotent and prints what it did; `o
 To reach the clusters' LoadBalancer addresses from the Mac, `up.sh` prints the route to add, once per VM start (your
 sudo; never run by the scripts).
 
+**One command, from nothing to the lab as it is today:** `kind-mesh/scripts/rebuild.sh --yes` deletes the three
+clusters (`down.sh`), then runs steps 2 to 5 and 8 to 9 above and `kind-mesh-cilium/`'s steps 1, 4, 6 and 9 (the swap,
+step 2, the lab's chart, the network policy), then `check.sh`: each phase timed and logged under
+`output/rebuild-<date>/`, stopping at the first failure. Without `--yes` it only prints what is lost (the replica
+set's data and indexes, mongot's indexes, Loki's flows, Grafana's state, every password) and kept (the VM, the kind
+network, the images in the VM's docker, the recorded runs). `--reclaim-docker` requires `--yes` and after the rebuild frees the VM docker's build cache
+and unused images, never `localhost/kind-mesh/oc`, our Cilium images or kind's node image. What each step sets and
+why: [docs/building-the-kind-mesh-lab.md](../docs/building-the-kind-mesh-lab.md).
+
+**Which script owns which Cilium values.** `up.sh` installs each cluster's release from `cilium/values.yaml`,
+`cilium/values-<cluster>.yaml` and, at the mesh step, `cilium/values-mesh.yaml`, with the images `versions.env` pins
+(`lib.sh`, `cilium_image_args`). `kind-mesh-cilium/scripts/cleartext-l7.sh` adds `kind-mesh-cilium/cilium/values-step2.yaml`
+(WireGuard, the L7 backend) on top, with `--reuse-values`; `kind-mesh-cilium/scripts/cilium-build.sh` changes the
+images and nothing else (`--reset-then-reuse-values`). A re-run of `up.sh` on a lab after step 2 would render the
+release without step 2's values, so it refuses before platform changes, naming #166: after step 2, the platform's scripts
+are `colima-up.sh` and `rebuild.sh` only.
+
 ## The search GUI
 
 The repository's GUI (`app/gui/server.py`), in mesh0, with two settings for the mesh: `MEMBERS`, so a search can go
@@ -86,7 +103,7 @@ mongo-0` restarts it.
 | `values/search.yaml` | The chart's values, the same in every cluster |
 | `observability/` | Loki, hubble-observer (chart vendored from the operator's fork) and Grafana values, the collector, the relay client certificate, the flows dashboard (the fork's, with an "Across the clusters" row) |
 | `images/oc/` | The `oc` image the chart's Jobs run here: Red Hat's `ose-cli` needs a login, OKD's `origin-cli` has no arm64 build, and Red Hat's hardened `kubectl` has no shell |
-| `scripts/`, `check.sh`, `drills.sh` | Bring-up, the GUI, proofs, drills |
+| `scripts/`, `check.sh`, `drills.sh` | Bring-up, the GUI, proofs, drills; `scripts/rebuild.sh` runs the whole bring-up again after `down.sh` |
 | `output/` | The recorded runs |
 
 The scripts are adapted from cilium-implementation-poc (`scripts/lab-up.sh`, `poc1-colima-up.sh`, `clusters/ci/`,
@@ -97,5 +114,6 @@ The scripts are adapted from cilium-implementation-poc (`scripts/lab-up.sh`, `po
 | | |
 | --- | --- |
 | Delete the clusters, keep the VM | `kind-mesh/scripts/down.sh` |
+| Delete the clusters and rebuild the lab to its current state, keep the VM | `kind-mesh/scripts/rebuild.sh --yes` (above); `--reclaim-docker` for the VM docker's build cache and unused images |
 | Stop the VM, keep everything | `kind-mesh/scripts/colima-down.sh` records each node's address in `~/.kube/mongodb-mesh.node-ips`, stops the nodes with their restart policy off, then the VM; `kind-mesh/scripts/colima-up.sh` starts the VM at the size in `versions.env`, each node pinned to its address, and waits for the API servers, Cilium and the mesh. Measured 2026-10-22, 16 to 24 GiB: down 35 s, up 73 s, all six nodes back on their addresses with `on-failure:1`, the mesh connected; mongot Ready about 47 s after `colima-up.sh` returned, then `check.sh` 0 failed and a search drill 0 of 237 (`output/restart-2026-10-22/`). The Mac's route to the LoadBalancer block is printed, not run (your sudo) |
 | Delete the VM and its disk | `colima delete --profile mongodb-mesh --data`. Without `--data`, Colima keeps the docker disk, and a new VM of the same name picks up the old one, clusters and all |

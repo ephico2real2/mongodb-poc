@@ -83,12 +83,19 @@ if [ -n "${CILIUM_CLUSTERMESH_IMAGE:-}" ]; then
     --set clustermesh.apiserver.image.useDigest=false --set clustermesh.apiserver.image.pullPolicy=IfNotPresent)
 fi
 
-# With CILIUM_IMAGES_LOCAL=1, the Cilium images from the VM's docker into every node of <cluster>: they are in no
-# registry. kind skips a node that already has the image.
-cilium_load_local() { # <cluster>
+# With CILIUM_IMAGES_LOCAL=1, the Cilium images are in the VM's docker and in no registry. The check is its own
+# function so that rebuild.sh can refuse before it deletes anything.
+cilium_images_local() { # fails, naming the image, when one is not in the VM's docker
   local img
   for img in "$CILIUM_IMAGE" ${CILIUM_CLUSTERMESH_IMAGE:+"$CILIUM_CLUSTERMESH_IMAGE"}; do
     docker image inspect "$img" >/dev/null 2>&1 || die "$img is not in the VM's docker: build it there first (CILIUM_IMAGES_LOCAL=1)"
+  done
+}
+# The Cilium images from the VM's docker into every node of <cluster>. kind skips a node that already has the image.
+cilium_load_local() { # <cluster>
+  local img
+  cilium_images_local
+  for img in "$CILIUM_IMAGE" ${CILIUM_CLUSTERMESH_IMAGE:+"$CILIUM_CLUSTERMESH_IMAGE"}; do
     kind load docker-image "$img" --name "$1" >/dev/null || die "kind could not load $img into $1"
     echo "  $1: loaded $img"
   done

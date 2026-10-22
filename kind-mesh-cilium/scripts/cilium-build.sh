@@ -38,7 +38,15 @@ here="$(cd "$(dirname "$0")/.." && pwd)"
 lab_env
 # shellcheck disable=SC2153  # CLUSTERS comes from versions.env
 read -r -a clusters <<<"$CLUSTERS"
-out="$here/output"
+# CILIUM_PLACEMENT=fresh: measure after without an old upgrade baseline; all live checks remain.
+case "${CILIUM_PLACEMENT:-compare}" in
+  compare) ;;
+  fresh) [ "${1:-} ${2:-}" = "measure after" ] || [ "${1:-}" = drill ] \
+    || die "CILIUM_PLACEMENT=fresh is only for measure after or drill" ;;
+  *) die "CILIUM_PLACEMENT must be compare or fresh" ;;
+esac
+out="${CILIUM_OUTPUT_DIR:-$here/output}"
+mkdir -p "$out"
 # The build's commit from its tag, and what runs before it (versions.env). Agents print the build clone's
 # `git rev-parse --short`, whose length is the clone's: #145's printed 1d3a02ab, #190's prints 9e5a34a525 while its tag
 # ends in 9e5a34a5. So a printed commit matches when it starts with the expected one (on_commit), never by equality.
@@ -279,7 +287,7 @@ measure() { # <before|after>
   esac
   expect=$(other_node "$scope") cross=$(cross_cluster "$scope")
   placement "$tmp/placement.json"
-  if [ "$tag" = after ]; then
+  if [ "$tag" = after ] && [ "${CILIUM_PLACEMENT:-compare}" != fresh ]; then
     # A mongod restarted by #187's step (RESTARTED in the record) has a new UID and address; nothing else may change.
     python3 - "$out/$rec-placement.json" "$tmp/placement.json" "$l7_record" <<'PYCODE' \
       || die "pod UID/IP/node/owner changed, or no baseline placement; take a new before measurement"
@@ -293,6 +301,9 @@ PYCODE
   fails=0
   {
     echo "== $tag: $(date -u +%Y-%m-%dT%H:%MZ); expecting every agent on $CILIUM_VERSION $want, workloads named at scope $scope"
+    if [ "${CILIUM_PLACEMENT:-compare}" = fresh ]; then
+      echo "placement: fresh lab; skipped old baseline comparison; placement must remain stable during this measurement"
+    fi
     for c in "${clusters[@]}"; do
       echo "== $c"
       inventory=$(agents "$c") || die "$c: cannot inventory both agents"

@@ -18,6 +18,19 @@ first="${clusters[0]}"
 
 say "tools"
 for t in docker kind kubectl helm cilium python3 openssl curl; do command -v "$t" >/dev/null || die "$t is not installed"; done
+for c in "${clusters[@]}"; do
+  # On a lab after kind-mesh-cilium step 2 the release also carries that lab's cilium/values-step2.yaml (WireGuard, the
+  # L7 backend), applied by its cleartext-l7.sh with --reuse-values. This upgrade renders from the files below alone and
+  # would drop them (#166), so check every cluster before changing the platform (including a partially converted mesh).
+  if values=$(helm get values cilium -n kube-system --kube-context "kind-$c" -o json 2>/dev/null); then
+    result=$(python3 -c '
+import json, sys
+v = json.load(sys.stdin) or {}
+print("step2" if v.get("encryption", {}).get("enabled") or v.get("loadBalancer", {}).get("l7", {}).get("backend") else "base")' <<<"$values") || die "$c: cannot parse Cilium values; nothing changed"
+    [ "$result" != step2 ] ||
+    die "$c's Cilium release runs step 2's values (WireGuard, the L7 backend), which this upgrade would turn off (#166); kind-mesh-cilium/scripts/cleartext-l7.sh owns them: nothing changed"
+  fi
+done
 kv=$(kind version | awk '{print $2}' | sed 's/^v//')
 [ "$kv" = "$KIND_VERSION" ] || echo "warning: kind $kv, the lab pins $KIND_VERSION"
 printf 'kind %s | helm %s | %s | docker %s at %s\n' "$kv" "$(helm version --short)" \
