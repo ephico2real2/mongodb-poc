@@ -1,0 +1,86 @@
+Colima profile mongodb-mesh is running: 8 CPUs, 24 GiB
+
+== inotify limits in the VM  (11:56:09)
+fs.inotify.max_user_instances = 512
+fs.inotify.max_user_watches = 1048576
+PROFILE         STATUS     ARCH       CPUS    MEMORY    DISK     RUNTIME    ADDRESS
+mongodb-mesh    Running    aarch64    8       24GiB     60GiB    docker     192.168.64.10
+
+== the kind nodes' addresses (~/.kube/mongodb-mesh.node-ips)  (11:56:10)
+  mesh0-control-plane 172.18.0.2 pinned
+  mesh1-control-plane 172.18.0.4 pinned
+  mesh2-control-plane 172.18.0.6 pinned
+  mesh0-worker 172.18.0.3 pinned
+  mesh1-worker 172.18.0.5 pinned
+  mesh2-worker 172.18.0.7 pinned
+
+== the control planes, then their API servers  (11:56:11)
+  mesh0-control-plane 172.18.0.2 started
+  mesh1-control-plane 172.18.0.4 started
+  mesh2-control-plane 172.18.0.6 started
+  kind-mesh0: API server ready
+  kind-mesh1: API server ready
+  kind-mesh2: API server ready
+
+== the workers  (11:56:21)
+  mesh0-worker 172.18.0.3 started
+  mesh1-worker 172.18.0.5 started
+  mesh2-worker 172.18.0.7 started
+
+== nodes, Cilium and Cluster Mesh  (11:56:22)
+  mesh0-control-plane Ready 172.18.0.2
+  mesh0-worker Ready 172.18.0.3
+  mesh1-control-plane Ready 172.18.0.4
+  mesh1-worker Ready 172.18.0.5
+  mesh2-control-plane Ready 172.18.0.6
+  mesh2-worker Ready 172.18.0.7
+  kind-mesh0: Cilium healthy
+  kind-mesh1: Cilium healthy
+  kind-mesh2: Cilium healthy
+⚠️  Service type NodePort detected! Service may fail when nodes are removed from the cluster!
+✅ Service "clustermesh-apiserver" of type "NodePort" found
+✅ Cluster access information is available:
+  - 172.18.0.2:32379
+✅ Deployment clustermesh-apiserver is ready
+ℹ️  KVStoreMesh is enabled
+
+✅ All 2 nodes are connected to all clusters [min:2 / avg:2.0 / max:2]
+✅ All 1 KVStoreMesh replicas are connected to all clusters [min:2 / avg:2.0 / max:2]
+
+🔌 Cluster Connections:
+  - mesh1: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  - mesh2: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+
+⚠️  Service type NodePort detected! Service may fail when nodes are removed from the cluster!
+✅ Service "clustermesh-apiserver" of type "NodePort" found
+✅ Cluster access information is available:
+  - 172.18.0.4:32379
+✅ Deployment clustermesh-apiserver is ready
+ℹ️  KVStoreMesh is enabled
+⌛ Waiting (0s) for clusters to be connected: 1 nodes are not ready
+
+✅ All 2 nodes are connected to all clusters [min:2 / avg:2.0 / max:2]
+✅ All 1 KVStoreMesh replicas are connected to all clusters [min:2 / avg:2.0 / max:2]
+
+🔌 Cluster Connections:
+  - mesh0: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  - mesh2: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+
+⚠️  Service type NodePort detected! Service may fail when nodes are removed from the cluster!
+✅ Service "clustermesh-apiserver" of type "NodePort" found
+✅ Cluster access information is available:
+  - 172.18.0.6:32379
+✅ Deployment clustermesh-apiserver is ready
+ℹ️  KVStoreMesh is enabled
+
+✅ All 2 nodes are connected to all clusters [min:2 / avg:2.0 / max:2]
+✅ All 1 KVStoreMesh replicas are connected to all clusters [min:2 / avg:2.0 / max:2]
+
+🔌 Cluster Connections:
+  - mesh0: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  - mesh1: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+
+
+== the Mac's path to 172.18.255.0/24  (11:57:22)
+for the Mac to reach the clusters' LoadBalancer addresses, once per VM start: sudo route -n add -net 172.18.255.0/24 192.168.64.10
+colima-up exit 0 in 73s

@@ -166,19 +166,6 @@ for c in "${clusters[@]}"; do
     -o custom-columns='CATALOG:.metadata.name,IMAGE:.spec.image,STATE:.status.connectionState.lastObservedState'
 done
 
-# The Mac reaches the LoadBalancer blocks through the VM: Docker's FORWARD policy drops what does not come from a
-# docker bridge, so the VM accepts the block onto the kind bridge; the Mac's route is your sudo, printed, never run
-# (cilium-implementation-poc poc1-colima-up.sh).
 say "the Mac's path to $LB_RANGE"
-br="br-$(docker network inspect kind --format '{{.Id}}' | cut -c1-12)"
-colima ssh --profile "$COLIMA_PROFILE" -- sudo sh -c \
-  "iptables -C DOCKER-USER -d $LB_RANGE -o $br -j ACCEPT 2>/dev/null || iptables -I DOCKER-USER -d $LB_RANGE -o $br -j ACCEPT"
-addr=$(colima list --json | python3 -c '
-import json, sys
-for line in sys.stdin:
-    if line.strip():
-        d = json.loads(line)
-        if d.get("name") == sys.argv[1]:
-            print(d.get("address") or ""); break' "$COLIMA_PROFILE")
-echo "for the Mac to reach the clusters' LoadBalancer addresses, once per VM start: sudo route -n add -net $LB_RANGE ${addr:-<the VM address>}"
+lb_path
 say "platform up: ${clusters[*]}; KUBECONFIG=${KUBECONFIG/$HOME/\~}"

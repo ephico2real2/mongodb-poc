@@ -1,0 +1,15 @@
+== mesh0
+🔌 Cluster Connections:
+  - mesh1: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  - mesh2: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+
+== mesh1
+🔌 Cluster Connections:
+  - mesh0: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  - mesh2: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+
+== mesh2
+🔌 Cluster Connections:
+  - mesh0: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  - mesh1: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+
