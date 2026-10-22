@@ -1,0 +1,36 @@
+# 2026-10-22T06:57:19Z: electionTimeoutMillis=10000 catchUpTimeoutMillis=-1 heartbeatTimeoutSecs=10 electionTimeoutMillis=10000
+reconfig ok: 1; version 4; electionTimeoutMillis 10000, catchUpTimeoutMillis -1, heartbeatTimeoutSecs 10
+# 2026-10-22T07:05:04Z: electionTimeoutMillis=10000 catchUpTimeoutMillis=-1 heartbeatTimeoutSecs=10 electionTimeoutMillis=10000 catchUpTimeoutMillis=0
+reconfig ok: 1; version 5; electionTimeoutMillis 10000, catchUpTimeoutMillis 0, heartbeatTimeoutSecs 10
+# 2026-10-22T07:12:49Z: electionTimeoutMillis=10000 catchUpTimeoutMillis=-1 heartbeatTimeoutSecs=10 electionTimeoutMillis=5000
+reconfig ok: 1; version 6; electionTimeoutMillis 5000, catchUpTimeoutMillis -1, heartbeatTimeoutSecs 10
+# 2026-10-22T07:20:34Z: electionTimeoutMillis=10000 catchUpTimeoutMillis=-1 heartbeatTimeoutSecs=10 electionTimeoutMillis=5000 catchUpTimeoutMillis=0
+reconfig ok: 1; version 7; electionTimeoutMillis 5000, catchUpTimeoutMillis 0, heartbeatTimeoutSecs 10
+# 2026-10-22T07:28:20Z: electionTimeoutMillis=10000 catchUpTimeoutMillis=-1 heartbeatTimeoutSecs=10 electionTimeoutMillis=5000 heartbeatTimeoutSecs=5
+reconfig ok: 1; version 8; electionTimeoutMillis 5000, catchUpTimeoutMillis -1, heartbeatTimeoutSecs 5
+# 2026-10-22T07:36:05Z: electionTimeoutMillis=10000 catchUpTimeoutMillis=-1 heartbeatTimeoutSecs=10 electionTimeoutMillis=2000 catchUpTimeoutMillis=0
+reconfig ok: 1; version 9; electionTimeoutMillis 2000, catchUpTimeoutMillis 0, heartbeatTimeoutSecs 10
+# 2026-10-22T07:44:34Z: electionTimeoutMillis=10000 catchUpTimeoutMillis=-1 heartbeatTimeoutSecs=10
+reconfig ok: 1; version 10; electionTimeoutMillis 10000, catchUpTimeoutMillis -1, heartbeatTimeoutSecs 10
+# 2026-10-22T07:46:55Z: electionTimeoutMillis=10000 catchUpTimeoutMillis=-1 heartbeatTimeoutSecs=10 electionTimeoutMillis=10000
+reconfig ok: 1; version 11; electionTimeoutMillis 10000, catchUpTimeoutMillis -1, heartbeatTimeoutSecs 10
+# 2026-10-22T07:55:08Z: electionTimeoutMillis=10000 catchUpTimeoutMillis=-1 heartbeatTimeoutSecs=10 electionTimeoutMillis=10000 catchUpTimeoutMillis=0
+reconfig ok: 1; version 12; electionTimeoutMillis 10000, catchUpTimeoutMillis 0, heartbeatTimeoutSecs 10
+# 2026-10-22T08:02:54Z: electionTimeoutMillis=10000 catchUpTimeoutMillis=-1 heartbeatTimeoutSecs=10 electionTimeoutMillis=5000
+reconfig ok: 1; version 13; electionTimeoutMillis 5000, catchUpTimeoutMillis -1, heartbeatTimeoutSecs 10
+# 2026-10-22T08:10:41Z: electionTimeoutMillis=10000 catchUpTimeoutMillis=-1 heartbeatTimeoutSecs=10 electionTimeoutMillis=5000 catchUpTimeoutMillis=0
+reconfig ok: 1; version 14; electionTimeoutMillis 5000, catchUpTimeoutMillis 0, heartbeatTimeoutSecs 10
+# 2026-10-22T08:18:28Z: electionTimeoutMillis=10000 catchUpTimeoutMillis=-1 heartbeatTimeoutSecs=10 electionTimeoutMillis=5000 heartbeatTimeoutSecs=5
+reconfig ok: 1; version 15; electionTimeoutMillis 5000, catchUpTimeoutMillis -1, heartbeatTimeoutSecs 5
+# 2026-10-22T08:26:14Z: electionTimeoutMillis=10000 catchUpTimeoutMillis=-1 heartbeatTimeoutSecs=10 electionTimeoutMillis=2000 catchUpTimeoutMillis=0
+reconfig ok: 1; version 16; electionTimeoutMillis 2000, catchUpTimeoutMillis 0, heartbeatTimeoutSecs 10
+# 2026-10-22T08:34:39Z: electionTimeoutMillis=10000 catchUpTimeoutMillis=-1 heartbeatTimeoutSecs=10
+reconfig ok: 1; version 17; electionTimeoutMillis 10000, catchUpTimeoutMillis -1, heartbeatTimeoutSecs 10
+# 2026-10-22T08:36:43Z: electionTimeoutMillis=10000 catchUpTimeoutMillis=-1 heartbeatTimeoutSecs=10 electionTimeoutMillis=10000
+reconfig ok: 1; version 18; electionTimeoutMillis 10000, catchUpTimeoutMillis -1, heartbeatTimeoutSecs 10
+# 2026-10-22T08:40:12Z: electionTimeoutMillis=10000 catchUpTimeoutMillis=-1 heartbeatTimeoutSecs=10 electionTimeoutMillis=5000
+reconfig ok: 1; version 19; electionTimeoutMillis 5000, catchUpTimeoutMillis -1, heartbeatTimeoutSecs 10
+# 2026-10-22T08:43:17Z: electionTimeoutMillis=10000 catchUpTimeoutMillis=-1 heartbeatTimeoutSecs=10 electionTimeoutMillis=2000
+reconfig ok: 1; version 20; electionTimeoutMillis 2000, catchUpTimeoutMillis -1, heartbeatTimeoutSecs 10
+# 2026-10-22T08:46:07Z: electionTimeoutMillis=10000 catchUpTimeoutMillis=-1 heartbeatTimeoutSecs=10
+reconfig ok: 1; version 21; electionTimeoutMillis 10000, catchUpTimeoutMillis -1, heartbeatTimeoutSecs 10

@@ -1,0 +1,136 @@
+== drill: the primary's cluster mesh0 lost by kill, mesh1 writes and searches (150 s); client options heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+[t+  1s] primary mongo-mesh0; lab.drill holds 9522 documents; electionTimeoutMillis 5000
+[t+ 15s] SIGKILL mesh0's mongod on mesh0-worker: no shutdown, no step-down
+[t+ 56s] primary now: mongo-mesh1 (elected 5.1 s after, writes accepted 5.1 s after the kill, by its log)
+  mesh1 +  0.6 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 +  0.6 s  REPL     Member is now in state DOWN 
+  mesh1 +  0.6 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 +  0.6 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 +  0.6 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 +  2.3 s  REPL     Choosing new sync source. Our current sync source is not primary and does not have a sync source, so we require that it is ahead of us 
+  mesh1 +  2.3 s  REPL     Canceling oplog query due to OplogQueryMetadata. We have to choose a new sync source 
+  mesh1 +  2.3 s  REPL     Oplog fetcher returned error InvalidSyncSource: sync source mongo-mesh2.mongodb.svc.cluster.local:27017 (config version: 7; last applied optime
+  mesh1 +  2.3 s  REPL     Oplog fetcher stopped querying remote oplog with error InvalidSyncSource: sync source mongo-mesh2.mongodb.svc.cluster.local:27017 (config versi
+  mesh1 +  2.3 s  REPL     Clearing sync source to choose a new one 
+  mesh1 +  2.3 s  REPL     Could not find member to sync from 
+  mesh1 +  2.3 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 +  2.8 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 +  3.3 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 +  3.8 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 +  4.3 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 +  4.8 s  REPL     SyncSourceFeedback error sending update {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source was cleared. Was mongo-mesh2.mong
+  mesh1 +  4.8 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 +  5.1 s  ELECTION Starting an election, since we've seen no PRIMARY in election timeout period 
+  mesh1 +  5.1 s  ELECTION Conducting a dry run election to see if we could be elected 
+  mesh1 +  5.1 s  REPL     Scheduling remote command request 
+  mesh1 +  5.1 s  REPL     Scheduling remote command request 
+  mesh1 +  5.1 s  ELECTION VoteRequester processResponse 
+  mesh1 +  5.1 s  ELECTION Dry election run succeeded, running for election 
+  mesh1 +  5.1 s  REPL     Updating term 
+  mesh1 +  5.1 s  ELECTION Storing last vote document in local storage for my election 
+  mesh1 +  5.1 s  REPL     Scheduling remote command request 
+  mesh1 +  5.1 s  REPL     Scheduling remote command request 
+  mesh1 +  5.1 s  ELECTION VoteRequester processResponse 
+  mesh1 +  5.1 s  ELECTION Election succeeded, assuming primary role 
+  mesh1 +  5.1 s  REPL     Replica set state transition PRIMARY
+  mesh1 +  5.1 s  REPL     Resetting sync source to empty 
+  mesh1 +  5.1 s  REPL     Entering primary catch-up mode 
+  mesh1 +  5.1 s  REPL     Skipping primary catchup since the catchup timeout is 0 
+  mesh1 +  5.1 s  REPL     Exited primary catch-up mode 
+  mesh1 +  5.1 s  REPL     Stopping replication producer 
+  mesh1 +  5.1 s  REPL     Oplog writer buffer has been drained 
+  mesh1 +  5.1 s  REPL     Oplog applier buffer has been drained 
+  mesh1 +  5.1 s  REPL     Oplog applier buffer has been drained 
+  mesh1 +  5.1 s  REPL     Starting to kill user operations 
+  mesh1 +  5.1 s  REPL     Stopped killing user operations 
+  mesh1 +  5.1 s  REPL     State transition ops metrics 
+  mesh1 +  5.1 s  REPL     Increment the config term via reconfig 
+  mesh1 +  5.1 s  REPL     Replication config state is Steady, starting reconfig 
+  mesh1 +  5.1 s  REPL     Setting new configuration state ConfigReconfiguring
+  mesh1 +  5.1 s  REPL     Was able to quickly find new index in config. Skipping full checks. 
+  mesh1 +  5.1 s  REPL     replSetReconfig config object parses ok 
+  mesh1 +  5.1 s  REPL     Persisting new config to disk 
+  mesh1 +  5.1 s  REPL     Persisted new config to disk 
+  mesh1 +  5.1 s  REPL     Setting new configuration state ConfigSteady
+  mesh1 +  5.1 s  REPL     New replica set config in use 
+  mesh1 +  5.1 s  REPL     Found self in config 
+  mesh1 +  5.1 s  REPL     ReplSetReconfig succeeded 
+  mesh1 +  5.1 s  REPL     Starting to transition to primary. 
+  mesh1 +  5.1 s  REPL     Logging transition to primary to oplog on stepup 
+  mesh1 +  5.1 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 +  5.1 s  REPL     Transition to primary complete; database writes are now permitted 
+  mesh1 +  5.1 s  REPL     Applier already left draining state, exiting. 
+  mesh1 +  5.1 s  REPL     Advancing committed opTime to a new term 
+  mesh1 +  7.1 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 +  9.1 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 + 11.1 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 + 13.1 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 + 15.1 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 + 17.1 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 + 19.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 + 21.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 + 23.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 + 25.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 + 27.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 + 29.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 + 31.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 + 33.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 + 35.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 + 37.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh1 + 39.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 +  0.2 s  REPL     Recreating cursor for oplog fetcher due to error SocketException: Error while getting the next batch in the oplog fetcher :: caused by :: recv 
+  mesh2 +  0.2 s  REPL     Error returned from oplog query (no more query restarts left) SocketException: Error while getting the next batch in the oplog fetcher :: cause
+  mesh2 +  0.2 s  REPL     Oplog fetcher returned error SocketException: Error while getting the next batch in the oplog fetcher :: caused by :: socket exception [CONNECT
+  mesh2 +  0.2 s  REPL     Oplog fetcher stopped querying remote oplog with error SocketException: Error while getting the next batch in the oplog fetcher :: caused by ::
+  mesh2 +  0.2 s  REPL     Clearing sync source to choose a new one 
+  mesh2 +  0.2 s  REPL     Could not find member to sync from 
+  mesh2 +  0.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 +  0.2 s  REPL     Member is now in state DOWN 
+  mesh2 +  0.7 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 +  1.3 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 +  1.8 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 +  2.3 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 +  2.3 s  REPL     SyncSourceFeedback error sending update {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source was cleared. Was mongo-mesh0.mong
+  mesh2 +  2.8 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 +  3.3 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 +  3.8 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 +  4.3 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 +  4.8 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 +  5.1 s  ELECTION Responding to vote request 
+  mesh2 +  5.1 s  REPL     Updating term 
+  mesh2 +  5.1 s  ELECTION Responding to vote request 
+  mesh2 +  5.1 s  REPL     Restarting heartbeats after learning of a new primary 
+  mesh2 +  5.1 s  REPL     Member is in new state PRIMARY
+  mesh2 +  5.1 s  REPL     Scheduling heartbeat to fetch a newer config 
+  mesh2 +  5.1 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 +  5.1 s  REPL     Setting new configuration state ConfigHBReconfiguring
+  mesh2 +  5.1 s  REPL     Setting new configuration state ConfigSteady
+  mesh2 +  5.1 s  REPL     New replica set config in use 
+  mesh2 +  5.1 s  REPL     Found self in config 
+  mesh2 +  5.1 s  REPL     Heartbeat Reconfig succeeded 
+  mesh2 +  5.1 s  REPL     Starting ReplicationCoordinatorImpl::finishRecoveryIfEligible 
+  mesh2 +  5.1 s  REPL     Sync source candidate chosen 
+  mesh2 +  5.1 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 +  5.1 s  REPL     Changed sync source 
+  mesh2 +  5.1 s  REPL     Advancing committed opTime to a new term 
+  mesh2 +  7.1 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 +  9.1 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 + 11.1 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 + 13.1 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 + 15.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 + 17.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 + 19.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 + 21.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 + 23.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 + 25.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 + 27.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 + 29.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 + 31.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 + 33.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 + 35.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 + 37.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+  mesh2 + 39.2 s  REPL_HB  Heartbeat failed after max retries {'code': 6, 'codeName': 'HostUnreachable', 'errmsg': 'Error connecting to mongo-mesh0.mongodb.svc.cluster.lo
+[t+ 75s] nothing to undo: the kubelet restarted mongod (1 restart in this run)
+[t+154s] primary after: mongo-mesh0
+RESULT {"search":{"ok":286,"fail":0,"maxMs":14,"maxAt":"2.0"},"write":{"ok":286,"fail":0,"maxMs":4857,"maxAt":"12.7"}}
+[t+155s] acknowledged writes: 286; lab.drill grew by 286 (9522 -> 9808): every acknowledged write is there, once

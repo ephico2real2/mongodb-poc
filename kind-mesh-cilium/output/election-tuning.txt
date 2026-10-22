@@ -1,0 +1,38 @@
+e10000: done: freeze heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+e10000: done: kill heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+e10000: done: partition heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+e10000-c0: done: freeze heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+e10000-c0: done: kill heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+e10000-c0: done: partition heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+e5000: done: freeze heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+e5000: done: kill heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+e5000: done: partition heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+e5000-c0: done: freeze heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+e5000-c0: done: kill heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+e5000-c0: done: partition heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+e5000-h5: done: freeze heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+e5000-h5: done: kill heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+e5000-h5: done: partition heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+e2000-c0: done: freeze heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+e2000-c0: done: kill heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+e2000-c0: done: partition heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+| Replica set settings (others default) | Lost by | Writes failed | Longest write | Longest without an acknowledged write | New primary elected after | Writes accepted after | Searches failed | Acknowledged writes all there, once |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `electionTimeoutMillis=10000` | freeze | 0 of 275 | 10.5 s | 11.0 s | 10.0 s (mongo-mesh1) | 10.7 s | 0 of 275 | yes |
+| `electionTimeoutMillis=10000` | kill | 0 of 276 | 10.1 s | 10.6 s | 10.3 s (mongo-mesh1) | 10.3 s | 0 of 276 | yes |
+| `electionTimeoutMillis=10000` | partition | 0 of 250 | 22.9 s | 23.4 s | 15.0 s (mongo-mesh1) | 23.2 s | 0 of 250 | yes |
+| `electionTimeoutMillis=10000 catchUpTimeoutMillis=0` | freeze | 0 of 276 | 10.1 s | 10.7 s | 10.4 s (mongo-mesh1) | 10.4 s | 0 of 276 | yes |
+| `electionTimeoutMillis=10000 catchUpTimeoutMillis=0` | kill | 0 of 276 | 10.0 s | 10.5 s | 10.2 s (mongo-mesh2) | 10.3 s | 0 of 276 | yes |
+| `electionTimeoutMillis=10000 catchUpTimeoutMillis=0` | partition | 0 of 265 | 15.3 s | 15.8 s | 15.5 s (mongo-mesh2) | 15.5 s | 0 of 265 | yes |
+| `electionTimeoutMillis=5000` | freeze | 0 of 274 | 10.9 s | 11.4 s | 5.1 s (mongo-mesh2) | 11.0 s | 0 of 274 | yes |
+| `electionTimeoutMillis=5000` | kill | 0 of 285 | 5.0 s | 5.5 s | 5.2 s (mongo-mesh2) | 5.2 s | 0 of 285 | yes |
+| `electionTimeoutMillis=5000` | partition | 0 of 273 | 10.8 s | 11.3 s | 7.8 s (mongo-mesh2) | 11.0 s | 0 of 273 | yes |
+| `electionTimeoutMillis=5000 catchUpTimeoutMillis=0` | freeze | 1 of 279 | 6.8 s | 7.3 s | 5.1 s (mongo-mesh2) | 5.1 s | 0 of 279 | yes; failed writes found anyway: 0 of 1 |
+| `electionTimeoutMillis=5000 catchUpTimeoutMillis=0` | kill | 0 of 285 | 4.7 s | 5.2 s | 4.9 s (mongo-mesh1) | 4.9 s | 0 of 285 | yes |
+| `electionTimeoutMillis=5000 catchUpTimeoutMillis=0` | partition | 0 of 280 | 7.7 s | 8.2 s | 8.0 s (mongo-mesh1) | 8.0 s | 0 of 280 | yes |
+| `electionTimeoutMillis=5000 heartbeatTimeoutSecs=5` | freeze | 0 of 283 | 6.3 s | 6.8 s | 4.7 s (mongo-mesh1) | 5.5 s | 0 of 283 | yes |
+| `electionTimeoutMillis=5000 heartbeatTimeoutSecs=5` | kill | 0 of 286 | 4.9 s | 5.5 s | 5.1 s (mongo-mesh2) | 5.1 s | 0 of 286 | yes |
+| `electionTimeoutMillis=5000 heartbeatTimeoutSecs=5` | partition | 0 of 272 | 12.1 s | 12.6 s | 8.0 s (mongo-mesh2) | 12.3 s | 0 of 272 | yes |
+| `electionTimeoutMillis=2000 catchUpTimeoutMillis=0` | freeze | 1 of 279 | 6.8 s | 7.3 s | 1.9 s (mongo-mesh2) | 1.9 s | 0 of 279 | yes; failed writes found anyway: 0 of 1 |
+| `electionTimeoutMillis=2000 catchUpTimeoutMillis=0` | kill | 0 of 292 | 1.7 s | 2.2 s | 1.9 s (mongo-mesh1) | 1.9 s | 0 of 292 | yes |
+| `electionTimeoutMillis=2000 catchUpTimeoutMillis=0` | partition | 0 of 279 | 8.6 s | 9.1 s | 2.9 s (mongo-mesh1) | 2.9 s | 0 of 279 | yes |

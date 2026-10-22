@@ -1,0 +1,72 @@
+== drill: the primary's cluster mesh0 lost by partition, mesh1 writes and searches (150 s); client options heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+[t+  2s] primary mongo-mesh0; lab.drill holds 10655 documents; electionTimeoutMillis 5000
+[t+ 15s] cut mesh0's mongod off from the other clusters (Cilium deny policy)
+[t+ 56s] primary now: mongo-mesh1 (elected 7.9 s after, writes accepted 12.3 s after the partition, by its log)
+  mesh1 +  5.3 s  REPL     Member is now in state DOWN 
+  mesh1 +  7.9 s  ELECTION Starting an election, since we've seen no PRIMARY in election timeout period 
+  mesh1 +  7.9 s  ELECTION Conducting a dry run election to see if we could be elected 
+  mesh1 +  7.9 s  REPL     Scheduling remote command request 
+  mesh1 +  7.9 s  REPL     Scheduling remote command request 
+  mesh1 +  7.9 s  ELECTION VoteRequester processResponse 
+  mesh1 +  7.9 s  ELECTION Dry election run succeeded, running for election 
+  mesh1 +  7.9 s  REPL     Updating term 
+  mesh1 +  7.9 s  ELECTION Storing last vote document in local storage for my election 
+  mesh1 +  7.9 s  REPL     Scheduling remote command request 
+  mesh1 +  7.9 s  REPL     Scheduling remote command request 
+  mesh1 +  7.9 s  ELECTION VoteRequester processResponse 
+  mesh1 +  7.9 s  ELECTION Election succeeded, assuming primary role 
+  mesh1 +  7.9 s  REPL     Replica set state transition PRIMARY
+  mesh1 +  7.9 s  REPL     Resetting sync source to empty 
+  mesh1 +  7.9 s  REPL     Entering primary catch-up mode 
+  mesh1 +  7.9 s  REPL     Received heartbeat while in catchup state 
+  mesh1 +  9.9 s  REPL     Oplog fetcher returned error NetworkTimeout: Error while getting the next batch in the oplog fetcher :: caused by :: recv failed while exhausti
+  mesh1 +  9.9 s  REPL     Oplog fetcher stopped querying remote oplog with error NetworkTimeout: Error while getting the next batch in the oplog fetcher :: caused by :: 
+  mesh1 +  9.9 s  REPL     Received heartbeat while in catchup state 
+  mesh1 + 11.9 s  REPL     Received heartbeat while in catchup state 
+  mesh1 + 12.3 s  REPL     Received heartbeat while in catchup state 
+  mesh1 + 12.3 s  REPL     Caught up to the latest optime known via heartbeats after becoming primary 
+  mesh1 + 12.3 s  REPL     Exited primary catch-up mode 
+  mesh1 + 12.3 s  REPL     Stopping replication producer 
+  mesh1 + 12.3 s  REPL     Oplog writer buffer has been drained 
+  mesh1 + 12.3 s  REPL     Oplog applier buffer has been drained 
+  mesh1 + 12.3 s  REPL     Oplog applier buffer has been drained 
+  mesh1 + 12.3 s  REPL     Oplog applier buffer has been drained 
+  mesh1 + 12.3 s  REPL     Starting to kill user operations 
+  mesh1 + 12.3 s  REPL     Stopped killing user operations 
+  mesh1 + 12.3 s  REPL     State transition ops metrics 
+  mesh1 + 12.3 s  REPL     Increment the config term via reconfig 
+  mesh1 + 12.3 s  REPL     Replication config state is Steady, starting reconfig 
+  mesh1 + 12.3 s  REPL     Setting new configuration state ConfigReconfiguring
+  mesh1 + 12.3 s  REPL     Was able to quickly find new index in config. Skipping full checks. 
+  mesh1 + 12.3 s  REPL     replSetReconfig config object parses ok 
+  mesh1 + 12.3 s  REPL     Persisting new config to disk 
+  mesh1 + 12.3 s  REPL     Persisted new config to disk 
+  mesh1 + 12.3 s  REPL     Setting new configuration state ConfigSteady
+  mesh1 + 12.3 s  REPL     New replica set config in use 
+  mesh1 + 12.3 s  REPL     Found self in config 
+  mesh1 + 12.3 s  REPL     ReplSetReconfig succeeded 
+  mesh1 + 12.3 s  REPL     Starting to transition to primary. 
+  mesh1 + 12.3 s  REPL     Logging transition to primary to oplog on stepup 
+  mesh1 + 12.3 s  REPL     Transition to primary complete; database writes are now permitted 
+  mesh1 + 12.3 s  REPL     Applier already left draining state, exiting. 
+  mesh1 + 12.3 s  REPL     Applier already left draining state, exiting. 
+  mesh1 + 12.3 s  REPL     Advancing committed opTime to a new term 
+  mesh1 + 32.3 s  REPL     SyncSourceFeedback error sending update {'code': 202, 'codeName': 'NetworkInterfaceExceededTimeLimit', 'errmsg': "Request 97979 timed out, dead
+  mesh2 +  6.8 s  REPL     Member is now in state DOWN 
+  mesh2 +  7.9 s  ELECTION Responding to vote request 
+  mesh2 +  7.9 s  REPL     Updating term 
+  mesh2 +  7.9 s  ELECTION Responding to vote request 
+  mesh2 +  7.9 s  REPL     Restarting heartbeats after learning of a new primary 
+  mesh2 +  7.9 s  REPL     Member is in new state PRIMARY
+  mesh2 + 12.3 s  REPL     Scheduling heartbeat to fetch a newer config 
+  mesh2 + 12.3 s  REPL     Setting new configuration state ConfigHBReconfiguring
+  mesh2 + 12.3 s  REPL     Setting new configuration state ConfigSteady
+  mesh2 + 12.3 s  REPL     New replica set config in use 
+  mesh2 + 12.3 s  REPL     Found self in config 
+  mesh2 + 12.3 s  REPL     Heartbeat Reconfig succeeded 
+  mesh2 + 12.3 s  REPL     Starting ReplicationCoordinatorImpl::finishRecoveryIfEligible 
+  mesh2 + 12.3 s  REPL     Advancing committed opTime to a new term 
+[t+ 75s] remove the deny policy
+[t+154s] primary after: mongo-mesh0
+RESULT {"search":{"ok":272,"fail":0,"maxMs":10,"maxAt":"12.2"},"write":{"ok":272,"fail":0,"maxMs":12045,"maxAt":"12.7"}}
+[t+154s] acknowledged writes: 272; lab.drill grew by 272 (10655 -> 10927): every acknowledged write is there, once
