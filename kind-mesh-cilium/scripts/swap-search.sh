@@ -32,10 +32,11 @@ for c in "${clusters[@]}"; do
   kubectl --context "$ctx" apply -f "$m/39-operator-olm.yaml" >/dev/null
   echo "  operator: $(kubectl --context "$ctx" -n search get csv mongodb-kubernetes.v1.13.0 -o jsonpath='{.status.phase}')"
   # The CSV running is not OLM managing it: a Subscription made beside the earlier chart's CSV cannot resolve (measured).
-  # scripts/chart-up.sh reclaims that CSV; until then OLM does not manage the operator.
+  # The lab's chart clears that CSV (its csv-reclaim hook, run by scripts/chart-up.sh); until then OLM does not manage
+  # the operator.
   rf=$(kubectl --context "$ctx" -n search get subscription mongodb-kubernetes -o jsonpath='{.status.conditions[?(@.type=="ResolutionFailed")].status}' 2>/dev/null || true)
   if [ "$rf" = True ]; then
-    echo "  warning: the Subscription is ResolutionFailed beside the earlier CSV: run scripts/chart-up.sh to reclaim it"
+    echo "  warning: the Subscription is ResolutionFailed beside the earlier CSV: scripts/chart-up.sh clears it"
   fi
 
   say "$c: mongot's certificate for mongot-global, the MongoDBSearch without Envoy"

@@ -8,6 +8,9 @@ The change: each cluster's MongoDBSearch keeps its two mongot but drops the oper
 (`loadBalancer.unmanaged`). `mongot-global`, the Cilium global Service every mongod dials, now points straight at the
 mongot pods of the three clusters, and still prefers the local ones. mongod and mongot keep mutual TLS.
 
+Steps 1 and 2 below were applied by hand (scripts and manifests). The search side is now installed by the lab's chart,
+`kind-mesh-cilium/chart/mongodb-search-cilium`, which took over the same objects ([the lab's chart](#the-labs-chart-mongodb-search-cilium)).
+
 ## Summary
 
 Results, a search every half second through mesh2's own member:
@@ -122,17 +125,22 @@ through OLM pinned to 1.13.0 with an approver hook, the MongoDBSearch with no op
 
 | # | What | Command | Passes when | Result |
 | --- | --- | --- | --- | --- |
-| H1 | Render tests | `kind-mesh-cilium/chart/test.sh` | 0 failed | 15 PASS, 0 failed (`chart-test.txt`) |
+| H1 | Render tests | `kind-mesh-cilium/chart/test.sh` | 0 failed | 18 PASS, 0 failed (`chart-test.txt`) |
 | H2 | The lab's search onto the chart, in place | `kind-mesh-cilium/scripts/chart-up.sh` | release `deployed` in every cluster; the MongoDBSearch's generation unchanged | Passed: generation 4 → 4, no mongot rolled (`chart-up.log`) |
 | H3 | OLM manages the operator | `kubectl -n search get subscription mongodb-kubernetes` | 1.13.0 installed; any newer version waits | `UpgradePending`: 1.13.0 installed, 1.14.0 staged and not approved, in every cluster |
 | H4 | The lab is healthy, the drill unchanged | `kind-mesh/check.sh`; `kind-mesh-cilium/drills.sh mongot mesh2 both` | 0 failed; no search fails | 0 failed (`check-chart.txt`); 0 of 236 searches failed, mesh2's searches came back by themselves (`drill-mongot-mesh2-both.chart.txt`) |
+| H5 | The chart's CSV reclaim, nothing to clear | `kind-mesh-cilium/scripts/chart-up.sh mesh2` | the reclaim exits without deleting; the approver finds 1.13.0 installed | Passed in 7.9 s: "nothing could be orphaned, not waiting" (`chart-reclaim.txt`, R1) |
+| H6 | The chart's CSV reclaim, a CSV left without its Subscription | on mesh2: `kubectl -n search delete subscription mongodb-kubernetes`, then `chart-up.sh mesh2`, with a search every 0.5 s through mesh2's member | the reclaim deletes the CSV; 1.13.0 is installed again; no search fails | Passed in 27.3 s: ResolutionFailed seen after 5 s, the CSV deleted, the approver's InstallPlan Complete 14 s later; mongot not restarted; 296 searches, 0 failed, the longest 45 ms (`chart-reclaim.txt`, R2) |
 
 **Found on the way:** since step 1's swap, every cluster's Subscription had been `ResolutionFailed`: the CSV the
 earlier chart installed blocked the new Subscription ("@existing/search//mongodb-kubernetes.v1.13.0 and
 operatorhubio-catalog … provide"). The operator kept running, so every result above stands, but OLM no longer
 managed it, and `swap-search.sh` checked only the CSV's phase. The first takeover failed on it
-(`chart-up.run1-failed.log`). `chart-up.sh` now deletes that CSV when it sees this condition, as the earlier chart's
-csv-reclaim did; the approver then installs 1.13.0 again.
+(`chart-up.run1-failed.log`). H2 passed with `chart-up.sh` deleting that CSV. The chart now does it itself, with the
+main chart's csv-reclaim script unchanged (`templates/00-csv-reclaim.yaml`, H5 and H6), so a plain
+`helm upgrade --install` recovers from it.
+
+Not tested: installing the chart on a cluster that never ran steps 1 and 2 (no objects to adopt), or through Argo CD.
 
 ## Compared with the Envoy lab
 

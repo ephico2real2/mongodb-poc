@@ -4,14 +4,18 @@
 # labels and annotations are set first), so nothing is recreated: the chart's rendering equals the live
 # MongoDBSearch, which the operator therefore does not roll.
 #
-#   kind-mesh-cilium/scripts/chart-up.sh      # idempotent: helm upgrade --install
+#   kind-mesh-cilium/scripts/chart-up.sh            # mesh0, mesh1, mesh2; idempotent: helm upgrade --install
+#   kind-mesh-cilium/scripts/chart-up.sh mesh2      # one
+#
+# A CSV that blocks the Subscription (left by an earlier install, or by scripts/swap-search.sh) is cleared by the
+# chart's own hook, templates/00-csv-reclaim.yaml; its log is printed below.
 set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck disable=SC1091
 . "$here/../kind-mesh/scripts/lib.sh"
 lab_env
 # shellcheck disable=SC2153  # CLUSTERS comes from versions.env
-read -r -a clusters <<<"$CLUSTERS"
+read -r -a clusters <<<"${*:-$CLUSTERS}"
 release=mongot-search
 ns=search
 chart="$here/chart/mongodb-search-cilium"
@@ -29,22 +33,12 @@ for c in "${clusters[@]}"; do
       echo "  adopted $obj"
     fi
   done
-  # A CSV left by an earlier install blocks a new Subscription from resolving ("@existing/... and <catalog>/...
-  # provide" the same CSV: measured after swap-search.sh, the operator running but OLM no longer managing it). The
-  # earlier chart's csv-reclaim did this: delete that CSV, so the Subscription installs it again, and the approver
-  # approves exactly operator.version. The operator is away for that minute; mongot and mongod keep serving.
-  msg=$(kubectl --context "$ctx" -n "$ns" get subscription mongodb-kubernetes \
-    -o jsonpath='{.status.conditions[?(@.type=="ResolutionFailed")].message}' 2>/dev/null || true)
-  if [[ "$msg" == *"@existing/$ns//mongodb-kubernetes."*"provide"* ]]; then
-    csv=$(sed -n "s|.*@existing/$ns//\(mongodb-kubernetes\.v[0-9.]*\) .*|\1|p" <<<"$msg")
-    echo "  the Subscription cannot resolve beside $csv, left by an earlier install: deleting that CSV"
-    kubectl --context "$ctx" -n "$ns" delete csv "$csv" --wait=true >/dev/null
-  fi
   gen_before=$(kubectl --context "$ctx" -n "$ns" get mongodbsearch mongot -o jsonpath='{.metadata.generation}' 2>/dev/null || echo none)
   helm_r upgrade --install "$release" "$chart" -n "$ns" --kube-context "$ctx" -f "$values" --wait --timeout 10m >/dev/null \
     || die "the release did not install on $c"
   gen_after=$(kubectl --context "$ctx" -n "$ns" get mongodbsearch mongot -o jsonpath='{.metadata.generation}')
   echo "  release $(helm status "$release" -n "$ns" --kube-context "$ctx" -o json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["info"]["status"], "revision", d["version"])')"
   echo "  MongoDBSearch generation $gen_before -> $gen_after ($([ "$gen_before" = "$gen_after" ] && echo 'spec unchanged: no mongot rolled' || echo 'spec changed'))"
-  echo "  approver: $(kubectl --context "$ctx" -n "$ns" logs job/${release}-mongodb-search-cilium-approver 2>/dev/null | tail -1)"
+  kubectl --context "$ctx" -n "$ns" logs "job/${release}-mongodb-search-cilium-csv-reclaim" 2>/dev/null | sed 's/^/  /'
+  echo "  $(kubectl --context "$ctx" -n "$ns" logs "job/${release}-mongodb-search-cilium-approver" 2>/dev/null | tail -1)"
 done

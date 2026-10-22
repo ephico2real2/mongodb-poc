@@ -1,7 +1,7 @@
 {{- /*
 Approves the InstallPlan that installs exactly operator.version, read through the Subscription's own reference, and
 no other: any other version waits for a human. When that version is already installed it approves nothing. From the
-chart/mongodb-search-helm approver, without its CSV reclaim. Helm post-install and post-upgrade.
+chart/mongodb-search-helm approver. Helm post-install and post-upgrade, weight -1, after the CSV reclaim (-2).
 */ -}}
 {{- if .Values.operator.install }}
 apiVersion: v1
@@ -53,6 +53,7 @@ metadata:
     {{- include "msc.labels" . | nindent 4 }}
   annotations:
     helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-1"
     helm.sh/hook-delete-policy: before-hook-creation
 spec:
   backoffLimit: 0

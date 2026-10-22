@@ -37,5 +37,18 @@ has 'source.hostAndPorts is empty' "$err"; row $? "refused: no members in source
 out=$(helm template t "$chart" "${lab[@]}" --set operator.install=false)
 ! has 'kind: Subscription' "$out" && ! has 'kind: Job' "$out" && has 'kind: MongoDBSearch' "$out"; row $? "operator.install false: no Subscription, no approver, the MongoDBSearch still"
 
+order=$(helm template t "$chart" "${lab[@]}" | grep -E 'name: t-mongodb-search-cilium-(csv-reclaim|approver)$|hook-weight' | tr -d ' "')
+has 'name:t-mongodb-search-cilium-csv-reclaim helm.sh/hook-weight:-2' "$(tr '\n' ' ' <<<"$order")" \
+  && has 'name:t-mongodb-search-cilium-approver helm.sh/hook-weight:-1' "$(tr '\n' ' ' <<<"$order")"
+row $? "lab: the CSV reclaim (weight -2) runs before the approver (-1)"
+
+script() { helm template t "$1" "${@:2}" | awk '/csv-reclaim %s/,/^---/' ; }
+diff <(script ../../chart/mongodb-search-helm -n search -f ../../chart/mongodb-search-helm/examples/values-crc.yaml) \
+  <(script "$chart" "${lab[@]}") >/dev/null && [ -n "$(script "$chart" "${lab[@]}")" ]
+row $? "the CSV reclaim's script is chart/mongodb-search-helm's, unchanged"
+
+out=$(helm template t "$chart" "${lab[@]}" --set csvReclaim.enabled=false)
+! has 'csv-reclaim' "$out" && has 'kind: Subscription' "$out"; row $? "csvReclaim.enabled false: no reclaim, the Subscription still"
+
 echo "== $fails failed"
 exit "$fails"

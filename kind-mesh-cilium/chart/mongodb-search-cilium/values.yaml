@@ -18,7 +18,15 @@ operator:
   # How long the approver waits for OLM to stage the plan and install it.
   approveWaitSeconds: 600
 
-# The image the approver hook runs: a shell and oc. The lab's own (kind-mesh/images/oc), loaded into every node.
+# Clears a CSV that blocks the Subscription (left by an earlier install, or made beside another Subscription). It
+# deletes only an unowned, unreferenced, settled CSV of this package, and only after OLM reports ResolutionFailed or
+# when the namespace holds no Subscription of this package. templates/00-csv-reclaim.yaml.
+csvReclaim:
+  enabled: true
+  waitSeconds: 120
+
+# The image the reclaim and approver hooks run: a shell and oc. The lab's own (kind-mesh/images/oc), loaded into
+# every node.
 jobs:
   image: localhost/kind-mesh/oc:4.20.42
   resources:

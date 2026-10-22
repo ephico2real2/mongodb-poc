@@ -155,6 +155,13 @@ Step 2 then made Cilium balance each search request: WireGuard on all three clus
 (`service.cilium.io/lb-l7`) on `mongot-global`, and cleartext gRPC on the search hop, because that balancer reads
 cleartext only. Between nodes and clusters it travels inside WireGuard.
 
+The search side is installed by the lab's own chart, `kind-mesh-cilium/chart/mongodb-search-cilium` (not released;
+`kind-mesh-cilium/README.md`): the operator through OLM, the MongoDBSearch with `loadBalancer.unmanaged`, and
+`mongot-global`. `searchTLS.enabled` and `globalService.lbL7.enabled` choose Step 1's or Step 2's form. Cilium's
+settings and each mongod's `searchTLSMode` are set outside it. Steps 1 and 2 were first applied by hand; the chart then
+took over the same objects without rolling a mongot. The repository's main chart is unchanged: it always renders the
+operator's Envoy.
+
 | mesh2 loses… | With the operator's Envoy | Step 1: per connection | Step 2: per request |
 | --- | --- | --- | --- |
 | all its mongot | 160 of 234 searches failed | 0 of 237 | 0 of 235, and 0 of 236; mesh0 and mesh1 shared them evenly |
