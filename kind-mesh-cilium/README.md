@@ -42,6 +42,7 @@ chart existed; they are how the results in the testing record were produced.
 | 5. Check, drills (step 2), the wire | `kind-mesh/check.sh`; `drills.sh mongot mesh2 both`, `mongot mesh2 one`, `spread mesh2`; `scripts/wire-check.sh` |
 | 6. The search side onto the chart | `kind-mesh-cilium/scripts/chart-up.sh` |
 | 7. Story #131: the primary's cluster lost, under four client settings | `kind-mesh-cilium/scripts/primary-matrix.sh` (or one run: `CLIENT_OPTS='…' drills.sh primary freeze\|kill\|partition`) |
+| 8. Election tuning: the same drills under six replica set profiles; then how long a link outage each election timeout rides out | `kind-mesh-cilium/scripts/election-tuning.sh`; `kind-mesh-cilium/scripts/blip-test.sh` |
 
 ## Files
 
@@ -56,5 +57,6 @@ chart existed; they are how the results in the testing record were produced.
 | `scripts/swap-search.sh`, `scripts/cleartext-l7.sh`, `scripts/wire-check.sh`, `drills.sh`, `output/` | The two steps, the wire check, the drills, the recorded runs |
 | `chart/mongodb-search-cilium/`, `chart/values-lab.yaml`, `chart/test.sh`, `scripts/chart-up.sh` | The lab's chart, its values, its render tests, its install in every cluster |
 | `manifests/50-partition-mesh0.yaml`, `scripts/primary-matrix.sh` | Story #131: the Cilium deny policy that cuts mesh0's mongod off from the other clusters; the drill matrix and its table |
+| `scripts/election-tuning.sh`, `scripts/blip-test.sh`, `scripts/rs-lib.sh`, `scripts/wan.sh` | Election tuning: the replica set profiles; the link outage test; their shared reconfig; a delayed, lossy or cut link between one cluster and the others (netem), since the clusters share one VM |
 
 The repository's main chart (`chart/mongodb-search-helm`) is not changed: it always renders the operator's Envoy.

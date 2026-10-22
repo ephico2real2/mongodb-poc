@@ -55,20 +55,29 @@ EOF
 rs_plain="mongodb://mongo-mesh0.mongodb.svc.cluster.local,mongo-mesh1.mongodb.svc.cluster.local,mongo-mesh2.mongodb.svc.cluster.local/?replicaSet=rs0&tls=true&tlsCAFile=/run/mongod/ca.crt"
 rs_uri="$rs_plain${CLIENT_OPTS:+&$CLIENT_OPTS}"
 # A majority write through the replica set and a search, every half second, from a cluster's member; each failure
-# with its time, then the totals, including the longest wait of each.
-load_rw() { # <cluster> <seconds>
+# with its time, then the totals, including the longest wait of each. Each write has its own _id, <run>-<n>, so the
+# drill can check every acknowledged write by id, and list the failed ones: a write that fails on its write concern
+# (wtimeout) has been applied on the primary and is not undone. gapMs is the longest time between two acknowledged
+# writes, the outage an application sees.
+load_rw() { # <cluster> <seconds> <run id>
   kubectl --context "kind-$1" -n mongodb exec -i mongo-0 -c mongod -- \
     mongosh --quiet --tls --tlsCAFile /run/mongod/ca.crt --host localhost --file /dev/stdin <<EOF
 db.getSiblingDB("admin").auth("labAdmin", "$admin_pw");
 db.getMongo().setReadPref("nearest");
 const rs = new Mongo("$rs_uri"); rs.getDB("admin").auth("labAdmin", "$admin_pw");
-const start = Date.now(), end = start + $2 * 1000, r = {search: {ok: 0, fail: 0, maxMs: 0, maxAt: null}, write: {ok: 0, fail: 0, maxMs: 0, maxAt: null}};
+const start = Date.now(), end = start + $2 * 1000, r = {search: {ok: 0, fail: 0, maxMs: 0, maxAt: null}, write: {ok: 0, fail: 0, maxMs: 0, maxAt: null, gapMs: 0, gapAt: null, failedIds: []}};
 const s = () => ((Date.now() - start) / 1000).toFixed(1);
-const timed = (k, f) => { const t = Date.now(), at = s();
-  try { f(); r[k].ok++; } catch (e) { r[k].fail++; print("  " + k + " failed at " + at + " s: " + (e.codeName || e.message).slice(0, 90)); }
-  const ms = Date.now() - t; if (ms > r[k].maxMs) { r[k].maxMs = ms; r[k].maxAt = at; } };
+const timed = (k, f) => { const t = Date.now(), at = s(); let ok = true;
+  try { f(); r[k].ok++; } catch (e) { ok = false; r[k].fail++; print("  " + k + " failed at " + at + " s: " + (e.codeName || e.message).slice(0, 90)); }
+  const ms = Date.now() - t; if (ms > r[k].maxMs) { r[k].maxMs = ms; r[k].maxAt = at; }
+  return ok; };
+let n = 0, lastOk = Date.now();
 while (Date.now() < end) {
-  timed("write", () => rs.getDB("lab").drill.insertOne({at: new Date()}, {writeConcern: {w: "majority", wtimeout: 3000}}));
+  const id = "$3-" + (++n);
+  if (timed("write", () => rs.getDB("lab").drill.insertOne({_id: id, at: new Date()}, {writeConcern: {w: "majority", wtimeout: 3000}}))) {
+    if (Date.now() - lastOk > r.write.gapMs) { r.write.gapMs = Date.now() - lastOk; r.write.gapAt = s(); }
+    lastOk = Date.now();
+  } else r.write.failedIds.push(id);
   timed("search", () => db.getSiblingDB("sample_mflix").movies.aggregate([{\$search: {index: "default", text: {query: "space", path: {wildcard: "*"}}}}, {\$limit: 1}]).toArray());
   sleep(500);
 }
@@ -79,22 +88,52 @@ EOF
 rs_eval() { { printf 'db.getSiblingDB("admin").auth("labAdmin", "%s");\n' "$admin_pw"; cat; } \
   | kubectl --context kind-mesh1 -n mongodb exec -i mongo-0 -c mongod -- mongosh --quiet "$rs_plain" --file /dev/stdin 2>/dev/null; }
 now_ms() { python3 -c 'import time; print(int(time.time() * 1000))'; }
-# Seconds from <epoch ms> to the first "Election succeeded" in <cluster>'s mongod log after it: the member's own time,
-# not the drill's polling, which waits on connections to an unreachable member. The VM's clock and this machine's agree
-# to about 0.1 s (measured).
+# Seconds from <epoch ms> to the first "Election succeeded" in <cluster>'s mongod log after it, and to the end of the
+# new primary's catch-up, when it accepts writes: the member's own time, not the drill's polling, which waits on
+# connections to an unreachable member. The VM's clock and this machine's agree to about 0.1 s (measured).
 # shellcheck disable=SC2016  # $date is a key of mongod's JSON log, read by python
 election_after() { # <cluster> <epoch ms>
   kubectl --context "kind-$1" -n mongodb logs mongo-0 -c mongod --since=10m 2>/dev/null | python3 -c '
 import datetime, json, sys
-since = int(sys.argv[1])
+since, elected = int(sys.argv[1]), None
 for line in sys.stdin:
-    if "Election succeeded" not in line:
+    want = "Transition to primary complete" if elected else "Election succeeded"
+    if want not in line:
         continue
     ms = datetime.datetime.fromisoformat(json.loads(line)["t"]["$date"]).timestamp() * 1000
-    if ms >= since:
-        print(f"{(ms - since) / 1000:.1f}")
+    if ms < since:
+        continue
+    if elected is None:
+        elected = (ms - since) / 1000
+    else:
+        print(f"elected {elected:.1f} s after, writes accepted {(ms - since) / 1000:.1f} s after")
         break' "$2"
 }
+# The two other members' replication log for 40 s from <epoch ms>, in seconds after it: when each lost the primary,
+# started an election and won it. mongod logs nothing of these components while the replica set is steady.
+# shellcheck disable=SC2016  # $date is a key of mongod's JSON log, read by python
+election_trace() { # <epoch ms>
+  local c
+  for c in mesh1 mesh2; do
+    kubectl --context "kind-$c" -n mongodb logs mongo-0 -c mongod --since=10m 2>/dev/null | python3 -c '
+import datetime, json, sys
+since, c = int(sys.argv[1]), sys.argv[2]
+for line in sys.stdin:
+    try:
+        d = json.loads(line)
+    except ValueError:
+        continue
+    comp, msg, a = d.get("c"), d.get("msg", ""), d.get("attr", {})
+    # The sync source retries repeat every second while the old primary is away and say nothing about the election.
+    if comp not in ("ELECTION", "REPL_HB", "REPL") or "select a sync source" in msg or "select sync source" in msg:
+        continue
+    ms = datetime.datetime.fromisoformat(d["t"]["$date"]).timestamp() * 1000
+    if since <= ms <= since + 40000:
+        why = a.get("reason") or a.get("error") or a.get("status") or a.get("newState") or ""
+        print(f"  {c} +{(ms - since) / 1000:5.1f} s  {comp:8} {msg} {why}"[:170])' "$1" "$c"
+  done
+}
+election_timeout() { printf 'print(rs.conf().settings.electionTimeoutMillis)' | rs_eval; }
 mongod_restarts() { kubectl --context kind-mesh0 -n mongodb get pod mongo-0 -o jsonpath='{.status.containerStatuses[?(@.name=="mongod")].restartCount}'; }
 primary_member() { printf 'print((db.hello().primary || "none").split(".")[0])' | rs_eval; }
 
@@ -166,14 +205,15 @@ drill_failback() { # <cluster>
 }
 
 drill_primary() { # <freeze|kill|partition>: mesh0, the primary's cluster, is lost from 15 s to 75 s
-  local mode=$1 before after ok p node restarts action_ms
+  local mode=$1 before after ok failed all applied nfailed present p node restarts action_ms run
   log="$out/drill-primary-$mode${CLIENT_OPTS:+-$(printf '%s' "$CLIENT_OPTS" | tr '&=' '-_')}${DRILL_TAG:+-$DRILL_TAG}.txt"
   t0=$(date +%s)
   echo "== drill: the primary's cluster mesh0 lost by $mode, mesh1 writes and searches (150 s)${CLIENT_OPTS:+; client options $CLIENT_OPTS}" | tee "$log"
   [ "$(primary_member)" = mongo-mesh0 ] || { note "mesh0 is not primary ($(primary_member)); wait for it to take the primary back"; return 1; }
   before=$(printf 'print(db.getSiblingDB("lab").drill.countDocuments({}))' | rs_eval)
-  note "primary mongo-mesh0; lab.drill holds $before documents"
-  load_rw mesh1 150 >"$out/drill-primary-load.tmp" 2>&1 &
+  note "primary mongo-mesh0; lab.drill holds $before documents; electionTimeoutMillis $(election_timeout)"
+  run="drill-$(date +%s)"
+  load_rw mesh1 150 "$run" >"$out/drill-primary-load.tmp" 2>&1 &
   at 15
   action_ms=$(now_ms)
   case "$mode" in
@@ -186,7 +226,9 @@ drill_primary() { # <freeze|kill|partition>: mesh0, the primary's cluster, is lo
     partition) note "cut mesh0's mongod off from the other clusters (Cilium deny policy)"; kubectl --context kind-mesh0 apply -f "$here/manifests/50-partition-mesh0.yaml" >/dev/null ;;
   esac
   for _ in $(seq 1 40); do p=$(primary_member); [ -n "$p" ] && [ "$p" != none ] && [ "$p" != mongo-mesh0 ] && break; sleep 1; done
-  note "primary now: ${p:-none} (elected $(election_after "${p#mongo-}" "$action_ms") s after the $mode, by its log)"
+  at 56   # the new primary's catch-up and the trace's 40 s are over: both read from the logs
+  note "primary now: ${p:-none} ($(election_after "${p#mongo-}" "$action_ms") the $mode, by its log)"
+  election_trace "$action_ms" | tee -a "$log"
   at 75
   case "$mode" in
     freeze) note "docker unpause mesh0's two nodes"; docker unpause mesh0-control-plane mesh0-worker >/dev/null ;;
@@ -197,9 +239,14 @@ drill_primary() { # <freeze|kill|partition>: mesh0, the primary's cluster, is lo
   for _ in $(seq 1 60); do [ "$(primary_member)" = mongo-mesh0 ] && break; sleep 2; done
   note "primary after: $(primary_member)"
   cat "$out/drill-primary-load.tmp" >>"$log"; rm -f "$out/drill-primary-load.tmp"
-  ok=$(sed -n 's/^RESULT //p' "$log" | python3 -c 'import json,sys; print(json.load(sys.stdin)["write"]["ok"])')
   after=$(printf 'print(db.getSiblingDB("lab").drill.countDocuments({}))' | rs_eval)
-  note "acknowledged writes: $ok; lab.drill grew by $((after - before)) ($before -> $after): $([ $((after - before)) = "$ok" ] && echo 'every acknowledged write is there, once' || echo 'MISMATCH')"
+  # Every acknowledged write, by its id: the run's documents less the failed writes found anyway. _id is unique, so
+  # none can be there twice.
+  read -r ok failed <<<"$(sed -n 's/^RESULT //p' "$log" | python3 -c 'import json, sys; w = json.load(sys.stdin)["write"]; print(w["ok"], json.dumps(w["failedIds"], separators=(",", ":")))')"
+  # shellcheck disable=SC2016  # $regex and $in are mongosh's
+  read -r all applied nfailed <<<"$(printf 'const c = db.getSiblingDB("lab").drill, f = %s; print(c.countDocuments({_id: {$regex: "^%s-"}}) + " " + c.countDocuments({_id: {$in: f}}) + " " + f.length)' "$failed" "$run" | rs_eval)"
+  present=$((all - applied))
+  note "acknowledged writes: $ok, found by id: $present ($before -> $after documents): $([ "$present" = "$ok" ] && echo 'every acknowledged write is there, once' || echo "MISSING $((ok - present))"); failed writes applied anyway: $applied of $nfailed"
   grep -E 'failed at|RESULT' "$log" | tail -6 | cut -c1-160
 }
 

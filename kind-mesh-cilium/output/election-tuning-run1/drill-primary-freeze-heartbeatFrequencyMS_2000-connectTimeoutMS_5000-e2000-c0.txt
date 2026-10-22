@@ -1,0 +1,106 @@
+== drill: the primary's cluster mesh0 lost by freeze, mesh1 writes and searches (150 s); client options heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+[t+  2s] primary mongo-mesh0; lab.drill holds 10927 documents; electionTimeoutMillis 2000
+[t+ 15s] docker pause mesh0's two nodes
+[t+ 56s] primary now: mongo-mesh2 (elected 2.0 s after, writes accepted 2.0 s after the freeze, by its log)
+  mesh1 +  2.0 s  ELECTION Responding to vote request 
+  mesh1 +  2.0 s  REPL     Updating term 
+  mesh1 +  2.0 s  ELECTION Responding to vote request 
+  mesh1 +  2.0 s  REPL     Restarting heartbeats after learning of a new primary 
+  mesh1 +  2.0 s  REPL     Member is in new state PRIMARY
+  mesh1 +  2.0 s  REPL     Scheduling heartbeat to fetch a newer config 
+  mesh1 +  2.0 s  REPL     Setting new configuration state ConfigHBReconfiguring
+  mesh1 +  2.0 s  REPL     Setting new configuration state ConfigSteady
+  mesh1 +  2.0 s  REPL     New replica set config in use 
+  mesh1 +  2.0 s  REPL     Found self in config 
+  mesh1 +  2.0 s  REPL     Heartbeat Reconfig succeeded 
+  mesh1 +  2.0 s  REPL     Starting ReplicationCoordinatorImpl::finishRecoveryIfEligible 
+  mesh1 +  2.0 s  REPL     Restarting heartbeats after learning of a new primary 
+  mesh1 +  7.9 s  REPL     Recreating cursor for oplog fetcher due to error NetworkTimeout: Error while getting the next batch in the oplog fetcher :: caused by :: recv f
+  mesh1 + 11.6 s  REPL     Member is now in state DOWN 
+  mesh1 + 14.9 s  REPL     Choosing new sync source because our current sync source does not satisfy our strict criteria for candidates, but there is another member which
+  mesh1 + 14.9 s  REPL     Canceling oplog query on fetch error. We have to choose a new sync source 
+  mesh1 + 14.9 s  REPL     Oplog fetcher returned error SocketException: Error while getting the next batch in the oplog fetcher :: caused by :: socket exception [CONNECT
+  mesh1 + 14.9 s  REPL     Oplog fetcher stopped querying remote oplog with error SocketException: Error while getting the next batch in the oplog fetcher :: caused by ::
+  mesh1 + 14.9 s  REPL     Clearing sync source to choose a new one 
+  mesh1 + 14.9 s  REPL     Sync source candidate chosen 
+  mesh1 + 14.9 s  REPL     Changed sync source 
+  mesh1 + 14.9 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 16.0 s  REPL     Advancing committed opTime to a new term 
+  mesh1 + 16.3 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 16.3 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 16.3 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 18.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 18.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 18.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 20.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 20.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 20.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 22.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 22.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 22.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 24.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 24.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 24.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 26.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 26.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 26.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 28.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 28.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 28.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 30.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 30.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 30.5 s  REPL     Unable to forward progress {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.svc.cluster.l
+  mesh1 + 32.5 s  REPL     SyncSourceFeedback error sending update {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source changed from mongo-mesh0.mongodb.
+  mesh2 +  2.0 s  ELECTION Starting an election, since we've seen no PRIMARY in election timeout period 
+  mesh2 +  2.0 s  ELECTION Conducting a dry run election to see if we could be elected 
+  mesh2 +  2.0 s  REPL     Scheduling remote command request 
+  mesh2 +  2.0 s  REPL     Scheduling remote command request 
+  mesh2 +  2.0 s  ELECTION VoteRequester processResponse 
+  mesh2 +  2.0 s  ELECTION Dry election run succeeded, running for election 
+  mesh2 +  2.0 s  REPL     Updating term 
+  mesh2 +  2.0 s  ELECTION Storing last vote document in local storage for my election 
+  mesh2 +  2.0 s  REPL     Scheduling remote command request 
+  mesh2 +  2.0 s  REPL     Scheduling remote command request 
+  mesh2 +  2.0 s  ELECTION VoteRequester processResponse 
+  mesh2 +  2.0 s  ELECTION Election succeeded, assuming primary role 
+  mesh2 +  2.0 s  REPL     Replica set state transition PRIMARY
+  mesh2 +  2.0 s  REPL     Resetting sync source to empty 
+  mesh2 +  2.0 s  REPL     Entering primary catch-up mode 
+  mesh2 +  2.0 s  REPL     Skipping primary catchup since the catchup timeout is 0 
+  mesh2 +  2.0 s  REPL     Exited primary catch-up mode 
+  mesh2 +  2.0 s  REPL     Stopping replication producer 
+  mesh2 +  2.0 s  REPL     Oplog writer buffer has been drained 
+  mesh2 +  2.0 s  REPL     Oplog applier buffer has been drained 
+  mesh2 +  2.0 s  REPL     Oplog applier buffer has been drained 
+  mesh2 +  2.0 s  REPL     Oplog applier buffer has been drained 
+  mesh2 +  2.0 s  REPL     Replication producer stopped after oplog fetcher finished returning a batch from our sync source. Abandoning this batch of oplog entries and re
+  mesh2 +  2.0 s  REPL     Starting to kill user operations 
+  mesh2 +  2.0 s  REPL     Stopped killing user operations 
+  mesh2 +  2.0 s  REPL     State transition ops metrics 
+  mesh2 +  2.0 s  REPL     Increment the config term via reconfig 
+  mesh2 +  2.0 s  REPL     Replication config state is Steady, starting reconfig 
+  mesh2 +  2.0 s  REPL     Setting new configuration state ConfigReconfiguring
+  mesh2 +  2.0 s  REPL     Was able to quickly find new index in config. Skipping full checks. 
+  mesh2 +  2.0 s  REPL     replSetReconfig config object parses ok 
+  mesh2 +  2.0 s  REPL     Persisting new config to disk 
+  mesh2 +  2.0 s  REPL     Persisted new config to disk 
+  mesh2 +  2.0 s  REPL     Setting new configuration state ConfigSteady
+  mesh2 +  2.0 s  REPL     New replica set config in use 
+  mesh2 +  2.0 s  REPL     Found self in config 
+  mesh2 +  2.0 s  REPL     ReplSetReconfig succeeded 
+  mesh2 +  2.0 s  REPL     Starting to transition to primary. 
+  mesh2 +  2.0 s  REPL     Logging transition to primary to oplog on stepup 
+  mesh2 +  2.0 s  REPL     Transition to primary complete; database writes are now permitted 
+  mesh2 +  2.0 s  REPL     Applier already left draining state, exiting. 
+  mesh2 +  2.0 s  REPL     Applier already left draining state, exiting. 
+  mesh2 +  2.4 s  REPL     SyncSourceFeedback error sending update {'code': 119, 'codeName': 'InvalidSyncSource', 'errmsg': 'Sync source was cleared. Was mongo-mesh1.mong
+  mesh2 +  4.0 s  REPL     Member is now in state DOWN 
+  mesh2 + 16.0 s  REPL     Advancing committed opTime to a new term 
+[t+ 75s] docker unpause mesh0's two nodes
+[t+154s] primary after: mongo-mesh0
+  write failed at 12.2 s: WriteConcernTimeout
+  write failed at 21.0 s: WriteConcernTimeout
+  write failed at 24.5 s: WriteConcernTimeout
+  write failed at 74.3 s: connect EHOSTUNREACH 10.21.250.171:27017 - Local (0.0.0.0:0)
+RESULT {"search":{"ok":235,"fail":0,"maxMs":17,"maxAt":"0.5"},"write":{"ok":231,"fail":4,"maxMs":8291,"maxAt":"12.2"}}
+[t+155s] acknowledged writes: 231; lab.drill grew by 234 (10927 -> 11161): MISMATCH

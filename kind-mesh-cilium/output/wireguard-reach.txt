@@ -1,0 +1,23 @@
+== Does WireGuard limit who can reach mongot? (2026-10-22, step 2 state, Cilium 1.20.2)
+
+# Cilium settings, every cluster (cilium-config): enable-wireguard = true, enable-policy = default;
+# no encryption strict mode key. No NetworkPolicy or CiliumNetworkPolicy in the search namespace.
+
+# 1. An unrelated pod: busybox 1.36 in mesh1's default namespace (10.20.1.184, mesh1-worker)
+$ kubectl --context kind-mesh1 -n default run wg-probe --image=docker.io/library/busybox:1.36 --restart=Never -- sh -c '...nc -z -w 3...'
+mesh0 mongot 10.10.0.201:27028 -> open
+mesh0 mongot 10.10.1.187:27028 -> open
+mongot-global.search.svc.cluster.local:27028 -> open
+
+# 2. A host outside WireGuard: the Colima VM (172.18.0.1 on the kind network, not a Cilium node, no WireGuard key),
+#    given a route to mesh0-worker's pod network for the test, removed afterwards
+$ sudo ip route add 10.10.1.0/24 via 172.18.0.3
+VM host (172.18.0.1, no WireGuard) -> 10.10.1.187:27028: open
+$ sudo ip route del 10.10.1.0/24 via 172.18.0.3
+
+# Result: WireGuard encrypts the traffic between WireGuard nodes; it does not decide who may connect. Any pod in the
+# three clusters, and a host on the nodes' network that is not in WireGuard, reach mongot's cleartext port.
+# The controls Cilium 1.20.2 has (cilium-agent --help), not applied or tested in this lab:
+#   --enable-encryption-strict-mode-ingress   "Enable strict mode encryption enforcement for ingress traffic"
+#   --enable-encryption-strict-mode-egress (with --encryption-strict-egress-cidr)
+#   a CiliumNetworkPolicy allowing 27028 to mongot only from the mongod pods (app: mongo) of the three clusters

@@ -1,0 +1,70 @@
+== drill: the primary's cluster mesh0 lost by partition, mesh1 writes and searches (150 s); client options heartbeatFrequencyMS=2000&connectTimeoutMS=5000
+[t+  2s] primary mongo-mesh0; lab.drill holds 13910 documents; electionTimeoutMillis 5000
+[t+ 15s] cut mesh0's mongod off from the other clusters (Cilium deny policy)
+[t+ 56s] primary now: mongo-mesh2 (elected 7.8 s after, writes accepted 11.0 s after the partition, by its log)
+  mesh1 +  7.8 s  ELECTION Responding to vote request 
+  mesh1 +  7.8 s  REPL     Updating term 
+  mesh1 +  7.8 s  ELECTION Responding to vote request 
+  mesh1 +  7.8 s  REPL     Restarting heartbeats after learning of a new primary 
+  mesh1 +  7.8 s  REPL     Member is in new state PRIMARY
+  mesh1 + 10.6 s  REPL     Member is now in state DOWN 
+  mesh1 + 10.6 s  REPL_HB  Heartbeat failed after max retries {'code': 202, 'codeName': 'NetworkInterfaceExceededTimeLimit', 'errmsg': 'Request 116659 timed out, deadline
+  mesh1 + 11.0 s  REPL     Scheduling heartbeat to fetch a newer config 
+  mesh1 + 11.0 s  REPL     Setting new configuration state ConfigHBReconfiguring
+  mesh1 + 11.0 s  REPL     Setting new configuration state ConfigSteady
+  mesh1 + 11.1 s  REPL     New replica set config in use 
+  mesh1 + 11.1 s  REPL     Found self in config 
+  mesh1 + 11.1 s  REPL     Heartbeat Reconfig succeeded 
+  mesh1 + 11.1 s  REPL     Starting ReplicationCoordinatorImpl::finishRecoveryIfEligible 
+  mesh1 + 11.1 s  REPL     Advancing committed opTime to a new term 
+  mesh2 +  7.8 s  ELECTION Starting an election, since we've seen no PRIMARY in election timeout period 
+  mesh2 +  7.8 s  ELECTION Conducting a dry run election to see if we could be elected 
+  mesh2 +  7.8 s  REPL     Scheduling remote command request 
+  mesh2 +  7.8 s  REPL     Scheduling remote command request 
+  mesh2 +  7.8 s  ELECTION VoteRequester processResponse 
+  mesh2 +  7.8 s  ELECTION Dry election run succeeded, running for election 
+  mesh2 +  7.8 s  REPL     Updating term 
+  mesh2 +  7.8 s  ELECTION Storing last vote document in local storage for my election 
+  mesh2 +  7.8 s  REPL     Scheduling remote command request 
+  mesh2 +  7.8 s  REPL     Scheduling remote command request 
+  mesh2 +  7.8 s  ELECTION VoteRequester processResponse 
+  mesh2 +  7.8 s  ELECTION Election succeeded, assuming primary role 
+  mesh2 +  7.8 s  REPL     Replica set state transition PRIMARY
+  mesh2 +  7.8 s  REPL     Resetting sync source to empty 
+  mesh2 +  7.8 s  REPL     Entering primary catch-up mode 
+  mesh2 +  7.8 s  REPL     Received heartbeat while in catchup state 
+  mesh2 +  9.8 s  REPL     Received heartbeat while in catchup state 
+  mesh2 + 10.2 s  REPL     Oplog fetcher returned error NetworkTimeout: Error while getting the next batch in the oplog fetcher :: caused by :: recv failed while exhausti
+  mesh2 + 10.2 s  REPL     Oplog fetcher stopped querying remote oplog with error NetworkTimeout: Error while getting the next batch in the oplog fetcher :: caused by :: 
+  mesh2 + 11.0 s  REPL     Member is now in state DOWN 
+  mesh2 + 11.0 s  REPL     Received heartbeat while in catchup state 
+  mesh2 + 11.0 s  REPL     Caught up to the latest optime known via heartbeats after becoming primary 
+  mesh2 + 11.0 s  REPL     Exited primary catch-up mode 
+  mesh2 + 11.0 s  REPL     Stopping replication producer 
+  mesh2 + 11.0 s  REPL     Oplog writer buffer has been drained 
+  mesh2 + 11.0 s  REPL     Oplog applier buffer has been drained 
+  mesh2 + 11.0 s  REPL     Oplog applier buffer has been drained 
+  mesh2 + 11.0 s  REPL     Starting to kill user operations 
+  mesh2 + 11.0 s  REPL     Stopped killing user operations 
+  mesh2 + 11.0 s  REPL     State transition ops metrics 
+  mesh2 + 11.0 s  REPL     Increment the config term via reconfig 
+  mesh2 + 11.0 s  REPL     Replication config state is Steady, starting reconfig 
+  mesh2 + 11.0 s  REPL     Setting new configuration state ConfigReconfiguring
+  mesh2 + 11.0 s  REPL     Was able to quickly find new index in config. Skipping full checks. 
+  mesh2 + 11.0 s  REPL     replSetReconfig config object parses ok 
+  mesh2 + 11.0 s  REPL     Persisting new config to disk 
+  mesh2 + 11.0 s  REPL     Persisted new config to disk 
+  mesh2 + 11.0 s  REPL     Setting new configuration state ConfigSteady
+  mesh2 + 11.0 s  REPL     New replica set config in use 
+  mesh2 + 11.0 s  REPL     Found self in config 
+  mesh2 + 11.0 s  REPL     ReplSetReconfig succeeded 
+  mesh2 + 11.0 s  REPL     Starting to transition to primary. 
+  mesh2 + 11.0 s  REPL     Logging transition to primary to oplog on stepup 
+  mesh2 + 11.0 s  REPL     Transition to primary complete; database writes are now permitted 
+  mesh2 + 11.0 s  REPL     Applier already left draining state, exiting. 
+  mesh2 + 11.1 s  REPL     Advancing committed opTime to a new term 
+  mesh2 + 32.3 s  REPL     SyncSourceFeedback error sending update {'code': 202, 'codeName': 'NetworkInterfaceExceededTimeLimit', 'errmsg': "Request 114712 timed out, dea
+[t+ 75s] remove the deny policy
+[t+155s] primary after: mongo-mesh0
+RESULT {"search":{"ok":273,"fail":0,"maxMs":20,"maxAt":"118.8"},"write":{"ok":273,"fail":0,"maxMs":10844,"maxAt":"11.8","gapMs":11350,"gapAt":"22.6","failedIds":[]}}
+[t+156s] acknowledged writes: 273, found by id: 273 (13910 -> 14183 documents): every acknowledged write is there, once; failed writes applied anyway: 0 of 0

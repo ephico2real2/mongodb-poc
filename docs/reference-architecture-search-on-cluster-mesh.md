@@ -179,6 +179,12 @@ What this trades:
   (outlier detection) and runs no health checks (Cilium v1.20.2 `operator/pkg/ciliumenvoyconfig/envoy_config.go`).
 - **Every cluster of the mesh must run WireGuard.** While one did and two did not, the encrypting cluster's mongod was
   cut off (the replica set elected another primary on its own).
+- **WireGuard encrypts; it does not decide who connects.** A pod in mesh1's `default` namespace, and a host
+  outside WireGuard given a route, both reached mongot's cleartext port (`kind-mesh-cilium/output/wireguard-reach.txt`).
+  Limiting it needs a CiliumNetworkPolicy (27028 from the mongod pods only) and Cilium's ingress encryption strict
+  mode; neither is tested. Cilium's mTLS options do not apply here: ztunnel (beta) is "currently not compatible with
+  Cluster Mesh", and the SPIRE-based mutual authentication is deprecated in 1.20 and has no trust domain across
+  clusters (Cilium 1.20 docs).
 
 ## Watching it
 
@@ -202,10 +208,24 @@ What this trades:
   and 47.2 s (partition) on its connection to the lost primary. `timeoutMS=10000`, or 5 s connect and socket
   timeouts, cap the wait at 10.0 s, but up to 4 writes failed per run, so the application must retry them. One run per
   setting, mongosh 2.6.0; another driver should be measured the same way (`kind-mesh-cilium/drills.sh primary`).
-- **A shorter `electionTimeoutMillis` halves the time without a primary**: 5000 instead of 10000 elected the new primary
-  4.8–5.3 s after a freeze or a kill and 7.3–8.0 s after a partition, and with the client settings above the longest
-  wait was 11.3 s. This lab's clusters share one VM; on a real network, measure first that 5 s does not cause needless
-  elections. The lab runs the default.
+- **Elected is not writable.** A new primary accepts writes only after its catch-up, which waits for a heartbeat
+  result from every member; a member that does not answer gives one after `heartbeatTimeoutSecs` (10 s). After a
+  partition at the defaults, the new primary was elected at 15.0 s and accepted writes at 23.2 s.
+- **Election settings trade a shorter outage for needless elections**
+  (`docs/testing-kind-mesh-cilium.md#election-tuning-after-story-131`, two rounds, one VM):
+
+  | Replica set settings | Longest without an acknowledged write: freeze / kill / partition | Shortest link outage that caused an election (tried: 1.5, 3, 4.5, 6, 9 s) |
+  | --- | --- | --- |
+  | defaults (`electionTimeoutMillis` 10000) | 11.0 / 10.6 / 23.4 s | none up to 9 s |
+  | `electionTimeoutMillis=5000` | 11.4 / 5.5 / 11.3 s | 4.5 s |
+  | `electionTimeoutMillis=5000`, `catchUpTimeoutMillis=0` | 7.3 / 5.2 / 8.2 s | 4.5 s |
+  | `electionTimeoutMillis=2000`, `catchUpTimeoutMillis=0` | 7.3 / 2.2 / 9.1 s | 1.5 s |
+
+  `electionTimeoutMillis` alone helps only when the primary's connections close (a crash); a silent loss still waits
+  for the catch-up. `catchUpTimeoutMillis=0` removes that wait; writes that reached another secondary but not the new
+  primary are then rolled back, which can include `w: 1` writes reported as successful, never majority writes. Below 5000, the client's own detection (`connectTimeoutMS=5000`) is the longer
+  wait. A needless election interrupts writes twice: once to the new primary, once back to the preferred one. Measure
+  the real network's outages before shortening anything; the lab runs the defaults.
 - **Connect with all three member names and `replicaSet=rs0`**, so the driver follows the primary across clusters.
 - **Read from the local member by connecting to it** (`directConnection=true` with `readPreference=nearest`, as the GUI
   and the drills did) when reads may be stale and should stay in their cluster; searches run on secondaries too.
@@ -243,6 +263,8 @@ Read with `kubectl top` and `free -m` (`kind-mesh/scripts/evidence.sh`, `kind-me
 - **Searches moving back** after a failover happen when mongod reconnects: a restart does it (measured); whether a
   connection is ever replaced by itself was not measured.
 - **Client settings in other drivers**: story #131 measured mongosh 2.6.0 only, one run per setting.
+- **Election settings on a real network**: the profiles ran twice and the outage test once, on one VM with links
+  emulated by netem; a production network's outages, latency and load decide the right setting.
 - **Latency between clusters**: all three clusters ran in one VM, so cross-cluster round trips were near zero.
 - **Losing two clusters**, a partition that splits the other two clusters from each other, and a VM restart (node addresses may change, and
   the mesh is declared by address) were not run.

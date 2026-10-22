@@ -1,6 +1,6 @@
 # Testing: MongoDB Search on Cilium alone, without the operator's Envoy (story #132)
 
-What was tested on `kind-mesh-cilium/` on 2026-10-21, and how to repeat it. Every result below is in a file under
+What was tested on `kind-mesh-cilium/` on 2026-10-21 and 2026-10-22, and how to repeat it. Every result below is in a file under
 `kind-mesh-cilium/output/`. The lab it changes, and the baseline it is compared with, is in
 [testing-kind-mesh.md](testing-kind-mesh.md).
 
@@ -26,6 +26,11 @@ Results, a search every half second through mesh2's own member:
   searches to another cluster on its own.
 - **Step 2 fixed the second.** Cilium sends each search to a local mongot when one is ready, so searches go back
   without a restart. Between nodes the search hop travels inside WireGuard (`kind-mesh-cilium/output/wire-check.txt`).
+- **WireGuard does not limit who connects** to mongot's cleartext port: any pod in the three clusters reached it, and
+  so did a host outside WireGuard ([C7](#c7-who-can-reach-mongots-cleartext-port)).
+- **When the primary's cluster is lost, no write is acknowledged for 10.6–11.0 s (freeze, kill) or 23.4 s
+  (partition) at the defaults.** `electionTimeoutMillis=5000` with `catchUpTimeoutMillis=0` brought that to 5.2–8.2 s,
+  but turned a 4.5 s link outage into an election ([election tuning](#election-tuning-after-story-131)).
 
 ## Before you start
 
@@ -109,6 +114,18 @@ and mesh1 in equal numbers (71 and 71) during the outages, and to mesh2 the rest
 - **Result: passed.** 15 s of searches through the three members: 3,221 WireGuard packets; 0 on TCP 27028, 0 on TCP
   27017, 0 VXLAN; 0 packets containing "space" (`wire-check.txt`).
 
+### C7. Who can reach mongot's cleartext port
+
+- **Run:** from a busybox pod in mesh1's `default` namespace, `nc -z -w 3` to both of mesh0's mongot pods and to
+  `mongot-global` on 27028. Then from the VM itself, which is on the nodes' network but has no WireGuard key, with a
+  route to mesh0-worker's pod network added for the test and removed after it.
+- **Question:** does WireGuard limit who can connect?
+- **Result: no.** All three answered the pod, and mesh0's mongot answered the VM (`wireguard-reach.txt`). WireGuard
+  encrypts traffic between the nodes that run it; it does not decide who may connect. The `search` namespace has no
+  network policy, and Cilium's encryption strict mode is off. Cilium 1.20.2 has `--enable-encryption-strict-mode-ingress`
+  ("Enable strict mode encryption enforcement for ingress traffic"), and a CiliumNetworkPolicy could allow 27028 from
+  the three clusters' mongod pods only. Neither was applied or tested.
+
 ### What went wrong while applying step 2
 
 | Run | What happened | Fix, now in `cleartext-l7.sh` |
@@ -188,7 +205,9 @@ What a client sees when mesh0, the primary's cluster, is lost, and which client 
   or `timeoutMS=10000`, up to 4 writes failed per run, after a freeze or a partition (each error is listed in
   `primary-matrix.txt`).
 - **`heartbeatFrequencyMS=2000&connectTimeoutMS=5000`: no write failed in any mode.** The longest waits were 11.5 s
-  (freeze), 9.7 s (kill) and 22.8 s (partition).
+  (freeze), 9.7 s (kill) and 22.8 s (partition). The partition's 22.8 s is the server's, not the client's: a later run
+  with the election trace found the new primary accepting writes 10 s after it was elected (see
+  [Election tuning](#election-tuning-after-story-131)).
 
 ### The same, with a shorter election timeout
 
@@ -205,18 +224,148 @@ The replica set's `electionTimeoutMillis` from 10000 (the default) to 5000, then
 | partition | `defaults` | 0 of 208 | 44.6 s | 0 of 208 | 8.0 s (mongo-mesh2) | yes |
 | partition | `heartbeatFrequencyMS=2000&connectTimeoutMS=5000` | 0 of 273 | 11.3 s | 0 of 273 | 7.3 s (mongo-mesh2) | yes |
 
-- The new primary came in about half the time: 4.8–5.3 s after a freeze or a kill, 7.3–8.0 s after a partition.
+- The new primary was elected in about half the time: 4.8–5.3 s after a freeze or a kill, 7.3–8.0 s after a partition.
 - With the heartbeat setting no write failed, and the longest wait was 10.5 s (freeze), 4.6 s (kill) and 11.3 s
   (partition).
 - With the defaults the long waits stayed (37.7 s, 44.6 s): they are the client's, not the election's.
-- Not measured: whether 5 s causes elections that should not happen on a network slower than this lab's, where all
-  three clusters share one VM.
+- **Correction:** being elected is not accepting writes. After a freeze or a partition the new primary waited about
+  10 s more before accepting them, which is why the longest waits stayed near 11 s. Measured in
+  [Election tuning](#election-tuning-after-story-131) below.
 
 ### Found on the way: a force-deleted pod is not a crash
 
 The first kill drill force-deleted mesh0's mongod pod. mongod still received SIGTERM, stepped down and handed the
 primary to mesh1 within a second (mesh1's log: "Received replSetStepUp request"); no write failed and the longest took
 58 ms (`drill-primary-forcedelete.txt`). The kill mode now sends SIGKILL on the node instead.
+
+## Election tuning (after story #131)
+
+Which replica set settings shorten the time without writes when the primary's cluster is lost, and what they cost.
+All three clusters run in one VM: the links between them have no delay, and they share its CPU. The times below are
+this lab's, a floor rather than a forecast.
+
+What the primary drill records since this work (`kind-mesh-cilium/drills.sh primary`):
+- the two other members' replication log from the moment mesh0 is lost (`election_trace`);
+- when the new primary was elected, and when it **accepted writes**, both from its own log;
+- each write's own `_id`, so every acknowledged write is checked by id, and the failed ones that are in the database
+  anyway are counted;
+- the **longest time without an acknowledged write**, the outage an application sees (a write every 0.5 s).
+
+### What a new primary waits for
+
+The traces of a partition and a freeze at the default settings
+(`drill-primary-partition-heartbeatFrequencyMS_2000-connectTimeoutMS_5000-trace.txt`, `…-freeze-…-trace.txt`):
+
+| | Elected | Writes accepted |
+| --- | --- | --- |
+| partition | 12.4 s | 22.4 s |
+| freeze | 10.0 s | 10.6 s |
+
+Between the two, the new primary is in **catch-up**: it accepts writes once it has a heartbeat result from every
+member since it restarted its heartbeats ("If any heartbeat is not fresh enough, return none",
+`TopologyCoordinator::latestKnownOpTimeSinceHeartbeatRestart`, mongo r8.3.4). A member that does not answer gives a
+result only when it is marked down, after `heartbeatTimeoutSecs` (10 s). When heartbeats restart, a request already
+sent is kept, but one only scheduled is cancelled and sent again ("Only cancel heartbeats that are scheduled",
+`replication_coordinator_impl_heartbeat.cpp`). In the freeze, mesh0 was marked down 0.6 s after the election, which
+fits a request already in flight. In the partition, mesh0 had been marked down at 10.6 s, before the election at
+12.4 s, and writes came 10 s after the election.
+
+`catchUpTimeoutMillis=0` skips the catch-up. MongoDB's docs: a newly elected primary catches up with "members that may
+have more recent writes", which may "reduce the amount of data that the other members would need to roll back".
+Without it, writes that reached another secondary but not the new primary are rolled back; with `w: 1` the client may
+have been told they succeeded. A majority write is not lost either way: a member without it cannot win the vote of
+the members that have it ("candidate's data is staler than mine", `TopologyCoordinator::processReplSetRequestVotes`,
+mongo r8.3.4). The drill writes with `w: "majority"`, and checks every one.
+
+### Six profiles
+
+- **Run:** `kind-mesh-cilium/scripts/election-tuning.sh` (about 50 minutes; the replica set returns to the defaults at
+  the end, also when interrupted; each reconfig is logged in `election-tuning-reconfig.txt`). The client:
+  `heartbeatFrequencyMS=2000&connectTimeoutMS=5000`.
+- **Passes when:** no search fails, and every acknowledged write is there, once.
+
+**Result: passed in all 18 runs** (`election-tuning.txt`; each run's record is
+`drill-primary-<mode>-heartbeatFrequencyMS_2000-connectTimeoutMS_5000-<profile>.txt`). No search failed in any run.
+
+| Replica set settings (others default) | Lost by | Writes failed | Longest without an acknowledged write | Elected | Writes accepted |
+| --- | --- | --- | --- | --- | --- |
+| defaults | freeze | 0 of 275 | 11.0 s | 10.0 s | 10.7 s |
+| | kill | 0 of 276 | 10.6 s | 10.3 s | 10.3 s |
+| | partition | 0 of 250 | 23.4 s | 15.0 s | 23.2 s |
+| `catchUpTimeoutMillis=0` | freeze | 0 of 276 | 10.7 s | 10.4 s | 10.4 s |
+| | kill | 0 of 276 | 10.5 s | 10.2 s | 10.3 s |
+| | partition | 0 of 265 | 15.8 s | 15.5 s | 15.5 s |
+| `electionTimeoutMillis=5000` | freeze | 0 of 274 | 11.4 s | 5.1 s | 11.0 s |
+| | kill | 0 of 285 | 5.5 s | 5.2 s | 5.2 s |
+| | partition | 0 of 273 | 11.3 s | 7.8 s | 11.0 s |
+| `electionTimeoutMillis=5000`, `catchUpTimeoutMillis=0` | freeze | 1 of 279 | 7.3 s | 5.1 s | 5.1 s |
+| | kill | 0 of 285 | 5.2 s | 4.9 s | 4.9 s |
+| | partition | 0 of 280 | 8.2 s | 8.0 s | 8.0 s |
+| `electionTimeoutMillis=5000`, `heartbeatTimeoutSecs=5` | freeze | 0 of 283 | 6.8 s | 4.7 s | 5.5 s |
+| | kill | 0 of 286 | 5.5 s | 5.1 s | 5.1 s |
+| | partition | 0 of 272 | 12.6 s | 8.0 s | 12.3 s |
+| `electionTimeoutMillis=2000`, `catchUpTimeoutMillis=0` | freeze | 1 of 279 | 7.3 s | 1.9 s | 1.9 s |
+| | kill | 0 of 292 | 2.2 s | 1.9 s | 1.9 s |
+| | partition | 0 of 279 | 9.1 s | 2.9 s | 2.9 s |
+
+A first round of the same 18 runs, before the drill had the longest gap and the check by id
+(`election-tuning-run1/`), elected and accepted writes within 0.8 s of these times in every row.
+
+- **A partition at the defaults costs 23.2–23.5 s** (two rounds) without writes; a freeze or a kill about 11 s.
+- **`catchUpTimeoutMillis=0` alone** brings the partition to 14.8–15.5 s, the election's own time.
+- **`electionTimeoutMillis=5000` alone helps a kill only** (writes back after 4.9–5.2 s). After a freeze or a
+  partition, writes still start about 11 s in: the catch-up still waits for the silent member's 10 s.
+- **5000 with no catch-up** accepted writes 4.9–8.0 s after any of the three; the longest gap was 5.2–8.2 s.
+- **5000 with `heartbeatTimeoutSecs=5`** keeps the catch-up: good after a freeze (6.8 s), but a partition still pays
+  a restarted 5 s (12.6 s).
+- **2000 with no catch-up** accepted writes 1.9–2.9 s in, yet the longest gap after a freeze or a partition was still
+  7.3–9.1 s. That remainder is the client's: the write in flight to the lost primary waits until the driver gives it
+  up (`connectTimeoutMS=5000`, heartbeat every 2 s): the longest single write was 6.8 s after the freeze, 8.6 s after
+  the partition. A kill closes the connections, and there the gap was 2.2 s.
+- In both rounds, the freeze runs of `electionTimeoutMillis` 5000 and 2000 with `catchUpTimeoutMillis=0` each had one
+  write fail with `connect EHOSTUNREACH` to mesh0's address in the 6 s after mesh0 came back. The write was never sent.
+  Not investigated.
+
+### The cost: a short link outage becomes an election
+
+- **Run:** `kind-mesh-cilium/scripts/blip-test.sh` (about 10 minutes). For each `electionTimeoutMillis`, mesh0's nodes
+  lose every packet they send to the other clusters for 1.5 to 9 s (`scripts/wan.sh cut`, netem on the nodes' links to
+  the other clusters only); nothing else changes. Then the replica set's term is read: any election moves it. Between
+  cases mesh0 takes the primary back.
+- **Checked first:** with `wan.sh delay mesh0 50`, mesh0's heartbeat round trips to the other members read 77 and 76 ms,
+  and 12 and 8 ms after `wan.sh off` (`wan-check.txt`). The reading before the delay was 316 and 271 ms: on this VM
+  the round trip alone varies that much.
+
+**Result** (`blip-test.txt`, one run per cell):
+
+| Outage | `electionTimeoutMillis` 10000 | 5000 | 2000 |
+| --- | --- | --- | --- |
+| 1.5 s | no election | no election | **election** |
+| 3 s | no election | no election | **election** |
+| 4.5 s | no election | **election** | **election** |
+| 6 s | no election | **election** | **election** |
+| 9 s | no election | **election** | **election** |
+
+- Each election moved the term by 2 or 3: another member was elected, then mesh0 took the primary back. A needless
+  election interrupts writes twice.
+- 5000 did not ride out 4.5 s, less than its own timeout: the timeout counts from the last heartbeat heard, which can
+  be up to 2 s before the outage starts (heartbeats every 2 s).
+- 2000 did not ride out the shortest outage tried, 1.5 s.
+
+### Found on the way: a write that failed is in the database
+
+In the first round, `electionTimeoutMillis=2000` with no catch-up, after a freeze: 231 writes acknowledged, but
+`lab.drill` grew by 234 (`election-tuning-run1/drill-primary-freeze-…-e2000-c0.txt`). Three writes had failed with
+`WriteConcernTimeout`, at 12.2 s, 21.0 s and 24.5 s: the primary applied them, but a majority did not confirm them
+within the drill's `wtimeout` of 3 s. MongoDB "does not undo successful data modifications performed before the write
+concern exceeded the wtimeout time limit" (write concern reference). The trace shows why a majority was late: mesh1
+kept fetching from the frozen mesh0 until it changed sync source, 14.9 s after the freeze, and the first majority
+commit in the new term came at 16.0 s. The new primary had been elected at 2.0 s.
+
+Not one acknowledged write was missing or doubled; the count check flagged the extra writes, as its description said
+it would. The drill now gives each write an `_id` and checks every acknowledged one by id: the second round found all
+of them, and of the two failed writes, neither in the database. In the second round no freeze or partition trace
+shows a change of sync source within its 40 s, and no write timed out on its write concern.
 
 ## Compared with the Envoy lab
 

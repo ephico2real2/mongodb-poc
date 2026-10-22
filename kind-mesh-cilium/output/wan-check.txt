@@ -1,0 +1,3 @@
+before: mongo-mesh0 self, mongo-mesh1 316, mongo-mesh2 271
+mesh0 +50 ms: mongo-mesh0 self, mongo-mesh1 77, mongo-mesh2 76
+after: mongo-mesh0 self, mongo-mesh1 12, mongo-mesh2 8
