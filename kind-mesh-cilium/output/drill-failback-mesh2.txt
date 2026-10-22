@@ -1,0 +1,4 @@
+== drill: mesh2's searches after a failover, before and after a restart of its mongod
+[t+  1s] one search through mesh2's member is served by: another cluster
+[t+ 22s] mesh2's mongod restarted and back in the replica set: true
+[t+ 23s] one search through mesh2's member is served by: mongot-search-0-1

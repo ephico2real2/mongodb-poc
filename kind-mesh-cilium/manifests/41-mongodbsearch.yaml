@@ -1,0 +1,71 @@
+# Step 1 of story #132: the same MongoDBSearch as the chart renders for kind-mesh/values/search.yaml, without the
+# operator's Envoy, applied with kubectl in each cluster's namespace search.
+#
+# loadBalancer.unmanaged: the operator deploys no Envoy and no proxy Service, and lets more than one mongot run, which
+# it refuses with no load balancer at all (MCK 1.13.0 mongodbsearch_validation.go:150-158, mongodbsearch_types.go:419-425).
+# The endpoint is the name every mongod already dials: mongot-global, now a Cilium global Service straight over the
+# mongot pods of the three clusters (42-mongot-global.yaml). The operator writes it into mongod's configuration only
+# for a replica set it manages; this one is external, so mongod's parameters stay as they are.
+#
+# TLS is kept: mongot serves its own certificate (ent-mongot-search-cert, which gains the name mongot-global in
+# 40-mongot-certificate.yaml), and the source CA makes the operator turn on mutual TLS, so mongod presents its client
+# certificate to mongot directly, as it did to Envoy.
+apiVersion: mongodb.com/v1
+kind: MongoDBSearch
+metadata:
+  name: mongot
+  namespace: search
+spec:
+  version: "1.70.1"
+  clusters:
+    - loadBalancer:
+        unmanaged:
+          endpoint: mongot-global.search.svc.cluster.local:27028
+      persistence:
+        single:
+          storage: 10Gi
+          storageClass: standard
+      replicas: 2
+      resourceRequirements:
+        limits:
+          cpu: "2"
+          memory: 2Gi
+        requests:
+          cpu: 500m
+          memory: 1Gi
+  observability:
+    metricsForwarder:
+      deployment:
+        spec:
+          template:
+            spec:
+              containers:
+                - name: metrics-forwarder
+                  image: "quay.io/ephico2real/opentelemetry-collector-contrib:0.152.0"
+      mode: auto
+      resourceRequirements:
+        limits:
+          cpu: 250m
+          memory: 256Mi
+        requests:
+          cpu: 100m
+          memory: 128Mi
+    prometheus:
+      mode: enabled
+      port: 9946
+  security:
+    tls:
+      certsSecretPrefix: ent
+  source:
+    external:
+      hostAndPorts:
+        - "mongo-mesh0.mongodb.svc.cluster.local:27017"
+        - "mongo-mesh1.mongodb.svc.cluster.local:27017"
+        - "mongo-mesh2.mongodb.svc.cluster.local:27017"
+      tls:
+        ca:
+          name: ent-trust-bundle
+    passwordSecretRef:
+      key: password
+      name: search-sync-source-password
+    username: search-sync-source

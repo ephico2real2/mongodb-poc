@@ -1,0 +1,20 @@
+# Step 1 of story #132: mongot's own certificate, now also for the name mongod dials. With no Envoy in between, mongod
+# connects to mongot-global.search.svc.cluster.local:27028 and checks mongot's certificate against that name; the
+# operator's own names stay for its headless Service. Server and client usage: mongot also presents it to mongod.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ent-mongot-search-cert
+  namespace: search
+spec:
+  secretName: ent-mongot-search-cert
+  commonName: mongot-global.search.svc.cluster.local
+  dnsNames:
+    - mongot-global.search.svc.cluster.local
+    - mongot-search-0-svc.search.svc.cluster.local
+    - "*.mongot-search-0-svc.search.svc.cluster.local"
+  duration: 8760h
+  renewBefore: 720h
+  usages: [server auth, client auth, digital signature, key encipherment]
+  privateKey: {algorithm: ECDSA, size: 256}
+  issuerRef: {name: mesh-ca, kind: ClusterIssuer, group: cert-manager.io}

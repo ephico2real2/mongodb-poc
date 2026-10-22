@@ -1,0 +1,25 @@
+# Step 1 of story #132: the operator, kept when the chart goes. The same OperatorGroup and Subscription the chart
+# rendered (names included), applied with kubectl so they outlive `helm uninstall` (scripts/swap-search.sh marks the
+# chart's copies helm.sh/resource-policy: keep first). Manual approval pinned to 1.13.0, as the chart had it: OLM had
+# already staged 1.14.0 in each cluster, unapproved, and it stays that way.
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: mongot-mongodb-search-helm
+  namespace: search
+spec:
+  targetNamespaces:
+    - search
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: mongodb-kubernetes
+  namespace: search
+spec:
+  channel: stable
+  installPlanApproval: Manual
+  name: mongodb-kubernetes
+  source: operatorhubio-catalog
+  sourceNamespace: olm
+  startingCSV: mongodb-kubernetes.v1.13.0

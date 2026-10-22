@@ -1,0 +1,22 @@
+# Step 1 of story #132: the name every mongod dials for search, now a Cilium global Service straight over the mongot
+# pods of the three clusters (label app: mongot-search-0-svc, gRPC port 27028), not over the operator's Envoy.
+#
+# A mongot pod that is not Ready gets no new connections, and with affinity local a cluster with no ready mongot sends
+# its mongod's new connection to another cluster's (Cilium v1.20.2 pkg/clustermesh/selectbackends.go:64-87). An open
+# connection is not moved: mongod keeps one per host and never recycles it, so searches move back only when it
+# reconnects. Step 2 (per-request balancing) is for that.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongot-global
+  namespace: search
+  annotations:
+    service.cilium.io/global: "true"
+    service.cilium.io/affinity: local
+spec:
+  selector:
+    app: mongot-search-0-svc
+  ports:
+    - name: grpc
+      port: 27028
+      targetPort: 27028

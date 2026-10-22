@@ -1,0 +1,41 @@
+
+== mesh0: keep the operator, then the chart out  (21:31:41)
+  release mongot uninstalled; MongoDBSearch kept: mongot
+  operator: Succeeded
+
+== mesh0: mongot's certificate for mongot-global, the MongoDBSearch without Envoy  (21:31:42)
+Warning: resource mongodbsearch/mongot is missing the kubectl.kubernetes.io/last-applied-configuration annotation which is required by kubectl apply. kubectl apply should only be used on resources created declaratively by either kubectl create --save-config or kubectl apply. The missing annotation will be patched automatically.
+
+== mesh0: what the operator's Envoy left, removed; mongot-global onto the mongot pods  (21:32:39)
+  mongodb-kubernetes-operator-f7958c55c-dd7dz 1/1 Running
+  mongot-gui-5f589b967c-zx25v 1/1 Running
+  mongot-search-0-0 1/1 Running
+  mongot-search-0-1 1/1 Running
+  mongot-search-lb-0-6fd8d5568d-ptmkf 1/1 Terminating
+
+== mesh1: keep the operator, then the chart out  (21:32:39)
+  release mongot uninstalled; MongoDBSearch kept: mongot
+  operator: Succeeded
+
+== mesh1: mongot's certificate for mongot-global, the MongoDBSearch without Envoy  (21:32:40)
+Warning: resource mongodbsearch/mongot is missing the kubectl.kubernetes.io/last-applied-configuration annotation which is required by kubectl apply. kubectl apply should only be used on resources created declaratively by either kubectl create --save-config or kubectl apply. The missing annotation will be patched automatically.
+
+== mesh1: what the operator's Envoy left, removed; mongot-global onto the mongot pods  (21:33:36)
+  mongodb-kubernetes-operator-5444488d76-z9kmd 1/1 Running
+  mongot-search-0-0 1/1 Running
+  mongot-search-0-1 1/1 Running
+  mongot-search-lb-0-6fd8d5568d-7cz9b 1/1 Terminating
+
+== mesh2: keep the operator, then the chart out  (21:33:37)
+  release mongot uninstalled; MongoDBSearch kept: mongot
+  operator: Succeeded
+
+== mesh2: mongot's certificate for mongot-global, the MongoDBSearch without Envoy  (21:33:37)
+Warning: resource mongodbsearch/mongot is missing the kubectl.kubernetes.io/last-applied-configuration annotation which is required by kubectl apply. kubectl apply should only be used on resources created declaratively by either kubectl create --save-config or kubectl apply. The missing annotation will be patched automatically.
+
+== mesh2: what the operator's Envoy left, removed; mongot-global onto the mongot pods  (21:34:34)
+  mongodb-kubernetes-operator-7f6794fbdd-hgvdp 1/1 Running
+  mongot-search-0-0 1/1 Running
+  mongot-search-0-1 1/1 Running
+  mongot-search-lb-0-6fd8d5568d-6z4cb 1/1 Terminating
+exit 0
