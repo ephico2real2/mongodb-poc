@@ -1,0 +1,60 @@
+# Step 2 of story #132: the MongoDBSearch of step 1 (41-mongodbsearch.yaml) with no spec.security.tls, so mongot
+# serves cleartext gRPC (the operator sets its gRPC TLS mode to disabled). Cilium's L7 load balancer reads only
+# cleartext gRPC; the traffic between nodes is encrypted by WireGuard (cilium/values-step2.yaml). mongod's own
+# connections to the replica set keep TLS (source.external.tls).
+apiVersion: mongodb.com/v1
+kind: MongoDBSearch
+metadata:
+  name: mongot
+  namespace: search
+spec:
+  version: "1.70.1"
+  clusters:
+    - loadBalancer:
+        unmanaged:
+          endpoint: mongot-global.search.svc.cluster.local:27028
+      persistence:
+        single:
+          storage: 10Gi
+          storageClass: standard
+      replicas: 2
+      resourceRequirements:
+        limits:
+          cpu: "2"
+          memory: 2Gi
+        requests:
+          cpu: 500m
+          memory: 1Gi
+  observability:
+    metricsForwarder:
+      deployment:
+        spec:
+          template:
+            spec:
+              containers:
+                - name: metrics-forwarder
+                  image: "quay.io/ephico2real/opentelemetry-collector-contrib:0.152.0"
+      mode: auto
+      resourceRequirements:
+        limits:
+          cpu: 250m
+          memory: 256Mi
+        requests:
+          cpu: 100m
+          memory: 128Mi
+    prometheus:
+      mode: enabled
+      port: 9946
+  source:
+    external:
+      hostAndPorts:
+        - "mongo-mesh0.mongodb.svc.cluster.local:27017"
+        - "mongo-mesh1.mongodb.svc.cluster.local:27017"
+        - "mongo-mesh2.mongodb.svc.cluster.local:27017"
+      tls:
+        ca:
+          name: ent-trust-bundle
+    passwordSecretRef:
+      key: password
+      name: search-sync-source-password
+    username: search-sync-source

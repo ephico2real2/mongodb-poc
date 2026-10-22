@@ -7,6 +7,7 @@
 #   kind-mesh-cilium/drills.sh mongot [c] one    # c (mesh2) loses the mongot its mongod is connected to
 #   kind-mesh-cilium/drills.sh mongot [c] both   # c loses all its mongot: do its searches move to another cluster?
 #   kind-mesh-cilium/drills.sh failback [c]      # after a failover: do c's searches come home, before and after a restart?
+#   kind-mesh-cilium/drills.sh spread [c] [s]    # how c's searches are spread over its mongot pods
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck disable=SC1091
@@ -109,8 +110,22 @@ drill_failback() { # <cluster>
   note "one search through $c's member is served by: $(serving_pod "$c" | sed 's/^$/another cluster/')"
 }
 
+drill_spread() { # <cluster> <seconds>: how a cluster's searches are spread over its mongot pods
+  local c=$1 secs=$2 p
+  local before=() i=0 pods
+  log="$out/drill-spread-$c.txt"
+  t0=$(date +%s)
+  read -r -a pods <<<"$(mongot_pods "$c")"
+  echo "== $c's searches over its mongot pods: ${secs} s of searches through its member" | tee "$log"
+  for p in "${pods[@]}"; do before+=("$(pod_searches "$c" "$p")"); done
+  load "$c" "$secs" | grep RESULT | tee -a "$log"
+  for p in "${pods[@]}"; do note "$p answered $(( $(pod_searches "$c" "$p") - ${before[$i]} ))"; i=$((i + 1)); done
+}
+
 case "${1:-}" in
   mongot) drill_mongot "${2:-mesh2}" "${3:-both}" ;;
   failback) drill_failback "${2:-mesh2}" ;;
-  *) echo "usage: $0 mongot [cluster] [one|both] | failback [cluster]" >&2; exit 2 ;;
+  spread) drill_spread "${2:-mesh2}" "${3:-20}" ;;
+  load-only) log=/dev/null; load "${2:-mesh2}" "${3:-60}" ;;   # a search load alone, for scripts/cleartext-l7.sh
+  *) echo "usage: $0 mongot [cluster] [one|both] | failback [cluster] | spread [cluster] [seconds] | load-only [cluster] [seconds]" >&2; exit 2 ;;
 esac

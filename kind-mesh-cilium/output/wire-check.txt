@@ -1,0 +1,7 @@
+== wire check 2026-10-22T03:17:40Z: 15 s on the kind bridge br-b5d80f5c4558, searches running through mesh0, mesh1 and mesh2
+packets on the bridge: 8122
+UDP 51871, WireGuard: 3221
+TCP 27028, gRPC search in the clear: 0
+TCP 27017, mongod in the clear: 0
+UDP 8472, VXLAN in the clear: 0
+packets whose bytes contain the search text 'space': 0

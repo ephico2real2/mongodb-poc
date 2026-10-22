@@ -1,1 +1,1 @@
-RESULT {"ok":237,"fail":0,"maxMs":225,"maxAt":"12.7","firstFailAt":null,"lastFailAt":null}
+RESULT {"ok":237,"fail":0,"maxMs":149,"maxAt":"94.3","firstFailAt":null,"lastFailAt":null}

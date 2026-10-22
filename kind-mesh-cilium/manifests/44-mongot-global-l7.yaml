@@ -1,0 +1,20 @@
+# Step 2 of story #132: mongot-global (42-mongot-global.yaml) balanced per request by Cilium's Envoy: each gRPC
+# request of mongod's one connection is sent to a mongot of its own, local ones first (affinity local), so a request
+# that follows a failover goes back to the local mongot as soon as one is ready again. Cleartext gRPC only.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongot-global
+  namespace: search
+  annotations:
+    service.cilium.io/global: "true"
+    service.cilium.io/affinity: local
+    service.cilium.io/lb-l7: enabled
+    service.cilium.io/lb-l7-algorithm: round_robin
+spec:
+  selector:
+    app: mongot-search-0-svc
+  ports:
+    - name: grpc
+      port: 27028
+      targetPort: 27028

@@ -1,0 +1,21 @@
+== mesh1's mongod: elections and member states since the Step 2 Cilium change (recorded 02:56:42Z)
+2026-10-22T02:26:40.381+00:00 Heartbeat failed after max retries | {'target': 'mongo-mesh2.mongodb.svc.cluster.local:27017'}
+2026-10-22T02:26:40.381+00:00 Heartbeat failed after max retries | {'target': 'mongo-mesh2.mongodb.svc.cluster.local:27017'}
+2026-10-22T02:26:42.398+00:00 Heartbeat failed after max retries | {'target': 'mongo-mesh2.mongodb.svc.cluster.local:27017'}
+2026-10-22T02:26:42.398+00:00 Heartbeat failed after max retries | {'target': 'mongo-mesh2.mongodb.svc.cluster.local:27017'}
+2026-10-22T02:26:44.398+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh2.mongodb.svc.cluster.local:27017', 'newState': 'SECONDARY'}
+2026-10-22T02:38:44.414+00:00 Heartbeat failed after max retries | {'target': 'mongo-mesh2.mongodb.svc.cluster.local:27017'}
+2026-10-22T02:38:44.415+00:00 Heartbeat failed after max retries | {'target': 'mongo-mesh2.mongodb.svc.cluster.local:27017'}
+2026-10-22T02:38:46.414+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh2.mongodb.svc.cluster.local:27017', 'newState': 'SECONDARY'}
+2026-10-22T02:54:46.338+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh2.mongodb.svc.cluster.local:27017', 'newState': 'PRIMARY'}
+2026-10-22T02:55:47.077+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh0.mongodb.svc.cluster.local:27017', 'newState': 'SECONDARY'}
+2026-10-22T02:55:58.971+00:00 Starting an election, since we've seen no PRIMARY in electio | {}
+2026-10-22T02:55:58.997+00:00 Election succeeded, assuming primary role | {'term': 9}
+2026-10-22T02:56:09.038+00:00 Transition to primary complete; database writes are now perm | {'term': 9}
+2026-10-22T02:56:13.534+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh2.mongodb.svc.cluster.local:27017', 'newState': 'SECONDARY'}
+2026-10-22T02:56:20.117+00:00 Stepping down from primary, because a new term has begun | {'term': 10}
+2026-10-22T02:56:20.143+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh0.mongodb.svc.cluster.local:27017', 'newState': 'PRIMARY'}
+
+== mesh0's Cilium agents: restarts and encryption now
+  cilium-9vds5 1/1 restarts 0
+  cilium-fhrcq 1/1 restarts 0

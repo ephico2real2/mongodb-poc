@@ -1,0 +1,13 @@
+# Step 2 of story #132, added to each cluster's Cilium release (helm upgrade --reuse-values):
+# - WireGuard transparent encryption: pod-to-pod traffic between nodes, across Cluster Mesh too, is encrypted, which
+#   lets the search hop drop MongoDB's own TLS. Every cluster of a mesh must have it (Cilium docs,
+#   network/encryption-wireguard: Cluster Mesh), on UDP 51871 between nodes.
+# - Cilium's Envoy as the L7 load balancer for Services annotated service.cilium.io/lb-l7: enabled, which balances
+#   each gRPC request (HTTP/2 stream) and still honours affinity local (Cilium v1.20.2
+#   operator/pkg/ciliumenvoyconfig/envoy_config.go, pkg/clustermesh/selectbackends.go). Beta in 1.20.
+encryption:
+  enabled: true
+  type: wireguard
+loadBalancer:
+  l7:
+    backend: envoy
