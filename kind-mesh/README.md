@@ -8,7 +8,7 @@ installed by this repository's chart. The design, why it is built this way and h
 
 ## What runs where
 
-Everything is in one Colima VM, `mongodb-mesh` (8 CPUs, 24 GiB, 60 GB disk): the docker network `kind`, and in it six
+Everything is in one Colima VM, `mongodb-mesh` (8 CPUs, 24 GiB, 100 GiB disk): the docker network `kind`, and in it six
 node containers, one control plane and one worker for each of `mesh0`, `mesh1` and `mesh2`. The clusters' contexts
 are in `~/.kube/mongodb-mesh.config`; the default docker context and `~/.kube/config` are not touched.
 

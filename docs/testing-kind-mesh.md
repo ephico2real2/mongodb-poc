@@ -157,6 +157,13 @@ them mongot not yet Ready (`check-after-immediately.txt`). The first `colima-up.
 Docker 29.5.2 prints a stopped container's address as `invalid IP`, and the script read that as an address
 (`colima-up-attempt1-invalid-ip.txt`); fixed in `lib.sh` `node_ip`.
 
+The docker disk grew from 60 to 100 GiB on 2026-10-22 (#182), again with one restart: it was 80% used (45 of 59 GB),
+and the lab's mongot volumes are this disk, where mongot stops indexing above 85%. `colima-up.sh` passes
+`COLIMA_DISK_GIB` to the stopped VM, colima ran `limactl disk resize` ("resizing disk to 100GiB"), Lima grew the
+partition and the file system at boot, and the script checks the size reached: `/dev/vdb1 99G 46G 49G 49%` after. The
+nodes came back on their addresses, mongot was Ready 1 s after `colima-up.sh` returned, `check.sh` passed before and
+after, and a search drill lost 0 of 237 (`kind-mesh/output/disk-grow-2026-10-22/`).
+
 ## Problems found while building, and the fix
 
 | Problem | Fix |

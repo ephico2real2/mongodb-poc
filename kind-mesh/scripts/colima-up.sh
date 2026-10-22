@@ -7,32 +7,56 @@
 #   kind-mesh/scripts/colima-down.sh    # records the nodes' addresses, stops the nodes and the VM
 #
 # vz and --network-address as cilium-implementation-poc's poc1 profile: the address is what a Mac route to the
-# clusters' LoadBalancer block goes through. A stopped VM is started with versions.env's CPUs and memory: colima 0.10.3
-# takes a flag given to `colima start` over its colima.yaml and rewrites Lima's lima.yaml before it starts the VM
+# clusters' LoadBalancer block goes through. A stopped VM is started with versions.env's CPUs, memory and disk: colima
+# 0.10.3 takes a flag given to `colima start` over its colima.yaml and rewrites Lima's lima.yaml before it starts the VM
 # (cmd/start.go prepareConfig, environment/vm/lima/lima.go resume). A running VM ignores them ("already running,
-# ignoring"), so a difference is reported, not applied. The VM type and a smaller disk cannot be changed.
+# ignoring"), so a difference is reported, not applied. A larger disk is grown by `limactl disk resize` before the
+# start (environment/vm/lima/disk.go syncDiskSize) and its partition and file system at boot (Lima 2.2.0,
+# boot.Linux/05-lima-disks.sh). Colima warns on resize failure; Lima tolerates grow/resize failures and can
+# skip growth if tools are absent, so the size reached is checked after this run starts the VM. The VM type and a
+# smaller disk cannot be changed.
 set -euo pipefail
 # shellcheck disable=SC1091
 . "$(dirname "$0")/lib.sh"
 
 gib=1073741824
 info=$(colima_info) || die "cannot read Colima's profiles"
-read -r status cpus mem _ <<<"$info"
+read -r status cpus mem disk _ <<<"$info"
+started=1
 case "$status" in
   Running)
-    echo "Colima profile $COLIMA_PROFILE is running: $cpus CPUs, $((mem / gib)) GiB"
-    if [ "$cpus" != "$COLIMA_CPUS" ] || [ "$mem" != $((COLIMA_MEMORY_GIB * gib)) ]; then
-      echo "  versions.env asks for ${COLIMA_CPUS} CPUs, ${COLIMA_MEMORY_GIB} GiB: a running VM is not resized;" \
-        "kind-mesh/scripts/colima-down.sh, then this script, applies it"
-    fi ;;
+    echo "Colima profile $COLIMA_PROFILE is running: $cpus CPUs, $((mem / gib)) GiB, $((disk / gib)) GiB disk"
+    if [ "$cpus" != "$COLIMA_CPUS" ] || [ "$mem" != $((COLIMA_MEMORY_GIB * gib)) ] || [ "$disk" -lt $((COLIMA_DISK_GIB * gib)) ]; then
+      echo "  versions.env asks for ${COLIMA_CPUS} CPUs, ${COLIMA_MEMORY_GIB} GiB, ${COLIMA_DISK_GIB} GiB disk: a running" \
+        "VM is not resized; kind-mesh/scripts/colima-down.sh, then this script, applies it"
+    fi
+    started= ;;
   "")
     say "create Colima profile $COLIMA_PROFILE: ${COLIMA_CPUS} CPUs, ${COLIMA_MEMORY_GIB} GiB, ${COLIMA_DISK_GIB} GiB disk"
     colima start --profile "$COLIMA_PROFILE" --vm-type vz --runtime docker --network-address --activate=false \
       --cpus "$COLIMA_CPUS" --memory "$COLIMA_MEMORY_GIB" --disk "$COLIMA_DISK_GIB" ;;
   *)
-    say "start Colima profile $COLIMA_PROFILE (was $status, $cpus CPUs, $((mem / gib)) GiB): ${COLIMA_CPUS} CPUs, ${COLIMA_MEMORY_GIB} GiB"
-    colima start --profile "$COLIMA_PROFILE" --activate=false --cpus "$COLIMA_CPUS" --memory "$COLIMA_MEMORY_GIB" ;;
+    say "start Colima profile $COLIMA_PROFILE (was $status, $cpus CPUs, $((mem / gib)) GiB, $((disk / gib)) GiB disk): \
+${COLIMA_CPUS} CPUs, ${COLIMA_MEMORY_GIB} GiB, ${COLIMA_DISK_GIB} GiB disk"
+    colima start --profile "$COLIMA_PROFILE" --activate=false --cpus "$COLIMA_CPUS" --memory "$COLIMA_MEMORY_GIB" \
+      --disk "$COLIMA_DISK_GIB" ;;
 esac
+
+# The docker file system, which the nodes' volumes (mongot's data path among them) live on. A partition table and the
+# file system's own overhead take a little of the disk (60 GiB gave 97.9%, 2026-10-22); a disk that was not grown
+# reads 60% of 100. Checked only on a VM this run started: a running one is reported above.
+if [ -n "$started" ]; then
+  say "the docker disk"
+  colima ssh --profile "$COLIMA_PROFILE" -- df -h /var/lib/docker \
+    || die "cannot inspect the docker file system"
+  fs=$(colima ssh --profile "$COLIMA_PROFILE" -- df -B1 --output=size /var/lib/docker | tail -1 | tr -d ' ') \
+    || die "cannot read the docker file system size"
+  case "$fs" in
+    ''|*[!0-9]*) die "invalid docker file system size from df: '$fs'" ;;
+  esac
+  [ "$fs" -ge $((COLIMA_DISK_GIB * gib * 95 / 100)) ] \
+    || die "the docker file system is $fs bytes, versions.env asks for ${COLIMA_DISK_GIB} GiB: the disk was not grown (check colima start's log)"
+fi
 
 # Ubuntu's fs.inotify.max_user_instances is 128; a second kind cluster in one VM died on it in cilium-implementation-poc
 # ("inotify_init: too many open files"), and one cluster with Cilium held 219 instances there. 512 is kind's own

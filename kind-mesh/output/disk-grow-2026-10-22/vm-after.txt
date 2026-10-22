@@ -1,0 +1,9 @@
+{"name":"mongodb-mesh","status":"Running","arch":"aarch64","cpus":8,"memory":25769803776,"disk":107374182400,"address":"192.168.64.10","runtime":"docker"}
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/vdb1        99G   46G   49G  49% /var/lib/docker
+NAME    SIZE FSTYPE MOUNTPOINT
+vdb     100G        
+└─vdb1  100G ext4   /mnt/lima-colima-mongodb-mesh
+               total        used        free      shared  buff/cache   available
+Mem:           23981       12159        1654          91       10571       11821
+Swap:              0           0           0
