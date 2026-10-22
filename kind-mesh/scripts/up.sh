@@ -131,6 +131,15 @@ for c in "${clusters[@]}"; do
   i=$((i + 1))
 done
 for c in "${clusters[@]}"; do
+  # On a lab after kind-mesh-cilium step 2 the release also carries that lab's cilium/values-step2.yaml (WireGuard, the
+  # L7 backend), applied by its cleartext-l7.sh with --reuse-values. This upgrade renders from the files below alone and
+  # would drop them (#166), so a re-run stops here: the platform is up, and nothing of this script is left to do.
+  if helm get values cilium -n kube-system --kube-context "kind-$c" -o json 2>/dev/null | python3 -c '
+import json, sys
+v = json.load(sys.stdin) or {}
+sys.exit(0 if v.get("encryption", {}).get("enabled") or v.get("loadBalancer", {}).get("l7", {}).get("backend") else 1)'; then
+    die "$c's Cilium release runs step 2's values (WireGuard, the L7 backend), which this upgrade would turn off (#166); kind-mesh-cilium/scripts/cleartext-l7.sh owns them: nothing changed"
+  fi
   helm_r upgrade cilium cilium/cilium --version "$CILIUM_VERSION" -n kube-system --kube-context "kind-$c" \
     -f cilium/values.yaml -f "cilium/values-$c.yaml" -f cilium/values-mesh.yaml \
     --set k8sServiceHost="$c-control-plane" --set k8sServicePort=6443 "${declared[@]}" "${cilium_image_args[@]}" \

@@ -31,7 +31,10 @@ Not tested: installing the chart on a cluster that never ran steps 1 and 2 (no a
 ## How the lab was built: steps 1 and 2
 
 On a lab built and passing with `kind-mesh/` (its README). These steps applied the design by hand, before the
-chart existed; they are how the results in the testing record were produced.
+chart existed; they are how the results in the testing record were produced. `kind-mesh/scripts/rebuild.sh --yes`
+replays them (steps 1, 4, 6 and 9's policy) after `kind-mesh/`'s bring-up, on freshly deleted clusters; what each
+one sets and why is in [docs/building-the-kind-mesh-lab.md](../docs/building-the-kind-mesh-lab.md). Step 4 assumes
+the Cilium release `kind-mesh/scripts/up.sh` made and adds to it: after it, `up.sh` refuses to run again (#166).
 
 | Step | Command |
 | --- | --- |
