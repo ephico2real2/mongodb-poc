@@ -1,0 +1,30 @@
+== Who connects to mongot under mongot-ingress: Hubble policy verdicts on the mongot pods, all six nodes (2026-10-22T13:35:02Z)
+# traffic in the window: 10 searches through each cluster's member; each mongot's metrics read through the API server's proxy
+# mesh0: searches ok 10, failed 0
+# mesh0 mongot-search-0-0 metrics through the API server: read
+# mesh0 mongot-search-0-1 metrics through the API server: read
+# mesh1: searches ok 10, failed 0
+# mesh1 mongot-search-0-0 metrics through the API server: read
+# mesh1 mongot-search-0-1 metrics through the API server: read
+# mesh2: searches ok 10, failed 0
+# mesh2 mongot-search-0-0 metrics through the API server: read
+# mesh2 mongot-search-0-1 metrics through the API server: read
+# hubble observe --type policy-verdict --to-label app=mongot-search-0-svc --since <window>, counted by node, port, verdict, source
+  mesh0/mesh0-control-plane    8080   FORWARDED     1  reserved:host reserved:kube-apiserver
+  mesh0/mesh0-control-plane    9946   FORWARDED     1  reserved:host reserved:kube-apiserver
+  mesh0/mesh0-control-plane    27028  FORWARDED     1  app=mongo io.cilium.k8s.policy.cluster=mesh0 io.kubernetes.pod.namespace=mongodb
+  mesh0/mesh0-worker           8080   FORWARDED     2  reserved:host
+  mesh0/mesh0-worker           9946   FORWARDED     1  reserved:remote-node
+  mesh0/mesh0-worker           27028  FORWARDED     1  app=mongo io.cilium.k8s.policy.cluster=mesh0 io.kubernetes.pod.namespace=mongodb
+  mesh1/mesh1-control-plane    8080   FORWARDED     2  reserved:host reserved:kube-apiserver
+  mesh1/mesh1-control-plane    9946   FORWARDED     1  reserved:host reserved:kube-apiserver
+  mesh1/mesh1-control-plane    27028  FORWARDED     1  app=mongo io.cilium.k8s.policy.cluster=mesh1 io.kubernetes.pod.namespace=mongodb
+  mesh1/mesh1-worker           8080   FORWARDED     2  reserved:host
+  mesh1/mesh1-worker           9946   FORWARDED     1  reserved:remote-node
+  mesh1/mesh1-worker           27028  FORWARDED     1  app=mongo io.cilium.k8s.policy.cluster=mesh1 io.kubernetes.pod.namespace=mongodb
+  mesh2/mesh2-control-plane    8080   FORWARDED     2  reserved:host reserved:kube-apiserver
+  mesh2/mesh2-control-plane    9946   FORWARDED     1  reserved:host reserved:kube-apiserver
+  mesh2/mesh2-control-plane    27028  FORWARDED     1  app=mongo io.cilium.k8s.policy.cluster=mesh2 io.kubernetes.pod.namespace=mongodb
+  mesh2/mesh2-worker           8080   FORWARDED     2  reserved:host
+  mesh2/mesh2-worker           9946   FORWARDED     1  reserved:remote-node
+  mesh2/mesh2-worker           27028  FORWARDED     1  app=mongo io.cilium.k8s.policy.cluster=mesh2 io.kubernetes.pod.namespace=mongodb

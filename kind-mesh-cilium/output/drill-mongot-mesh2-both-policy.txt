@@ -1,0 +1,10 @@
+== drill: mesh2 loses both of its mongot while its mongod searches (120 s); no Envoy, mongot-global straight to mongot
+[t+  2s] mesh2's mongod is served by its own mongot-search-0-1
+[t+  2s] searches answered before: mesh0=443 mesh1=16468 mesh2=315 
+[t+ 15s] cordon mesh2's nodes and delete mongot-search-0-0 mongot-search-0-1: no replacement can be scheduled
+[t+ 45s] searches answered so far: mesh0=471 mesh1=16498 mesh2=0 
+[t+ 75s] uncordon mesh2: its mongot are scheduled again
+[t+124s] searches answered after: mesh0=523 mesh1=16548 mesh2=52 ; mesh2's mongot: mongot-search-0-0 mongot-search-0-1
+[t+126s] after the drill, one search through mesh2's member is served by: mongot-search-0-1
+  search failed at 12.2 s: HostUnreachable
+RESULT {"ok":236,"fail":1,"maxMs":164,"maxAt":"93.7","firstFailAt":"12.2","lastFailAt":"12.2"}

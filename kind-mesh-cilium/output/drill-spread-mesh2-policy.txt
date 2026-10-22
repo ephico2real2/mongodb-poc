@@ -1,0 +1,4 @@
+== mesh2's searches over its mongot pods: 20 s of searches through its member
+RESULT {"ok":40,"fail":0,"maxMs":24,"maxAt":"5.1","firstFailAt":null,"lastFailAt":null}
+[t+ 22s] mongot-search-0-0 answered 20
+[t+ 22s] mongot-search-0-1 answered 20
