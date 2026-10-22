@@ -135,6 +135,22 @@ metrics endpoint, one per mongot pod, is a global Service of its own (`kind-mesh
 `search-gui`, which may read `sample_mflix` and nothing else. The vectors are the sample data's 5-dimension
 `plot_embedding` values and a fixed vector per theme word: the mechanics of vector search, not semantic search.
 
+## Without the operator's Envoy (story #132, Step 1)
+
+Cilium is already the service mesh, so Step 1 removed the operator's Envoy: each MongoDBSearch uses
+`loadBalancer.unmanaged`, and `mongot-global` points straight at the mongot pods (`kind-mesh-cilium/`). An unready
+mongot then loses its endpoint, and a cluster with no ready mongot sends its mongod's new connection to another
+cluster. mongod and mongot keep mutual TLS.
+
+| mesh2 loses… | With the operator's Envoy | On Cilium alone |
+| --- | --- | --- |
+| all its mongot | 160 of 234 searches failed | **0 of 237 failed**; mesh0's mongot answered |
+| the mongot serving its mongod | 0 of 237 (Envoy retried on the other) | 0 of 237; mesh2's other mongot answered |
+| — and when they come back | remote until mongod restarts | remote until mongod restarts |
+
+Measured on 2026-10-21 (`docs/testing-kind-mesh-cilium.md`). Searches still move back only when mongod reconnects:
+Step 2 (Cilium's per-request balancing, cleartext gRPC with WireGuard) is for that.
+
 ## Watching it
 
 - **Hubble**: one relay sees the whole mesh (mesh0's reaches all six nodes; one CA). The UI runs in mesh0. The CLI
