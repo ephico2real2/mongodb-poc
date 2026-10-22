@@ -165,7 +165,7 @@ serving_pod() { # <cluster>
 
 drill_mongot() { # <cluster> <one|both>
   local c=$1 which=$2 pods holder
-  log="$out/drill-mongot-$c-$which.txt"
+  log="$out/drill-mongot-$c-$which${DRILL_TAG:+-$DRILL_TAG}.txt"
   t0=$(date +%s)
   echo "== drill: $c loses $which of its mongot while its mongod searches (120 s); no Envoy, mongot-global straight to mongot" | tee "$log"
   holder=$(serving_pod "$c")
@@ -173,7 +173,7 @@ drill_mongot() { # <cluster> <one|both>
   note "$c's mongod is served by its own $holder"
   if [ "$which" = both ]; then pods=$(mongot_pods "$c"); else pods=$holder; fi
   note "searches answered before: $(counts)"
-  load "$c" 120 >"$out/drill-mongot-$c-$which-load.txt" 2>&1 &
+  load "$c" 120 >"$out/drill-mongot-$c-$which${DRILL_TAG:+-$DRILL_TAG}-load.txt" 2>&1 &
   at 15; note "cordon $c's nodes and delete $pods: no replacement can be scheduled"
   kubectl --context "kind-$c" cordon "$c-control-plane" "$c-worker" >/dev/null
   # shellcheck disable=SC2086  # one argument per pod
@@ -184,12 +184,12 @@ drill_mongot() { # <cluster> <one|both>
   wait
   note "searches answered after: $(counts); $c's mongot: $(mongot_pods "$c")"
   note "after the drill, one search through $c's member is served by: $(serving_pod "$c" | sed 's/^$/another cluster/')"
-  tee -a "$log" <"$out/drill-mongot-$c-$which-load.txt"
+  tee -a "$log" <"$out/drill-mongot-$c-$which${DRILL_TAG:+-$DRILL_TAG}-load.txt"
 }
 
 drill_failback() { # <cluster>
   local c=$1 st
-  log="$out/drill-failback-$c.txt"
+  log="$out/drill-failback-$c${DRILL_TAG:+-$DRILL_TAG}.txt"
   t0=$(date +%s)
   echo "== drill: $c's searches after a failover, before and after a restart of its mongod" | tee "$log"
   note "one search through $c's member is served by: $(serving_pod "$c" | sed 's/^$/another cluster/')"
@@ -253,7 +253,7 @@ drill_primary() { # <freeze|kill|partition>: mesh0, the primary's cluster, is lo
 drill_spread() { # <cluster> <seconds>: how a cluster's searches are spread over its mongot pods
   local c=$1 secs=$2 p
   local before=() i=0 pods
-  log="$out/drill-spread-$c.txt"
+  log="$out/drill-spread-$c${DRILL_TAG:+-$DRILL_TAG}.txt"
   t0=$(date +%s)
   read -r -a pods <<<"$(mongot_pods "$c")"
   echo "== $c's searches over its mongot pods: ${secs} s of searches through its member" | tee "$log"

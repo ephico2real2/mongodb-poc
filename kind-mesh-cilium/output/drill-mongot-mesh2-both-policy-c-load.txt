@@ -1,0 +1,2 @@
+  search failed at 12.6 s: HostUnreachable
+RESULT {"ok":237,"fail":1,"maxMs":201,"maxAt":"94.3","firstFailAt":"12.6","lastFailAt":"12.6"}

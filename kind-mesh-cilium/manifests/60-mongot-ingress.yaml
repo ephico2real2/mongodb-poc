@@ -1,0 +1,41 @@
+# Who may connect to mongot. WireGuard encrypts the traffic between nodes but lets any pod, and a host given a route,
+# reach mongot's cleartext gRPC port (output/wireguard-reach.txt). This allows, and so limits ingress to:
+#   - 27028, search: the mongod pods (app=mongo in namespace mongodb) of the three clusters. The cluster label is named
+#     because since Cilium 1.19 a selector without it matches the local cluster only (policy-default-local-cluster).
+#     Through mongot-global's L7 proxy the client keeps its own identity (Hubble, before the policy).
+#   - 9946, metrics: the GUI in mesh0, and the API server's proxy (drills.sh reads metrics through it). The proxy
+#     connects from the control-plane node's cilium_host address: a mongot on that node sees the local host, labelled
+#     kube-apiserver; a mongot on another node sees remote-node. remote-node is not limited to the local cluster: it is
+#     every node of the three clusters but the mongot's own, so their host network reaches 9946 too.
+# The local host is allowed on every port without a rule (Cilium's allow-localhost, "always" on Kubernetes): the
+# kubelet's probes on 8080, and anything in the host network of the mongot's node. Anything else is dropped. The trust
+# is a namespace and a label: whoever can create a pod labelled app=mongo in mongodb, in any of the three clusters,
+# gets in.
+# Applied in every cluster: kubectl --context kind-meshN apply -f kind-mesh-cilium/manifests/60-mongot-ingress.yaml
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: mongot-ingress
+  namespace: search
+spec:
+  endpointSelector:
+    matchLabels:
+      app: mongot-search-0-svc
+  ingress:
+    - fromEndpoints:
+        - matchExpressions:
+            - {key: k8s:io.kubernetes.pod.namespace, operator: In, values: [mongodb]}
+            - {key: k8s:app, operator: In, values: [mongo]}
+            - {key: io.cilium.k8s.policy.cluster, operator: In, values: [mesh0, mesh1, mesh2]}
+      toPorts:
+        - ports: [{port: "27028", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: search
+            k8s:app: mongot-gui
+            io.cilium.k8s.policy.cluster: mesh0
+      toPorts:
+        - ports: [{port: "9946", protocol: TCP}]
+    - fromEntities: [kube-apiserver, remote-node]
+      toPorts:
+        - ports: [{port: "9946", protocol: TCP}]

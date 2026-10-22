@@ -1,0 +1,17 @@
+== Hubble drops on the six nodes during: drills.sh mongot mesh2 both (tag policy-e, 2026-10-22T13:31:46Z, drill exit 0)
+# mongot-ingress policy in mesh0: ciliumnetworkpolicy.cilium.io/mongot-ingress
+# mongot-ingress policy in mesh1: ciliumnetworkpolicy.cilium.io/mongot-ingress
+# mongot-ingress policy in mesh2: ciliumnetworkpolicy.cilium.io/mongot-ingress
+# control on mesh0-control-plane (default/capture-control-* to 192.0.2.1, denied): 88 drops recorded, Oct 22 13:29:35.173 .. Oct 22 13:31:43.814
+# control on mesh0-worker (default/capture-control-* to 192.0.2.1, denied): 88 drops recorded, Oct 22 13:29:35.196 .. Oct 22 13:31:43.836
+# control on mesh1-control-plane (default/capture-control-* to 192.0.2.1, denied): 88 drops recorded, Oct 22 13:29:35.306 .. Oct 22 13:31:43.950
+# control on mesh1-worker (default/capture-control-* to 192.0.2.1, denied): 88 drops recorded, Oct 22 13:29:35.343 .. Oct 22 13:31:43.985
+# control on mesh2-control-plane (default/capture-control-* to 192.0.2.1, denied): 88 drops recorded, Oct 22 13:29:35.479 .. Oct 22 13:31:44.123
+# control on mesh2-worker (default/capture-control-* to 192.0.2.1, denied): 88 drops recorded, Oct 22 13:29:35.540 .. Oct 22 13:31:44.183
+# envoy mongot-global on mesh0-control-plane: connect failures +0, connect timeouts +0
+# envoy mongot-global on mesh0-worker: connect failures +0, connect timeouts +0
+# envoy mongot-global on mesh1-control-plane: connect failures +0, connect timeouts +0
+# envoy mongot-global on mesh1-worker: connect failures +0, connect timeouts +0
+# envoy mongot-global on mesh2-control-plane: connect failures +12, connect timeouts +0
+# envoy mongot-global on mesh2-worker: connect failures +0, connect timeouts +0
+# every other drop: 0

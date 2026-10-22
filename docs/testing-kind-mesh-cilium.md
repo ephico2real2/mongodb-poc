@@ -26,8 +26,11 @@ Results, a search every half second through mesh2's own member:
   searches to another cluster on its own.
 - **Step 2 fixed the second.** Cilium sends each search to a local mongot when one is ready, so searches go back
   without a restart. Between nodes the search hop travels inside WireGuard (`kind-mesh-cilium/output/wire-check.txt`).
-- **WireGuard does not limit who connects** to mongot's cleartext port: any pod in the three clusters reached it, and
-  so did a host outside WireGuard ([C7](#c7-who-can-reach-mongots-cleartext-port)).
+- **WireGuard does not limit who connects** to mongot's cleartext port: any pod in the three clusters reached it, and so
+  did a host outside WireGuard ([C7](#c7-who-can-reach-mongots-cleartext-port)). A CiliumNetworkPolicy now lets only the
+  three clusters' mongod pods, and the mongot's own node, reach it. Under it the check, the one-mongot drill and the
+  spread pass; when mesh2 loses all its mongot, 1 to 3 searches failed at the deletion in each of 5 runs, against 1 of 3
+  runs without it ([C8](#c8-only-mongod-reaches-mongot-a-ciliumnetworkpolicy)).
 - **When the primary's cluster is lost, no write is acknowledged for 10.6–11.0 s (freeze, kill) or 23.4 s
   (partition) at the defaults.** `electionTimeoutMillis=5000` with `catchUpTimeoutMillis=0` brought that to 5.2–8.2 s,
   but turned a 4.5 s link outage into an election ([election tuning](#election-tuning-after-story-131)).
@@ -124,7 +127,62 @@ and mesh1 in equal numbers (71 and 71) during the outages, and to mesh2 the rest
   encrypts traffic between the nodes that run it; it does not decide who may connect. The `search` namespace has no
   network policy, and Cilium's encryption strict mode is off. Cilium 1.20.2 has `--enable-encryption-strict-mode-ingress`
   ("Enable strict mode encryption enforcement for ingress traffic"), and a CiliumNetworkPolicy could allow 27028 from
-  the three clusters' mongod pods only. Neither was applied or tested.
+  the three clusters' mongod pods only. The policy is C8; strict mode was not applied or tested.
+- **Correction:** `nc -z` to `mongot-global` proves only that the L7 proxy on the client's node answered: it completes
+  the TCP handshake itself. C8 repeats the test with a gRPC request, which mongot itself answered (`mongot-reach-open.txt`),
+  so the result stands.
+
+### C8. Only mongod reaches mongot: a CiliumNetworkPolicy
+
+- **The policy** (`kind-mesh-cilium/manifests/60-mongot-ingress.yaml`, applied in every cluster): 27028 from the mongod
+  pods (`app=mongo` in `mongodb`) of mesh0, mesh1 and mesh2, the cluster label named because a selector without it
+  matches the local cluster only (`policy-default-local-cluster=true`); 9946 from the GUI and from the API server's
+  proxy (`kube-apiserver`, `remote-node`). Written from Hubble: through `mongot-global`'s proxy the client keeps its own
+  identity. What it lets in besides, stated in its header: `remote-node` is every node of the three clusters but the
+  mongot's own (in mesh0-worker's ipcache the other clusters' node IPs are identity 6, `remote-node`, and
+  mesh0-control-plane's is 7, `kube-apiserver` and `remote-node`), and the local host reaches every port
+  (`AllowLocalhost: always`).
+- **Run:** `kind-mesh-cilium/scripts/mongot-reach.sh open` without the policy and `mongot-reach.sh policy` with it in
+  every cluster (the records: `policy` at 13:24Z, then `open` at 13:26Z with the policy removed): four probe pods in
+  mesh1, one per combination of the `mongodb` namespace and the `app=mongo` label, send a gRPC health check to both of
+  mesh0's mongot and to `mongot-global`; then the VM, outside WireGuard, opens a TCP connection to mesh0-worker's mongot
+  through a route added for the test.
+- **Passes when:** without the policy every probe reaches mongot; with it only the probe in `mongodb` with `app=mongo`
+  does, and the VM does not.
+- **Result: passed.** Without the policy, mongot answered all twelve requests and the VM connected
+  (`mongot-reach-open.txt`). With it, the three other probes got no answer in 5 s on all three targets, the VM no
+  connection in 5 s, and the `mongodb`/`app=mongo` probe was answered by mesh0's mongot and through `mongot-global`
+  (`mongot-reach-policy.txt`). The `mongot-global` row goes to mesh1's own mongot (affinity local), so it tests mesh1's
+  copy of the policy. The trust is a namespace and a label: whoever can create a pod labelled `app=mongo` in `mongodb`
+  gets in.
+- **What still connects** (`mongot-ingress-verdicts.txt`, Hubble policy verdicts on the six nodes during 30 searches
+  and a metrics read of each mongot): only the allowed sources, all `FORWARDED`. 27028 from the mongod of the mongot's
+  cluster; 9946 from the API server's proxy, as `host`+`kube-apiserver` on the control-plane nodes and `remote-node` on the
+  workers; 8080, the kubelet's probes, from the local host.
+- **Check and drills with the policy:** `kind-mesh/check.sh` 0 failed (`check-policy.txt`). `drills.sh mongot mesh2 one`:
+  0 of 237 failed (`drill-mongot-mesh2-one-policy.txt`). `spread mesh2`: 20 and 20 over mesh2's two mongot
+  (`drill-spread-mesh2-policy.txt`). `mongot mesh2 both`: mesh0 and mesh1 served mesh2's searches during the outage and
+  mesh2's mongot took them back, but 1 to 3 searches failed (`HostUnreachable`) at the moment mesh2's mongot were deleted.
+- **Is that failure the policy?** Run with `kind-mesh-cilium/scripts/drill-capture.sh <tag> mongot mesh2 both`: every
+  Hubble drop on the six nodes during the drill, a control on each node that must be dropped (proving that node's
+  stream), and Envoy's counters for `mongot-global` before and after.
+  - The policy drops nothing: 0 drops besides the controls in every run, and no Envoy connect timeout in the two runs
+    that read Envoy's counters (e, f); a timeout is what a silent policy drop gives (`policy-deny-response` none,
+    Envoy's connect timeout 5 s; Envoy counts a timeout as a connect failure too). A disallowed pod's SYNs to the six
+    mongot, directly and through the proxy, were all recorded as `Policy denied DROPPED` on the mongot's node
+    (`drill-capture-ingress-control.txt`), so such a drop would have shown.
+  - The failure is an immediate connect failure to a mongot being torn down: with the policy, 12 connect failures and 0
+    timeouts on mongo-0's node, 3 searches failed (`drill-capture-policy-e.txt`); without it, 0 and 0, no search failed
+    (`drill-capture-nopolicy-f.txt`). Each failed search took under 250 ms.
+  - It happens without the policy too (`drill-mongot-mesh2-both-nopolicy-a.txt`: 1 failed). Counts: 5 of 5 runs with the
+    policy had a failure, 1 of 3 without on the same day (Fisher's exact test p = 0.11). The two runs of the same setup
+    on 2026-10-21, both 0 failed (`drill-mongot-mesh2-both.step2.txt`, `drill-mongot-mesh2-both.chart.txt`; step 1's run
+    was another setup), make it 1 of 5 without and p = 0.048. So the policy may make that moment more likely; it is not
+    settled. At the rates seen, 8 runs each would show it about 3 times in 4, 10 runs each 9 times in 10. The earlier
+    records, `drill-capture-{nopolicy-a,nopolicy-b,policy-c,policy-d}.txt`, come from a first version of the capture
+    with one control, on mesh2-worker only, and no Envoy counters.
+- **Reviewed** by two reviewers (OB3 on the policy and the reach test, OB2 on the capture and this conclusion), who ran
+  the tests on the lab; their fixes are merged and were re-run here.
 
 ### What went wrong while applying step 2
 

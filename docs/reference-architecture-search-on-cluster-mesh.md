@@ -179,12 +179,16 @@ What this trades:
   (outlier detection) and runs no health checks (Cilium v1.20.2 `operator/pkg/ciliumenvoyconfig/envoy_config.go`).
 - **Every cluster of the mesh must run WireGuard.** While one did and two did not, the encrypting cluster's mongod was
   cut off (the replica set elected another primary on its own).
-- **WireGuard encrypts; it does not decide who connects.** A pod in mesh1's `default` namespace, and a host
-  outside WireGuard given a route, both reached mongot's cleartext port (`kind-mesh-cilium/output/wireguard-reach.txt`).
-  Limiting it needs a CiliumNetworkPolicy (27028 from the mongod pods only) and Cilium's ingress encryption strict
-  mode; neither is tested. Cilium's mTLS options do not apply here: ztunnel (beta) is "currently not compatible with
-  Cluster Mesh", and the SPIRE-based mutual authentication is deprecated in 1.20 and has no trust domain across
-  clusters (Cilium 1.20 docs).
+- **WireGuard encrypts; it does not decide who connects.** A pod in mesh1's `default` namespace, and a host outside
+  WireGuard given a route, both reached mongot's cleartext port (`kind-mesh-cilium/output/wireguard-reach.txt`). A
+  CiliumNetworkPolicy in every cluster (`kind-mesh-cilium/manifests/60-mongot-ingress.yaml`) limits 27028 to the mongod
+  pods of the three clusters, naming the cluster label in its selector; tested: other pods and the host get no answer,
+  mongod does, and the check passes. When a cluster loses all its mongot, 1 to 3 searches failed at the deletion in each
+  of 5 runs with the policy and in 1 of 3 without; whether the policy adds to that is not settled (testing record, C8).
+  Its trust is a namespace and a label, and it leaves 9946 open to every node of the mesh and every port to the local
+  host. Cilium's ingress encryption strict mode is not tested. Cilium's mTLS options do not apply here: ztunnel (beta)
+  is "currently not compatible with Cluster Mesh", and the SPIRE-based mutual authentication is deprecated in 1.20 and
+  has no trust domain across clusters (Cilium 1.20 docs).
 
 ## Watching it
 
