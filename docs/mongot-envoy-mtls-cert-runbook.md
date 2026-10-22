@@ -14,17 +14,17 @@ This runbook turns two company-signed PEM files into the Kubernetes TLS secrets 
 Each PEM holds three things, in this order: the password-protected private key, the company CA bundle, then the leaf (service) certificate.
 
 <!-- markdownlint-disable MD033 -->
-<img alt="The three TLS parties of this runbook: mongod sends search queries to Envoy; Envoy connects to mongot with mTLS, presenting its client cert; mongot syncs from mongod, presenting the mongot cert as a client. All three trust the company CA, held in ent-trust-bundle and in ca.crt in each secret." src="diagrams/mongot-runbooks/cert-parties.light.png">
+<img alt="The three TLS parties of this runbook: mongod sends search queries to Envoy; Envoy connects to mongot with mTLS, presenting its client cert; mongot syncs from mongod, presenting the mongot cert as a client. Envoy and mongot trust the company CA in ent-trust-bundle; mongod uses its own TLS CA configuration." src="diagrams/mongot-runbooks/cert-parties.light.png">
 <!-- markdownlint-enable MD033 -->
 
-*The three parties and the certificate each one presents. All three need the company CA.*
+*The three parties and the certificate each one presents. The figure's “ca.crt in each secret” labels the extra copies these commands write. Envoy and mongot read trust from `ent-trust-bundle`; mongod uses its own TLS CA configuration.*
 
 ```text
 ① mongod --search queries--> Envoy x2 (mongot-search-lb-0), presents the Envoy cert
 ② Envoy  --mTLS, Envoy client cert--> mongot x3 (mongot-search-0), presents the mongot cert
 ③ mongot --sync, mongot cert as client--> mongod, trusts the company CA in its CA ConfigMap
 
-Company CA: ent-trust-bundle and ca.crt in each secret, trusted by mongod, Envoy and mongot
+Company CA: ent-trust-bundle for Envoy and mongot; mongod uses its own TLS CA configuration
 ```
 
 Each numbered arrow is a TLS connection where the caller checks the other side's cert, so all three parties need the company CA.
@@ -226,7 +226,7 @@ If a Certificate comes back within a few minutes, something else creates it (the
 
 ## Step 5: Create or replace the secrets
 
-Mirror the cert-manager format exactly: a `kubernetes.io/tls` secret with `tls.crt`, `tls.key` and `ca.crt`. The `--dry-run=client -o yaml | oc apply` pattern creates the secret if it is missing and replaces its data if it exists.
+Write a `kubernetes.io/tls` secret with `tls.crt` and `tls.key`. These commands also retain a harmless `ca.crt` copy, matching the cert-manager format; peer verification uses the mounted trust ConfigMap (Step 6). The `--dry-run=client -o yaml | oc apply` pattern creates the secret if it is missing and replaces its data if it exists.
 
 ```bash
 oc create secret generic $MONGOT_SECRET \
@@ -262,10 +262,12 @@ Every party must trust the company CA before the new certs go live. A party that
 | Party | What it verifies | Where the company CA must be |
 | --- | --- | --- |
 | mongod | mongot's or Envoy's cert when search traffic connects | mongod's TLS CA setting (the CA ConfigMap referenced by the MongoDB resource) |
-| mongot | Client certs from mongod and Envoy; mongod's server cert when it syncs | `ca.crt` in its secret (Step 5) and the CA bundle mounted on its pod |
-| Envoy | mongot's server cert | `ca.crt` in its secret (Step 5) and the CA bundle mounted on its pod |
+| mongot | Client certs from mongod and Envoy; mongod's server cert when it syncs | `ca.crt` from the source trust ConfigMap (`ent-trust-bundle`), mounted on its pod |
+| Envoy | mongot's server cert | `ca.crt` from the source trust ConfigMap (`ent-trust-bundle`), mounted on its pod |
 
-**ca.crt in the secret vs the mounted bundle.** `ca.crt` says who signed this cert. The mounted bundle says whose certs this pod accepts, and can hold several CAs. Envoy reads `ca.crt` from its own secret to verify mongot, so that copy is required. Keep the company CA in both the secrets and the mounted bundle.
+**ca.crt in the secret vs the mounted bundle.** The TLS secrets' `ca.crt` is not read for peer verification. The mounted trust bundle determines whose certificates Envoy and mongot accept and can hold several CAs. Keep the company CA in `ent-trust-bundle`.
+
+Operator 1.13.0 projects Envoy's trusted CA from the source CA volume ([`mongodbsearchenvoy_controller.go:628–633`](https://github.com/mongodb/mongodb-kubernetes/blob/1.13.0/controllers/operator/mongodbsearchenvoy_controller.go#L628-L633)). For an external source, that volume uses `ca.crt` from the ConfigMap named by `spec.source.external.tls.ca` ([`external_search_source.go:41–42`](https://github.com/mongodb/mongodb-kubernetes/blob/1.13.0/controllers/searchcontroller/external_search_source.go#L41-L42)); mongot's `CertificateAuthorityFile` points at the same CA mount ([`mongodbsearch_reconcile_helper.go:1918–2061`](https://github.com/mongodb/mongodb-kubernetes/blob/1.13.0/controllers/searchcontroller/mongodbsearch_reconcile_helper.go#L1918-L2061)).
 
 **6a. Create ent-trust-bundle from the company CA**
 
@@ -384,7 +386,7 @@ Keep the original PEM files and Step 4 backups somewhere access-controlled. Dele
 
 **Why not pass the whole PEM as the cert?** The secret needs the cert and the key in separate fields. Passing the PEM would put the encrypted key inside `tls.crt`.
 
-**Do we need `ca.crt` in the secret?** Yes, in both. Envoy uses `ca.crt` from its secret to verify mongot's server cert; without it the Envoy-to-mongot handshake fails. mongot needs the CA to verify the client certs from Envoy and mongod. Keep the same company CA in `ent-trust-bundle` too (Step 6).
+**Do we need `ca.crt` in the secret?** No, for Operator 1.13.0. The commands retain that harmless copy, but Envoy and mongot verify peers using the source trust ConfigMap (`ent-trust-bundle` here). See Step 6 for the pinned operator source references.
 
 **Why keep the old secret names?** The MongoDBSearch resource and Envoy config already reference them. New names would mean editing those resources too.
 

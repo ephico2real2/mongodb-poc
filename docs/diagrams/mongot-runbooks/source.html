@@ -194,7 +194,7 @@ figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
     <h2>Cert runbook: who presents and trusts what</h2>
     <figure>
       <div class="fig-scroll">
-        <svg viewBox="0 0 980 300" role="img" aria-label="The three TLS parties of the cert runbook: mongod sends search queries to Envoy; Envoy connects to mongot with mTLS, presenting its client cert; mongot syncs from mongod, presenting the mongot cert as a client. All three trust the company CA, held in ent-trust-bundle and in ca.crt in each secret.">
+        <svg viewBox="0 0 980 300" role="img" aria-label="The three TLS parties of the cert runbook: mongod sends search queries to Envoy; Envoy connects to mongot with mTLS, presenting its client cert; mongot syncs from mongod, presenting the mongot cert as a client. Envoy and mongot trust the company CA in ent-trust-bundle; mongod uses its own TLS CA configuration.">
           <defs>
             <marker id="cp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--remote)"/></marker>
           </defs>
@@ -234,13 +234,13 @@ figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
           <rect x="30" y="196" width="920" height="58" rx="8" fill="var(--none-wash)" stroke="var(--none)" stroke-width="1.5"/>
           <g font-family="IBM Plex Sans, sans-serif" font-size="12.5">
             <text x="46" y="220" font-weight="600" fill="currentColor">Company CA</text>
-            <text x="46" y="240" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">ent-trust-bundle · ca.crt in each secret</text>
+            <text x="46" y="240" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor">ent-trust-bundle (the trust ConfigMap)</text>
             <text x="934" y="230" text-anchor="end" fill="var(--muted)">trusted by mongod, Envoy and mongot</text>
             <text x="36" y="282" fill="var(--muted)">Each numbered arrow is a TLS connection where the caller checks the other side's cert.</text>
           </g>
         </svg>
       </div>
-      <figcaption>The three parties of the cert runbook and the certificate each one presents. All three need the company CA, because on every connection the caller checks the other side's cert.</figcaption>
+      <figcaption>The three parties of the cert runbook and the certificate each one presents. Envoy and mongot read the CA from ent-trust-bundle, not from the TLS secrets (operator 1.13.0); mongod uses its own TLS CA configuration.</figcaption>
     </figure>
   </section>
 </div>
