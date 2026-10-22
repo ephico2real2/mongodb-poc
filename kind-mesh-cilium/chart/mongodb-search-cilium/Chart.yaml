@@ -1,0 +1,9 @@
+apiVersion: v2
+name: mongodb-search-cilium
+description: >-
+  MongoDB Search on Cilium alone, for the kind mesh lab (story #132): the operator through OLM, a MongoDBSearch with
+  no operator Envoy, and mongot-global, the Cilium global Service every mongod dials, balanced per connection or per
+  request. The replica set is an external source. Lab-only; not released.
+type: application
+version: 0.1.0
+appVersion: "1.13.0"

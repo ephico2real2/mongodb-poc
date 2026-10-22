@@ -1,0 +1,17 @@
+# The lab's values, the same in mesh0, mesh1 and mesh2 (story #132, step 2): per-request balancing, cleartext gRPC
+# inside WireGuard. For step 1 instead: searchTLS.enabled: true and globalService.lbL7.enabled: false.
+namespace: search
+# The OperatorGroup the lab already has (made by the earlier chart and kept by kind-mesh-cilium/scripts/swap-search.sh):
+# adopted by the release, since OLM allows only one per namespace.
+operator:
+  operatorGroupName: mongot-mongodb-search-helm
+source:
+  hostAndPorts:
+    - mongo-mesh0.mongodb.svc.cluster.local:27017
+    - mongo-mesh1.mongodb.svc.cluster.local:27017
+    - mongo-mesh2.mongodb.svc.cluster.local:27017
+searchTLS:
+  enabled: false
+globalService:
+  lbL7:
+    enabled: true

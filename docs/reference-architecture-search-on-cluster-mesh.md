@@ -27,6 +27,15 @@ number below comes from that lab. What it has not shown is said in [What is not 
 - **No acknowledged write was lost or duplicated.** The old primary rolled back exactly one write per freeze: with the
   default client its retry was already on the new primary; with 5 s timeouts it was one the client was told had failed.
 
+Then without the operator's Envoy (story #132), a search every half second through mesh2's own member:
+
+| mesh2 loses… | Operator's Envoy | Step 1: no Envoy | Step 2: Cilium balances each search |
+| --- | --- | --- | --- |
+| all its mongot | 160 of 234 failed | 0 of 237 | 0 of 235, then 0 of 236 |
+| one mongot | 0 of 237 | 0 of 237 | 0 of 237 |
+| when they come back | stays remote until mongod restarts | stays remote until mongod restarts | returns to mesh2 by itself |
+| spread over a cluster's two mongot | Envoy's round robin | no | yes, 20 and 20 |
+
 ## Why this shape
 
 | Option | What it needs | Why not here |

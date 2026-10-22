@@ -1,0 +1,77 @@
+# The namespace every object goes to. Empty: the release's namespace (helm -n).
+namespace: ""
+
+# The MongoDB operator through OLM. install: false when it already serves this namespace by other means.
+operator:
+  install: true
+  # Pinned: the approver hook approves the InstallPlan of exactly this version; any other waits for a human.
+  version: "1.13.0"
+  channel: stable
+  package: mongodb-kubernetes
+  source: operatorhubio-catalog
+  sourceNamespace: olm
+  # OLM allows one OperatorGroup per namespace: false when the namespace already has one.
+  createOperatorGroup: true
+  # Its name. Empty: <release>-mongodb-search-cilium. Set it to an existing OperatorGroup's name for the release to adopt
+  # that one instead of creating a second, which OLM refuses.
+  operatorGroupName: ""
+  # How long the approver waits for OLM to stage the plan and install it.
+  approveWaitSeconds: 600
+
+# The image the approver hook runs: a shell and oc. The lab's own (kind-mesh/images/oc), loaded into every node.
+jobs:
+  image: localhost/kind-mesh/oc:4.20.42
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: 500m, memory: 1024Mi}
+
+# The MongoDBSearch.
+search:
+  name: mongot
+  version: "1.70.1"
+  replicas: 2
+  resources:
+    requests: {cpu: 500m, memory: 1Gi}
+    limits: {cpu: "2", memory: 2Gi}
+  persistence:
+    storage: 10Gi
+    storageClass: standard
+  # Kept on uninstall (helm.sh/resource-policy: keep): its volumes hold the indexes, and an uninstall is not meant to
+  # cost a full rebuild.
+  keepOnUninstall: true
+  # The metrics forwarder the operator adds (mode auto), and mongot's own Prometheus port.
+  metricsForwarderImage: quay.io/ephico2real/opentelemetry-collector-contrib:0.152.0
+  prometheusPort: 9946
+
+# The replica set mongot syncs from: an external source, the operator does not manage it.
+source:
+  # host:port of every member, by names that resolve in this cluster (in the lab, the members' global Services).
+  hostAndPorts: []
+  username: search-sync-source
+  passwordSecret:
+    name: search-sync-source-password
+    key: password
+  # The ConfigMap with ca.crt that signs the members' certificates.
+  caConfigMap: ent-trust-bundle
+
+# TLS on the search hop, mongod to mongot.
+# true: mongot serves TLS with the Secret <certsSecretPrefix>-<search.name>-search-cert, which must name the global
+#   Service; with the source CA the operator makes it mutual TLS. Each mongod: searchTLSMode=requireTLS.
+# false: cleartext gRPC, for Cilium's L7 balancing (lbL7), with the traffic between nodes encrypted by Cilium
+#   (WireGuard). Each mongod: searchTLSMode=disabled.
+searchTLS:
+  enabled: false
+  certsSecretPrefix: ent
+
+# mongot-global: the one name every mongod dials (mongotHost), a Cilium global Service over the mongot pods of every
+# cluster of the mesh. The MongoDBSearch's endpoint is <name>.<namespace>.svc.cluster.local:27028.
+globalService:
+  name: mongot-global
+  # local: a mongod is sent to its own cluster's mongot while one is ready, to another cluster's otherwise.
+  affinity: local
+  # Cilium's L7 load balancing: each gRPC request balanced, not each connection, so searches go back to their own
+  # cluster as soon as a mongot there is ready. Cleartext gRPC only (searchTLS.enabled: false); needs Cilium's
+  # loadBalancer.l7.backend=envoy.
+  lbL7:
+    enabled: true
+    algorithm: round_robin

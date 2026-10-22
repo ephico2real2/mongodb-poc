@@ -15,6 +15,11 @@ On a lab built and passing with `kind-mesh/` (its README), from the repository's
 | 3. Drills (step 1) | `kind-mesh-cilium/drills.sh mongot mesh2 both`, `mongot mesh2 one`, `failback mesh2` |
 | 4. Step 2: WireGuard, Cilium's L7 load balancer, the search hop in cleartext | `kind-mesh-cilium/scripts/cleartext-l7.sh` |
 | 5. Check, drills (step 2), the wire | `kind-mesh/check.sh`; `drills.sh mongot mesh2 both`, `mongot mesh2 one`, `spread mesh2`; `scripts/wire-check.sh` |
+| 6. The search side onto the lab's chart (adopts what steps 1 and 2 made) | `kind-mesh-cilium/chart/test.sh`, then `kind-mesh-cilium/scripts/chart-up.sh` |
+
+From now on the chart is how this design is installed: `helm upgrade --install mongot-search
+kind-mesh-cilium/chart/mongodb-search-cilium -n search -f kind-mesh-cilium/chart/values-lab.yaml`, the same in every
+cluster. The manifests remain the record of steps 1 and 2.
 
 ## Files
 
@@ -27,6 +32,6 @@ On a lab built and passing with `kind-mesh/` (its README), from the repository's
 | `cilium/values-step2.yaml` | Step 2's Cilium settings: WireGuard, the L7 backend |
 | `manifests/44-mongot-global-l7.yaml`, `45-mongodbsearch-cleartext.yaml` | Step 2: `mongot-global` balanced per request; the MongoDBSearch without TLS on the search hop |
 | `scripts/swap-search.sh`, `scripts/cleartext-l7.sh`, `scripts/wire-check.sh`, `drills.sh`, `output/` | The two steps, the wire check, the drills, the recorded runs |
+| `chart/mongodb-search-cilium/`, `chart/values-lab.yaml`, `chart/test.sh`, `scripts/chart-up.sh` | The lab's chart, its values, its render tests, the takeover |
 
-The chart is not changed: it always renders the operator's Envoy. If this design is kept, a chart option to leave it
-out is a separate story.
+The repository's main chart (`chart/mongodb-search-helm`) is not changed: it always renders the operator's Envoy.

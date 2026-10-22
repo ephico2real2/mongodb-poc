@@ -1,0 +1,113 @@
+{{- /*
+Approves the InstallPlan that installs exactly operator.version, read through the Subscription's own reference, and
+no other: any other version waits for a human. When that version is already installed it approves nothing. From the
+chart/mongodb-search-helm approver, without its CSV reclaim. Helm post-install and post-upgrade.
+*/ -}}
+{{- if .Values.operator.install }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "msc.fullname" . }}-approver
+  namespace: {{ include "msc.namespace" . }}
+  labels:
+    {{- include "msc.labels" . | nindent 4 }}
+---
+# A Role, not a ClusterRole: approving a plan installs an operator, so the grant stays in this namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "msc.fullname" . }}-approver
+  namespace: {{ include "msc.namespace" . }}
+  labels:
+    {{- include "msc.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["operators.coreos.com"]
+    resources: ["installplans"]
+    verbs: ["get", "list", "patch"]
+  - apiGroups: ["operators.coreos.com"]
+    resources: ["subscriptions"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "msc.fullname" . }}-approver
+  namespace: {{ include "msc.namespace" . }}
+  labels:
+    {{- include "msc.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "msc.fullname" . }}-approver
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "msc.fullname" . }}-approver
+    namespace: {{ include "msc.namespace" . }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "msc.fullname" . }}-approver
+  namespace: {{ include "msc.namespace" . }}
+  labels:
+    {{- include "msc.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ add .Values.operator.approveWaitSeconds 60 }}
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      serviceAccountName: {{ include "msc.fullname" . }}-approver
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: approve
+          image: {{ .Values.jobs.image }}
+          resources:
+            {{- toYaml .Values.jobs.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          env:
+            - {name: NAMESPACE, value: {{ include "msc.namespace" . | quote }}}
+            - {name: SUBSCRIPTION, value: {{ .Values.operator.package | quote }}}
+            - {name: TARGET, value: {{ include "msc.csv" . | quote }}}
+            - {name: WAIT_SECONDS, value: {{ .Values.operator.approveWaitSeconds | quote }}}
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -uo pipefail
+              log()  { printf '[approver %s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
+              fail() { printf '[approver] FAILED: %s\n' "$*" >&2; exit 1; }
+              deadline=$(( $(date +%s) + WAIT_SECONDS ))
+              sub()  { oc get subscriptions.operators.coreos.com "$SUBSCRIPTION" -n "$NAMESPACE" -o jsonpath="{$1}"; }
+              plan() { oc get installplans.operators.coreos.com "$1" -n "$NAMESPACE" -o jsonpath="{$2}"; }
+              if [ "$(sub .status.installedCSV 2>/dev/null)" = "$TARGET" ]; then
+                log "${TARGET} is installed; nothing to approve"; exit 0
+              fi
+              while :; do
+                ref="$(sub .status.installPlanRef.name 2>/dev/null)"
+                if [ -n "$ref" ]; then
+                  names="$(plan "$ref" '.spec.clusterServiceVersionNames[*]')"
+                  [ "$names" = "$TARGET" ] || fail "InstallPlan ${ref} installs '${names}', not ${TARGET}: not approving it"
+                  break
+                fi
+                [ "$(date +%s)" -lt "$deadline" ] || fail "no InstallPlan for ${TARGET} within ${WAIT_SECONDS}s"
+                log "waiting for OLM to stage an InstallPlan for ${TARGET}"; sleep 5
+              done
+              [ "$(plan "$ref" .spec.approved)" = true ] || oc patch installplans.operators.coreos.com "$ref" -n "$NAMESPACE" \
+                --type merge -p '{"spec":{"approved":true}}' >/dev/null || fail "could not approve ${ref}"
+              log "approved ${ref} (${TARGET})"
+              while :; do
+                phase="$(plan "$ref" .status.phase)"
+                [ "$phase" = Complete ] && { log "${ref} is Complete"; exit 0; }
+                [ "$phase" = Failed ] && fail "InstallPlan ${ref} Failed: oc describe installplan ${ref} -n ${NAMESPACE}"
+                [ "$(date +%s)" -lt "$deadline" ] || fail "InstallPlan ${ref} is '${phase}' after ${WAIT_SECONDS}s"
+                sleep 5
+              done
+{{- end }}
