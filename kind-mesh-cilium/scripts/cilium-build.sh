@@ -7,21 +7,21 @@
 # agent on the build, the clustermesh-apiserver on its image when the build has one, Cilium healthy, WireGuard on every
 # agent, connected to both other clusters, and every CiliumEndpoint of a pod with an owner carrying status.workloads.
 # Then #187's step: once the mongot-global frontend on mongod's node is an L7 load balancer again, Cilium's Envoy there
-# must count mongod's searches; if it does not, that cluster's mongod is restarted (output/cilium-build-l7.txt).
+# must count mongod's searches; if it does not, that cluster's mongod is restarted (output/<CILIUM_RECORD>-l7.txt).
 #
 # Story #190: the same rollout from #145's build to the one that names the workload across Cluster Mesh, which needs
 # the clustermesh-apiserver's image too (CILIUM_CLUSTERMESH_IMAGE), both built in the VM's docker (CILIUM_IMAGES_LOCAL=1:
 # kind load, no pull). What each side runs and names is pinned in versions.env (CILIUM_BEFORE_COMMIT, CILIUM_BEFORE_SCOPE,
 # CILIUM_SCOPE): the next build is a pin change.
 #
-#   kind-mesh-cilium/scripts/cilium-build.sh measure before   # on what runs now: output/cilium-build-before.txt
+#   kind-mesh-cilium/scripts/cilium-build.sh measure before   # on what runs now: output/<CILIUM_RECORD>-before.txt
 #   kind-mesh-cilium/scripts/cilium-build.sh upgrade 2>&1 | tee kind-mesh-cilium/output/cilium-build.log
 #                                                             # mesh2, mesh1, then mesh0 (the primary's); the loads in
 #                                                             # output/cilium-build-evidence.*/cilium-build-load-<cluster>.txt
 #   kind-mesh-cilium/scripts/cilium-build.sh upgrade mesh2    # the named clusters only, in that order
 #   LOAD_SECONDS=60 ... upgrade                               # the load runs in batches of this many seconds (60)
 #                                                             # until the last gate passes; each batch checks its writes
-#   kind-mesh-cilium/scripts/cilium-build.sh measure after    # on the build: output/cilium-build-after.txt
+#   kind-mesh-cilium/scripts/cilium-build.sh measure after    # on the build: output/<CILIUM_RECORD>-after.txt
 #   kind-mesh-cilium/scripts/cilium-build.sh drill            # mesh2 loses its mongot: do its cross-cluster search
 #                                                             # flows name the workload? (with CILIUM_SCOPE=mesh, expected
 #                                                             # all named; otherwise none)
@@ -49,7 +49,9 @@ before_commit=$CILIUM_BEFORE_COMMIT
 for x in "$CILIUM_BEFORE_SCOPE" "$CILIUM_SCOPE"; do
   case "$x" in node|cluster|mesh) ;; *) die "CILIUM_BEFORE_SCOPE and CILIUM_SCOPE are node, cluster or mesh, not $x" ;; esac
 done
-l7_record="$out/cilium-build-l7.txt"   # #187's step, per cluster; "RESTARTED <cluster>" when its mongod was restarted
+# Each build's records under their own name (CILIUM_RECORD in versions.env), so a later run keeps the earlier ones.
+rec=${CILIUM_RECORD:-cilium-build}
+l7_record="$out/$rec-l7.txt"   # #187's step, per cluster; "RESTARTED <cluster>" when its mongod was restarted
 tmp=$(mktemp -d "$out/cilium-build-evidence.XXXXXX")
 load_pids=()
 active_cluster=none
@@ -268,7 +270,7 @@ cross_cluster() { case "$1" in mesh) echo all ;; *) echo none ;; esac; }
 # other clusters' members (#190). Before expects CILIUM_BEFORE_COMMIT at CILIUM_BEFORE_SCOPE, after the build at
 # CILIUM_SCOPE.
 measure() { # <before|after>
-  local tag=$1 log="$out/cilium-build-$1.txt" c node agent remote same others x rf sf xf v all named missing names
+  local tag=$1 log="$out/$rec-$1.txt" c node agent remote same others x rf sf xf v all named missing names
   local want scope ver inventory flow_since expect cross
   case "$tag" in
     before) want=$before_commit scope=$CILIUM_BEFORE_SCOPE ;;
@@ -279,7 +281,7 @@ measure() { # <before|after>
   placement "$tmp/placement.json"
   if [ "$tag" = after ]; then
     # A mongod restarted by #187's step (RESTARTED in the record) has a new UID and address; nothing else may change.
-    python3 - "$out/cilium-build-placement.json" "$tmp/placement.json" "$l7_record" <<'PYCODE' \
+    python3 - "$out/$rec-placement.json" "$tmp/placement.json" "$l7_record" <<'PYCODE' \
       || die "pod UID/IP/node/owner changed, or no baseline placement; take a new before measurement"
 import json, os, sys
 base, now = (json.load(open(f)) for f in sys.argv[1:3])
@@ -343,7 +345,7 @@ PYCODE
   placement "$tmp/placement-end.json"
   cmp "$tmp/placement.json" "$tmp/placement-end.json" || die "placement changed during measurement"
   # A new baseline: #187's restarts recorded against the old one no longer apply.
-  if [ "$v" = 0 ] && [ "$tag" = before ]; then cp "$tmp/placement.json" "$out/cilium-build-placement.json"; rm -f "$l7_record"; fi
+  if [ "$v" = 0 ] && [ "$tag" = before ]; then cp "$tmp/placement.json" "$out/$rec-placement.json"; rm -f "$l7_record"; fi
   [ "$v" = 0 ]
 }
 
@@ -581,7 +583,7 @@ print("  values kept: " + ", ".join(sorted(a)) + "; now " + "; ".join(now))' \
   done
 }
 
-# mesh2 loses its mongot (drills.sh mongot mesh2 both, recorded as output/drill-mongot-mesh2-both-build.txt): its
+# mesh2 loses its mongot (drills.sh mongot mesh2 both, recorded as output/drill-mongot-mesh2-both-<CILIUM_RECORD without "cilium-">.txt): its
 # searches go to the other clusters' mongot meanwhile, so mongod's flows to a mongot in another cluster can be read.
 # The flows are followed on mesh2 mongo-0's agent for the whole drill (its ring buffer may not hold a minute-old flow
 # by the end). With CILIUM_SCOPE=mesh (#190) every one of them names the workload, L3/L4 and L7; otherwise none does.
@@ -593,13 +595,13 @@ drill() {
   kubectl --context "kind-$c" -n kube-system exec "$agent" -c cilium-agent -- timeout 200 hubble observe --follow -o json \
     --from-cluster "$c" --from-pod mongodb/mongo-0 --to-namespace search --port 27028 >"$tmp/drill-flows.json" 2>/dev/null &
   pid=$!
-  DRILL_TAG=build "$here/drills.sh" mongot "$c" both || { wait "$pid" || true; die "mongot drill failed"; }
+  DRILL_TAG="${rec#cilium-}" "$here/drills.sh" mongot "$c" both || { wait "$pid" || true; die "mongot drill failed"; }
   wait "$pid" || true
   {
     echo "== $c's search flows to another cluster's mongot during drills.sh mongot $c both, build $commit, scope $CILIUM_SCOPE ($(date -u +%Y-%m-%dT%H:%MZ))"
     echo "  to another cluster: $(named_count StatefulSet/mongot-search-0 "$c" <"$tmp/drill-flows.json") (named/flows; expected $expect named)"
     echo "  to any cluster:     $(named_count StatefulSet/mongot-search-0 <"$tmp/drill-flows.json") (named/flows, $c's own included)"
-  } | tee "$out/cilium-build-drill.txt"
+  } | tee "$out/$rec-drill.txt"
   cross=$(named_count StatefulSet/mongot-search-0 "$c" <"$tmp/drill-flows.json")
   # Preserve the cluster-scope drill: reused connections need not emit L3/L4.
   for t in L7 $([ "$CILIUM_SCOPE" = mesh ] && echo L3_L4); do
@@ -607,9 +609,9 @@ drill() {
   done
   # The drill measures attribution, not search reliability: 1 to 3 searches fail at the moment the mongot are deleted
   # (testing record C8, #187), so failures are reported and only a drill that answered nothing stops the run.
-  sed -n 's/^RESULT //p' "$out/drill-mongot-$c-both-build-load.txt" \
+  sed -n 's/^RESULT //p' "$out/drill-mongot-$c-both-${rec#cilium-}-load.txt" \
     | python3 -c 'import json,sys; r=json.load(sys.stdin); print("  searches during the drill: %d answered, %d failed" % (r["ok"], r["fail"])); assert r["ok"] > 0' \
-    | tee -a "$out/cilium-build-drill.txt" || die "drill searches were not answered or not recorded"
+    | tee -a "$out/$rec-drill.txt" || die "drill searches were not answered or not recorded"
 }
 
 case "${1:-}" in

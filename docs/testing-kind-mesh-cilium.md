@@ -491,7 +491,7 @@ the observing agent reads them. So both images change, and both are built in the
 | # | What | Command | Passes when | Result |
 | --- | --- | --- | --- | --- |
 | X1 | The measurement on #145's build | `kind-mesh-cilium/scripts/cilium-build.sh measure before` | 0 failed: every agent `1d3a02ab`; every CiliumEndpoint of an owned pod carries the field; flows to the mongot on the other node name it, L3/L4 and L7; replication flows to the other clusters name nothing | (run pending) |
-| X2 | Both images, one cluster at a time (mesh2, mesh1, mesh0), under the load | `kind-mesh-cilium/scripts/cilium-build.sh upgrade 2>&1 \| tee kind-mesh-cilium/output/cilium-build.log` | each cluster's gate and #187's step before the next; every acknowledged write found by id | (run pending) |
+| X2 | Both images, one cluster at a time (mesh2, mesh1, mesh0), under the load | `kind-mesh-cilium/scripts/cilium-build.sh upgrade 2>&1 \| tee kind-mesh-cilium/output/cilium-build-190.log` | each cluster's gate and #187's step before the next; every acknowledged write found by id | (run pending) |
 | X3 | The measurement on the build | `kind-mesh-cilium/scripts/cilium-build.sh measure after` | 0 failed: as X1, and replication flows to the other clusters name `StatefulSet/mongo` | (run pending) |
 | X4 | A search across clusters | `kind-mesh-cilium/scripts/cilium-build.sh drill` | mesh2's flows to another cluster's mongot, L3/L4 and L7, all name `StatefulSet/mongot-search-0` | (run pending) |
 | X5 | The lab is healthy | `kind-mesh/check.sh` | 0 failed | (run pending) |
