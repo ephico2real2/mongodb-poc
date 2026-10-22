@@ -18,7 +18,8 @@ here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/../kind-mesh/scripts/lib.sh"
 lab_env
 admin_pw=$(kubectl --context kind-mesh0 -n mongodb get secret mongo-admin -o jsonpath='{.data.password}' | base64 -d)
-out="$here/output"
+out="${CILIUM_OUTPUT_DIR:-$here/output}"
+mkdir -p "$out"
 mkdir -p "$out"
 restore() {
   local c

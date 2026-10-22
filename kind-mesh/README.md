@@ -45,7 +45,7 @@ clusters (`down.sh`), then runs steps 2 to 5 and 8 to 9 above and `kind-mesh-cil
 step 2, the lab's chart, the network policy), then `check.sh`: each phase timed and logged under
 `output/rebuild-<date>/`, stopping at the first failure. Without `--yes` it only prints what is lost (the replica
 set's data and indexes, mongot's indexes, Loki's flows, Grafana's state, every password) and kept (the VM, the kind
-network, the images in the VM's docker, the recorded runs). `--reclaim-docker` also frees the VM docker's build cache
+network, the images in the VM's docker, the recorded runs). `--reclaim-docker` requires `--yes` and after the rebuild frees the VM docker's build cache
 and unused images, never `localhost/kind-mesh/oc`, our Cilium images or kind's node image. What each step sets and
 why: [docs/building-the-kind-mesh-lab.md](../docs/building-the-kind-mesh-lab.md).
 
@@ -54,7 +54,7 @@ why: [docs/building-the-kind-mesh-lab.md](../docs/building-the-kind-mesh-lab.md)
 (`lib.sh`, `cilium_image_args`). `kind-mesh-cilium/scripts/cleartext-l7.sh` adds `kind-mesh-cilium/cilium/values-step2.yaml`
 (WireGuard, the L7 backend) on top, with `--reuse-values`; `kind-mesh-cilium/scripts/cilium-build.sh` changes the
 images and nothing else (`--reset-then-reuse-values`). A re-run of `up.sh` on a lab after step 2 would render the
-release without step 2's values, so it refuses at the mesh step, naming #166: after step 2, the platform's scripts
+release without step 2's values, so it refuses before platform changes, naming #166: after step 2, the platform's scripts
 are `colima-up.sh` and `rebuild.sh` only.
 
 ## The search GUI

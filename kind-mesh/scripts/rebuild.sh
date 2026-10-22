@@ -8,7 +8,7 @@
 #   kind-mesh/scripts/rebuild.sh                          # prints what a rebuild deletes, keeps and runs; changes nothing
 #   kind-mesh/scripts/rebuild.sh --yes                    # deletes the clusters, rebuilds; logs in output/rebuild-<date>/
 #   kind-mesh/scripts/rebuild.sh --yes --reclaim-docker   # then the VM's own docker: its build cache and unused images
-#   kind-mesh/scripts/rebuild.sh --reclaim-docker         # only that, with the clusters as they are
+#   --reclaim-docker also requires --yes and runs after the rebuild
 #
 # What is lost and what stays is printed before the deletion (plan). The VM itself is not touched: a stopped one is
 # started with kind-mesh/scripts/colima-up.sh first.
@@ -50,7 +50,7 @@ phases=(
 plan() {
   cat <<EOF
 rebuild.sh deletes the kind clusters ${clusters[*]} and every volume in them:
-  - the replica set's data and its search indexes (data-load.sh loads the sample data and makes the indexes again);
+  - the replica set's data and all its indexes (data-load.sh loads the sample data and makes the indexes again);
     what was written since, lab.drill and lab.probe among it, is gone
   - mongot's indexes (two mongot a cluster, 10Gi volumes each), rebuilt by mongot from the replica set
   - Loki's flows (the storage-loki-0 volume in mesh0) and Grafana's state (no volume: its admin password Secret, and
@@ -64,7 +64,7 @@ It keeps:
     ${CILIUM_CLUSTERMESH_IMAGE:-(none)}, the Jobs' $oc_image; with --reclaim-docker, the build cache and the
     unused images go, these never
   - the recorded runs: kind-mesh/output/ and kind-mesh-cilium/output/ are in git. This run's logs go to
-    kind-mesh/output/rebuild-<date>/; cleartext-l7.sh rewrites kind-mesh-cilium/output/step2-load-*.txt (git diff shows it)
+    kind-mesh/output/rebuild-<date>.XXXXXX/ (including the step2-load records); tracked records stay unchanged
 Then it runs, each phase timed and logged, stopping at the first failure:
 EOF
   local p
@@ -83,29 +83,39 @@ disk() {
 # next Cilium build starts cold). docker rmi is called without -f: an image a container uses (a kind node's) is
 # refused, and kept.
 reclaim_docker() {
-  local id ref
+  local id repo tag ref images protected=" "
+  # Snapshot before pruning; command substitution propagates a failed inventory.
+  # Protect IDs as well as names: digest-only rows and aliases can refer to a protected image.
+  images=$(docker images --no-trunc --format '{{.ID}} {{.Repository}} {{.Tag}}') \
+    || die "cannot inventory images: nothing reclaimed"
+  while read -r id repo tag; do
+    case "$repo" in
+      "$oc_image"|"${CILIUM_IMAGE%:*}"|"${CILIUM_CLUSTERMESH_IMAGE%:*}"|"${KIND_NODE_IMAGE%%:*}") protected="$protected$id " ;;
+    esac
+  done <<<"$images"
   say "the VM's docker: the build cache, then the images no container uses"
   docker builder prune --all --force
-  while read -r id ref; do
-    case "$ref" in
-      "$oc_image":*|"$CILIUM_IMAGE"|"${CILIUM_CLUSTERMESH_IMAGE:-}"|"${KIND_NODE_IMAGE%%:*}":*) echo "  kept $ref (the lab needs it)"; continue ;;
-      '<none>:<none>') ref=$id ;;
-    esac
-    # stdin from /dev/null: the loop's own stdin is the image list, which a command must not read.
-    if docker rmi "$ref" </dev/null >/dev/null 2>&1; then echo "  removed $ref"; else echo "  kept $ref (in use)"; fi
-  done < <(docker images --format '{{.ID}} {{.Repository}}:{{.Tag}}')
+  while read -r id repo tag; do
+    [ -n "$id" ] || continue
+    case "$protected" in *" $id "*) echo "  kept $repo:$tag (the lab needs it)"; continue ;; esac
+    # Docker reports both dangling and digest-only images with Tag=<none>.
+    if [ "$tag" = '<none>' ]; then ref=$id; else ref="$repo:$tag"; fi
+    if docker rmi "$ref" </dev/null >/dev/null 2>&1; then echo "  removed $ref"; else echo "  kept $ref (in use or removal refused)"; fi
+  done <<<"$images"
 }
 
 # The nodes' recorded addresses belong to the nodes down.sh deletes: a next colima-up.sh would refuse the new nodes
 # against them (its pin_node). Then down.sh itself.
 down() {
-  if [ -f "$MESH_NODE_IPS" ]; then rm -f "$MESH_NODE_IPS"; echo "removed ${MESH_NODE_IPS/$HOME/\~}"; fi
+  if [ -f "$MESH_NODE_IPS" ]; then rm -f "$MESH_NODE_IPS" || return $?; echo "removed ${MESH_NODE_IPS/$HOME/\~}"; fi
   kind-mesh/scripts/down.sh
 }
 # Step 9 of kind-mesh-cilium/README.md: the policy, applied by hand there, in every cluster.
 mongot_ingress() {
   local c
-  for c in "${clusters[@]}"; do kubectl --context "kind-$c" apply -f kind-mesh-cilium/manifests/60-mongot-ingress.yaml; done
+  for c in "${clusters[@]}"; do
+    kubectl --context "kind-$c" apply -f kind-mesh-cilium/manifests/60-mongot-ingress.yaml || return $?
+  done
 }
 
 n=0
@@ -128,16 +138,20 @@ phase() { # <name> <command...>: timed, logged to $out/NN-<name>.log and summari
 
 say "what a rebuild does"
 plan
-lab_env
-if [ "$yes" != 1 ]; then
-  if [ "$reclaim" != 1 ]; then die "nothing deleted: add --yes to delete the clusters and rebuild"; fi
-  disk; reclaim_docker; disk
-  exit 0
-fi
+[ "$yes" = 1 ] || die "nothing deleted: add --yes to delete the clusters and rebuild (also required for --reclaim-docker)"
 
-say "before any deletion: the tools, the images, the chart"
-# The scripts check their own tools, but only once they run, after the deletion; up.sh's list is checked here first.
-for t in docker kind kubectl helm cilium colima python3 openssl curl; do command -v "$t" >/dev/null || die "$t is not installed: nothing deleted"; done
+say "before any deletion: the tools, VM, network, images, charts and disk"
+for t in docker kind kubectl helm cilium colima python3 openssl curl awk sed grep sort cut tr head tail wc base64 seq tee date mkdir rm mktemp; do
+  command -v "$t" >/dev/null || die "$t is not installed: nothing deleted"
+done
+lab_env
+info=$(colima_info) || die "cannot inspect the VM: nothing deleted"
+[ "${info%% *}" = Running ] || die "the VM is not Running: nothing deleted"
+docker info >/dev/null || die "the VM's docker is unavailable: nothing deleted"
+if docker network inspect kind >/dev/null 2>&1; then
+  have=$(docker network inspect kind --format '{{range .IPAM.Config}}{{.Subnet}} {{end}}' | tr ' ' '\n' | grep -m1 '\.')
+  [ "$have" = "$LAB_SUBNET" ] || die "kind network has subnet $have, expected $LAB_SUBNET: nothing deleted"
+fi
 if [ "${CILIUM_IMAGES_LOCAL:-0}" = 1 ]; then
   cilium_images_local
   echo "  the Cilium images are in the VM's docker: $CILIUM_IMAGE${CILIUM_CLUSTERMESH_IMAGE:+, $CILIUM_CLUSTERMESH_IMAGE}"
@@ -149,9 +163,25 @@ else
 fi
 kind-mesh-cilium/chart/test.sh >/dev/null || die "the lab chart's render tests fail (kind-mesh-cilium/chart/test.sh): nothing deleted"
 echo "  the lab chart's render tests pass"
+helm lint chart/mongodb-search-helm -f kind-mesh/values/search.yaml >/dev/null \
+  || die "the Envoy chart fails lint: nothing deleted"
+helm template mongot chart/mongodb-search-helm -n search -f kind-mesh/values/search.yaml >/dev/null \
+  || die "the Envoy chart cannot render: nothing deleted"
+# Conservative budget: no credit for space deletion might recover. This cannot bound
+# future writes; increase the budget for larger images/data and avoid concurrent writers.
+reserve=${REBUILD_DISK_BUDGET_KIB:-12582912}
+[[ "$reserve" =~ ^[1-9][0-9]*$ ]] || die "REBUILD_DISK_BUDGET_KIB must be positive"
+fs=$(colima ssh --profile "$COLIMA_PROFILE" -- df -k --output=size,avail /var/lib/docker) \
+  || die "cannot read docker disk capacity: nothing deleted"
+read -r size avail <<<"$(printf '%s\n' "$fs" | tail -1)"
+[[ "$size" =~ ^[1-9][0-9]*$ && "$avail" =~ ^[0-9]+$ ]] || die "invalid docker disk capacity: nothing deleted"
+[ $(((size - avail + reserve) * 100)) -lt $((size * 85)) ] \
+  || die "docker disk would reach 85% with the rebuild budget: nothing deleted"
 disk
 
-out="$LAB_DIR/output/rebuild-$(date +%Y-%m-%d)"
+mkdir -p "$LAB_DIR/output"
+out=$(mktemp -d "$LAB_DIR/output/rebuild-$(date +%Y-%m-%d).XXXXXX")
+export CILIUM_OUTPUT_DIR="$out"
 summary="$out/summary.txt"
 mkdir -p "$out"
 t_all=$(date +%s)

@@ -16,7 +16,8 @@ lab_env
 # shellcheck disable=SC2153  # CLUSTERS comes from versions.env
 read -r -a clusters <<<"$CLUSTERS"
 admin_pw=$(kubectl --context kind-mesh0 -n mongodb get secret mongo-admin -o jsonpath='{.data.password}' | base64 -d)
-out="$here/output"
+out="${CILIUM_OUTPUT_DIR:-$here/output}"
+mkdir -p "$out"
 member_state() { # <cluster>: PRIMARY, SECONDARY or nothing
   printf 'db.getSiblingDB("admin").auth("labAdmin", "%s"); const h = db.hello(); print(h.isWritablePrimary ? "PRIMARY" : (h.secondary ? "SECONDARY" : ""))' "$admin_pw" \
     | kubectl --context "kind-$1" -n mongodb exec -i mongo-0 -c mongod -- mongosh --quiet --tls --tlsCAFile /run/mongod/ca.crt --host localhost --file /dev/stdin 2>/dev/null
@@ -80,4 +81,4 @@ for c in "${clusters[@]}"; do
   echo "  $c: CiliumEnvoyConfig for mongot-global: $(kubectl --context "kind-$c" -n search get ciliumenvoyconfig -o name 2>/dev/null | tr '\n' ' ')"
 done
 wait
-say "step 2 applied; loads in output/step2-load-cilium.txt and step2-load-cleartext.txt"
+say "step 2 applied; loads in $out/step2-load-cilium.txt and step2-load-cleartext.txt"

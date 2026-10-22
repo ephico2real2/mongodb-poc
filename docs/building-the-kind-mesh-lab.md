@@ -9,7 +9,7 @@ on the wire or in Hubble. The order is the one the lab was built in; every resul
 reasons for it: [the reference architecture](reference-architecture-search-on-cluster-mesh.md).
 
 One command runs the whole order after deleting what is there: `kind-mesh/scripts/rebuild.sh --yes`
-([Tear down and rebuild](#tear-down-and-rebuild)). Every command below runs from the repository's root; for your
+([Tear down and rebuild](#tear-down-and-rebuild)). Lab commands below run from the repository's root (the image build commands explicitly enter the Cilium clone); for your
 own `kubectl`, `export KUBECONFIG=~/.kube/mongodb-mesh.config` first (the scripts set it themselves).
 
 | # | Setting | Command | Assumes |
@@ -40,13 +40,13 @@ own `kubectl`, `export KUBECONFIG=~/.kube/mongodb-mesh.config` first (the script
 - **Why:** the release agent names the workload (`StatefulSet/mongot-search-0`) only for a pod on its own node; our
   build names it for a pod on another node (#145) and in another cluster of the mesh (#190), so the flows dashboard
   can say what talked to what across the mesh. The chart stays the release's; only the images change.
-- **Command:** the four lines under "Across Cluster Mesh too" in
+- **Command:** the build commands under "Across Cluster Mesh too" in
   [testing-kind-mesh-cilium.md](testing-kind-mesh-cilium.md#across-cluster-mesh-too-story-190): a clone of the fork at
   the pinned commit, `DOCKER_HOST` at the VM's socket, `make dev-docker-image` and
   `make docker-clustermesh-apiserver-image`.
 - **See it worked:** `DOCKER_HOST=unix://$HOME/.colima/mongodb-mesh/docker.sock docker image inspect
   quay.io/cilium/cilium-dev:remote-workload-cm-9e5a34a5 quay.io/cilium/clustermesh-apiserver:remote-workload-cm-9e5a34a5
-  --format '{{.RepoTags}}'` lists both; `docker run --rm --entrypoint cilium-agent <agent image> --version` prints
+  --format '{{.RepoTags}}'` lists both; `DOCKER_HOST=unix://$HOME/.colima/mongodb-mesh/docker.sock docker run --rm --entrypoint cilium-agent quay.io/cilium/cilium-dev:remote-workload-cm-9e5a34a5 --version` prints
   `1.20.2 9e5a34a525`. `up.sh` and `rebuild.sh` refuse, naming the image, when one is missing (`lib.sh`,
   `cilium_images_local`).
 - **Hubble:** nothing yet; the images are not running. What they change is step 15.
@@ -58,8 +58,10 @@ own `kubectl`, `export KUBECONFIG=~/.kube/mongodb-mesh.config` first (the script
   address it had.
 - **Why:** the three clusters, their volumes and images all live in this VM's docker. One VM means the clusters
   share one kernel and have no real network between them, which the testing records say when it matters (the
-  election times are "a floor rather than a forecast"). 16 GiB left 1,240 MiB available with the lab up (#162); the
-  60 GiB disk reached 80% used and mongot stops indexing above 85% (#182).
+  election times are "a floor rather than a forecast"). 16 GiB left 2,086 MiB available before the restart
+  (`kind-mesh/output/restart-2026-10-22/vm-before.txt`); the 60 GiB disk reached 80% used
+  (`kind-mesh/output/disk-grow-2026-10-22/vm-before.txt`). Mongot stops indexing above 85%
+  ([resource record](testing-kind-mesh.md#resources), #182).
 - **Command:** `kind-mesh/scripts/colima-up.sh`. Idempotent: a running VM is reported, not resized.
 - **See it worked:** it prints `colima list` and, on a VM it started, `df -h /var/lib/docker`; with no clusters yet it
   ends with "no kind nodes yet: kind-mesh/scripts/up.sh creates the clusters". Recorded: the first lines of
@@ -246,7 +248,7 @@ Three settings, one script, in the order the script enforces (A, C, B):
   encryption", each MongoDBSearch Running "mongot without TLS", each mongod "with searchTLSMode=disabled, back as
   SECONDARY", and a `CiliumEnvoyConfig` named `cilium-envoy-lb-mongot-global` per cluster
   (`kind-mesh-cilium/output/step2-apply.log`); `check.sh` 0 failed (`check-step2.txt`).
-- **On the wire:** `scripts/wire-check.sh` on the kind bridge: WireGuard packets on UDP 51871, none on TCP 27028 or
+- **On the wire:** `kind-mesh-cilium/scripts/wire-check.sh` on the kind bridge: WireGuard packets on UDP 51871, none on TCP 27028 or
   27017, no VXLAN, the search text in no packet
   ([C6](testing-kind-mesh-cilium.md#c6-the-search-hop-is-encrypted-between-nodes), `wire-check.txt`). WireGuard does
   not decide who may connect: a pod anywhere, and a host outside WireGuard, reached mongot's port
@@ -288,7 +290,7 @@ Three settings, one script, in the order the script enforces (A, C, B):
   (no script of its own; `rebuild.sh`'s `mongot-ingress` phase runs exactly this).
 - **See it worked:** `kind-mesh-cilium/scripts/mongot-reach.sh policy`: of four probe pods only the one in `mongodb`
   with `app=mongo` is answered, directly and through `mongot-global`; the VM gets no connection
-  (`mongot-reach-policy.txt`; `mongot-reach.sh open` without the policy answers all,
+  (`mongot-reach-policy.txt`; `kind-mesh-cilium/scripts/mongot-reach.sh open` without the policy answers all,
   [C8](testing-kind-mesh-cilium.md#c8-only-mongod-reaches-mongot-a-ciliumnetworkpolicy)). `check.sh` 0 failed under it
   (`check-policy.txt`).
 - **Hubble:** policy verdicts: only the allowed sources, all `FORWARDED` (`mongot-ingress-verdicts.txt`); a
@@ -306,7 +308,17 @@ Three settings, one script, in the order the script enforces (A, C, B):
   measure before`, `upgrade`, `measure after`, `drill`: one cluster at a time under a search and write load, the CRD
   first, then a Helm upgrade that changes the images and nothing else, then step 2's gate, then #187's step. Not for
   a fresh lab: `measure before` expects the previous build's agents (`CILIUM_BEFORE_COMMIT`), and `measure after`
-  compares the pods with the placement `measure before` recorded.
+  compares the pods with the placement `measure before` recorded. For a rebuilt lab use:
+
+  ```sh
+  export CILIUM_OUTPUT_DIR="$(mktemp -d "$PWD/kind-mesh-cilium/output/rebuilt.XXXXXX")"
+  CILIUM_PLACEMENT=fresh kind-mesh-cilium/scripts/cilium-build.sh measure after
+  kind-mesh-cilium/scripts/cilium-build.sh drill
+  ```
+
+  `fresh` records that it skipped the old baseline comparison; it still checks placement stability during the
+  measurement, agent versions, CEPs and attribution at `CILIUM_SCOPE=mesh` from `versions.env`. The separate output
+  directory preserves the historical records and is also used by the drill.
 - **#187's check:** after an agent restart, once `mongot-global`'s frontend on mongod's node is an L7 load balancer
   again, Cilium's Envoy there must count 20 searches through that mongod; if it does not, that mongod is restarted
   (`cilium-build.sh`, `l7_after_restart`; its record `cilium-build-190-l7.txt`: 20 of 20 in each cluster). It runs
@@ -314,9 +326,9 @@ Three settings, one script, in the order the script enforces (A, C, B):
   `mongot-global` is annotated L7, so the same question exists there; the drill `kind-mesh-cilium/drills.sh mongot
   mesh2 both` answers it for mesh2 (searches return to mesh2 by themselves only through Envoy), and the GUI's
   "served by" for each member.
-- **See it worked:** `cilium-build.sh measure after` (on a lab with a baseline): every agent on `9e5a34a5`, every
+- **See it worked:** `kind-mesh-cilium/scripts/cilium-build.sh measure after` (on a lab with a baseline): every agent on `9e5a34a5`, every
   CiliumEndpoint of an owned pod carrying `status.workloads`, flows to the mongot on the other node named, flows to
-  the other clusters' mongod named `StatefulSet/mongo` (`cilium-build-190-after.txt`); `cilium-build.sh drill`: mesh2's
+  the other clusters' mongod named `StatefulSet/mongo` (`cilium-build-190-after.txt`); `kind-mesh-cilium/scripts/cilium-build.sh drill`: mesh2's
   search flows to another cluster's mongot all named, L3/L4 and L7 (`cilium-build-190-drill.txt`;
   [X1 to X5](testing-kind-mesh-cilium.md#across-cluster-mesh-too-story-190)). Without a baseline: `kubectl --context
   kind-mesh0 -n kube-system exec ds/cilium -c cilium-agent -- cilium-agent --version` prints `1.20.2 9e5a34a525`, and
@@ -326,34 +338,40 @@ Three settings, one script, in the order the script enforces (A, C, B):
 
 ## 16. The proofs
 
-- **Command:** `kind-mesh/check.sh`: the mesh, the replica set, a `w: 3` write on every member, every MongoDBSearch
+- **Command:** `kind-mesh/check.sh`: the mesh, the replica set, a `w: 3` write through the replica set, read on every member, every MongoDBSearch
   Running, every mongot holding both indexes STEADY, `$search` through every member, no volume over 10Gi. The exit
   code is the number of FAILs.
 - **See it worked:** `== 0 failed`: 22 rows with two mongot per cluster, the policy and the observability stack
   (`kind-mesh-cilium/output/check-policy.txt`, `cilium-build-190-check.txt`; 19 rows with one mongot,
   `kind-mesh/output/check.txt`).
-- **Optional, each with its record in the testing records:** the drills (`kind-mesh-cilium/drills.sh mongot mesh2
-  one|both`, `spread mesh2`, `primary freeze|kill|partition`), `scripts/wire-check.sh`, `scripts/mongot-reach.sh`,
-  `scripts/cilium-build.sh measure|drill`, `scripts/primary-matrix.sh`, `scripts/election-tuning.sh` (the replica set
-  goes back to the defaults at its end: no profile is part of the lab), `scripts/blip-test.sh`.
+- **Optional examples, each with evidence in the testing records:**
+  `kind-mesh-cilium/drills.sh mongot mesh2 both`, `kind-mesh-cilium/drills.sh spread mesh2`,
+  `kind-mesh-cilium/drills.sh primary freeze`, `kind-mesh-cilium/scripts/wire-check.sh`,
+  `kind-mesh-cilium/scripts/mongot-reach.sh policy`, `kind-mesh-cilium/scripts/cilium-build.sh drill`,
+  `kind-mesh-cilium/scripts/primary-matrix.sh`, `kind-mesh-cilium/scripts/election-tuning.sh`
+  (the replica set goes back to the defaults at its end: no profile is part of the lab),
+  `kind-mesh-cilium/scripts/blip-test.sh`.
 
 ## Tear down and rebuild
 
 `kind-mesh/scripts/rebuild.sh` runs steps 2 to 14 and 16 in this order, through the scripts named above, after
 deleting the three clusters with `kind-mesh/scripts/down.sh`. It is orchestration only: each phase is one of the
-scripts above (the policy, the `kubectl apply` of step 14), timed and logged to `kind-mesh/output/rebuild-<date>/`,
+scripts above (the policy, the `kubectl apply` of step 14), timed and logged to `kind-mesh/output/rebuild-<date>.XXXXXX/`,
 and the run stops at the first failure, naming the phase.
 
 - Without `--yes` it prints what a rebuild deletes, keeps and runs, and changes nothing. With `--yes` it first checks
-  what it cannot make (the VM running, the tools, step 0's images in the VM's docker, the chart's render tests) and
+  what it cannot make (the VM running, the tools, step 0's images in the VM's docker, both charts' local rendering, the kind network subnet, and the disk budget) and
   refuses before any deletion when one is missing.
 - **Lost:** the replica set's data and search indexes (loaded again from the sample data), everything written since
   (`lab.drill`, `lab.probe`), mongot's indexes (rebuilt from the set), Loki's flows, Grafana's state, every Secret and
   user the scripts made (new passwords), the nodes' recorded addresses. **Kept:** the VM, the kind network, the
-  images in the VM's docker, the recorded runs (in git; the replay rewrites `kind-mesh-cilium/output/step2-load-*.txt`).
-- `--reclaim-docker` (with `--yes`, after the build; or alone) removes the VM docker's build cache and the images no
+  images in the VM's docker, the recorded runs (the replay sets `CILIUM_OUTPUT_DIR` to its unique log directory, including the step-2 loads).
+- `--reclaim-docker` (requires `--yes`, after the build) removes the VM docker's build cache and the images no
   container uses, never `localhost/kind-mesh/oc`, the two Cilium images or kind's node image; `docker rmi` is called
   without `-f`, so an image a container uses is kept and reported.
+- Disk admission reserves `REBUILD_DISK_BUDGET_KIB` (default 12582912 KiB, a conservative budget, not a measured
+  bound) below the 85% limit before deletion, without credit for deleted data. Increase it for larger images/data;
+  later downloads, cluster readiness and concurrent disk writes can still fail after deletion.
 - The VM is not touched: a stopped one is started with `kind-mesh/scripts/colima-up.sh` first.
 
 The run on the lab, its times and checks: [testing-kind-mesh-cilium.md](testing-kind-mesh-cilium.md#rebuilt-from-scratch-story-193).
