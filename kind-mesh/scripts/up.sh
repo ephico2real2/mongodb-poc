@@ -45,6 +45,10 @@ for c in "${clusters[@]}"; do
   say "create $c"
   if kind get clusters 2>/dev/null | grep -qx "$c"; then echo "exists, kept"; else kind create cluster --config "clusters/$c.yaml" --wait 0; fi
 done
+if [ "${CILIUM_IMAGES_LOCAL:-0}" = 1 ]; then
+  say "the Cilium images from the VM's docker into every node (CILIUM_IMAGES_LOCAL=1)"
+  for c in "${clusters[@]}"; do cilium_load_local "$c"; done
+fi
 cp_ip() { docker inspect "$1-control-plane" --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'; }
 
 cluster_up() {

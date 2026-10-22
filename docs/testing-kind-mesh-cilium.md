@@ -464,6 +464,51 @@ How the script runs, and what it leaves:
 - **What equal values do not prove.** Equal effective values do not prove equal manifests (the Kubernetes version, a
   template's `lookup`): nothing else may change the release or the cluster during the upgrade.
 
+### Across Cluster Mesh too (story #190)
+
+The next build (fork branch `hubble/remote-workload-clustermesh`, commit `9e5a34a525` on `1d3a02ab1a`) names the
+workload of a pod in another cluster: the clustermesh-apiserver writes a pod's workloads into its kvstore entry, and
+the observing agent reads them. So both images change, and both are built in the lab VM's docker, in no registry:
+
+```sh
+git clone https://github.com/ephico2real2/cilium.git && cd cilium && git checkout 9e5a34a525   # hubble/remote-workload-clustermesh
+export DOCKER_HOST=unix://$HOME/.colima/mongodb-mesh/docker.sock                              # the lab VM's docker
+make dev-docker-image DOCKER_IMAGE_TAG=remote-workload-cm-9e5a34a5 DOCKER_BUILD_FLAGS="--platform linux/arm64 --load"
+make docker-clustermesh-apiserver-image DOCKER_IMAGE_TAG=remote-workload-cm-9e5a34a5 DOCKER_BUILD_FLAGS="--platform linux/arm64 --load"
+docker run --rm --entrypoint cilium-agent quay.io/cilium/cilium-dev:remote-workload-cm-9e5a34a5 --version   # 1.20.2 9e5a34a525
+```
+
+On 2026-10-22 the two builds took 97 s and 16 s (the builder's caches warm). The fork's change has its unit tests
+(`go test ./pkg/identity/ ./pkg/ipcache/ ./clustermesh-apiserver/clustermesh/ ./pkg/clustermesh/kvstoremesh/...`:
+all pass); its design was made twice, by two models, and reviewed by a third.
+
+
+- `kind-mesh/versions.env`: `CILIUM_IMAGE=quay.io/cilium/cilium-dev:remote-workload-cm-9e5a34a5`,
+  `CILIUM_CLUSTERMESH_IMAGE=quay.io/cilium/clustermesh-apiserver:remote-workload-cm-9e5a34a5`, `CILIUM_IMAGES_LOCAL=1`
+  (`kind load docker-image` into every node, under the same 85% disk gate, instead of a pull). The CiliumEndpoint CRD
+  did not change. The chart's one key `clustermesh.apiserver.image` sets the apiserver's four containers (etcd-init,
+  etcd, apiserver, kvstoremesh).
+- What each side runs and names is pinned, not coded: `CILIUM_BEFORE_COMMIT=1d3a02ab` with `CILIUM_BEFORE_SCOPE=cluster`
+  (#145's build), and `CILIUM_SCOPE=mesh`. Agents print a commit of the build clone's length (`9e5a34a525`), so the
+  script matches the commit by prefix.
+- The gate also requires the clustermesh-apiserver Deployment rolled out with every container on the new image.
+- After each cluster's gate, #187's step: once `mongot-global`'s frontend on mongod's node has `l7-load-balancer`
+  again (`cilium-dbg bpf lb list`), Cilium's Envoy there must count the 20 searches of `drills.sh load-only <c> 10`
+  (`upstream_rq_total` of `search/mongot-global`). All harness loads are drained and paused for the check, restart,
+  and recheck. This aggregate counter is a smoke test, not per-request proof: other clients, retries or fanout can
+  mask bypass. If it misses, that cluster's mongod is restarted (`kubectl delete pod mongo-0`), with rs0 health
+  checked after draining and again before deletion. Restarting a primary triggers an election; mesh0 is normally
+  primary. Health snapshots cannot exclude a concurrent failure. A second miss stops the run with loads paused. Each check and restart goes to `output/<CILIUM_RECORD>-l7.txt` (`cilium-build-190-l7.txt`), and `measure after` accepts
+  the restarted mongod's new UID and address only.
+
+| # | What | Command | Passes when | Result |
+| --- | --- | --- | --- | --- |
+| X1 | The measurement on #145's build | `kind-mesh-cilium/scripts/cilium-build.sh measure before` | 0 failed: every agent `1d3a02ab`; every CiliumEndpoint of an owned pod carries the field; flows to the mongot on the other node name it, L3/L4 and L7; replication flows to the other clusters name nothing | **Passed**, 22:20Z: 0 failed; every agent `1d3a02ab`, other-node L3/L4 9 of 9 and L7 8 of 8 named in each cluster (`cilium-build-190-before.txt`) |
+| X2 | Both images, one cluster at a time (mesh2, mesh1, mesh0), under the load | `kind-mesh-cilium/scripts/cilium-build.sh upgrade 2>&1 \| tee kind-mesh-cilium/output/cilium-build-190.log` | each cluster's gate and #187's step before the next; every acknowledged write found by id | **Rolled out; the final recheck stopped on a script bug**: the images went in by `kind load` (VM disk 51% → 68%), each cluster's gate and #187's step passed with no mongod restart (Envoy counted 20 of 20 in each, `cilium-build-190-l7.txt`), writes 0 of 2,390 failed, searches failed 9 times in each cluster while agents were replaced (#187); then `cilium-dbg encrypt status \| grep -q` failed under pipefail (SIGPIPE) on an agent that reported WireGuard with 5 peers, fixed in this branch (`cilium-build-190.log`) |
+| X3 | The measurement on the build | `kind-mesh-cilium/scripts/cilium-build.sh measure after` | 0 failed: as X1, and replication flows to the other clusters name `StatefulSet/mongo` | **Passed**, 22:36Z: 0 failed; other-node L3/L4 9 of 9 and L7 8 of 8 in each cluster; mongod's flows to the other clusters' mongod name `StatefulSet/mongo`: 12 of 12, 10 of 10, 14 of 14 (`cilium-build-190-after.txt`) |
+| X4 | A search across clusters | `kind-mesh-cilium/scripts/cilium-build.sh drill` | mesh2's flows to another cluster's mongot, L3/L4 and L7, all name `StatefulSet/mongot-search-0` | **Passed**: to another cluster L3/L4 **72 of 72** and L7 **160 of 160** named (with #145's build: 0 of 72, 0 of 161); 237 searches answered, 0 failed (`cilium-build-190-drill.txt`) |
+| X5 | The lab is healthy | `kind-mesh/check.sh` | 0 failed | **Passed**: 0 failed (`cilium-build-190-check.txt`) |
+
 ## Compared with the Envoy lab
 
 | mesh2 loses… | With the operator's Envoy | Step 1: per connection | Step 2: per request |

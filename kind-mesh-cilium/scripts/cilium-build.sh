@@ -1,22 +1,30 @@
 #!/usr/bin/env bash
 # Story #145: our Cilium build (CILIUM_IMAGE in kind-mesh/versions.env: release 1.20.2 plus Hubble naming the workload
 # of a pod on another node of the same cluster) on the running lab, one cluster at a time, under searches and writes.
-# For each cluster: the build's CiliumEndpoint CRD and its label first, then a Helm upgrade that changes the agent image
-# and nothing else (--reset-then-reuse-values keeps every value the release runs: WireGuard, the L7 backend, the mesh,
+# For each cluster: the build's CiliumEndpoint CRD and its label first, then a Helm upgrade that changes the images and
+# nothing else (--reset-then-reuse-values keeps every value the release runs: WireGuard, the L7 backend, the mesh,
 # Hubble's TLS; checked on the release's values before and after), then step 2's gate before the next cluster: every
-# agent on the build, Cilium healthy, WireGuard on every agent, connected to both other clusters, and every
-# CiliumEndpoint of a pod with an owner carrying status.workloads.
+# agent on the build, the clustermesh-apiserver on its image when the build has one, Cilium healthy, WireGuard on every
+# agent, connected to both other clusters, and every CiliumEndpoint of a pod with an owner carrying status.workloads.
+# Then #187's step: once the mongot-global frontend on mongod's node is an L7 load balancer again, Cilium's Envoy there
+# must count mongod's searches; if it does not, that cluster's mongod is restarted (output/<CILIUM_RECORD>-l7.txt).
 #
-#   kind-mesh-cilium/scripts/cilium-build.sh measure before   # on the release: output/cilium-build-before.txt
+# Story #190: the same rollout from #145's build to the one that names the workload across Cluster Mesh, which needs
+# the clustermesh-apiserver's image too (CILIUM_CLUSTERMESH_IMAGE), both built in the VM's docker (CILIUM_IMAGES_LOCAL=1:
+# kind load, no pull). What each side runs and names is pinned in versions.env (CILIUM_BEFORE_COMMIT, CILIUM_BEFORE_SCOPE,
+# CILIUM_SCOPE): the next build is a pin change.
+#
+#   kind-mesh-cilium/scripts/cilium-build.sh measure before   # on what runs now: output/<CILIUM_RECORD>-before.txt
 #   kind-mesh-cilium/scripts/cilium-build.sh upgrade 2>&1 | tee kind-mesh-cilium/output/cilium-build.log
 #                                                             # mesh2, mesh1, then mesh0 (the primary's); the loads in
 #                                                             # output/cilium-build-evidence.*/cilium-build-load-<cluster>.txt
 #   kind-mesh-cilium/scripts/cilium-build.sh upgrade mesh2    # the named clusters only, in that order
 #   LOAD_SECONDS=60 ... upgrade                               # the load runs in batches of this many seconds (60)
 #                                                             # until the last gate passes; each batch checks its writes
-#   kind-mesh-cilium/scripts/cilium-build.sh measure after    # on the build: output/cilium-build-after.txt
+#   kind-mesh-cilium/scripts/cilium-build.sh measure after    # on the build: output/<CILIUM_RECORD>-after.txt
 #   kind-mesh-cilium/scripts/cilium-build.sh drill            # mesh2 loses its mongot: do its cross-cluster search
-#                                                             # flows name the workload? (expected not: the fix's scope)
+#                                                             # flows name the workload? (with CILIUM_SCOPE=mesh, expected
+#                                                             # all named; otherwise none)
 #
 # Back to the release: inspect history, then rollback to the saved original revision explicitly. The CRD keeps the
 # optional field, which the release ignores, and its label, which the release operator leaves alone.
@@ -25,12 +33,25 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck disable=SC1091
 . "$here/../kind-mesh/scripts/lib.sh"
+# shellcheck disable=SC1091
+. "$here/scripts/rs-lib.sh"   # rs_eval, for rs_healthy
 lab_env
 # shellcheck disable=SC2153  # CLUSTERS comes from versions.env
 read -r -a clusters <<<"$CLUSTERS"
 out="$here/output"
-commit=${CILIUM_IMAGE##*-}   # the build's commit, as its agents print it: "cilium-agent 1.20.2 1d3a02ab ..."
-release_commit=e0dc92bd     # the release's, as measured before the build (cilium-build-before.txt)
+# The build's commit from its tag, and what runs before it (versions.env). Agents print the build clone's
+# `git rev-parse --short`, whose length is the clone's: #145's printed 1d3a02ab, #190's prints 9e5a34a525 while its tag
+# ends in 9e5a34a5. So a printed commit matches when it starts with the expected one (on_commit), never by equality.
+commit=${CILIUM_IMAGE##*-}
+before_commit=$CILIUM_BEFORE_COMMIT
+[[ "$commit" =~ ^[0-9a-f]{7,}$ && "$before_commit" =~ ^[0-9a-f]{7,}$ ]] \
+  || die "CILIUM_IMAGE must end in -<commit> and CILIUM_BEFORE_COMMIT be a commit (7+ hex digits)"
+for x in "$CILIUM_BEFORE_SCOPE" "$CILIUM_SCOPE"; do
+  case "$x" in node|cluster|mesh) ;; *) die "CILIUM_BEFORE_SCOPE and CILIUM_SCOPE are node, cluster or mesh, not $x" ;; esac
+done
+# Each build's records under their own name (CILIUM_RECORD in versions.env), so a later run keeps the earlier ones.
+rec=${CILIUM_RECORD:-cilium-build}
+l7_record="$out/$rec-l7.txt"   # #187's step, per cluster; "RESTARTED <cluster>" when its mongod was restarted
 tmp=$(mktemp -d "$out/cilium-build-evidence.XXXXXX")
 load_pids=()
 active_cluster=none
@@ -175,13 +196,20 @@ PYCODE
 
 # The batches' totals. gapMs is the longest wait for an acknowledged write while writes were being made; betweenMs the
 # longest time between two batches, when the harness (kubectl exec, mongosh, the batch's check) wrote nothing: it is
-# kept apart, as it is not an outage the load saw.
+# kept apart, as it is not an outage the load saw. A pause for a mongod restart (PAUSED) is not a time between batches.
 summarize_load() {
   python3 - "$1" <<'PYCODE'
 import json, sys
-rows = [json.loads(l[7:]) for l in open(sys.argv[1]) if l.startswith("RESULT ")]
+rows, between, prev = [], [], None
+for l in open(sys.argv[1]):
+    if l.startswith("PAUSED"):
+        prev = None
+    elif l.startswith("RESULT "):
+        rows.append(json.loads(l[7:]))
+        if prev:
+            between.append(rows[-1]["write"]["startMs"] - prev["write"]["endMs"])
+        prev = rows[-1]
 assert rows, "no completed load batches"
-between = [b["write"]["startMs"] - a["write"]["endMs"] for a, b in zip(rows, rows[1:])]
 summary = {k: {"ok": sum(r[k]["ok"] for r in rows), "fail": sum(r[k]["fail"] for r in rows),
                "maxMs": max(r[k]["maxMs"] for r in rows)} for k in ("write", "search")}
 summary["write"]["gapMs"] = max(r["write"]["gapMs"] for r in rows)
@@ -193,53 +221,86 @@ PYCODE
 
 # Finite batches keep the load alive for arbitrarily long gates. Each batch checks its exact acknowledged ids.
 # On exit the current batch finishes; no infrastructure restore or detached loader remains.
+# stop-load-<cluster> pauses one cluster's load (its batch finishes), for a restart of its mongod, whose container
+# the load runs in.
 load_batches() {
-  local c=$1 secs=$2 batch=0
-  while [ ! -e "$tmp/stop-load" ]; do
+  local c=$1 secs=$2 batch=$3
+  while [ ! -e "$tmp/stop-load" ] && [ ! -e "$tmp/stop-load-$c" ]; do
     batch=$((batch + 1))
     if ! CLIENT_OPTS="${CLIENT_OPTS:-timeoutMS=10000}" "$here/drills.sh" load-rw "$c" "$secs" "build-$c-$(basename "$tmp")-$batch"; then
       touch "$tmp/load-failed-$c"
       return 1
     fi
   done
+  echo "$batch" >"$tmp/load-batch-$c"
 }
+start_load() { # <cluster>: its load in the background, appended to its log, batch ids continuing; upgrade's $secs
+  local c=$1
+  load_batches "$c" "${secs:?}" "$(cat "$tmp/load-batch-$c" 2>/dev/null || echo 0)" >>"$tmp/cilium-build-load-$c.txt" 2>&1 &
+  load_pids+=($!)
+  echo $! >"$tmp/load-pid-$c"
+}
+pause_load() { # <cluster>: waits for its current batch, then no load through its member until resume_load
+  local c=$1 pid p kept=()
+  pid=$(cat "$tmp/load-pid-$c")
+  touch "$tmp/stop-load-$c"
+  wait "$pid" || die "$c: load or acknowledged-write check failed"
+  for p in "${load_pids[@]}"; do [ "$p" = "$pid" ] || kept+=("$p"); done
+  load_pids=(${kept[@]+"${kept[@]}"})
+  echo "PAUSED $(date -u +%FT%TZ) for a restart of $c's mongod" >>"$tmp/cilium-build-load-$c.txt"
+}
+resume_load() { rm -f "$tmp/stop-load-$1"; start_load "$1"; }
 check_loads() {
   local c
   for c in "${clusters[@]}"; do [ ! -e "$tmp/load-failed-$c" ] || die "$c: load or acknowledged-write check failed"; done
 }
 
+# Every agent of an inventory (agents) on CILIUM_VERSION and a commit starting with <commit>: see `commit` above.
+on_commit() { # <inventory> <commit>
+  awk -v v="$CILIUM_VERSION" -v h="$2" 'NF != 3 || $2 != v || $3 !~ /^[0-9a-f]+$/ || length($3) > 40 || index($3, h) != 1 {bad=1} END {exit bad}' <<<"$1"
+}
+# What Hubble names at <scope> (versions.env): mongod's flows to the mongot on the other node of its cluster (named
+# from cluster up), and to the other clusters' mongod (named at mesh only), as verdict's all or none.
+other_node() { case "$1" in node) echo none ;; *) echo all ;; esac; }
+cross_cluster() { case "$1" in mesh) echo all ;; *) echo none ;; esac; }
+
 # The measurement, in every cluster: which build each agent runs, which CiliumEndpoints carry status.workloads, and
-# whether Hubble names the workload of mongod's search flows to the mongot on the other node of its cluster (the fix),
+# whether Hubble names the workload of mongod's search flows to the mongot on the other node of its cluster (#145),
 # to the mongot on its own node (named by the release already: the control), and of mongod's replication flows to the
-# other clusters' members (not carried across Cluster Mesh: expected empty with the build too).
-measure() { # <before|after>: before expects the release, after the build
-  local tag=$1 log="$out/cilium-build-$1.txt" c node agent remote same others x rf sf xf v all named missing names
-  local expect=all ver inventory flow_since
-  case "$tag" in before|after) ;; *) die "measure expects before or after" ;; esac
+# other clusters' members (#190). Before expects CILIUM_BEFORE_COMMIT at CILIUM_BEFORE_SCOPE, after the build at
+# CILIUM_SCOPE.
+measure() { # <before|after>
+  local tag=$1 log="$out/$rec-$1.txt" c node agent remote same others x rf sf xf v all named missing names
+  local want scope ver inventory flow_since expect cross
+  case "$tag" in
+    before) want=$before_commit scope=$CILIUM_BEFORE_SCOPE ;;
+    after) want=$commit scope=$CILIUM_SCOPE ;;
+    *) die "measure expects before or after" ;;
+  esac
+  expect=$(other_node "$scope") cross=$(cross_cluster "$scope")
   placement "$tmp/placement.json"
   if [ "$tag" = after ]; then
-    cmp "$out/cilium-build-placement.json" "$tmp/placement.json" || die "pod UID/IP/node/owner changed, or no baseline placement; take a new before measurement"
+    # A mongod restarted by #187's step (RESTARTED in the record) has a new UID and address; nothing else may change.
+    python3 - "$out/$rec-placement.json" "$tmp/placement.json" "$l7_record" <<'PYCODE' \
+      || die "pod UID/IP/node/owner changed, or no baseline placement; take a new before measurement"
+import json, os, sys
+base, now = (json.load(open(f)) for f in sys.argv[1:3])
+restarted = {l.split()[1] for l in open(sys.argv[3]) if l.startswith("RESTARTED ")} if os.path.exists(sys.argv[3]) else set()
+key = lambda r: [r[0], r[1], r[2], r[5], r[6]] if r[1] == "mongodb" and r[0] in restarted else r
+assert [key(r) for r in base] == [key(r) for r in now]
+PYCODE
   fi
-  [ "$tag" = before ] && expect=none
   fails=0
   {
-    echo "== story #145, $tag: $(date -u +%Y-%m-%dT%H:%MZ); expecting the $([ "$tag" = before ] && echo release || echo "build $commit")"
+    echo "== $tag: $(date -u +%Y-%m-%dT%H:%MZ); expecting every agent on $CILIUM_VERSION $want, workloads named at scope $scope"
     for c in "${clusters[@]}"; do
       echo "== $c"
       inventory=$(agents "$c") || die "$c: cannot inventory both agents"
       ver=$(awk '{print $1 "=" $2 ":" $3}' <<<"$inventory" | tr '\n' ' ')
-      if [ "$tag" = before ]; then
-        if awk -v v="$CILIUM_VERSION" -v h="$release_commit" '$2 != v || $3 != h {bad=1} END {exit bad}' <<<"$inventory"; then
-          row PASS "$c: every agent on the release" "$ver"
-        else row FAIL "$c: every agent on the release" "$ver"; fi
-      else
-        if awk -v v="$CILIUM_VERSION" -v h="$commit" '$2 != v || $3 != h {bad=1} END {exit bad}' <<<"$inventory"; then
-          row PASS "$c: every agent on the build" "$ver"
-        else row FAIL "$c: every agent on the build" "$ver"; fi
-      fi
+      on_commit "$inventory" "$want" && row PASS "$c: every agent on $want" "$ver" || row FAIL "$c: every agent on $want" "$ver"
       inventory=$(ceps "$c") || die "$c: cannot inventory CEPs"
       read -r all named missing names <<<"$inventory"
-      if [ "$tag" = before ]; then
+      if [ "$scope" = node ]; then
         [ "$named" = 0 ] && row PASS "$c: no CiliumEndpoint carries status.workloads" "$named of $all" \
           || row FAIL "$c: no CiliumEndpoint carries status.workloads" "$named of $all"
       else
@@ -276,30 +337,42 @@ measure() { # <before|after>: before expects the release, after the build
       others=()
       for x in "${clusters[@]}"; do [ "$x" = "$c" ] || others+=(--to-cluster "$x"); done
       xf=$(flows "$c" "$agent" StatefulSet/mongo --from-cluster "$c" --from-pod mongodb/mongo-0 --to-pod mongodb/mongo-0 "${others[@]}" --port 27017)
-      row "$(verdict "$xf" none L3_L4)" "$c: mongod -> the other clusters' mongod names nothing (not in scope)" "named/flows: $xf"
+      row "$(verdict "$xf" "$cross" L3_L4)" "$c: mongod -> the other clusters' mongod names $([ "$cross" = none ] && echo nothing || echo StatefulSet/mongo)" "named/flows: $xf"
     done
     echo "== $tag: $fails failed"
   } | tee "$log"
   v=$(sed -n "s/^== $tag: \([0-9]*\) failed$/\1/p" "$log")
   placement "$tmp/placement-end.json"
   cmp "$tmp/placement.json" "$tmp/placement-end.json" || die "placement changed during measurement"
-  if [ "$v" = 0 ] && [ "$tag" = before ]; then cp "$tmp/placement.json" "$out/cilium-build-placement.json"; fi
+  # A new baseline: #187's restarts recorded against the old one no longer apply.
+  if [ "$v" = 0 ] && [ "$tag" = before ]; then cp "$tmp/placement.json" "$out/$rec-placement.json"; rm -f "$l7_record"; fi
   [ "$v" = 0 ]
 }
 
 # Step 2's gate, and the build's own: before the next cluster is touched.
 gate() { # <cluster>
-  local c=$1 ctx="kind-$1" p bad o n all named missing names i inventory
+  local c=$1 ctx="kind-$1" p o n all named missing names i inventory
   kubectl --context "$ctx" -n kube-system rollout status ds/cilium --timeout=5m >/dev/null
   inventory=$(agents "$c") || die "$c: cannot inventory both agents"
-  bad=$(printf '%s\n' "$inventory" | awk -v want="$CILIUM_VERSION $commit" '$2 " " $3 != want')
-  [ -z "$bad" ] || die "$c: agents not on the build: $bad"
-  note "$c: every agent answers $CILIUM_VERSION $commit"
+  on_commit "$inventory" "$commit" || die "$c: agents not on the build $CILIUM_VERSION $commit: $(tr '\n' ' ' <<<"$inventory")"
+  note "$c: every agent answers $CILIUM_VERSION $commit*"
+  # The apiserver's image has no version command, so the Deployment's container images are the check; the rollout
+  # status, that its pods run that template.
+  if [ -n "${CILIUM_CLUSTERMESH_IMAGE:-}" ]; then
+    kubectl --context "$ctx" -n kube-system rollout status deploy/clustermesh-apiserver --timeout=5m >/dev/null
+    o=$(kubectl --context "$ctx" -n kube-system get deploy clustermesh-apiserver \
+      -o jsonpath='{range .spec.template.spec.initContainers[*]}{.name}={.image}{"\n"}{end}{range .spec.template.spec.containers[*]}{.name}={.image}{"\n"}{end}')
+    [ -n "$o" ] && awk -F= -v want="$CILIUM_CLUSTERMESH_IMAGE" '$2 != want {bad=1} END {exit bad}' <<<"$o" \
+      || die "$c: clustermesh-apiserver not on $CILIUM_CLUSTERMESH_IMAGE: $(tr '\n' ' ' <<<"$o")"
+    note "$c: clustermesh-apiserver rolled out, $(wc -l <<<"$o" | tr -d ' ') containers on $CILIUM_CLUSTERMESH_IMAGE"
+  fi
   cilium_healthy "$c" "on the build"
   # shellcheck disable=SC2013  # Kubernetes pod names contain no whitespace
+  # The output is read whole before it is searched: under pipefail, `cilium-dbg ... | grep -q` fails whenever grep exits
+  # at its match before cilium-dbg has written the rest (SIGPIPE), and reported an encrypting agent as not (#190's run).
   for p in $(awk '{print $1}' <<<"$inventory"); do
-    kubectl --context "$ctx" -n kube-system exec "$p" -c cilium-agent -- cilium-dbg encrypt status 2>/dev/null | grep -q 'Encryption: Wireguard' \
-      || die "$c $p does not report WireGuard encryption"
+    o=$(kubectl --context "$ctx" -n kube-system exec "$p" -c cilium-agent -- cilium-dbg encrypt status 2>/dev/null) \
+      && grep -q 'Encryption: Wireguard' <<<"$o" || die "$c $p does not report WireGuard encryption"
   done
   o=$(cilium clustermesh status --context "$ctx" --wait --wait-duration 5m 2>&1) || { printf '%s\n' "$o"; die "$c: clustermesh command failed"; }
   n=$(grep -c 'configured, 2/2 connected' <<<"$o" || true)
@@ -316,10 +389,13 @@ gate() { # <cluster>
   note "$c: $named of $all CiliumEndpoints carry status.workloads (the others' pods have no owner)"
 }
 
-# The build's image on every node of <clusters> before any agent restarts, so that no agent waits on a download (the
+# The build's images on every node of <clusters> before any agent restarts, so that no agent waits on a download (the
 # DaemonSet replaces both agents of a cluster at once: maxUnavailable 2, the chart's default). The nodes' /var is the
 # VM's one docker disk, which also holds mongot's volumes (local-path; kind-mesh/versions.env): mongot stops indexing
-# at 85% of it used (#182), so no pull may take the disk there. The first pull, allowed 2 GiB, measures what one costs.
+# at 85% of it used (#182), so no image may take the disk there. The first cluster, allowed 4 GiB (two images on two
+# nodes; #145 allowed 2 GiB for one image on one node). Reserve at least that much for every cluster, even
+# when the first cluster is cached. This is a capacity budget, not an upper bound proved from image sizes; include
+# import scratch space in CILIUM_IMAGE_CLUSTER_BUDGET_KIB and exclude concurrent disk writers.
 disk_used() { # <node> [KiB more]: the % of the node's /var used, with that much more written; fails at 85% or above
   local df size avail
   df=$(docker exec "$1" df -k --output=size,avail /var | tail -1) || return 1
@@ -329,23 +405,116 @@ disk_used() { # <node> [KiB more]: the % of the node's /var used, with that much
   [ $(((size - avail + ${2:-0}) * 100)) -lt $((size * 85)) ]
 }
 avail_kib() { docker exec "$1" df -k --output=avail /var | tail -1 | tr -d ' '; }
-prepull() { # <cluster...>
-  local nodes=() c n first before per pct
-  for c in "$@"; do nodes+=("$c-control-plane" "$c-worker"); done
-  first=${nodes[0]}
-  pct=$(disk_used "$first" $((2 * 1024 * 1024))) || die "the VM's disk would be ${pct:-?}% used after a 2 GiB pull; mongot stops indexing at 85%"
-  before=$(avail_kib "$first")
-  docker exec "$first" crictl pull "$CILIUM_IMAGE" >/dev/null
-  per=$((before - $(avail_kib "$first")))
-  [ "$per" -ge 0 ] || per=0
-  pct=$(disk_used "$first" $((per * (${#nodes[@]} - 1)))) \
-    || die "the VM's disk would be ${pct:-?}% used after ${#nodes[@]} pulls of $((per / 1024)) MiB; mongot stops indexing at 85%"
-  note "pulled on $first: $((per / 1024)) MiB; the VM's disk $pct% used once all ${#nodes[@]} are pulled"
-  for n in "${nodes[@]:1}"; do
-    docker exec "$n" crictl pull "$CILIUM_IMAGE" >/dev/null
-    pct=$(disk_used "$n") || die "the VM's disk is ${pct:-?}% used after the pull on $n; mongot stops indexing at 85%"
-    note "pulled on $n: the VM's disk $pct% used"
+place_images() { # <cluster>: kind load from the VM's docker (CILIUM_IMAGES_LOCAL=1), or a pull on each node
+  local img n
+  if [ "${CILIUM_IMAGES_LOCAL:-0}" = 1 ]; then cilium_load_local "$1"; return; fi
+  for img in "$CILIUM_IMAGE" ${CILIUM_CLUSTERMESH_IMAGE:+"$CILIUM_CLUSTERMESH_IMAGE"}; do
+    for n in "$1-control-plane" "$1-worker"; do docker exec "$n" crictl pull "$img" >/dev/null; done
   done
+}
+prepull() { # <cluster...>
+  local c n first=$1 before per pct reserve remaining=$#
+  # A cached first cluster cannot estimate a cold one. Reserve a budget for EVERY
+  # cluster before writing; increase this bound for larger images/import scratch space.
+  reserve=${CILIUM_IMAGE_CLUSTER_BUDGET_KIB:-4194304}
+  [[ "$reserve" =~ ^[1-9][0-9]*$ ]] || die "CILIUM_IMAGE_CLUSTER_BUDGET_KIB must be positive"
+  n="$first-control-plane"
+  pct=$(disk_used "$n" $((reserve * remaining))) || die "the VM's disk would be ${pct:-?}% used with the image budgets; mongot stops indexing at 85%"
+  for c in "$@"; do
+    pct=$(disk_used "$n" $((reserve * remaining))) || die "$c: insufficient disk for remaining image budgets"
+    before=$(avail_kib "$n")
+    place_images "$c"
+    remaining=$((remaining - 1))
+    if [ "$c" = "$first" ]; then
+      per=$((before - $(avail_kib "$n")))
+      [ "$per" -ge "$reserve" ] || per=$reserve
+      pct=$(disk_used "$n" $((per * ($# - 1)))) \
+        || die "the VM's disk would be ${pct:-?}% used once all $# clusters hold the images ($((per / 1024)) MiB each); mongot stops indexing at 85%"
+      note "images on $c: $((per / 1024)) MiB; the VM's disk $pct% used once all $# clusters hold them"
+    else
+      pct=$(disk_used "$n") || die "the VM's disk is ${pct:-?}% used after the images went onto $c; mongot stops indexing at 85%"
+      note "images on $c: the VM's disk $pct% used"
+    fi
+  done
+}
+
+# #187: an agent restart writes mongot-global's frontend as plain L4 for about a minute, and a connection mongod opens
+# then goes straight to one mongot, past Cilium's Envoy, until mongod reconnects. So once the frontend on mongod's node
+# is an L7 load balancer again, its Envoy must count 20 searches through mongod (drills.sh load-only, 10 s); the
+# harness loads are paused for this check. The aggregate delta is a smoke test: retries, fanout or external
+# traffic can still mask bypass. It is not per-request attribution or proof that every search crossed Envoy.
+mongot_frontend_l7() { # <cluster> <agent> <frontend ip>: every slot-0 entry of <ip>:27028 has the L7 flag
+  kubectl --context "kind-$1" -n kube-system exec "$2" -c cilium-agent -- cilium-dbg bpf lb list -o json 2>/dev/null \
+    | python3 -c '
+import json, sys
+fe = [v for k, v in json.load(sys.stdin).items() if k in (sys.argv[1] + " (0)", sys.argv[1] + "/i (0)")]
+sys.exit(0 if fe and all(any("l7-load-balancer" in e for e in v) for v in fe) else 1)' "$3:27028/TCP"
+}
+envoy_requests() { # <cluster> <agent>: upstream_rq_total of search/mongot-global in the Envoy of that agent's node
+  kubectl --context "kind-$1" -n kube-system exec "$2" -c cilium-agent -- cilium-dbg envoy admin metrics \
+    | awk '$1 ~ /^envoy_cluster_upstream_rq_total\{/ && index($1, "envoy_cluster_name=\"search/mongot-global\"") {n += $2; hit = 1}
+      END {if (!hit) exit 1; printf "%d\n", n}'
+}
+envoy_counts() { # <cluster>: true when Envoy on mongod's node counted the searches; recorded either way
+  local c=$1 ip node agent i before after v ok
+  ip=$(kubectl --context "kind-$c" -n search get svc mongot-global -o jsonpath='{.spec.clusterIP}')
+  [ -n "$ip" ] || die "$c: no ClusterIP for search/mongot-global"
+  node=$(kubectl --context "kind-$c" -n mongodb get pod mongo-0 -o jsonpath='{.spec.nodeName}')
+  agent=$(agent_on "$c" "$node" || true)
+  [ -n "$node" ] && [ -n "$agent" ] || die "$c: no node or agent for mongo-0"
+  for i in $(seq 1 60); do
+    mongot_frontend_l7 "$c" "$agent" "$ip" && break
+    [ "$i" -lt 60 ] || die "$c: mongot-global ($ip:27028) on $node is not an L7 load balancer after 300 s"
+    sleep 5
+  done
+  note "$c: mongot-global $ip:27028 is an L7 load balancer on $node (check $i)"
+  before=$(envoy_requests "$c" "$agent") || die "$c: no upstream_rq_total for search/mongot-global from $agent"
+  v=$("$here/drills.sh" load-only "$c" 10 2>&1 | sed -n 's/^RESULT //p') || die "$c: search command failed"
+  ok=$(python3 -c 'import json,sys; r=json.loads(sys.argv[1]); assert r["ok"] > 0 and r["fail"] == 0; print(r["ok"])' "$v") || die "$c: search load failed"
+  after=$(envoy_requests "$c" "$agent") || die "$c: no upstream_rq_total for search/mongot-global from $agent"
+  printf '%s L7 %s: %s searches answered, Envoy on %s counted %s (%s -> %s)\n' "$(date -u +%FT%TZ)" "$c" "$ok" "$node" \
+    "$((after - before))" "$before" "$after" | tee -a "$l7_record"
+  [ $((after - before)) -ge "$ok" ]
+}
+rs_healthy() { # every member of rs0 up, PRIMARY or SECONDARY; the answer read whole before it is searched (pipefail)
+  local o
+  o=$(printf 'const m = rs.status().members; print("RS " + (m.length === %s && m.every(x => x.health === 1 && ["PRIMARY", "SECONDARY"].includes(x.stateStr)) ? "healthy" : m.map(x => x.name.split(".")[0] + "=" + x.stateStr).join(",")))\n' \
+    "${#clusters[@]}" | rs_eval) && grep -qx 'RS healthy' <<<"$o"
+}
+mongod_restart() { # <cluster>: one member at a time, and only while every member is healthy
+  local c=$1 uid i now
+  # l7_after_restart has drained every harness load; check health AFTER that wait.
+  rs_healthy || die "$c: not restarting mongod while a member of rs0 is not healthy"
+  uid=$(kubectl --context "kind-$c" -n mongodb get pod mongo-0 -o jsonpath='{.metadata.uid}')
+  [ -n "$uid" ] || die "$c: cannot identify mongo-0 for restart"
+  note "$c: Envoy did not count mongod's searches; restarting mongo-0 (#187); if primary, this triggers an election (mesh0 is normally primary)"
+  rs_healthy || die "$c: rs0 health changed before deletion"
+  kubectl --context "kind-$c" -n mongodb delete pod mongo-0 --wait=true --timeout=5m >/dev/null
+  for i in $(seq 1 60); do
+    now=$(kubectl --context "kind-$c" -n mongodb get pod mongo-0 -o jsonpath='{.metadata.uid}' 2>/dev/null || true)
+    [ -n "$now" ] && [ "$now" != "$uid" ] && break
+    [ "$i" -lt 60 ] || die "$c: no new mongo-0 after 300 s"
+    sleep 5
+  done
+  kubectl --context "kind-$c" -n mongodb wait pod/mongo-0 --for=condition=Ready --timeout=10m >/dev/null || die "$c: mongo-0 not Ready"
+  for i in $(seq 1 60); do
+    rs_healthy && break
+    [ "$i" -lt 60 ] || die "$c: rs0 not healthy 300 s after mongo-0 was Ready"
+    sleep 5
+  done
+  echo "RESTARTED $c $(date -u +%FT%TZ) mongo-0 $uid -> $now" | tee -a "$l7_record"
+}
+# envoy_counts runs as a condition, where set -e is off: each of its steps dies on its own failure.
+l7_after_restart() { # <cluster>
+  local c
+  # Drain all harness traffic before sampling counters. Keep it paused through the
+  # restart and second check; any failure exits without launching another batch.
+  for c in "${clusters[@]}"; do pause_load "$c"; done
+  if ! envoy_counts "$1"; then
+    mongod_restart "$1"
+    envoy_counts "$1" || die "$1: Cilium's Envoy still does not count mongod's searches after mongod's restart (#187)"
+  fi
+  for c in "${clusters[@]}"; do resume_load "$c"; done
 }
 
 upgrade() { # <cluster...>
@@ -362,16 +531,13 @@ upgrade() { # <cluster...>
   [[ "$secs" =~ ^[1-9][0-9]*$ ]] || die "LOAD_SECONDS must be a positive batch duration"
   say "searches and majority writes through every member in $secs s batches until all gates finish"
   t0=$(date +%s)
-  for c in "${clusters[@]}"; do
-    load_batches "$c" "$secs" >"$tmp/cilium-build-load-$c.txt" 2>&1 &
-    load_pids+=($!)
-  done
+  for c in "${clusters[@]}"; do start_load "$c"; done
   sleep 10
   for c in "$@"; do
     active_cluster=$c
     check_loads
     ctx="kind-$c"
-    say "$c: the build's CRD, then the agent image"
+    say "$c: the build's CRD, then the images"
     helm get values cilium --all -n kube-system --kube-context "$ctx" -o json >"$tmp/$c-before.json"
     rev=$(helm status cilium -n kube-system --kube-context "$ctx" -o json | python3 -c 'import json, sys; print(json.load(sys.stdin)["version"])')
     printf '%s\n' "$rev" >"$tmp/$c-original-revision.txt"
@@ -382,17 +548,28 @@ upgrade() { # <cluster...>
       "${cilium_image_args[@]}" --wait --timeout 10m >/dev/null || die "Helm upgrade/wait failed on $c; resources may already have changed"
     note "$c: Helm revision $rev -> $(helm status cilium -n kube-system --kube-context "$ctx" -o json | python3 -c 'import json, sys; print(json.load(sys.stdin)["version"])')"
     helm get values cilium --all -n kube-system --kube-context "$ctx" -o json >"$tmp/$c-after.json"
-    # Every value the release ran is still there, unchanged; only the agent image's keys differ.
+    # Every value the release ran is still there, unchanged; only the image keys cilium_image_args sets differ: the
+    # agent's (image) and, with CILIUM_CLUSTERMESH_IMAGE, the clustermesh-apiserver's (clustermesh.apiserver.image).
     python3 -c '
-import json, sys
-b, a = (json.load(open(f)) for f in sys.argv[1:3])
-img = lambda v: {k: x for k, x in v.items() if k != "image"}
-assert img(b) == img(a), "values other than image changed"
-assert {k: x for k, x in a.get("image", {}).items() if k not in ("repository", "tag", "useDigest", "pullPolicy")} == \
-       {k: x for k, x in b.get("image", {}).items() if k not in ("repository", "tag", "useDigest", "pullPolicy")}
-print("  values kept: " + ", ".join(sorted(img(a))) + "; image now " + a["image"]["repository"] + ":" + a["image"]["tag"])' \
-      "$tmp/$c-before.json" "$tmp/$c-after.json" || die "the upgrade on $c changed a value other than the agent image"
+import copy, json, sys
+keys = ("repository", "tag", "useDigest", "pullPolicy")
+def split(v):
+    v, now = copy.deepcopy(v), []
+    for path in [["image"]] + [["clustermesh", "apiserver", "image"]] * (sys.argv[3] != ""):
+        d = v
+        for k in path[:-1]:
+            d = d.get(k, {})
+        img = d.get(path[-1], {})
+        now.append(".".join(path) + " " + "%s:%s" % (img.get("repository"), img.get("tag")))
+        for k in keys:
+            img.pop(k, None)
+    return v, now
+(b, _), (a, now) = (split(json.load(open(f))) for f in sys.argv[1:3])
+assert b == a, "values other than the image keys changed"
+print("  values kept: " + ", ".join(sorted(a)) + "; now " + "; ".join(now))' \
+      "$tmp/$c-before.json" "$tmp/$c-after.json" "${CILIUM_CLUSTERMESH_IMAGE:-}" || die "the upgrade on $c changed a value other than the image keys"
     gate "$c"
+    l7_after_restart "$c"
     completed_clusters="$completed_clusters $c"
     check_loads
   done
@@ -409,31 +586,35 @@ print("  values kept: " + ", ".join(sorted(img(a))) + "; image now " + a["image"
   done
 }
 
-# mesh2 loses its mongot (drills.sh mongot mesh2 both, recorded as output/drill-mongot-mesh2-both-build.txt): its
+# mesh2 loses its mongot (drills.sh mongot mesh2 both, recorded as output/drill-mongot-mesh2-both-<CILIUM_RECORD without "cilium-">.txt): its
 # searches go to the other clusters' mongot meanwhile, so mongod's flows to a mongot in another cluster can be read.
 # The flows are followed on mesh2 mongo-0's agent for the whole drill (its ring buffer may not hold a minute-old flow
-# by the end).
+# by the end). With CILIUM_SCOPE=mesh (#190) every one of them names the workload, L3/L4 and L7; otherwise none does.
 drill() {
-  local c=mesh2 node agent pid cross
+  local c=mesh2 node agent pid cross expect t
+  expect=$(cross_cluster "$CILIUM_SCOPE")
   node=$(kubectl --context "kind-$c" -n mongodb get pod mongo-0 -o jsonpath='{.spec.nodeName}')
   agent=$(agent_on "$c" "$node")
   kubectl --context "kind-$c" -n kube-system exec "$agent" -c cilium-agent -- timeout 200 hubble observe --follow -o json \
     --from-cluster "$c" --from-pod mongodb/mongo-0 --to-namespace search --port 27028 >"$tmp/drill-flows.json" 2>/dev/null &
   pid=$!
-  DRILL_TAG=build "$here/drills.sh" mongot "$c" both || { wait "$pid" || true; die "mongot drill failed"; }
+  DRILL_TAG="${rec#cilium-}" "$here/drills.sh" mongot "$c" both || { wait "$pid" || true; die "mongot drill failed"; }
   wait "$pid" || true
   {
-    echo "== story #145: mesh2's search flows to another cluster's mongot during drills.sh mongot mesh2 both ($(date -u +%Y-%m-%dT%H:%MZ))"
-    echo "  to another cluster: $(named_count StatefulSet/mongot-search-0 "$c" <"$tmp/drill-flows.json") (named/flows; expected none named)"
+    echo "== $c's search flows to another cluster's mongot during drills.sh mongot $c both, build $commit, scope $CILIUM_SCOPE ($(date -u +%Y-%m-%dT%H:%MZ))"
+    echo "  to another cluster: $(named_count StatefulSet/mongot-search-0 "$c" <"$tmp/drill-flows.json") (named/flows; expected $expect named)"
     echo "  to any cluster:     $(named_count StatefulSet/mongot-search-0 <"$tmp/drill-flows.json") (named/flows, $c's own included)"
-  } | tee "$out/cilium-build-drill.txt"
+  } | tee "$out/$rec-drill.txt"
   cross=$(named_count StatefulSet/mongot-search-0 "$c" <"$tmp/drill-flows.json")
-  [ "$(verdict "$cross" none L7)" = PASS ] || die "cross-cluster drill attribution missing or unexpected"
+  # Preserve the cluster-scope drill: reused connections need not emit L3/L4.
+  for t in L7 $([ "$CILIUM_SCOPE" = mesh ] && echo L3_L4); do
+    [ "$(verdict "$cross" "$expect" "$t")" = PASS ] || die "cross-cluster drill: $t flows missing, or not $expect named: $cross"
+  done
   # The drill measures attribution, not search reliability: 1 to 3 searches fail at the moment the mongot are deleted
   # (testing record C8, #187), so failures are reported and only a drill that answered nothing stops the run.
-  sed -n 's/^RESULT //p' "$out/drill-mongot-$c-both-build-load.txt" \
+  sed -n 's/^RESULT //p' "$out/drill-mongot-$c-both-${rec#cilium-}-load.txt" \
     | python3 -c 'import json,sys; r=json.load(sys.stdin); print("  searches during the drill: %d answered, %d failed" % (r["ok"], r["fail"])); assert r["ok"] > 0' \
-    | tee -a "$out/cilium-build-drill.txt" || die "drill searches were not answered or not recorded"
+    | tee -a "$out/$rec-drill.txt" || die "drill searches were not answered or not recorded"
 }
 
 case "${1:-}" in
