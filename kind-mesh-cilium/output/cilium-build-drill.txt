@@ -1,0 +1,3 @@
+== story #145: mesh2's search flows to another cluster's mongot during drills.sh mongot mesh2 both (2026-10-22T20:13Z)
+  to another cluster: L3_L4=0/72 L7=0/161 (named/flows; expected none named)
+  to any cluster:     L3_L4=16/88 L7=79/240 (named/flows, mesh2's own included)

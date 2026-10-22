@@ -10,6 +10,8 @@
 #   kind-mesh-cilium/drills.sh spread [c] [s]    # how c's searches are spread over its mongot pods
 #   CLIENT_OPTS=... kind-mesh-cilium/drills.sh primary freeze|kill|partition   # story #131: mesh0, the primary's
 #                                                # cluster, lost; writes and searches from mesh1; every acknowledged write checked
+#   kind-mesh-cilium/drills.sh load-rw <c> <s> <run>  # a search and a majority write every half second through c's
+#                                                # member for s seconds; then every acknowledged write checked by id
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck disable=SC1091
@@ -26,7 +28,8 @@ restore() {
   done
   kubectl --context kind-mesh0 delete -f "$here/manifests/50-partition-mesh0.yaml" --ignore-not-found >/dev/null 2>&1 || true
 }
-trap restore EXIT
+# Load modes must never repair infrastructure owned by a different drill.
+case "${1:-}" in load-only|load-rw) ;; *) trap restore EXIT ;; esac
 t0=$(date +%s)
 at() { while [ $(($(date +%s) - t0)) -lt "$1" ]; do sleep 0.5; done; }
 note() { printf '[t+%3ss] %s\n' "$(($(date +%s) - t0))" "$1" | tee -a "$log"; }
@@ -41,7 +44,7 @@ const start = Date.now(), end = start + $2 * 1000, r = {ok: 0, fail: 0, maxMs: 0
 const s = () => ((Date.now() - start) / 1000).toFixed(1);
 while (Date.now() < end) {
   const t = Date.now(), at = s();
-  try { db.getSiblingDB("sample_mflix").movies.aggregate([{\$search: {index: "default", text: {query: "space", path: {wildcard: "*"}}}}, {\$limit: 1}]).toArray(); r.ok++; }
+  try { db.getSiblingDB("sample_mflix").movies.aggregate([{\$search: {index: "default", text: {query: "space", path: {wildcard: "*"}}}}, {\$limit: 1}], {maxTimeMS: 10000}).toArray(); r.ok++; }
   catch (e) { r.fail++; r.firstFailAt = r.firstFailAt || at; r.lastFailAt = at; print("  search failed at " + at + " s: " + (e.codeName || e.message).slice(0, 90)); }
   const ms = Date.now() - t; if (ms > r.maxMs) { r.maxMs = ms; r.maxAt = at; }
   sleep(500);
@@ -65,7 +68,7 @@ load_rw() { # <cluster> <seconds> <run id>
 db.getSiblingDB("admin").auth("labAdmin", "$admin_pw");
 db.getMongo().setReadPref("nearest");
 const rs = new Mongo("$rs_uri"); rs.getDB("admin").auth("labAdmin", "$admin_pw");
-const start = Date.now(), end = start + $2 * 1000, r = {search: {ok: 0, fail: 0, maxMs: 0, maxAt: null}, write: {ok: 0, fail: 0, maxMs: 0, maxAt: null, gapMs: 0, gapAt: null, failedIds: []}};
+const start = Date.now(), end = start + $2 * 1000, r = {search: {ok: 0, fail: 0, maxMs: 0, maxAt: null}, write: {ok: 0, fail: 0, maxMs: 0, maxAt: null, gapMs: 0, gapAt: null, failedIds: [], acknowledgedIds: [], startMs: start}};
 const s = () => ((Date.now() - start) / 1000).toFixed(1);
 const timed = (k, f) => { const t = Date.now(), at = s(); let ok = true;
   try { f(); r[k].ok++; } catch (e) { ok = false; r[k].fail++; print("  " + k + " failed at " + at + " s: " + (e.codeName || e.message).slice(0, 90)); }
@@ -77,10 +80,13 @@ while (Date.now() < end) {
   if (timed("write", () => rs.getDB("lab").drill.insertOne({_id: id, at: new Date()}, {writeConcern: {w: "majority", wtimeout: 3000}}))) {
     if (Date.now() - lastOk > r.write.gapMs) { r.write.gapMs = Date.now() - lastOk; r.write.gapAt = s(); }
     lastOk = Date.now();
+    r.write.acknowledgedIds.push(id);
   } else r.write.failedIds.push(id);
-  timed("search", () => db.getSiblingDB("sample_mflix").movies.aggregate([{\$search: {index: "default", text: {query: "space", path: {wildcard: "*"}}}}, {\$limit: 1}]).toArray());
+  timed("search", () => db.getSiblingDB("sample_mflix").movies.aggregate([{\$search: {index: "default", text: {query: "space", path: {wildcard: "*"}}}}, {\$limit: 1}], {maxTimeMS: 10000}).toArray());
   sleep(500);
 }
+r.write.endMs = Date.now();
+if (r.write.endMs - lastOk > r.write.gapMs) { r.write.gapMs = r.write.endMs - lastOk; r.write.gapAt = s(); }
 print("RESULT " + JSON.stringify(r));
 EOF
 }
@@ -136,6 +142,28 @@ for line in sys.stdin:
 election_timeout() { printf 'print(rs.conf().settings.electionTimeoutMillis)' | rs_eval; }
 mongod_restarts() { kubectl --context kind-mesh0 -n mongodb get pod mongo-0 -o jsonpath='{.status.containerStatuses[?(@.name=="mongod")].restartCount}'; }
 primary_member() { printf 'print((db.hello().primary || "none").split(".")[0])' | rs_eval; }
+# Every acknowledged write of a load_rw run, by its id, from the RESULT line in <file>: "<acknowledged> <found> <failed
+# writes applied anyway> <failed writes>". _id is unique, so none can be there twice; a write that failed on its write
+# concern may still have been applied, so those are counted apart.
+writes_check() { # <file> <run id>
+  local payload result
+  payload=$(sed -n 's/^RESULT //p' "$1" | python3 -c '
+import json, sys
+w = json.load(sys.stdin)["write"]
+a, f = w["acknowledgedIds"], w["failedIds"]
+assert len(a) == w["ok"] and len(a) == len(set(a))
+assert len(f) == w["fail"] and not set(a).intersection(f)
+print(json.dumps({"a": a, "f": f}))') || return 1
+  # Exact ids, a majority read, and an explicit machine-readable result. Never turn a failed exec into zero counts.
+  # shellcheck disable=SC2016
+  result=$(printf 'const w = %s, c = db.getSiblingDB("lab").drill; const count = ids => c.aggregate([{$match: {_id: {$in: ids}}}, {$count: "n"}], {readConcern: {level: "majority"}}).toArray()[0]?.n || 0; print("CHECK " + JSON.stringify([w.a.length, count(w.a), count(w.f), w.f.length]));' "$payload" | rs_eval) || return 1
+  printf '%s\n' "$result" | python3 -c '
+import json, sys
+rows = [json.loads(l[6:]) for l in sys.stdin if l.startswith("CHECK ")]
+assert len(rows) == 1 and len(rows[0]) == 4
+assert all(type(x) is int and x >= 0 for x in rows[0])
+print(*rows[0])'
+}
 
 # Searches one mongot pod has answered (0 when the pod is not running).
 pod_searches() { # <cluster> <pod>
@@ -205,7 +233,7 @@ drill_failback() { # <cluster>
 }
 
 drill_primary() { # <freeze|kill|partition>: mesh0, the primary's cluster, is lost from 15 s to 75 s
-  local mode=$1 before after ok failed all applied nfailed present p node restarts action_ms run
+  local mode=$1 before after ok applied nfailed present p node restarts action_ms run checked
   log="$out/drill-primary-$mode${CLIENT_OPTS:+-$(printf '%s' "$CLIENT_OPTS" | tr '&=' '-_')}${DRILL_TAG:+-$DRILL_TAG}.txt"
   t0=$(date +%s)
   echo "== drill: the primary's cluster mesh0 lost by $mode, mesh1 writes and searches (150 s)${CLIENT_OPTS:+; client options $CLIENT_OPTS}" | tee "$log"
@@ -240,14 +268,11 @@ drill_primary() { # <freeze|kill|partition>: mesh0, the primary's cluster, is lo
   note "primary after: $(primary_member)"
   cat "$out/drill-primary-load.tmp" >>"$log"; rm -f "$out/drill-primary-load.tmp"
   after=$(printf 'print(db.getSiblingDB("lab").drill.countDocuments({}))' | rs_eval)
-  # Every acknowledged write, by its id: the run's documents less the failed writes found anyway. _id is unique, so
-  # none can be there twice.
-  read -r ok failed <<<"$(sed -n 's/^RESULT //p' "$log" | python3 -c 'import json, sys; w = json.load(sys.stdin)["write"]; print(w["ok"], json.dumps(w["failedIds"], separators=(",", ":")))')"
-  # shellcheck disable=SC2016  # $regex and $in are mongosh's
-  read -r all applied nfailed <<<"$(printf 'const c = db.getSiblingDB("lab").drill, f = %s; print(c.countDocuments({_id: {$regex: "^%s-"}}) + " " + c.countDocuments({_id: {$in: f}}) + " " + f.length)' "$failed" "$run" | rs_eval)"
-  present=$((all - applied))
+  checked=$(writes_check "$log" "$run") || return 1
+  read -r ok present applied nfailed <<<"$checked"
   note "acknowledged writes: $ok, found by id: $present ($before -> $after documents): $([ "$present" = "$ok" ] && echo 'every acknowledged write is there, once' || echo "MISSING $((ok - present))"); failed writes applied anyway: $applied of $nfailed"
   grep -E 'failed at|RESULT' "$log" | tail -6 | cut -c1-160
+  [ "$present" = "$ok" ]
 }
 
 drill_spread() { # <cluster> <seconds>: how a cluster's searches are spread over its mongot pods
@@ -268,5 +293,13 @@ case "${1:-}" in
   spread) drill_spread "${2:-mesh2}" "${3:-20}" ;;
   primary) drill_primary "${2:-freeze}" ;;
   load-only) log=/dev/null; load "${2:-mesh2}" "${3:-60}" ;;   # a search load alone, for scripts/cleartext-l7.sh
-  *) echo "usage: $0 mongot [cluster] [one|both] | failback [cluster] | spread [cluster] [seconds] | primary freeze|kill|partition | load-only [cluster] [seconds]" >&2; exit 2 ;;
+  # searches and majority writes, then every acknowledged write checked by id, for scripts/cilium-build.sh
+  load-rw) log="$out/load-rw-${4:?run id}.tmp"
+    load_rw "${2:-mesh1}" "${3:-60}" "$4" | tee "$log" || exit 1
+    checked=$(writes_check "$log" "$4") || exit 1
+    read -r ok present applied nfailed <<<"$checked"
+    echo "WRITES acknowledged $ok, found by id $present: $([ "$present" = "$ok" ] && echo 'every acknowledged write is there, once' || echo "MISSING $((ok - present))"); failed writes applied anyway: $applied of $nfailed"
+    [ "$present" = "$ok" ] || exit 1
+    rm -f "$log" ;;
+  *) echo "usage: $0 mongot [cluster] [one|both] | failback [cluster] | spread [cluster] [seconds] | primary freeze|kill|partition | load-only [cluster] [seconds] | load-rw <cluster> <seconds> <run id>" >&2; exit 2 ;;
 esac

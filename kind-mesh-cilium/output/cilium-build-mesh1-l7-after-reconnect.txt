@@ -1,0 +1,10 @@
+mongod on mesh1-control-plane, agent pod/cilium-m2vgb
+RESULT {"ok":20,"fail":0,"maxMs":8,"maxAt":"4.6","firstFailAt":null,"lastFailAt":null}
+== --type l7, from mongodb to search, since 2026-10-22T20:17:49Z
+  10 type=L7 dst=mongot-search-0-0 named=True l7=REQUEST
+  10 type=L7 dst=mongot-search-0-1 named=True l7=REQUEST
+== --type trace, from mongodb to search, since 2026-10-22T20:17:49Z
+  38 type=L3_L4 dst=mongot-search-0-0 named=False l7=-
+  77 type=L3_L4 dst=mongot-search-0-0 named=True l7=-
+  43 type=L3_L4 dst=mongot-search-0-1 named=False l7=-
+  26 type=L3_L4 dst=mongot-search-0-1 named=True l7=-

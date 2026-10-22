@@ -1,0 +1,26 @@
+== story #145, before: 2026-10-22T20:01Z; expecting the release
+== mesh0
+PASS  mesh0: every agent on the release                                   cilium-9vds5=1.20.2:e0dc92bd cilium-fhrcq=1.20.2:e0dc92bd 
+PASS  mesh0: no CiliumEndpoint carries status.workloads                   0 of 25
+      searches through mesh0's member: {"ok":16,"fail":0,"maxMs":21,"maxAt":"0.0","firstFailAt":null,"lastFailAt":null}; mongod on mesh0-worker, read on its agent cilium-fhrcq
+PASS  mesh0: other-node L3/L4 attribution                                 L3_L4=0/9 L7=0/8
+PASS  mesh0: mongod -> mongot-search-0-0 (other node) names nothing       named/flows: L3_L4=0/9 L7=0/8
+PASS  mesh0: mongod -> mongot-search-0-1 (same node, the control) names StatefulSet/mongot-search-0  named/flows: L7=8/8
+PASS  mesh0: mongod -> the other clusters' mongod names nothing (not in scope)  named/flows: L3_L4=0/10
+== mesh1
+PASS  mesh1: every agent on the release                                   cilium-95dmv=1.20.2:e0dc92bd cilium-mhqb7=1.20.2:e0dc92bd 
+PASS  mesh1: no CiliumEndpoint carries status.workloads                   0 of 18
+      searches through mesh1's member: {"ok":16,"fail":0,"maxMs":26,"maxAt":"0.0","firstFailAt":null,"lastFailAt":null}; mongod on mesh1-control-plane, read on its agent cilium-95dmv
+PASS  mesh1: other-node L3/L4 attribution                                 L3_L4=0/9 L7=0/8
+PASS  mesh1: mongod -> mongot-search-0-1 (other node) names nothing       named/flows: L3_L4=0/9 L7=0/8
+PASS  mesh1: mongod -> mongot-search-0-0 (same node, the control) names StatefulSet/mongot-search-0  named/flows: L7=8/8
+PASS  mesh1: mongod -> the other clusters' mongod names nothing (not in scope)  named/flows: L3_L4=0/11
+== mesh2
+PASS  mesh2: every agent on the release                                   cilium-45dgr=1.20.2:e0dc92bd cilium-5kpx9=1.20.2:e0dc92bd 
+PASS  mesh2: no CiliumEndpoint carries status.workloads                   0 of 18
+      searches through mesh2's member: {"ok":16,"fail":0,"maxMs":24,"maxAt":"0.0","firstFailAt":null,"lastFailAt":null}; mongod on mesh2-control-plane, read on its agent cilium-45dgr
+PASS  mesh2: other-node L3/L4 attribution                                 L3_L4=0/9 L7=0/8
+PASS  mesh2: mongod -> mongot-search-0-0 (other node) names nothing       named/flows: L3_L4=0/9 L7=0/8
+PASS  mesh2: mongod -> mongot-search-0-1 (same node, the control) names StatefulSet/mongot-search-0  named/flows: L7=8/8
+PASS  mesh2: mongod -> the other clusters' mongod names nothing (not in scope)  named/flows: L3_L4=0/13
+== before: 0 failed

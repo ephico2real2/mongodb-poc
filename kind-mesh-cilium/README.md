@@ -44,6 +44,7 @@ chart existed; they are how the results in the testing record were produced.
 | 7. Story #131: the primary's cluster lost, under four client settings | `kind-mesh-cilium/scripts/primary-matrix.sh` (or one run: `CLIENT_OPTS='…' drills.sh primary freeze\|kill\|partition`) |
 | 8. Election tuning: the same drills under six replica set profiles; then how long a link outage each election timeout rides out | `kind-mesh-cilium/scripts/election-tuning.sh`; `kind-mesh-cilium/scripts/blip-test.sh` |
 | 9. Who may connect to mongot: reach test, the policy in every cluster, reach test again, check and drills | `kind-mesh-cilium/scripts/mongot-reach.sh open`; `kubectl --context kind-meshN apply -f kind-mesh-cilium/manifests/60-mongot-ingress.yaml`; `mongot-reach.sh policy`; `kind-mesh/check.sh`; `DRILL_TAG=policy drills.sh mongot mesh2 one`, `mongot mesh2 both`, `spread mesh2`; `scripts/drill-capture.sh <tag> mongot mesh2 both` with and without the policy |
+| 10. Our Cilium build in every cluster, under load, measured before and after (story #145) | `kind-mesh-cilium/scripts/cilium-build.sh measure before`, `upgrade`, `measure after`, `drill`; `kind-mesh/check.sh` |
 
 ## Files
 
@@ -59,6 +60,7 @@ chart existed; they are how the results in the testing record were produced.
 | `chart/mongodb-search-cilium/`, `chart/values-lab.yaml`, `chart/test.sh`, `scripts/chart-up.sh` | The lab's chart, its values, its render tests, its install in every cluster |
 | `manifests/50-partition-mesh0.yaml`, `scripts/primary-matrix.sh` | Story #131: the Cilium deny policy that cuts mesh0's mongod off from the other clusters; the drill matrix and its table |
 | `scripts/election-tuning.sh`, `scripts/blip-test.sh`, `scripts/rs-lib.sh`, `scripts/wan.sh` | Election tuning: the replica set profiles; the link outage test; their shared reconfig; a delayed, lossy or cut link between one cluster and the others (netem), since the clusters share one VM |
+| `scripts/cilium-build.sh` | Story #145: our Cilium build one cluster at a time (CRD first, image only, step 2's gate), the load, the flow measurement |
 | `manifests/60-mongot-ingress.yaml`, `scripts/mongot-reach.sh`, `scripts/drill-capture.sh` | Who may connect to mongot: the CiliumNetworkPolicy (27028 from the three clusters' mongod only; 9946 from the GUI and the API server's proxy, which as `remote-node` is every node of the mesh); the probes that send mongot a gRPC request from four kinds of pod, and a TCP connection from the VM; a drill with every Hubble drop on the six nodes recorded, a control per node and Envoy's counters |
 
 The repository's main chart (`chart/mongodb-search-helm`) is not changed: it always renders the operator's Envoy.

@@ -65,6 +65,32 @@ lb_path() {
   echo "for the Mac to reach the clusters' LoadBalancer addresses, once per VM start: sudo route -n add -net $LB_RANGE ${addr:-<the VM address>}"
 }
 
+cilium_healthy() { # <cluster> <when>
+  cilium status --context "kind-$1" --wait --wait-duration 10m --interactive=false >"/tmp/cilium-status-$1.txt" \
+    || { cat "/tmp/cilium-status-$1.txt"; die "Cilium is not healthy on $1 $2"; }
+}
+
+# Our agent image (CILIUM_IMAGE) on the release chart, as Helm arguments (cilium-implementation-poc lab-up.sh,
+# image_args). By tag, without the release's digest: the chart would otherwise pin the release image.
+# shellcheck disable=SC2034  # used by the scripts that source this file
+cilium_image_args=(--set "image.repository=${CILIUM_IMAGE%%:*}" --set "image.tag=${CILIUM_IMAGE#*:}"
+  --set image.useDigest=false --set image.pullPolicy=IfNotPresent)
+
+# The build's CiliumEndpoint CRD on <cluster>, labelled with its schema version, before an agent of the build writes:
+# the API server drops a status field the CRD does not declare, silently (cilium-implementation-poc demo 39 §5), and
+# the agent does not write it again until it restarts: after a successful patch it compares with its own last status,
+# not the stored one (v1.20.2 pkg/endpointmanager/endpointsynchronizer.go). The release operator updates the CRD only
+# when the label is lower than its own 1.33.12 (pkg/k8s/apis/crdhelpers/register.go), so it leaves this one alone.
+cilium_build_crd() { # <cluster>
+  local ctx="kind-$1" t
+  curl -fsSL "$CILIUM_CRD_URL" | kubectl --context "$ctx" apply -f - >/dev/null || die "the build's CiliumEndpoint CRD could not be applied on $1"
+  kubectl --context "$ctx" label crd ciliumendpoints.cilium.io "io.cilium.k8s.crd.schema.version=$CILIUM_CRD_SCHEMA_VERSION" --overwrite >/dev/null
+  t=$(kubectl --context "$ctx" get crd ciliumendpoints.cilium.io \
+    -o jsonpath='{.spec.versions[?(@.name=="v2")].schema.openAPIV3Schema.properties.status.properties.workloads.type}')
+  [ "$t" = array ] || die "the CiliumEndpoint CRD on $1 declares no status.workloads after the apply"
+  echo "  $1: CRD ciliumendpoints.cilium.io declares status.workloads, schema version $CILIUM_CRD_SCHEMA_VERSION"
+}
+
 # helm, three tries: a chart repository's transient refusal is not the lab's failure, and upgrade --install is
 # idempotent (cilium-implementation-poc scripts/lab-up.sh, helm_r).
 helm_r() {
