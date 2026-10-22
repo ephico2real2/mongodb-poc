@@ -204,10 +204,12 @@ def page(q, mode, rows, err, delta, totals, ms, member=""):
         via = esc(f"{member}'s member") if member else "the primary"
         out.append("<div class=card><h2>The path this query took</h2><div class=path>"
                    f"<b>this page</b> &rarr; <b>mongod</b> ({via}) &rarr; "
-                   "<b>mongot-global</b>, a Cilium global Service &rarr; <b>Envoy</b> of mongod's own cluster, or of "
-                   "another cluster when its own has no ready pod &rarr; that cluster's <b>mongot</b><br>"
-                   "The app never addresses mongot. A mongod keeps its connection, so after a failover its searches "
-                   "stay on the other cluster until it reconnects.</div></div></div>")
+                   "<b>mongot-global</b>, a Cilium global Service &rarr; a <b>mongot</b> of mongod's own cluster, or of "
+                   "another cluster when its own has none ready (through the operator's Envoy, when the MongoDBSearch "
+                   "has one)<br>"
+                   "The app never addresses mongot. Balanced per connection, a failover lasts until mongod reconnects; "
+                   "balanced per request (Cilium's L7 load balancing), each search goes back to its own cluster as soon "
+                   "as a mongot there is ready.</div></div></div>")
     else:
         out.append("<div class=card><h2>The path this query took</h2><div class=path>"
                    "<b>this page</b> &rarr; <b>mongod</b> (outside the cluster) &rarr; one "

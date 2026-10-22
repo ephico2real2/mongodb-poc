@@ -1,0 +1,2 @@
+  search failed at 29.4 s: CallbackCanceled
+command terminated with exit code 137

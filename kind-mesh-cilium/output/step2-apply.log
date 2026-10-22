@@ -1,0 +1,37 @@
+
+== A. WireGuard and Cilium's L7 load balancer, one cluster at a time  (21:55:05)
+  mesh0: Encryption: Wireguard 
+  mesh1: Encryption: Wireguard 
+  mesh2: Encryption: Wireguard 
+  every agent of the three clusters reports WireGuard encryption
+  mesh0: ✅ All 2 nodes are connected to all clusters [min:2 / avg:2.0 / max:2]
+  mesh0: ✅ All 1 KVStoreMesh replicas are connected to all clusters [min:2 / avg:2.0 / max:2]
+  mesh0: 🔌 Cluster Connections:
+  mesh0:   - mesh1: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  mesh0:   - mesh2: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  mesh1: ✅ All 2 nodes are connected to all clusters [min:2 / avg:2.0 / max:2]
+  mesh1: ✅ All 1 KVStoreMesh replicas are connected to all clusters [min:2 / avg:2.0 / max:2]
+  mesh1: 🔌 Cluster Connections:
+  mesh1:   - mesh0: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  mesh1:   - mesh2: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  mesh2: ✅ All 2 nodes are connected to all clusters [min:2 / avg:2.0 / max:2]
+  mesh2: ✅ All 1 KVStoreMesh replicas are connected to all clusters [min:2 / avg:2.0 / max:2]
+  mesh2: 🔌 Cluster Connections:
+  mesh2:   - mesh0: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  mesh2:   - mesh1: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+
+== C. the search hop to cleartext: mongot first, then each mongod (secondaries first)  (22:02:06)
+  mesh0: MongoDBSearch Running, mongot without TLS
+  mesh1: MongoDBSearch Running, mongot without TLS
+  mesh2: MongoDBSearch Running, mongot without TLS
+  mesh1: mongod with searchTLSMode=disabled, back as SECONDARY
+  mesh2: mongod with searchTLSMode=disabled, back as SECONDARY
+  mesh0: mongod with searchTLSMode=disabled, back as SECONDARY
+
+== B. mongot-global balanced per request  (22:04:23)
+  mesh0: CiliumEnvoyConfig for mongot-global: ciliumenvoyconfig.cilium.io/cilium-envoy-lb-mongot-global 
+  mesh1: CiliumEnvoyConfig for mongot-global: ciliumenvoyconfig.cilium.io/cilium-envoy-lb-mongot-global 
+  mesh2: CiliumEnvoyConfig for mongot-global: ciliumenvoyconfig.cilium.io/cilium-envoy-lb-mongot-global 
+
+== step 2 applied; loads in output/step2-load-cilium.txt and step2-load-cleartext.txt  (22:04:33)
+exit 0
