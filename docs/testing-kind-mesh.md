@@ -174,6 +174,7 @@ after, and a search drill lost 0 of 237 (`kind-mesh/output/disk-grow-2026-10-22/
 | A second run of `mongo-up.sh` failed: `rs.status()` needs a login once users exist | it checks `db.hello().setName` |
 | The dashboard's cluster columns were missing | the dashboard from the fork, which added them |
 | The dashboard could not show drops | the observer also streams `--type drop` |
+| The collector beside the observer was OOMKilled 141 times in 16 h (#184): Loki refused a batch over its 4 MiB message limit, the collector retried it forever, and its memory-mapped queue file grew to 551 MB | batching in the exporter's queue at 3 MiB, the queue bounded at 64 MiB and its file at 128 MiB with compaction, a `memory_limiter`, 512Mi; 0 restarts over 30 minutes after (`kind-mesh/output/otel-collector-fix-2026-10-22.txt`). Backlog older than Loki's window (about an hour) was refused and is lost |
 
 ## Open
 
