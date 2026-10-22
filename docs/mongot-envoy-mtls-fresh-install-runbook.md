@@ -263,7 +263,9 @@ oc create configmap $TRUST_CM --from-file=ca.crt=trust-bundle.pem \
 
 Use the secret names exactly as set in Step 1. The operator finds the three TLS secrets by the `ent-mongot-search-*` naming convention (see the Overview), not by any reference in the YAML.
 
-Each secret is type `kubernetes.io/tls` with three keys: `tls.crt` (leaf then chain), `tls.key` (no password) and `ca.crt` (company CA). `ca.crt` is required: Envoy uses it to verify mongot, and mongot uses it to verify its clients.
+Each secret is type `kubernetes.io/tls`. The operator reads `tls.crt` (leaf then chain) and `tls.key` (no password); these commands also write a harmless `ca.crt` copy of the company CA. The TLS secrets' `ca.crt` is not used for peer verification. Envoy and mongot use `ca.crt` from the source trust ConfigMap, `ent-trust-bundle` in this runbook.
+
+Operator 1.13.0 projects Envoy's trusted CA from the source CA volume ([`mongodbsearchenvoy_controller.go:628–633`](https://github.com/mongodb/mongodb-kubernetes/blob/1.13.0/controllers/operator/mongodbsearchenvoy_controller.go#L628-L633)). For an external source, that volume uses `ca.crt` from the ConfigMap named by `spec.source.external.tls.ca` ([`external_search_source.go:41–42`](https://github.com/mongodb/mongodb-kubernetes/blob/1.13.0/controllers/searchcontroller/external_search_source.go#L41-L42)); mongot's `CertificateAuthorityFile` points at the same CA mount ([`mongodbsearch_reconcile_helper.go:1918–2061`](https://github.com/mongodb/mongodb-kubernetes/blob/1.13.0/controllers/searchcontroller/mongodbsearch_reconcile_helper.go#L1918-L2061)).
 
 ```bash
 # mongot: server and client auth

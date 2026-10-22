@@ -19,6 +19,8 @@ The chart never creates, changes or deletes the five objects. Before it installs
 | `ent-mongot-search-lb-0-cert` | Secret | `tls.crt`, `tls.key`, `ca.crt` | Envoy, serving the public hostname |
 | `search-sync-source-password` | Secret | `password` | mongot, to sign in to the source mongod |
 
+The table lists the keys the script writes. The TLS secrets' `ca.crt` is a harmless extra; Operator 1.13.0 reads peer trust from the source CA ConfigMap (`ent-trust-bundle` here). See the [runbook's operator source references](mongot-envoy-mtls-fresh-install-runbook.md#step-5-create-the-secrets).
+
 The three TLS secret names are fixed by the operator: `<prefix>-<name>-search-cert`, `<prefix>-<name>-search-lb-0-client-cert` and `<prefix>-<name>-search-lb-0-cert`, where the prefix is `tls.certsSecretPrefix` (`ent`) and the name is `search.name` (`mongot`).
 
 **Before you start**
