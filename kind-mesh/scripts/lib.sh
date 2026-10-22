@@ -71,10 +71,28 @@ cilium_healthy() { # <cluster> <when>
 }
 
 # Our agent image (CILIUM_IMAGE) on the release chart, as Helm arguments (cilium-implementation-poc lab-up.sh,
-# image_args). By tag, without the release's digest: the chart would otherwise pin the release image.
+# image_args). By tag, without the release's digest: the chart would otherwise pin the release image. With
+# CILIUM_CLUSTERMESH_IMAGE, the clustermesh-apiserver's too: in the 1.20.2 chart one key, clustermesh.apiserver.image,
+# sets all four containers of its Deployment (etcd-init, etcd, apiserver, kvstoremesh; `helm template`).
 # shellcheck disable=SC2034  # used by the scripts that source this file
 cilium_image_args=(--set "image.repository=${CILIUM_IMAGE%%:*}" --set "image.tag=${CILIUM_IMAGE#*:}"
   --set image.useDigest=false --set image.pullPolicy=IfNotPresent)
+if [ -n "${CILIUM_CLUSTERMESH_IMAGE:-}" ]; then
+  cilium_image_args+=(--set "clustermesh.apiserver.image.repository=${CILIUM_CLUSTERMESH_IMAGE%%:*}"
+    --set "clustermesh.apiserver.image.tag=${CILIUM_CLUSTERMESH_IMAGE#*:}"
+    --set clustermesh.apiserver.image.useDigest=false --set clustermesh.apiserver.image.pullPolicy=IfNotPresent)
+fi
+
+# With CILIUM_IMAGES_LOCAL=1, the Cilium images from the VM's docker into every node of <cluster>: they are in no
+# registry. kind skips a node that already has the image.
+cilium_load_local() { # <cluster>
+  local img
+  for img in "$CILIUM_IMAGE" ${CILIUM_CLUSTERMESH_IMAGE:+"$CILIUM_CLUSTERMESH_IMAGE"}; do
+    docker image inspect "$img" >/dev/null 2>&1 || die "$img is not in the VM's docker: build it there first (CILIUM_IMAGES_LOCAL=1)"
+    kind load docker-image "$img" --name "$1" >/dev/null || die "kind could not load $img into $1"
+    echo "  $1: loaded $img"
+  done
+}
 
 # The build's CiliumEndpoint CRD on <cluster>, labelled with its schema version, before an agent of the build writes:
 # the API server drops a status field the CRD does not declare, silently (cilium-implementation-poc demo 39 §5), and
