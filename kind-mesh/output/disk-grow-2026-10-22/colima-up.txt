@@ -1,0 +1,155 @@
+
+== start Colima profile mongodb-mesh (was Stopped, 8 CPUs, 24 GiB, 60 GiB disk):  (14:10:30)
+time="2026-10-22T14:10:31-05:00" level=info msg="starting colima [profile=mongodb-mesh]"
+time="2026-10-22T14:10:31-05:00" level=info msg="runtime: docker"
+time="2026-10-22T14:10:31-05:00" level=info msg="resizing disk to 100GiB..." context=vm
+time="2026-10-22T14:10:31-05:00" level=info msg="starting ..." context=vm
+time="2026-10-22T14:10:31-05:00" level=info msg="Using the existing instance `colima-mongodb-mesh`"
+time="2026-10-22T14:10:32-05:00" level=info msg="Starting the instance `colima-mongodb-mesh` with internal VM driver `vz`"
+time="2026-10-22T14:10:32-05:00" level=info msg="[hostagent] hostagent socket created at ~/.colima/_lima/colima-mongodb-mesh/ha.sock"
+time="2026-10-22T14:10:32-05:00" level=info msg="[hostagent] Starting VZ (hint: to watch the boot progress, see `~/.colima/_lima/colima-mongodb-mesh/serial*.log`)"
+time="2026-10-22T14:10:32-05:00" level=info msg="[hostagent] Mounting disk `colima-mongodb-mesh` on `/mnt/lima-colima-mongodb-mesh`"
+time="2026-10-22T14:10:32-05:00" level=info msg="[hostagent] Converting `~/.colima/_lima/_disks/colima-mongodb-mesh/datadisk` (raw) to a raw disk `~/.colima/_lima/_disks/colima-mongodb-mesh/datadisk`"
+time="2026-10-22T14:10:32-05:00" level=info msg="[hostagent] [VZ] - vm state change: running"
+time="2026-10-22T14:10:37-05:00" level=info msg="[hostagent] SSH server does not seem to be running on vsock port, using usernet forwarder"
+time="2026-10-22T14:10:37-05:00" level=info msg="SSH Local Port: 59594"
+time="2026-10-22T14:10:37-05:00" level=info msg="[hostagent] Waiting for the essential requirement 1 of 3: `ssh`"
+time="2026-10-22T14:10:37-05:00" level=info msg="[hostagent] The essential requirement 1 of 3 is satisfied"
+time="2026-10-22T14:10:37-05:00" level=info msg="[hostagent] Waiting for the essential requirement 2 of 3: `user session is ready for ssh`"
+time="2026-10-22T14:10:37-05:00" level=info msg="[hostagent] The essential requirement 2 of 3 is satisfied"
+time="2026-10-22T14:10:37-05:00" level=info msg="[hostagent] Waiting for the essential requirement 3 of 3: `Explicitly start ssh ControlMaster`"
+time="2026-10-22T14:10:37-05:00" level=info msg="[hostagent] The essential requirement 3 of 3 is satisfied"
+time="2026-10-22T14:10:37-05:00" level=info msg="[hostagent] Waiting for the guest agent to be running"
+time="2026-10-22T14:10:37-05:00" level=info msg="[hostagent] Forwarding `/var/run/docker.sock` (guest) to `~/.colima/mongodb-mesh/docker.sock` (host)"
+time="2026-10-22T14:10:37-05:00" level=info msg="[hostagent] Forwarding `/var/run/containerd/containerd.sock` (guest) to `~/.colima/mongodb-mesh/containerd.sock` (host)"
+time="2026-10-22T14:10:38-05:00" level=info msg="[hostagent] Guest agent is running"
+time="2026-10-22T14:10:38-05:00" level=info msg="[hostagent] Waiting for the final requirement 1 of 1: `boot scripts must have finished`"
+time="2026-10-22T14:10:38-05:00" level=info msg="[hostagent] Time sync: guest agent is alive, starting time synchronization"
+time="2026-10-22T14:10:38-05:00" level=info msg="[hostagent] Not forwarding TCP 0.0.0.0:22"
+time="2026-10-22T14:10:38-05:00" level=info msg="[hostagent] Not forwarding TCP 192.168.5.1:53"
+time="2026-10-22T14:10:38-05:00" level=info msg="[hostagent] Forwarding TCP from 127.0.0.1:53 to 127.0.0.1:53"
+time="2026-10-22T14:10:38-05:00" level=info msg="[hostagent] Forwarding `127.0.0.1:53` (guest) to `/tmp/lima-psl-127.0.0.1-53-1093384689/sock` (host)"
+time="2026-10-22T14:10:38-05:00" level=info msg="[hostagent] Stopping forwarding `127.0.0.1:53` (guest) to `/tmp/lima-psl-127.0.0.1-53-1093384689/sock` (host)"
+time="2026-10-22T14:10:38-05:00" level=warning msg="[hostagent] failed to set up forwarding tcp port 53 (negligible if already forwarded)" error="listen tcp 0.0.0.0:53: bind: address already in use"
+time="2026-10-22T14:10:38-05:00" level=info msg="[hostagent] Not forwarding TCP [fe80::5055:55ff:fe8a:313d]:53"
+time="2026-10-22T14:10:38-05:00" level=info msg="[hostagent] Not forwarding TCP [::]:22"
+time="2026-10-22T14:10:38-05:00" level=info msg="[hostagent] Forwarding TCP from [::1]:53 to 127.0.0.1:53"
+time="2026-10-22T14:10:38-05:00" level=info msg="[hostagent] Forwarding `[::1]:53` (guest) to `/tmp/lima-psl-127.0.0.1-53-3339675899/sock` (host)"
+time="2026-10-22T14:10:38-05:00" level=info msg="[hostagent] Stopping forwarding `[::1]:53` (guest) to `/tmp/lima-psl-127.0.0.1-53-3339675899/sock` (host)"
+time="2026-10-22T14:10:38-05:00" level=warning msg="[hostagent] failed to set up forwarding tcp port 53 (negligible if already forwarded)" error="listen tcp 0.0.0.0:53: bind: address already in use"
+time="2026-10-22T14:10:41-05:00" level=info msg="[hostagent] The final requirement 1 of 1 is satisfied"
+time="2026-10-22T14:10:41-05:00" level=info msg="READY. Run `limactl shell colima-mongodb-mesh` to open the shell."
+installing: 386 OK
+installing: amd64 OK
+{
+  "supported": [
+    "linux/arm64",
+    "linux/amd64",
+    "linux/386"
+  ],
+  "emulators": [
+    "python3.12",
+    "qemu-i386",
+    "qemu-x86_64"
+  ]
+}
+time="2026-10-22T14:10:41-05:00" level=info msg="provisioning ..." context=docker
+colima-mongodb-mesh
+Successfully created context "colima-mongodb-mesh"
+time="2026-10-22T14:10:42-05:00" level=info msg="starting ..." context=docker
+time="2026-10-22T14:10:43-05:00" level=info msg=done
+
+== the docker disk  (14:10:43)
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/vdb1        99G   45G   50G  48% /var/lib/docker
+
+== inotify limits in the VM  (14:10:44)
+fs.inotify.max_user_instances = 512
+fs.inotify.max_user_watches = 1048576
+PROFILE         STATUS     ARCH       CPUS    MEMORY    DISK      RUNTIME    ADDRESS
+mongodb-mesh    Running    aarch64    8       24GiB     100GiB    docker     192.168.64.10
+
+== the kind nodes' addresses (~/.kube/mongodb-mesh.node-ips)  (14:10:44)
+  mesh0-control-plane 172.18.0.2 pinned
+  mesh1-control-plane 172.18.0.4 pinned
+  mesh2-control-plane 172.18.0.6 pinned
+  mesh0-worker 172.18.0.3 pinned
+  mesh1-worker 172.18.0.5 pinned
+  mesh2-worker 172.18.0.7 pinned
+
+== the control planes, then their API servers  (14:10:45)
+  mesh0-control-plane 172.18.0.2 started
+  mesh1-control-plane 172.18.0.4 started
+  mesh2-control-plane 172.18.0.6 started
+  kind-mesh0: API server ready
+  kind-mesh1: API server ready
+  kind-mesh2: API server ready
+
+== the workers  (14:10:56)
+  mesh0-worker 172.18.0.3 started
+  mesh1-worker 172.18.0.5 started
+  mesh2-worker 172.18.0.7 started
+
+== nodes, Cilium and Cluster Mesh  (14:10:56)
+  mesh0-control-plane Ready 172.18.0.2
+  mesh0-worker Ready 172.18.0.3
+  mesh1-control-plane Ready 172.18.0.4
+  mesh1-worker Ready 172.18.0.5
+  mesh2-control-plane Ready 172.18.0.6
+  mesh2-worker Ready 172.18.0.7
+  kind-mesh0: Cilium healthy
+  kind-mesh1: Cilium healthy
+  kind-mesh2: Cilium healthy
+⚠️  Service type NodePort detected! Service may fail when nodes are removed from the cluster!
+✅ Service "clustermesh-apiserver" of type "NodePort" found
+✅ Cluster access information is available:
+  - 172.18.0.2:32379
+✅ Deployment clustermesh-apiserver is ready
+ℹ️  KVStoreMesh is enabled
+⌛ Waiting (0s) for clusters to be connected: 2 nodes are not ready
+⌛ Waiting (10s) for clusters to be connected: 2 nodes are not ready
+⌛ Waiting (20s) for clusters to be connected: 2 nodes are not ready
+⌛ Waiting (31s) for clusters to be connected: 2 nodes are not ready
+⌛ Waiting (41s) for clusters to be connected: 2 nodes are not ready
+⌛ Waiting (52s) for clusters to be connected: 2 nodes are not ready
+⌛ Waiting (1m2s) for clusters to be connected: 1 nodes are not ready
+⌛ Waiting (1m13s) for clusters to be connected: 1 nodes are not ready
+
+✅ All 2 nodes are connected to all clusters [min:2 / avg:2.0 / max:2]
+✅ All 1 KVStoreMesh replicas are connected to all clusters [min:2 / avg:2.0 / max:2]
+
+🔌 Cluster Connections:
+  - mesh1: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  - mesh2: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+
+⚠️  Service type NodePort detected! Service may fail when nodes are removed from the cluster!
+✅ Service "clustermesh-apiserver" of type "NodePort" found
+✅ Cluster access information is available:
+  - 172.18.0.4:32379
+✅ Deployment clustermesh-apiserver is ready
+ℹ️  KVStoreMesh is enabled
+
+✅ All 2 nodes are connected to all clusters [min:2 / avg:2.0 / max:2]
+✅ All 1 KVStoreMesh replicas are connected to all clusters [min:2 / avg:2.0 / max:2]
+
+🔌 Cluster Connections:
+  - mesh0: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  - mesh2: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+
+⚠️  Service type NodePort detected! Service may fail when nodes are removed from the cluster!
+✅ Service "clustermesh-apiserver" of type "NodePort" found
+✅ Cluster access information is available:
+  - 172.18.0.6:32379
+✅ Deployment clustermesh-apiserver is ready
+ℹ️  KVStoreMesh is enabled
+
+✅ All 2 nodes are connected to all clusters [min:2 / avg:2.0 / max:2]
+✅ All 1 KVStoreMesh replicas are connected to all clusters [min:2 / avg:2.0 / max:2]
+
+🔌 Cluster Connections:
+  - mesh0: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  - mesh1: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+
+
+== the Mac's path to 172.18.255.0/24  (14:18:36)
+for the Mac to reach the clusters' LoadBalancer addresses, once per VM start: sudo route -n add -net 172.18.255.0/24 192.168.64.10

@@ -1,0 +1,1 @@
+all mongot Ready 1 s after colima-up returned

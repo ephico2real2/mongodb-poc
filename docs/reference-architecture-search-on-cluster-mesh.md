@@ -248,7 +248,7 @@ What this trades:
 | mongod | 500m, 1Gi (limit 1 CPU, 2Gi) | 179 to 240 Mi | 10Gi |
 | mongot | 500m, 1Gi (limit 2 CPUs, 2Gi; heap 512Mi) | 622 to 677 Mi | 10Gi |
 | Envoy | the chart's default | 19 to 21 Mi | — |
-| The whole lab: 3 clusters, 6 nodes, two mongot per cluster, Cilium, cert-manager, OLM, the GUI, the observability stack | | 13.1 of 16 GiB in the VM on 2026-10-21 (24 GiB since 2026-10-22, #162); 37 of 60 GB of disk (each node keeps its own copy of every image) | |
+| The whole lab: 3 clusters, 6 nodes, two mongot per cluster, Cilium, cert-manager, OLM, the GUI, the observability stack | | 13.1 of 16 GiB in the VM on 2026-10-21 (24 GiB since 2026-10-22, #162); 37 of 60 GB of disk (100 GiB since 2026-10-22, #182; each node keeps its own copy of every image) | |
 
 Read with `kubectl top` and `free -m` (`kind-mesh/scripts/evidence.sh`, `kind-mesh/output/evidence-2026-10-21.txt`). These fit 24 documents and two indexes. Production sizing follows the chart's own guidance
 (`chart/mongodb-search-helm/production-settings.md`), per cluster.
