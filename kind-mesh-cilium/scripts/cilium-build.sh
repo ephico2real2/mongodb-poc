@@ -368,9 +368,11 @@ gate() { # <cluster>
   fi
   cilium_healthy "$c" "on the build"
   # shellcheck disable=SC2013  # Kubernetes pod names contain no whitespace
+  # The output is read whole before it is searched: under pipefail, `cilium-dbg ... | grep -q` fails whenever grep exits
+  # at its match before cilium-dbg has written the rest (SIGPIPE), and reported an encrypting agent as not (#190's run).
   for p in $(awk '{print $1}' <<<"$inventory"); do
-    kubectl --context "$ctx" -n kube-system exec "$p" -c cilium-agent -- cilium-dbg encrypt status 2>/dev/null | grep -q 'Encryption: Wireguard' \
-      || die "$c $p does not report WireGuard encryption"
+    o=$(kubectl --context "$ctx" -n kube-system exec "$p" -c cilium-agent -- cilium-dbg encrypt status 2>/dev/null) \
+      && grep -q 'Encryption: Wireguard' <<<"$o" || die "$c $p does not report WireGuard encryption"
   done
   o=$(cilium clustermesh status --context "$ctx" --wait --wait-duration 5m 2>&1) || { printf '%s\n' "$o"; die "$c: clustermesh command failed"; }
   n=$(grep -c 'configured, 2/2 connected' <<<"$o" || true)
@@ -474,9 +476,10 @@ envoy_counts() { # <cluster>: true when Envoy on mongod's node counted the searc
     "$((after - before))" "$before" "$after" | tee -a "$l7_record"
   [ $((after - before)) -ge "$ok" ]
 }
-rs_healthy() { # every member of rs0 up, PRIMARY or SECONDARY
-  printf 'const m = rs.status().members; print("RS " + (m.length === %s && m.every(x => x.health === 1 && ["PRIMARY", "SECONDARY"].includes(x.stateStr)) ? "healthy" : m.map(x => x.name.split(".")[0] + "=" + x.stateStr).join(",")))\n' \
-    "${#clusters[@]}" | rs_eval | grep -qx 'RS healthy'
+rs_healthy() { # every member of rs0 up, PRIMARY or SECONDARY; the answer read whole before it is searched (pipefail)
+  local o
+  o=$(printf 'const m = rs.status().members; print("RS " + (m.length === %s && m.every(x => x.health === 1 && ["PRIMARY", "SECONDARY"].includes(x.stateStr)) ? "healthy" : m.map(x => x.name.split(".")[0] + "=" + x.stateStr).join(",")))\n' \
+    "${#clusters[@]}" | rs_eval) && grep -qx 'RS healthy' <<<"$o"
 }
 mongod_restart() { # <cluster>: one member at a time, and only while every member is healthy
   local c=$1 uid i now
