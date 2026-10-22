@@ -51,12 +51,14 @@ NS=$TargetNamespace                       # Part 2 uses $NS
 # The script is a file of the chart. From a checkout of this repository, at its root:
 PREREQ=chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
 # From the published chart, with no clone (chart 0.3.3 and later):
-#   helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.33/mongodb-search-helm-0.3.33.tgz --untar
+#   helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.34/mongodb-search-helm-0.3.34.tgz --untar
 #   PREREQ=mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
 
 mkdir -m 700 $TargetNamespace             # the script never creates it
 bash $PREREQ --check \
   --mongot <mongot PEM> --envoy <Envoy client PEM> --route <public hostname PEM>
+# If the Envoy client cert also allows server authentication, or has no EKU, add
+# --route-reference <public hostname PEM> (Step 3)
 ```
 
 Run it with `bash`: helm stores a chart's files without the executable bit. Run it from a directory outside the chart: helm packages every file under a chart's directory and keeps it in each release, so the script refuses to write there.
@@ -87,6 +89,8 @@ bash $PREREQ --mongot <mongot PEM> --apply
 
 # Envoy: the client cert it presents to mongot
 bash $PREREQ --envoy <Envoy client PEM> --dry-run
+# If the client certificate also allows server authentication, or has no EKU:
+# bash $PREREQ --envoy <Envoy client PEM> --route-reference <public PEM> --dry-run
 bash $PREREQ --envoy <Envoy client PEM> --apply
 
 # Envoy: the server cert for the public hostname. It is mounted in the Envoy pods; the Route is passthrough and
@@ -96,6 +100,8 @@ bash $PREREQ --route <public hostname PEM> --apply
 ```
 
 `--route` prints the hostname for the values file (`loadBalancer.externalHostname`). When the certificate names several, say which with `--hostname <fqdn>`.
+
+If the Envoy client certificate also allows server authentication, or has no EKU, add `--route-reference <public PEM>` on each `--envoy` run, including `--apply` and `--check --envoy`; the reference must identify a distinct public certificate with a valid chain.
 
 What `--apply` does, each time:
 
@@ -168,7 +174,7 @@ From the published package, with no clone of the repository:
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.33/mongodb-search-helm-0.3.33.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.34/mongodb-search-helm-0.3.34.tgz \
   -n $NS -f my-values.yaml --timeout 20m
 ```
 
@@ -285,6 +291,9 @@ Then delete the decrypted key files (runbook Step 7d).
 | --- | --- | --- |
 | The script says `no namespace` | `TargetNamespace` is not exported and `--target-namespace` was not given | Step 1; there is no default |
 | The script says `is not the mongot certificate for <namespace>` | The PEM was issued for another namespace, or it is another step's PEM | Give each step its own PEM; ask the signer for one issued for this namespace |
+| The script says `a certificate allowing both server and client authentication, or with no EKU, cannot be distinguished from the public certificate` | The Envoy candidate also permits server authentication; names alone cannot establish its role | Add `--route-reference <public PEM>` to `--envoy` (also with `--check`). The reference must have one public leaf, a valid chain, and a different fingerprint. Use `--hostname` if it has several public names. An existing generated route Secret does not replace this explicit choice |
+| The script says `this is the public certificate named by --route-reference` | The Envoy candidate and the explicit public reference have the same leaf fingerprint | Give `--envoy` its own client PEM; keep the public PEM as the reference |
+| The script says `its basic constraints do not say CA:TRUE` | The root is version 3 and its basic constraints say `CA:FALSE`, or it has no basic constraints and neither a Certificate Sign key usage nor a Netscape CA type. OpenSSL 3 refuses such a root as `invalid CA certificate` (error 79), and LibreSSL accepts most of them; the script refuses them on every build. Roots with `CA:TRUE`, with no basic constraints but Certificate Sign key usage, or of version 1 are accepted | Ask the CA owner for a root with `basicConstraints = critical, CA:TRUE` and replace the rejected root in the PEM |
 | The script says `wrong passphrase` | The passphrase typed is not the key's | Run the step again |
 | The script says `this openssl ... cannot read the key` | The key's encryption is one this openssl build does not have | Set `OPENSSL` to another build, for example `OPENSSL=/opt/homebrew/bin/openssl` |
 | The script says `git would track` | The folder is inside a repository that does not ignore it | Add the line it prints to `.gitignore` |
@@ -351,7 +360,7 @@ Oct 8, 2026, namespace `dvh-vectordb-qa` created for this on the same lab, OpenS
 
 mongot was not installed there: the lab node was at 90% memory.
 
-The script's own tests ([`test/prerequisites.sh`](../test/prerequisites.sh), 105 checks, no cluster) pass with OpenSSL 3.6.4 and with LibreSSL 3.3.6, under bash 5.3.20 and under bash 3.2.57, in all four pairings.
+The script's own tests ([`test/prerequisites.sh`](../test/prerequisites.sh), 135 checks, no cluster) pass with OpenSSL 3.6.4, OpenSSL 4.0.3 and LibreSSL 3.3.6, under bash 5.3.20 and under bash 3.2.57, in all six pairings (Oct 22, 2026).
 
 Not tested:
 
