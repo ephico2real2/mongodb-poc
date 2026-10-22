@@ -432,6 +432,8 @@ On by default (`monitoring.alerts.enabled`): one PrometheusRule, `<search.name>-
 | `MongotDataPathFillingUp` | The same, 80% used or more | 15 m | warning |
 | `MongotDataPathFillingUp` | The same, 90% used or more | 5 m | critical |
 
+**Against MongoDB's recommended alerts.** MongoDB's [Recommended Alerts for mongot](https://www.mongodb.com/docs/search/self-managed/current/monitoring/recommended-alerts/) has 28 entries, in the tiers Page, Ticket and Watch and a section on Envoy. [`docs/mongot-recommended-alerts-comparison.md`](../../docs/mongot-recommended-alerts-comparison.md) puts each one beside the alerts above and says whether mongot 1.70.1 emits what it reads: 4 are covered here, 2 are left out by decision (replication lag, below), 1 does not apply to the operator's Envoy, 5 are Watch entries, which MongoDB says need no paging, and 16 are not in the chart, in 13 proposals that the owner decided on 2026-10-22 to make one story each (epic #167). Among those 16: no alert of this chart is about a mongot pod that is down, or that restarts in a loop.
+
 About the five index alerts:
 
 - **They name the index by its id**, the label `indexId_logString` of mongot's metrics; three also name the pod. The dashboard's section *What does each index hold?* shows the same id.
