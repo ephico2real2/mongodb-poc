@@ -1,0 +1,22 @@
+== Who can reach mongot's port 27028 in mesh0? 2026-10-22T19:30:35Z, tag screenshots
+# policy in mesh0's search namespace: ciliumnetworkpolicy.cilium.io/mongot-ingress; in mesh1's: ciliumnetworkpolicy.cilium.io/mongot-ingress
+# each probe: a pod in mesh1, image quay.io/mongodb/mongodb-community-server:8.3.4-ubi9, sending a gRPC health check (curl --http2-prior-knowledge)
+# mongot-global: Cilium's Envoy on the probe's node sends it to mesh1's own mongot (affinity local)
+# namespace default, app label: none (on mesh1-control-plane)
+  10.10.0.250:27028                              no answer in 5 s (dropped)
+  10.10.1.80:27028                               no answer in 5 s (dropped)
+  mongot-global.search.svc.cluster.local:27028   no answer in 5 s (dropped)
+# namespace mongodb, app label: none (on mesh1-control-plane)
+  10.10.0.250:27028                              no answer in 5 s (dropped)
+  10.10.1.80:27028                               no answer in 5 s (dropped)
+  mongot-global.search.svc.cluster.local:27028   no answer in 5 s (dropped)
+# namespace default, app label: mongo (on mesh1-control-plane)
+  10.10.0.250:27028                              no answer in 5 s (dropped)
+  10.10.1.80:27028                               no answer in 5 s (dropped)
+  mongot-global.search.svc.cluster.local:27028   no answer in 5 s (dropped)
+# namespace mongodb, app label: mongo (on mesh1-control-plane)
+  10.10.0.250:27028                              mongot answered
+  10.10.1.80:27028                               mongot answered
+  mongot-global.search.svc.cluster.local:27028   mongot answered (through envoy)
+# the Colima VM, outside WireGuard, with a route to mesh0-worker's pods for the test: ip route replace 10.10.1.0/24 via 172.18.0.3
+  10.10.1.80:27028                               no TCP connection in 5 s (dropped)

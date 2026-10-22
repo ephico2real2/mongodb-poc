@@ -6,7 +6,9 @@ endpoint are Cilium global Services, with one name in every cluster. Each cluste
 mongot, and through another cluster's when its own is unreachable.
 
 Built and measured on three kind clusters on 2026-10-21 (`kind-mesh/`: the scripts, the proofs and the drills). Every
-number below comes from that lab. What it has not shown is said in [What is not proven](#what-is-not-proven).
+number below comes from that lab. What it has not shown is said in [What is not proven](#what-is-not-proven). Why
+this shape rather than the conventional one, and what it costs, is the
+[business case](business-case-search-on-cilium-cluster-mesh.md).
 
 ## In short
 

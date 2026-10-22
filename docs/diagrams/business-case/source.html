@@ -1,0 +1,214 @@
+<!-- SPDX-License-Identifier: MIT-0. Started from the diagram-kit template, https://github.com/ephico2real2/diagram-kit -->
+<title>Search Business Case</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --ground: #f5f6f8; --surface: #ffffff; --ink: #18212c; --muted: #58636f; --rule: #d7dce3;
+  --host: #a55a0b; --host-wash: #fbf1e4; --remote: #0e6f68; --remote-wash: #e3f3f1;
+  --gap: #b3261e; --gap-wash: #fbe9e7; --none: #5f6a77; --none-wash: #eef0f3;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+    --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+    --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+  --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+  --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55; margin: 0; }
+.page { max-width: 1060px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 72px; display: grid; gap: 44px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0 0 6px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+.lede { font-size: 17px; max-width: 70ch; }
+code { font-family: var(--font-mono); font-size: .9em; }
+section { display: grid; gap: 14px; }
+figure { margin: 0; display: grid; gap: 10px; }
+.fig-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px; }
+.fig-scroll svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--ink); }
+figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; font-style: italic; }
+a { color: var(--remote); }
+:focus-visible { outline: 2px solid var(--remote); outline-offset: 2px; }
+</style>
+<div class="page">
+  <header>
+    <div class="eyebrow">mongodb-poc · business case · 2026-10-22</div>
+    <h1>MongoDB Search: the conventional entry, and the same search on Cilium Cluster Mesh</h1>
+    <p class="lede">Conventionally, each cluster's search is reached through a chain of hops in which the router, the Route and Envoy all match one hostname, and Envoy accepts exactly that one name. On Cluster Mesh, every mongod dials one global Service name, and the network sends a cluster's searches elsewhere when its mongot are gone.</p>
+  </header>
+
+  <section>
+    <h2>The conventional entry: one cluster, one name</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 650" role="img" aria-label="The conventional search entry for one OpenShift cluster, top to bottom. Outside OpenShift, a mongod replica set member with mongotHost grpc-search.domain:443 sends the hostname as SNI, never an IP, to an F5 VIP that must be L4 or fastL4, since an HTTP profile breaks gRPC. Inside the cluster, the OpenShift router (HAProxy), on ports 80 and 443 only with a one-hour tunnel timeout, picks the passthrough Route by SNI from os_sni_passthrough.map; the Route's host must equal externalHostname; the operator-managed Envoy, two replicas, terminates TLS and accepts one server name, externalHostname (operator 1.13.0), then splits gRPC streams across the mongot pods. An SNI not in the router's map gets the router's default certificate and never reaches Envoy; another SNI at Envoy gets its handshake closed with no certificate. One cluster, one name: a second cluster is a second stack and a second entry, and moving search to it is a DNS change to that name. mongot checks a client certificate's CA, not its hostname; the one-name rule is SNI matching, at Envoy and at the router, not CORS.">
+          <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+            <!-- lane: outside OpenShift -->
+            <text x="40" y="26" font-family="IBM Plex Mono, monospace" font-size="12" letter-spacing="1" fill="var(--muted)">OUTSIDE OPENSHIFT</text>
+            <rect x="40" y="38" width="460" height="66" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="54" y="58" font-weight="600" fill="var(--remote)">mongod<tspan font-weight="400" fill="var(--muted)">  replica set member</tspan></text>
+            <text x="54" y="76" font-family="IBM Plex Mono, monospace" font-size="12">mongotHost = grpc-search.&lt;domain&gt;:443</text>
+            <text x="54" y="94">sends the hostname as SNI, never an IP</text>
+            <line x1="270" y1="104" x2="270" y2="130" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="282" y="122" fill="var(--muted)">TLS, SNI = grpc-search.&lt;domain&gt;</text>
+            <rect x="40" y="132" width="460" height="50" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="54" y="152" font-weight="600" fill="var(--remote)">F5 VIP :443</text>
+            <text x="54" y="170">L4 / fastL4 only; an HTTP profile breaks gRPC</text>
+            <line x1="270" y1="182" x2="270" y2="236" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="282" y="196" fill="var(--muted)">TCP to the infra nodes :443, not decrypted</text>
+            <!-- lane rule -->
+            <line x1="20" y1="206" x2="960" y2="206" stroke="var(--rule)" stroke-width="1.2" stroke-dasharray="6 4"/>
+            <text x="40" y="228" font-family="IBM Plex Mono, monospace" font-size="12" letter-spacing="1" fill="var(--muted)">OPENSHIFT CLUSTER</text>
+            <!-- router -->
+            <rect x="40" y="238" width="460" height="66" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="54" y="258" font-weight="600" fill="var(--remote)">OpenShift router (HAProxy)</text>
+            <text x="54" y="276">picks the passthrough Route by SNI (<tspan font-family="IBM Plex Mono, monospace" font-size="12">os_sni_passthrough.map</tspan>)</text>
+            <text x="54" y="294" fill="var(--muted)">ports 80/443 only; tunnel timeout 1 h</text>
+            <line x1="270" y1="304" x2="270" y2="330" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="282" y="322" fill="var(--muted)">SNI in the map: a TCP tunnel</text>
+            <!-- route -->
+            <rect x="40" y="332" width="460" height="50" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="54" y="352" font-weight="600" fill="var(--remote)">passthrough Route</text>
+            <text x="54" y="370">host must equal <tspan font-family="IBM Plex Mono, monospace" font-size="12">externalHostname</tspan></text>
+            <line x1="270" y1="382" x2="270" y2="408" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="282" y="400" fill="var(--muted)">to the Envoy pods, still encrypted</text>
+            <!-- envoy: the one-name rule -->
+            <rect x="40" y="410" width="460" height="66" rx="6" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.3"/>
+            <text x="54" y="430" font-weight="600" fill="var(--host)">Envoy, operator-managed, x2</text>
+            <text x="54" y="448">terminates TLS; accepts ONE server name: <tspan font-family="IBM Plex Mono, monospace" font-size="12">externalHostname</tspan></text>
+            <text x="54" y="466" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">operator 1.13.0, mongodbsearchenvoy_controller.go</text>
+            <!-- streams to mongot -->
+            <line x1="250" y1="476" x2="112" y2="538" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <line x1="270" y1="476" x2="270" y2="538" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <line x1="290" y1="476" x2="428" y2="538" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="386" y="508" fill="var(--muted)">splits gRPC streams across mongot</text>
+            <rect x="40" y="540" width="140" height="40" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="110" y="565" text-anchor="middle" font-weight="600" fill="var(--remote)">mongot</text>
+            <rect x="200" y="540" width="140" height="40" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="270" y="565" text-anchor="middle" font-weight="600" fill="var(--remote)">mongot</text>
+            <rect x="360" y="540" width="140" height="40" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="430" y="565" text-anchor="middle" font-weight="600" fill="var(--remote)">mongot</text>
+            <!-- failure: at the router -->
+            <line x1="500" y1="271" x2="578" y2="271" stroke="var(--gap)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="539" y="263" text-anchor="middle" fill="var(--gap)">other SNI</text>
+            <rect x="580" y="238" width="360" height="66" rx="6" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.3"/>
+            <text x="594" y="258" font-weight="600" fill="var(--gap)">SNI not in the map</text>
+            <text x="594" y="276">the router's default certificate, no ALPN</text>
+            <text x="594" y="294" fill="var(--muted)">TLS succeeds; it never reaches Envoy</text>
+            <!-- failure: at Envoy -->
+            <line x1="500" y1="443" x2="578" y2="443" stroke="var(--gap)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="539" y="435" text-anchor="middle" fill="var(--gap)">other SNI</text>
+            <rect x="580" y="410" width="360" height="66" rx="6" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.3"/>
+            <text x="594" y="430" font-weight="600" fill="var(--gap)">another SNI</text>
+            <text x="594" y="448">handshake closed, no certificate</text>
+            <text x="594" y="466" fill="var(--muted)">measured on the VIP path, :27028</text>
+            <!-- takeaway -->
+            <text x="30" y="612">One cluster, one name. A second cluster is a second stack and a second entry; moving search to it is a DNS change to that name.</text>
+            <text x="30" y="634" fill="var(--muted)">mongot checks a client certificate's CA, not its hostname (MongoDB docs); the one-name rule is SNI matching, not CORS.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>The conventional entry, one cluster, as this repository documents it (README, "Architecture: OpenShift Route behind an F5", "One hostname, two entry paths", "What a wrong SNI does, by path"). The router, the Route and Envoy each match one name, and Envoy accepts only that name.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>The same search on Cilium Cluster Mesh: one name everywhere</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 548" role="img" aria-label="Three clusters, mesh0, mesh1 and mesh2. Each holds a mongod member of one replica set, mesh0's the primary and the others secondaries, and two mongot. mesh0's primary replicates to both secondaries over the mesh, through the members' global Services. One Cilium global Service, mongot-global, has the same name in every cluster with affinity local, and Cilium's L7 load balancer balances each search request over the mongot. Every mongod's mongotHost is mongot-global.search.svc.cluster.local:27028: one name everywhere, with no F5, no Route and no operator Envoy. Each mongod's searches go to its own cluster's mongot. When mesh2 lost both its mongot, its searches went to mesh0 and mesh1: 0 of 235 failed on 2026-10-21, before the network policy, and 1 to 3 per run failed with it. WireGuard runs between all nodes, a CiliumNetworkPolicy lets only pods labelled app=mongo in mongodb reach port 27028, and one Hubble relay sees the flows of all six nodes.">
+          <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+            <!-- replication, over the top -->
+            <text x="525" y="26" text-anchor="middle">replica set over the mesh (global member Services)</text>
+            <path d="M 240,92 V 36 H 490 V 90" fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#ah2)"/>
+            <path d="M 240,92 V 36 H 810 V 90" fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#ah2)"/>
+            <!-- cluster frames: above and below the global band -->
+            <rect x="30" y="56" width="280" height="140" rx="8" fill="none" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="30" y="248" width="280" height="112" rx="8" fill="none" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="350" y="56" width="280" height="140" rx="8" fill="none" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="350" y="248" width="280" height="112" rx="8" fill="none" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="670" y="56" width="280" height="140" rx="8" fill="none" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="670" y="248" width="280" height="112" rx="8" fill="none" stroke="currentColor" stroke-width="1.3"/>
+            <text x="44" y="78" font-weight="600">mesh0</text>
+            <text x="364" y="78" font-weight="600">mesh1</text>
+            <text x="684" y="78" font-weight="600">mesh2</text>
+            <!-- mongod members -->
+            <rect x="46" y="92" width="248" height="66" rx="6" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.3"/>
+            <text x="58" y="112" font-weight="600" fill="var(--host)">mongod<tspan dx="6">PRIMARY</tspan></text>
+            <text x="58" y="130">rs0 member, priority 2</text>
+            <text x="58" y="148" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">mongotHost: mongot-global</text>
+            <rect x="366" y="92" width="248" height="66" rx="6" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.3"/>
+            <text x="378" y="112" font-weight="600" fill="var(--host)">mongod<tspan dx="6">SECONDARY</tspan></text>
+            <text x="378" y="130">rs0 member, priority 1</text>
+            <text x="378" y="148" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">mongotHost: mongot-global</text>
+            <rect x="686" y="92" width="248" height="66" rx="6" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.3"/>
+            <text x="698" y="112" font-weight="600" fill="var(--host)">mongod<tspan dx="6">SECONDARY</tspan></text>
+            <text x="698" y="130">rs0 member, priority 1</text>
+            <text x="698" y="148" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">mongotHost: mongot-global</text>
+            <!-- mongod to the global Service -->
+            <line x1="170" y1="158" x2="170" y2="194" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah2)"/>
+            <text x="180" y="181" fill="var(--remote)">search</text>
+            <line x1="490" y1="158" x2="490" y2="194" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah2)"/>
+            <text x="500" y="181" fill="var(--remote)">search</text>
+            <line x1="810" y1="158" x2="810" y2="194" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah2)"/>
+            <text x="820" y="181" fill="var(--remote)">search</text>
+            <!-- the global band -->
+            <rect x="20" y="196" width="940" height="52" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="36" y="217"><tspan font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--remote)">mongot-global</tspan>  one Cilium global Service, the same name in every cluster, affinity local</text>
+            <text x="36" y="237">Cilium's L7 load balancer balances each search request over the mongot</text>
+            <!-- the global Service to the local mongot -->
+            <line x1="104" y1="248" x2="104" y2="298" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah2)"/>
+            <line x1="236" y1="248" x2="236" y2="298" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah2)"/>
+            <text x="96" y="278" text-anchor="end" fill="var(--remote)">local</text>
+            <line x1="424" y1="248" x2="424" y2="298" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah2)"/>
+            <line x1="556" y1="248" x2="556" y2="298" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah2)"/>
+            <text x="416" y="278" text-anchor="end" fill="var(--remote)">local</text>
+            <line x1="744" y1="248" x2="744" y2="298" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah2)"/>
+            <line x1="876" y1="248" x2="876" y2="298" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah2)"/>
+            <text x="736" y="278" text-anchor="end" fill="var(--remote)">local</text>
+            <!-- mongot, two per cluster -->
+            <rect x="46" y="300" width="116" height="40" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="104" y="325" text-anchor="middle" font-weight="600" fill="var(--remote)">mongot</text>
+            <rect x="178" y="300" width="116" height="40" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="236" y="325" text-anchor="middle" font-weight="600" fill="var(--remote)">mongot</text>
+            <rect x="366" y="300" width="116" height="40" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="424" y="325" text-anchor="middle" font-weight="600" fill="var(--remote)">mongot</text>
+            <rect x="498" y="300" width="116" height="40" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="556" y="325" text-anchor="middle" font-weight="600" fill="var(--remote)">mongot</text>
+            <rect x="686" y="300" width="116" height="40" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="744" y="325" text-anchor="middle" font-weight="600" fill="var(--remote)">mongot</text>
+            <rect x="818" y="300" width="116" height="40" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="876" y="325" text-anchor="middle" font-weight="600" fill="var(--remote)">mongot</text>
+            <!-- mesh2's failover, measured 2026-10-21 -->
+            <path d="M 810,250 V 352 C 810,372 796,374 776,374 H 576 C 560,374 556,366 556,342" fill="none" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah2)"/>
+            <path d="M 814,250 V 352 C 814,388 798,388 778,388 H 256 C 240,388 236,378 236,342" fill="none" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah2)"/>
+            <text x="256" y="410" fill="var(--remote)">mesh2 lost both mongot: searches went to mesh0 and mesh1; 0 of 235 failed before the policy, 1 to 3 with it</text>
+            <!-- one name -->
+            <text x="30" y="440">Every mongod: <tspan font-family="IBM Plex Mono, monospace" font-size="12">mongotHost = mongot-global.search.svc.cluster.local:27028</tspan>. One name everywhere: no F5, no Route, no operator Envoy.</text>
+            <!-- the network strip -->
+            <rect x="20" y="456" width="940" height="52" rx="6" fill="var(--none-wash)" stroke="var(--none)" stroke-width="1.3"/>
+            <text x="36" y="477">WireGuard between all nodes · CiliumNetworkPolicy: only pods labelled app=mongo in mongodb reach 27028 · one Hubble relay sees all six nodes</text>
+            <text x="36" y="497" fill="var(--muted)">Cilium's L7 load balancer runs in Cilium's own Envoy; the search hop is cleartext gRPC, inside WireGuard between nodes.</text>
+            <text x="30" y="534" fill="var(--muted)">Teal lines: search, straight within a cluster, curved where it crossed to another cluster. Ink lines: replication.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>The same search on Cilium Cluster Mesh, as built in the kind mesh lab (reference architecture: "Names", "The three paths", "Without the operator's Envoy (story #132)"). One name in every cluster; when a cluster's mongot are gone, the network sends its searches to the other clusters.</figcaption>
+    </figure>
+  </section>
+</div>

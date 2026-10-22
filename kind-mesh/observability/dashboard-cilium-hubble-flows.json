@@ -138,7 +138,7 @@
             "type": "loki",
             "uid": "${datasource}"
           },
-          "expr": "sum by (src, dst) (count_over_time({namespace=\"$hubbleobservernamespace\",container=\"$container\"} | $logparser | label_format src=`{{ or .flow_source_cluster_name \"host or outside\" }}`, dst=`{{ or .flow_destination_cluster_name \"host or outside\" }}` [$__range]))",
+          "expr": "sum by (src, dst) (count_over_time({namespace=\"$hubbleobservernamespace\",container=\"$container\"} | $logparser | __error__=\"\" | label_format src=`{{ or .flow_source_cluster_name \"host or outside\" }}`, dst=`{{ or .flow_destination_cluster_name \"host or outside\" }}` [$__range]))",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -220,7 +220,7 @@
             "type": "loki",
             "uid": "${datasource}"
           },
-          "expr": "sum by (src, dst) (count_over_time({namespace=\"$hubbleobservernamespace\",container=\"$container\"} | $logparser | flow_destination_namespace=\"search\" | flow_l4_TCP_destination_port=\"27028\" | label_format src=`{{ or .flow_source_cluster_name \"host or outside\" }}`, dst=`{{ or .flow_destination_cluster_name \"host or outside\" }}` [$__range]))",
+          "expr": "sum by (src, dst) (count_over_time({namespace=\"$hubbleobservernamespace\",container=\"$container\"} | $logparser | __error__=\"\" | flow_destination_namespace=\"search\" | flow_l4_TCP_destination_port=\"27028\" | label_format src=`{{ or .flow_source_cluster_name \"host or outside\" }}`, dst=`{{ or .flow_destination_cluster_name \"host or outside\" }}` [$__range]))",
           "queryType": "instant",
           "legendFormat": ""
         }
@@ -302,7 +302,7 @@
             "type": "loki",
             "uid": "${datasource}"
           },
-          "expr": "sum by (dst) (count_over_time({namespace=\"$hubbleobservernamespace\",container=\"$container\"} | $logparser | flow_destination_namespace=\"search\" | flow_l4_TCP_destination_port=\"27028\" | label_format src=`{{ or .flow_source_cluster_name \"host or outside\" }}`, dst=`{{ or .flow_destination_cluster_name \"host or outside\" }}` [1m]))",
+          "expr": "sum by (dst) (count_over_time({namespace=\"$hubbleobservernamespace\",container=\"$container\"} | $logparser | __error__=\"\" | flow_destination_namespace=\"search\" | flow_l4_TCP_destination_port=\"27028\" | label_format src=`{{ or .flow_source_cluster_name \"host or outside\" }}`, dst=`{{ or .flow_destination_cluster_name \"host or outside\" }}` [1m]))",
           "legendFormat": "{{dst}}",
           "step": "60s"
         }
