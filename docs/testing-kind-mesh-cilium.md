@@ -425,6 +425,45 @@ it would. The drill now gives each write an `_id` and checks every acknowledged 
 of them, and of the two failed writes, neither in the database. In the second round no freeze or partition trace
 shows a change of sync source within its 40 s, and no write timed out on its write concern.
 
+## Our Cilium build: workload names for pods on another node (story #145)
+
+Hubble 1.20.2 names the workload of a pod on the agent's own node only. Our build,
+`ghcr.io/ephico2real2/cilium-dev:1.20.2-remote-workload-1d3a02ab` (cilium-implementation-poc demo 39), writes it to
+the pod's CiliumEndpoint (`status.workloads`), so the other node's agent can name it too. Its scope, as reviewed: the
+same cluster, CiliumEndpointSlices off (off here); not carried across Cluster Mesh. The chart stays the release's; only
+the agent image changes (`CILIUM_IMAGE`, `CILIUM_CRD_URL` pinned to the build's commit, `CILIUM_CRD_SCHEMA_VERSION` in
+`kind-mesh/versions.env`).
+
+| # | What | Command | Passes when | Result |
+| --- | --- | --- | --- | --- |
+| W1 | The measurement on the release | `kind-mesh-cilium/scripts/cilium-build.sh measure before` | 0 failed: every agent `e0dc92bd`; no CiliumEndpoint carries the field; mongod's search flows to the mongot on the other node name nothing (to the one on its own node: `StatefulSet/mongot-search-0`, the control); replication flows to the other clusters name nothing | **Passed**, 20:01Z: 0 failed; to the mongot on the other node L3/L4 0 of 9 and L7 0 of 8 named, in each cluster (`cilium-build-before.txt`) |
+| W2 | The build, one cluster at a time (mesh2, mesh1, mesh0), a search and a majority write every 0.5 s through every member | `kind-mesh-cilium/scripts/cilium-build.sh upgrade` | each cluster's gate before the next: every agent `1.20.2 1d3a02ab`, `cilium status` healthy, WireGuard on every agent, connected to both other clusters, every CiliumEndpoint of an owned pod with the field; Helm values unchanged but the image; every acknowledged write found by id | **Gates passed, searches did not**: all three on the build in 232 s; writes 0 failed of 1,091, every acknowledged write found once; searches failed (`MaxTimeMSExpired`, 10 s) 8 times through mesh0 and 9 through mesh2, 0 through mesh1, while agents were replaced: #187 (`cilium-build.log`, `cilium-build-evidence.TosUeN/`) |
+| W3 | The measurement on the build | `kind-mesh-cilium/scripts/cilium-build.sh measure after` | 0 failed: the flows to the mongot on the other node name `StatefulSet/mongot-search-0`, L7 and L3/L4; replication flows to the other clusters still name nothing | **Passed in mesh0 and mesh2, 2 failed in mesh1**, 20:09Z: other-node L3/L4 9 of 9 and L7 8 of 8 named; mesh1 L3/L4 7 of 7 but no L7 flow, its searches bypassing Cilium's Envoy until mongod reconnected (#187); after that, 20 L7 flows, all named, 10 and 10 over its two mongot (`cilium-build-after.txt`, `cilium-build-mesh1-l7-after-reconnect.txt`) |
+| W4 | A search across clusters | `kind-mesh-cilium/scripts/cilium-build.sh drill` (mesh2 loses its mongot, `drills.sh mongot mesh2 both`) | searches answered (1 to 3 fail at the deletion, C8); mesh2's flows to another cluster's mongot recorded, expected to name nothing | **Passed**: to another cluster L3/L4 0 of 72 and L7 0 of 161 named, as expected; 236 searches answered, 1 failed (`HostUnreachable`) at the deletion (`cilium-build-drill.txt`, `drill-mongot-mesh2-both-build-load.txt`) |
+| W5 | The lab is healthy | `kind-mesh/check.sh` | 0 failed | **Passed**: 0 failed (`cilium-build-check.txt`) |
+
+How the script runs, and what it leaves:
+
+- **The load.** It runs in batches of `LOAD_SECONDS` (60 s by default) through every member until the last gate has
+  passed; each batch checks its own acknowledged writes by id, with a majority read, and a missing one fails the run.
+  The summary gives the longest wait for an acknowledged write within the batches (`gapMs`) and, apart, the longest
+  time between two batches (`betweenMs`), when the harness wrote nothing. No load mode runs `drills.sh`'s restore.
+- **The disk.** The image is pulled on every node first, and only while the VM's disk stays below 85% used: mongot's
+  volumes are on it, and mongot stops indexing at 85% (#182).
+- **The evidence.** `output/cilium-build-evidence.<random>/`: each cluster's effective Helm values before and after,
+  its revision before the upgrade, the load logs, the raw Hubble flows and probe replies. The run of 2026-10-22 commits
+  the upgrade's (`cilium-build-evidence.TosUeN/`); the raw flows, 1.9 MB, are summarized in the records, not committed.
+- **A failure.** The script stops at the cluster that failed, with no retry and no rollback: the clusters before it
+  stay on the build, that cluster may be partly rolled out (a failed `--wait` comes after Helm changed resources), and
+  the clusters after it are untouched. Back to the release: `helm history`, then `helm rollback cilium <revision>
+  -n kube-system --kube-context kind-<c> --wait` with the revision saved in the evidence, not the one before the last.
+- **The measurement.** `measure before` saves the application pods' UID, IP, node and owner
+  (`output/cilium-build-placement.json`); `measure after` refuses to run if any of them changed. A fresh gRPC health
+  check from mongod's container to the mongot on the other node gives the L3/L4 flow (the L7 proxy keeps its
+  connection open); the searches give the L7 flows. Both are required, read on mongod's node with the cluster named.
+- **What equal values do not prove.** Equal effective values do not prove equal manifests (the Kubernetes version, a
+  template's `lookup`): nothing else may change the release or the cluster during the upgrade.
+
 ## Compared with the Envoy lab
 
 | mesh2 loses… | With the operator's Envoy | Step 1: per connection | Step 2: per request |

@@ -14,7 +14,7 @@ are in `~/.kube/mongodb-mesh.config`; the default docker context and `~/.kube/co
 
 | In each cluster | |
 | --- | --- |
-| `kube-system` | Cilium 1.20.2 with its mesh apiserver, Hubble relay (and the Hubble UI in mesh0), metrics-server |
+| `kube-system` | Cilium 1.20.2 (the release chart; the agent is our build, `CILIUM_IMAGE` in `versions.env`, story #145) with its mesh apiserver, Hubble relay (and the Hubble UI in mesh0), metrics-server |
 | `cert-manager` | cert-manager v1.21.1, the shared root CA, `ClusterIssuer mesh-ca` |
 | `olm` | OLM v0.46.0 and OperatorHub's catalog |
 | `mongodb` | One mongod, a member of `rs0`; the three member Services `mongo-mesh0`, `-mesh1`, `-mesh2` |

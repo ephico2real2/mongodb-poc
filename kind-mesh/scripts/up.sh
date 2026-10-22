@@ -47,23 +47,23 @@ for c in "${clusters[@]}"; do
 done
 cp_ip() { docker inspect "$1-control-plane" --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'; }
 
-cilium_healthy() {
-  cilium status --context "kind-$1" --wait --wait-duration 10m --interactive=false >"/tmp/cilium-status-$1.txt" \
-    || { cat "/tmp/cilium-status-$1.txt"; die "Cilium is not healthy on $1 $2"; }
-}
-
 cluster_up() {
   local c="$1" ctx="kind-$1" dns ok=0 i
-  say "$c: Cilium $CILIUM_VERSION (no Hubble yet: its certificates need cert-manager)"
+  say "$c: Cilium $CILIUM_VERSION, agent $CILIUM_IMAGE (no Hubble yet: its certificates need cert-manager)"
   if helm status cilium -n kube-system --kube-context "$ctx" >/dev/null 2>&1; then
     echo "installed, kept; the mesh step upgrades it"
   else
     # The API server by the name in its certificate, not an address Docker may change on restart.
+    # shellcheck disable=SC2154  # cilium_image_args comes from lib.sh
     helm_r install cilium cilium/cilium --version "$CILIUM_VERSION" -n kube-system --kube-context "$ctx" \
       -f cilium/values.yaml -f "cilium/values-$c.yaml" --set k8sServiceHost="$c-control-plane" --set k8sServicePort=6443 \
-      --set hubble.enabled=false --set hubble.relay.enabled=false >/dev/null || die "Helm refused the Cilium install on $c"
+      --set hubble.enabled=false --set hubble.relay.enabled=false "${cilium_image_args[@]}" >/dev/null \
+      || die "Helm refused the Cilium install on $c"
   fi
   cilium_healthy "$c" "after install"
+  # After the install, once the operator has registered the release's CRDs; the mesh step's agent restart then makes
+  # every agent write status.workloads.
+  cilium_build_crd "$c"
   kubectl --context "$ctx" wait node --all --for=condition=Ready --timeout=5m >/dev/null
   kubectl --context "$ctx" get nodes -o wide --no-headers | awk '{print "  " $1, $2, $6}'
 
@@ -129,14 +129,16 @@ done
 for c in "${clusters[@]}"; do
   helm_r upgrade cilium cilium/cilium --version "$CILIUM_VERSION" -n kube-system --kube-context "kind-$c" \
     -f cilium/values.yaml -f "cilium/values-$c.yaml" -f cilium/values-mesh.yaml \
-    --set k8sServiceHost="$c-control-plane" --set k8sServicePort=6443 "${declared[@]}" --wait --timeout 10m >/dev/null \
+    --set k8sServiceHost="$c-control-plane" --set k8sServicePort=6443 "${declared[@]}" "${cilium_image_args[@]}" \
+    --wait --timeout 10m >/dev/null \
     || die "Helm could not turn on Hubble and the mesh on $c"
   kubectl --context "kind-$c" -n kube-system wait certificate --all --for=condition=Ready --timeout=3m >/dev/null
   # Hubble lives in cilium-config, which the agents read at start.
   kubectl --context "kind-$c" -n kube-system rollout restart ds/cilium >/dev/null
   kubectl --context "kind-$c" -n kube-system rollout status ds/cilium --timeout=5m >/dev/null
   kubectl --context "kind-$c" -n kube-system rollout status deploy/clustermesh-apiserver --timeout=5m >/dev/null
-  echo "$c: mesh apiserver at $(cp_ip "$c"):32379, ${#clusters[@]} members declared"
+  echo "$c: mesh apiserver at $(cp_ip "$c"):32379, ${#clusters[@]} members declared;" \
+    "$(kubectl --context "kind-$c" -n kube-system exec ds/cilium -c cilium-agent -- cilium-agent --version | cut -d' ' -f1-3)"
 done
 for c in "${clusters[@]}"; do cilium_healthy "$c" "with the mesh"; done
 for c in "${clusters[@]}"; do cilium clustermesh status --context "kind-$c" --wait --wait-duration 10m; done
