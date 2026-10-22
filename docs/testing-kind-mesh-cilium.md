@@ -470,6 +470,19 @@ The next build (fork branch `hubble/remote-workload-clustermesh`, commit `9e5a34
 workload of a pod in another cluster: the clustermesh-apiserver writes a pod's workloads into its kvstore entry, and
 the observing agent reads them. So both images change, and both are built in the lab VM's docker, in no registry:
 
+```sh
+git clone https://github.com/ephico2real2/cilium.git && cd cilium && git checkout 9e5a34a525   # hubble/remote-workload-clustermesh
+export DOCKER_HOST=unix://$HOME/.colima/mongodb-mesh/docker.sock                              # the lab VM's docker
+make dev-docker-image DOCKER_IMAGE_TAG=remote-workload-cm-9e5a34a5 DOCKER_BUILD_FLAGS="--platform linux/arm64 --load"
+make docker-clustermesh-apiserver-image DOCKER_IMAGE_TAG=remote-workload-cm-9e5a34a5 DOCKER_BUILD_FLAGS="--platform linux/arm64 --load"
+docker run --rm --entrypoint cilium-agent quay.io/cilium/cilium-dev:remote-workload-cm-9e5a34a5 --version   # 1.20.2 9e5a34a525
+```
+
+On 2026-10-22 the two builds took 97 s and 16 s (the builder's caches warm). The fork's change has its unit tests
+(`go test ./pkg/identity/ ./pkg/ipcache/ ./clustermesh-apiserver/clustermesh/ ./pkg/clustermesh/kvstoremesh/...`:
+all pass); its design was made twice, by two models, and reviewed by a third.
+
+
 - `kind-mesh/versions.env`: `CILIUM_IMAGE=quay.io/cilium/cilium-dev:remote-workload-cm-9e5a34a5`,
   `CILIUM_CLUSTERMESH_IMAGE=quay.io/cilium/clustermesh-apiserver:remote-workload-cm-9e5a34a5`, `CILIUM_IMAGES_LOCAL=1`
   (`kind load docker-image` into every node, under the same 85% disk gate, instead of a pull). The CiliumEndpoint CRD
@@ -485,7 +498,7 @@ the observing agent reads them. So both images change, and both are built in the
   and recheck. This aggregate counter is a smoke test, not per-request proof: other clients, retries or fanout can
   mask bypass. If it misses, that cluster's mongod is restarted (`kubectl delete pod mongo-0`), with rs0 health
   checked after draining and again before deletion. Restarting a primary triggers an election; mesh0 is normally
-  primary. Health snapshots cannot exclude a concurrent failure. A second miss stops the run with loads paused. Each check and restart goes to `output/cilium-build-l7.txt`, and `measure after` accepts
+  primary. Health snapshots cannot exclude a concurrent failure. A second miss stops the run with loads paused. Each check and restart goes to `output/<CILIUM_RECORD>-l7.txt` (`cilium-build-190-l7.txt`), and `measure after` accepts
   the restarted mongod's new UID and address only.
 
 | # | What | Command | Passes when | Result |
