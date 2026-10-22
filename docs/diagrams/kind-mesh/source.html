@@ -1,0 +1,193 @@
+<!-- SPDX-License-Identifier: MIT-0. Started from the diagram-kit template, https://github.com/ephico2real2/diagram-kit -->
+<title>Search Across Three Clusters</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --ground: #f5f6f8; --surface: #ffffff; --ink: #18212c; --muted: #58636f; --rule: #d7dce3;
+  --host: #a55a0b; --host-wash: #fbf1e4; --remote: #0e6f68; --remote-wash: #e3f3f1;
+  --gap: #b3261e; --gap-wash: #fbe9e7; --none: #5f6a77; --none-wash: #eef0f3;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+    --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+    --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+  --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+  --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55; margin: 0; }
+.page { max-width: 1060px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 72px; display: grid; gap: 44px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0 0 6px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+.lede { font-size: 17px; max-width: 70ch; }
+.muted { color: var(--muted); }
+code { font-family: var(--font-mono); font-size: .9em; }
+section { display: grid; gap: 14px; }
+figure { margin: 0; display: grid; gap: 10px; }
+.fig-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px; }
+.fig-scroll svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--ink); }
+figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
+.tbl { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+th { font-size: 12px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); background: var(--ground); }
+tr:last-child td { border-bottom: 0; }
+.yes { color: var(--remote); font-weight: 600; } .no { color: var(--gap); font-weight: 600; }
+.cell-gap { background: var(--gap-wash); }
+.decisions { display: grid; gap: 12px; }
+.decision { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 20px; display: grid; gap: 8px; }
+.decision .id { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.decision .q { font-weight: 600; }
+.decision .rec { font-size: 14px; border-left: 3px solid var(--remote); padding-left: 10px; }
+.decision .rec.warn { border-left-color: var(--host); }
+a { color: var(--remote); }
+:focus-visible { outline: 2px solid var(--remote); outline-offset: 2px; }
+</style>
+<div class="page">
+  <header>
+    <div class="eyebrow">mongodb-poc · kind mesh lab · 2026-10-21</div>
+    <h1>MongoDB Search across three clusters, joined by Cilium Cluster Mesh</h1>
+    <p class="lede">One replica set with a member in each of three kind clusters, and one mongot in each. The network does the multi-cluster part: every member and the search endpoint are Cilium global Services, with one name in every cluster.</p>
+  </header>
+
+  <section>
+    <h2>The design</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 470" role="img" aria-label="Three kind clusters, mesh0, mesh1 and mesh2. Each has a namespace mongodb with one mongod, a member of the replica set rs0: mesh0's is primary with priority 2, the others secondary with priority 1, and the primary replicates to both over Cluster Mesh. Each has a namespace search with the operator's Envoy and one mongot. Each mongod sends its searches to mongot-global, a global Service whose local affinity sends it to its own cluster's Envoy, which forwards to its own mongot. Each mongot syncs from the replica set by the three member names, which resolve in every cluster.">
+          <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+            <rect x="30" y="40" width="276" height="350" rx="8" fill="none" stroke="currentColor" stroke-width="1.3"/>
+            <text x="44" y="62" font-weight="600">mesh0</text><text x="100" y="62" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">id 1</text>
+            <rect x="42" y="74" width="252" height="100" rx="6" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+            <text x="52" y="92" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">ns mongodb</text>
+            <rect x="52" y="100" width="232" height="62" rx="6" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.3"/>
+            <text x="64" y="120" font-weight="600" fill="var(--host)">mongod, member of rs0</text>
+            <text x="64" y="137" font-family="IBM Plex Mono, monospace" font-size="12">mongo-mesh0</text>
+            <text x="64" y="153" fill="var(--muted)">PRIMARY, priority 2</text>
+            <rect x="42" y="214" width="252" height="164" rx="6" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+            <text x="52" y="232" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">ns search</text>
+            <rect x="52" y="242" width="232" height="46" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="64" y="261" font-weight="600" fill="var(--remote)">Envoy (operator)</text>
+            <text x="64" y="278" font-family="IBM Plex Mono, monospace" font-size="12">mongot-global :27028</text>
+            <rect x="52" y="310" width="232" height="56" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="64" y="330" font-weight="600" fill="var(--remote)">mongot, 1 pod</text>
+            <text x="64" y="348" fill="var(--muted)">syncs from rs0 · 10Gi volume</text>
+            <line x1="230" y1="162" x2="230" y2="240" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="220" y="199" text-anchor="end" fill="var(--remote)">search, to its own Envoy</text>
+            <line x1="230" y1="288" x2="230" y2="308" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <rect x="352" y="40" width="276" height="350" rx="8" fill="none" stroke="currentColor" stroke-width="1.3"/>
+            <text x="366" y="62" font-weight="600">mesh1</text><text x="422" y="62" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">id 2</text>
+            <rect x="364" y="74" width="252" height="100" rx="6" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+            <text x="374" y="92" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">ns mongodb</text>
+            <rect x="374" y="100" width="232" height="62" rx="6" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.3"/>
+            <text x="386" y="120" font-weight="600" fill="var(--host)">mongod, member of rs0</text>
+            <text x="386" y="137" font-family="IBM Plex Mono, monospace" font-size="12">mongo-mesh1</text>
+            <text x="386" y="153" fill="var(--muted)">SECONDARY, priority 1</text>
+            <rect x="364" y="214" width="252" height="164" rx="6" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+            <text x="374" y="232" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">ns search</text>
+            <rect x="374" y="242" width="232" height="46" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="386" y="261" font-weight="600" fill="var(--remote)">Envoy (operator)</text>
+            <text x="386" y="278" font-family="IBM Plex Mono, monospace" font-size="12">mongot-global :27028</text>
+            <rect x="374" y="310" width="232" height="56" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="386" y="330" font-weight="600" fill="var(--remote)">mongot, 1 pod</text>
+            <text x="386" y="348" fill="var(--muted)">syncs from rs0 · 10Gi volume</text>
+            <line x1="552" y1="162" x2="552" y2="240" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="542" y="199" text-anchor="end" fill="var(--remote)">search, to its own Envoy</text>
+            <line x1="552" y1="288" x2="552" y2="308" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <rect x="674" y="40" width="276" height="350" rx="8" fill="none" stroke="currentColor" stroke-width="1.3"/>
+            <text x="688" y="62" font-weight="600">mesh2</text><text x="744" y="62" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">id 3</text>
+            <rect x="686" y="74" width="252" height="100" rx="6" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+            <text x="696" y="92" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">ns mongodb</text>
+            <rect x="696" y="100" width="232" height="62" rx="6" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.3"/>
+            <text x="708" y="120" font-weight="600" fill="var(--host)">mongod, member of rs0</text>
+            <text x="708" y="137" font-family="IBM Plex Mono, monospace" font-size="12">mongo-mesh2</text>
+            <text x="708" y="153" fill="var(--muted)">SECONDARY, priority 1</text>
+            <rect x="686" y="214" width="252" height="164" rx="6" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+            <text x="696" y="232" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">ns search</text>
+            <rect x="696" y="242" width="232" height="46" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="708" y="261" font-weight="600" fill="var(--remote)">Envoy (operator)</text>
+            <text x="708" y="278" font-family="IBM Plex Mono, monospace" font-size="12">mongot-global :27028</text>
+            <rect x="696" y="310" width="232" height="56" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="708" y="330" font-weight="600" fill="var(--remote)">mongot, 1 pod</text>
+            <text x="708" y="348" fill="var(--muted)">syncs from rs0 · 10Gi volume</text>
+            <line x1="874" y1="162" x2="874" y2="240" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="864" y="199" text-anchor="end" fill="var(--remote)">search, to its own Envoy</text>
+            <line x1="874" y1="288" x2="874" y2="308" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <line x1="284" y1="131" x2="374" y2="131" stroke="var(--host)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <path d="M 200,100 C 200,8 850,8 850,98" fill="none" stroke="var(--host)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="525" y="24" text-anchor="middle" fill="var(--host)">replication from the primary, over Cluster Mesh</text>
+            <text x="30" y="416">mongo-mesh0, mongo-mesh1, mongo-mesh2 and mongot-global are Cilium global Services: one name in every cluster.</text>
+            <text x="30" y="436" fill="var(--muted)">Each mongod dials mongot-global. Affinity local sends it to its own cluster's Envoy, and to another cluster's only when its own has no ready pod.</text>
+            <text x="30" y="456" fill="var(--muted)">Each mongot syncs from rs0 by the three member names, which resolve in every cluster. Measured on the lab, 2026-10-21.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>Each cluster has the same two namespaces. The replica set spans the clusters; each cluster's mongod searches through its own Envoy and mongot, and another cluster's when its own Envoy has no ready pod. Built and checked on the lab on 2026-10-21 (kind-mesh/check.sh: 19 of 19).</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>The two drills, measured</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 318" role="img" aria-label="Two drills measured on the lab. First, mesh2 lost its Envoy for 60 seconds while its mongod searched every half second: 237 searches, none failed, the longest 16 milliseconds; mesh2's mongod moved to mesh0's Envoy, whose requests went from 13 to 224, and did not move back when mesh2's Envoy returned. Second, mesh0, the primary's cluster, was frozen for 60 seconds while mesh1 wrote and searched: mesh1 was elected primary about 11 seconds after the freeze, 223 writes and 223 searches succeeded, but the write sent at the freeze waited 36.7 seconds on its connection to the frozen primary; mesh0 took the primary back after it returned.">
+          <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+            <text x="30" y="28" font-weight="600">① mesh2 loses its Envoy while its mongod searches</text>
+            <line x1="40" y1="70" x2="460" y2="70" stroke="currentColor" stroke-width="1.2"/>
+            <rect x="92.5" y="56" width="210.0" height="28" rx="4" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.2"/>
+            <text x="197.5" y="74" text-anchor="middle" fill="var(--gap)">no ready Envoy in mesh2</text>
+            <text x="40" y="50" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">0 s</text>
+            <text x="460" y="50" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">120 s</text>
+            <line x1="92.5" y1="84" x2="92.5" y2="92" stroke="var(--ink)" stroke-width="1.2"/>
+            <text x="92.5" y="104" text-anchor="start" fill="var(--ink)">15 s: Envoy deleted</text>
+            <line x1="302.5" y1="84" x2="302.5" y2="112" stroke="var(--ink)" stroke-width="1.2"/>
+            <text x="302.5" y="124" text-anchor="start" fill="var(--ink)">75 s: Envoy back</text>
+            <rect x="30" y="150" width="440" height="104" rx="8" fill="var(--surface)" stroke="var(--rule)" stroke-width="1.3"/>
+            <text x="46" y="174" fill="var(--remote)" font-weight="600">237 searches, 0 failed, the longest 16 ms</text>
+            <text x="46" y="194" fill="var(--ink)">mesh2's mongod moved to mesh0's Envoy: 13 → 224 requests</text>
+            <text x="46" y="214" fill="var(--ink)">mesh1's Envoy took none of them.</text>
+            <text x="46" y="234" fill="var(--muted)">No move back: mesh2's new Envoy served 0 to the end.</text>
+            <text x="505" y="28" font-weight="600">② mesh0, the primary's cluster, freezes</text>
+            <line x1="515" y1="70" x2="940" y2="70" stroke="currentColor" stroke-width="1.2"/>
+            <rect x="557.5" y="56" width="170.0" height="28" rx="4" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.2"/>
+            <text x="642.5" y="74" text-anchor="middle" fill="var(--gap)">mesh0 frozen</text>
+            <text x="515" y="50" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">0 s</text>
+            <text x="940" y="50" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">150 s</text>
+            <line x1="557.5" y1="84" x2="557.5" y2="112" stroke="var(--ink)" stroke-width="1.2"/>
+            <text x="557.5" y="124" text-anchor="start" fill="var(--ink)">15 s: docker pause</text>
+            <line x1="591.5" y1="84" x2="591.5" y2="92" stroke="var(--host)" stroke-width="1.2"/>
+            <text x="591.5" y="104" text-anchor="start" fill="var(--host)">27 s: mesh1 elected</text>
+            <line x1="727.5" y1="84" x2="727.5" y2="92" stroke="var(--ink)" stroke-width="1.2"/>
+            <text x="727.5" y="104" text-anchor="start" fill="var(--ink)">75 s: unpause</text>
+            <line x1="940.0" y1="84" x2="940.0" y2="112" stroke="var(--ink)" stroke-width="1.2"/>
+            <text x="940.0" y="124" text-anchor="end" fill="var(--ink)">152 s: mesh0 primary again</text>
+            <rect x="505" y="150" width="445" height="104" rx="8" fill="var(--surface)" stroke="var(--rule)" stroke-width="1.3"/>
+            <text x="521" y="174" fill="var(--gap)" font-weight="600">223 writes, 0 failed, but one waited 36.7 s</text>
+            <text x="521" y="194" fill="var(--ink)">223 searches through mesh1, 0 failed, the longest 25 ms</text>
+            <text x="521" y="214" fill="var(--ink)">The election took about 11 s; the write sent at the freeze waited</text>
+            <text x="521" y="234" fill="var(--muted)">on its connection to the frozen primary (no client timeout).</text>
+            <text x="30" y="282" fill="var(--muted)">Measured on the lab on 2026-10-21 with kind-mesh/drills.sh: a search every half second, and in ② a majority write through rs0 as well.</text>
+            <text x="30" y="302" fill="var(--muted)">In ① mesh2's nodes were cordoned, so no new Envoy could start there until 75 s.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>Losing a cluster's Envoy moved its searches to another cluster with no failure, and they stayed there: Cilium chooses per connection. Losing the primary's cluster elected another primary in about 11 seconds with no failed write, but one write waited 36.7 seconds, because the client set no timeout.</figcaption>
+    </figure>
+  </section>
+</div>

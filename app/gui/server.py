@@ -31,6 +31,16 @@ TEXT_INDEX   = os.environ.get("TEXT_INDEX", "default")
 VEC_INDEX    = os.environ.get("VECTOR_INDEX", "vector_index")
 VEC_PATH     = os.environ.get("VECTOR_PATH", "plot_embedding")
 
+def pairs(value):
+    """name=value,name=value, in order: the two settings below."""
+    return dict(x.split("=", 1) for x in value.split(",") if "=" in x)
+
+# For a search spread over several clusters (kind-mesh/README.md); both empty by default, which keeps the one-cluster
+# behaviour above. MONGOT_TARGETS: name=URL of each mongot's metrics, read instead of the pods. MEMBERS: name=host:port
+# of each replica set member a search may be sent through, to see which mongot that member's mongod uses.
+TARGETS = pairs(os.environ.get("MONGOT_TARGETS", "")) or {p: f"http://{p}.{SVC}:{METRICS_PORT}/metrics" for p in PODS}
+MEMBERS = pairs(os.environ.get("MEMBERS", ""))
+
 # One search at a time. Each search starts its own mongosh, 70 to 185 MB while it runs: several at once passed the
 # pod's 512Mi limit and the kernel killed the whole container, a 502 for every search in flight. One at a time also
 # keeps the answer true: the pod is named by the counters read before and after the query, and two overlapping
@@ -52,11 +62,11 @@ THEMES = {
 }
 
 def counters(metric):
-    """Per-pod counter, read straight from each mongot's Prometheus endpoint."""
+    """Each mongot's counter, read straight from its Prometheus endpoint."""
     out = {}
-    for p in PODS:
+    for p, url in TARGETS.items():
         try:
-            with urllib.request.urlopen(f"http://{p}.{SVC}:{METRICS_PORT}/metrics", timeout=4) as r:
+            with urllib.request.urlopen(url, timeout=4) as r:
                 body = r.read().decode()
             m = re.search(rf"^{metric}\{{[^}}]*\}}\s+([0-9.]+)", body, re.M) \
                 or re.search(rf"^{metric}\s+([0-9.]+)", body, re.M)
@@ -65,7 +75,16 @@ def counters(metric):
             out[p] = None
     return out
 
-def run_query(q, mode):
+def member_uri(member):
+    """MONGO_URI with its hosts replaced by one member: connected to directly, and read from as a secondary too."""
+    scheme, rest = MONGO_URI.split("://", 1)
+    cred, _, hosts_and_tail = rest.rpartition("@")
+    path, _, query = ("/" + hosts_and_tail.split("/", 1)[1] if "/" in hosts_and_tail else "/").partition("?")
+    keep = [x for x in query.split("&") if x and x.split("=")[0].lower() not in ("replicaset", "directconnection", "readpreference")]
+    return (f"{scheme}://{cred + '@' if cred else ''}{MEMBERS[member]}{path}?"
+            + "&".join(keep + ["directConnection=true", "readPreference=nearest"]))
+
+def run_query(q, mode, member=""):
     if mode == "vector":
         vec = THEMES.get(q.lower().strip(), [0.2, 0.2, 0.2, 0.2, 0.2])
         stage = {"$vectorSearch": {"index": VEC_INDEX, "path": VEC_PATH, "queryVector": vec,
@@ -84,8 +103,10 @@ def run_query(q, mode):
     js = (f'const r=connect(process.env.MONGO_URI)'
           f'.getSiblingDB({json.dumps(DB)}).getCollection({json.dumps(COLL)})'
           f'.aggregate({json.dumps(pipeline)}).toArray(); print(JSON.stringify(r));')
+    # Through one member: its connection string replaces MONGO_URI in mongosh's environment only, never an argument.
+    env = dict(os.environ, MONGO_URI=member_uri(member)) if member else None
     p = subprocess.run(["mongosh", "--nodb", "--quiet", "--eval", js],
-                       capture_output=True, text=True, timeout=45)
+                       capture_output=True, text=True, timeout=45, env=env)
     line = [l for l in p.stdout.strip().split("\n") if l.startswith("[")]
     if not line:
         return None, (p.stderr or p.stdout or "no output").strip()[:400]
@@ -93,7 +114,9 @@ def run_query(q, mode):
 
 CSS = """
 :root{--bg:#0e131a;--card:#151c25;--ink:#e5e9ef;--mut:#9aa5b3;--ru:#2a3440;
---ok:#3fcfc0;--hot:#f0a53c;--bad:#f2857c}
+--ok:#3fcfc0;--okw:#122a28;--onok:#06231f;--hot:#f0a53c;--bad:#f2857c}
+@media (prefers-color-scheme: light){:root{--bg:#f5f6f8;--card:#ffffff;--ink:#18212c;--mut:#58636f;
+--ru:#d7dce3;--ok:#0e6f68;--okw:#e3f3f1;--onok:#ffffff;--hot:#a55a0b;--bad:#b3261e}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);
 font:15px/1.5 'IBM Plex Sans',system-ui,sans-serif}
 .wrap{max-width:1000px;margin:0 auto;padding:32px 18px 60px}
@@ -103,7 +126,7 @@ input[type=text]{flex:1;min-width:230px;padding:11px 14px;border-radius:8px;
 border:1px solid var(--ru);background:var(--card);color:var(--ink);font-size:15px}
 select,button{padding:11px 16px;border-radius:8px;border:1px solid var(--ru);
 background:var(--card);color:var(--ink);font-size:15px;cursor:pointer}
-button{background:var(--ok);color:#06231f;font-weight:600;border:0}
+button{background:var(--ok);color:var(--onok);font-weight:600;border:0}
 .card{background:var(--card);border:1px solid var(--ru);border-radius:10px;
 padding:18px 20px;margin-bottom:18px}
 .card h2{font-size:15px;margin:0 0 14px;color:var(--mut);font-weight:600;
@@ -117,12 +140,12 @@ td{padding:8px 10px;border-top:1px solid var(--ru)}
 .bar.zero{background:var(--ru)}
 .served{color:var(--hot);font-weight:600}
 .pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11.5px;
-background:#122a28;color:var(--ok);border:1px solid var(--ok)}
+background:var(--okw);color:var(--ok);border:1px solid var(--ok)}
 .err{color:var(--bad)}.path{color:var(--mut);font-size:12.5px;line-height:1.9}
 .path b{color:var(--ink)}
 """
 
-def page(q, mode, rows, err, delta, totals, ms):
+def page(q, mode, rows, err, delta, totals, ms, member=""):
     def esc(x): return html.escape(str(x))
     out = [f"<!doctype html><meta charset=utf-8><title>mongot search</title>",
            "<link rel=stylesheet href='https://fonts.googleapis.com/css2?"
@@ -137,7 +160,11 @@ def page(q, mode, rows, err, delta, totals, ms):
            f"<select name=mode>"
            f"<option value=text {'selected' if mode=='text' else ''}>$search (text)</option>"
            f"<option value=vector {'selected' if mode=='vector' else ''}>$vectorSearch</option>"
-           f"</select><button type=submit>Search</button></form>"]
+           "</select>"
+           + (f"<select name=via><option value=''>through the replica set</option>"
+              + "".join(f"<option value='{esc(m)}' {'selected' if m == member else ''}>through {esc(m)}'s mongod</option>"
+                        for m in MEMBERS) + "</select>" if MEMBERS else "")
+           + "<button type=submit>Search</button></form>"]
 
     if err:
         out.append(f"<div class=card><h2>Error</h2><div class='mono err'>{esc(err)}</div></div>")
@@ -146,7 +173,7 @@ def page(q, mode, rows, err, delta, totals, ms):
         served = [p for p, d in delta.items() if d and d > 0]
         out.append("<div class=card><h2>Which mongot served this query</h2><table>")
         mx = max([d for d in delta.values() if d] or [1])
-        for p in PODS:
+        for p in TARGETS:
             d = delta.get(p)
             tot = totals.get(p)
             w = int(100 * (d or 0) / mx) if mx else 0
@@ -155,7 +182,7 @@ def page(q, mode, rows, err, delta, totals, ms):
             out.append(f"<tr><td class=mono style='width:210px'>{name}</td>"
                        f"<td style='width:120px'><div class='{cls}' style='width:{max(w,3)}%'></div></td>"
                        f"<td class=mono style='width:90px'>{'+' + str(int(d)) if d else '—'}</td>"
-                       f"<td class=mono style='color:#9aa5b3'>lifetime {int(tot) if tot is not None else '?'}</td></tr>")
+                       f"<td class=mono style='color:var(--mut)'>lifetime {int(tot) if tot is not None else '?'}</td></tr>")
         out.append("</table>")
         if served:
             out.append(f"<p class=sub style='margin:12px 0 0'>Served by "
@@ -173,13 +200,22 @@ def page(q, mode, rows, err, delta, totals, ms):
                        f"<td class=mono>{r.get('score',0):.4f}</td></tr>")
         out.append("</table></div>")
 
-    out.append("<div class=card><h2>The path this query took</h2><div class=path>"
-               "<b>this page</b> &rarr; <b>mongod</b> (outside the cluster) &rarr; one "
-               "long-lived HTTP/2 connection &rarr; <b>Envoy</b> &rarr; one of "
-               f"<b>{REPLICAS} mongot pods</b><br>"
-               "The app never addresses mongot. Envoy splits <i>individual gRPC "
-               "streams</i>, which is why repeated searches land on different pods."
-               "</div></div></div>")
+    if MEMBERS:
+        via = esc(f"{member}'s member") if member else "the primary"
+        out.append("<div class=card><h2>The path this query took</h2><div class=path>"
+                   f"<b>this page</b> &rarr; <b>mongod</b> ({via}) &rarr; "
+                   "<b>mongot-global</b>, a Cilium global Service &rarr; <b>Envoy</b> of mongod's own cluster, or of "
+                   "another cluster when its own has no ready pod &rarr; that cluster's <b>mongot</b><br>"
+                   "The app never addresses mongot. A mongod keeps its connection, so after a failover its searches "
+                   "stay on the other cluster until it reconnects.</div></div></div>")
+    else:
+        out.append("<div class=card><h2>The path this query took</h2><div class=path>"
+                   "<b>this page</b> &rarr; <b>mongod</b> (outside the cluster) &rarr; one "
+                   "long-lived HTTP/2 connection &rarr; <b>Envoy</b> &rarr; one of "
+                   f"<b>{REPLICAS} mongot pods</b><br>"
+                   "The app never addresses mongot. Envoy splits <i>individual gRPC "
+                   "streams</i>, which is why repeated searches land on different pods."
+                   "</div></div></div>")
     return "".join(out)
 
 class H(BaseHTTPRequestHandler):
@@ -191,6 +227,8 @@ class H(BaseHTTPRequestHandler):
         qs = parse_qs(u.query)
         q = (qs.get("q", [""])[0]).strip()
         mode = qs.get("mode", ["text"])[0]
+        member = qs.get("via", [""])[0]
+        member = member if member in MEMBERS else ""
         rows = err = delta = None; totals = {}; ms = 0; status = 200
         if q and not SEARCH_SLOT.acquire(timeout=SLOT_WAIT_S):
             status = 503
@@ -201,11 +239,11 @@ class H(BaseHTTPRequestHandler):
                 metric = VEC_METRIC if mode == "vector" else TEXT_METRIC
                 before = counters(metric)
                 t0 = time.time()
-                rows, err = run_query(q, mode)
+                rows, err = run_query(q, mode, member)
                 ms = int((time.time() - t0) * 1000)
                 after = counters(metric)
                 delta = {p: (None if after.get(p) is None or before.get(p) is None
-                             else after[p] - before[p]) for p in PODS}
+                             else after[p] - before[p]) for p in TARGETS}
                 totals = after
             except Exception as e:
                 # A search that fails here (mongosh past its 45 s, output that is not JSON) is answered by this page.
@@ -214,7 +252,7 @@ class H(BaseHTTPRequestHandler):
                 err = f"The search failed: {type(e).__name__}: {e}"[:400]
             finally:
                 SEARCH_SLOT.release()
-        body = page(q, mode, rows, err, delta, totals, ms).encode()
+        body = page(q, mode, rows, err, delta, totals, ms, member).encode()
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))

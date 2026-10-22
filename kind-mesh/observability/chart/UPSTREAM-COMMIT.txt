@@ -1,0 +1,23 @@
+f1f5ead05daf9ac7f864adba0a5527d4b90e3e44 2026-09-12 15:49:54 -0500
+https://github.com/ephico2real2/hubble-observer (fork of onzack/hubble-observer, Apache-2.0), helm/hubble-observer at branch develop = upstream main 21319b7 + PR #9 (policy fix) + PR #10 (docs) + PR #11 (fieldMask/extraArgs) + the extended dashboard (drop reason, denying policy) in dashboard/cilium-hubble-flows.json; deployed from it 2026-09-12 (README Part 10)
+
+9ef13c778562d728a12870742ed4c93594cfdd55 Sat Sep 12 21:33:32 2026 -0500
+re-vendored 2026-09-13 from branch develop: the cf2cnp dependency is now the fork's Helm repository https://ephico2real2.github.io/cf2cnp at 0.5.0 (charts/cf2cnp-0.5.0.tgz) while onzack/cf2cnp#3 is pending (demo 26 Part 14f)
+
+8c56b622fce2d3e9d5c78e86afd541c26bc18b86 Sat Sep 12 22:20:19 2026 -0500
+re-vendored 2026-09-13 (demo 28): cf2cnp 0.5.1 and the hubble-policy-verdicts 0.1.1 dashboard (alias policyVerdictsDashboard) as dependencies from the forks' Helm repositories
+
+e5077ddf25ee617b8ba6eed38f9b7057c8828402 Sun Sep 13 05:48:48 2026 -0500
+re-vendored 2026-09-13 (demo 29): cf2cnp 0.6.0 and hubble-policy-verdicts 0.2.0 (the Loki row) as dependencies from the forks' Helm repositories; examples/values-policy-verdicts.yaml (E8) is at the fork's repository root
+
+a00dd7e947cf2499bc6f0b9528eb47a3d1400de8 Sun Sep 13 06:37:18 2026 -0500
+re-vendored 2026-09-13 (demo 32): cf2cnp 0.6.1 (merge keeps the document as it was; one kube-dns rule)
+
+7853c77b6afde1ae90d179441a43c5eec6c3b12f Sun Sep 13 07:07:18 2026 -0500
+re-vendored 2026-09-13 (demo 34): containerName (default the chart name) so a second release keeps its own container label in Loki; the E8 example sets hubble-observer-verdicts
+
+46bd41c2ccadf356251ae8df0864c7031cecb0e4 Sun Sep 13 09:08:54 2026 -0500
+re-vendored 2026-09-13 (demo 29 Part 9): hubble-policy-verdicts 0.2.1 — the namespace filter chooses its side (role: destination or source)
+
+d95da35271f928bf6b9b78c996e9a1abcea1de27 Sun Sep 13 09:43:07 2026 -0500
+re-vendored 2026-09-13 (demo 35): cf2cnp 0.6.3 (descriptions from the rules) and hubble-policy-verdicts 0.2.2 (generic panel wording, audited pairs)

@@ -1,0 +1,7 @@
+
+== sample_mflix.movies and its search indexes, through rs0  (19:04:46)
+primary: mongo-mesh0.mongodb.svc.cluster.local:27017
+documents loaded: 24
+index requested: default (search)
+index requested: vector_index (vectorSearch)
+queryable after 18 s: default, vector_index

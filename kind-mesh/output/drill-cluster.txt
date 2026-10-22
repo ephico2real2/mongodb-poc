@@ -1,0 +1,10 @@
+== drill: mesh0 (the primary's cluster) freezes for 60 s while mesh1 writes and searches (150 s)
+primary before: mongo-mesh0
+[t+ 15s] docker pause mesh0's two nodes
+[t+ 27s] new primary: mongo-mesh1
+[t+ 75s] docker unpause mesh0's two nodes
+[t+152s] primary after mesh0 is back: mongo-mesh0 (mesh0 has priority 2, so it takes it back once caught up)
+  mongo-mesh0 PRIMARY
+  mongo-mesh1 SECONDARY
+  mongo-mesh2 SECONDARY
+RESULT {"search":{"ok":223,"fail":0,"maxMs":25,"maxAt":"0.0"},"write":{"ok":223,"fail":0,"maxMs":36739,"maxAt":"13.8"},"firstFailAt":null,"lastFailAt":null}

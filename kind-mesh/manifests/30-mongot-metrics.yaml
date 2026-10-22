@@ -1,0 +1,101 @@
+# One metrics Service per mongot pod, so the search GUI can read every pod's counters from one place and show which
+# cluster, and which of its pods, answered. Rendered per cluster by scripts/gui-up.sh: in cluster X the Services of
+# X's pods select them (__SEL_meshN__ becomes mongot-search-0-svc for its own cluster); in the other clusters the same
+# Services select nothing. Being global, each name then reaches exactly one pod from anywhere: the member Services'
+# pattern (11-member-services.yaml), needed because mongot pods have the same names and labels in every cluster.
+# Two pods per cluster (values/search.yaml, search.replicas); a third needs three more Services here and in the GUI.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongot-metrics-mesh0-0
+  namespace: search
+  annotations:
+    service.cilium.io/global: "true"
+spec:
+  selector:
+    app: __SEL_mesh0__
+    statefulset.kubernetes.io/pod-name: mongot-search-0-0
+  ports:
+    - name: metrics
+      port: 9946
+      targetPort: 9946
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongot-metrics-mesh0-1
+  namespace: search
+  annotations:
+    service.cilium.io/global: "true"
+spec:
+  selector:
+    app: __SEL_mesh0__
+    statefulset.kubernetes.io/pod-name: mongot-search-0-1
+  ports:
+    - name: metrics
+      port: 9946
+      targetPort: 9946
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongot-metrics-mesh1-0
+  namespace: search
+  annotations:
+    service.cilium.io/global: "true"
+spec:
+  selector:
+    app: __SEL_mesh1__
+    statefulset.kubernetes.io/pod-name: mongot-search-0-0
+  ports:
+    - name: metrics
+      port: 9946
+      targetPort: 9946
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongot-metrics-mesh1-1
+  namespace: search
+  annotations:
+    service.cilium.io/global: "true"
+spec:
+  selector:
+    app: __SEL_mesh1__
+    statefulset.kubernetes.io/pod-name: mongot-search-0-1
+  ports:
+    - name: metrics
+      port: 9946
+      targetPort: 9946
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongot-metrics-mesh2-0
+  namespace: search
+  annotations:
+    service.cilium.io/global: "true"
+spec:
+  selector:
+    app: __SEL_mesh2__
+    statefulset.kubernetes.io/pod-name: mongot-search-0-0
+  ports:
+    - name: metrics
+      port: 9946
+      targetPort: 9946
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongot-metrics-mesh2-1
+  namespace: search
+  annotations:
+    service.cilium.io/global: "true"
+spec:
+  selector:
+    app: __SEL_mesh2__
+    statefulset.kubernetes.io/pod-name: mongot-search-0-1
+  ports:
+    - name: metrics
+      port: 9946
+      targetPort: 9946

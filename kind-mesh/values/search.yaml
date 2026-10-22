@@ -1,0 +1,57 @@
+# The chart's values in all three clusters: the same file, because each cluster's MongoDBSearch is the same one mongot
+# syncing from the same replica set, reached under the same name. Installed by kind-mesh/scripts/search-up.sh:
+#   helm upgrade --install mongot chart/mongodb-search-helm -n search -f kind-mesh/values/search.yaml --timeout 20m
+namespace: search
+
+# The operator through OLM on kind: OperatorHub's catalog instead of OpenShift's certified-operators. The chart's
+# preflight and gate need the ClusterServiceVersion OLM makes.
+operator:
+  source: operatorhubio-catalog
+  sourceNamespace: olm
+
+# Two mongot per cluster, so that Envoy's retry has another mongot to go to (one measured 2026-10-21 first: 167 of 235
+# searches failed while it was away). Sized for the sample data: the operator sets the heap to half the memory request.
+search:
+  replicas: 2
+  resources:
+    requests: {cpu: 500m, memory: 1Gi}
+    limits: {cpu: "2", memory: 2Gi}
+  persistence:
+    storage: 10Gi
+    storageClass: standard
+
+# Envoy is the name mongod dials: the global Service mongot-global over every cluster's Envoy
+# (kind-mesh/manifests/22-mongot-global.yaml), so its certificate and SNI match carry that name in every cluster.
+loadBalancer:
+  externalHostname: mongot-global.search.svc.cluster.local
+  replicas: 1
+
+# The replica set's three members, by their global Service names, which resolve in every cluster.
+source:
+  hostAndPorts:
+    - mongo-mesh0.mongodb.svc.cluster.local:27017
+    - mongo-mesh1.mongodb.svc.cluster.local:27017
+    - mongo-mesh2.mongodb.svc.cluster.local:27017
+  username: search-sync-source
+  passwordSecret:
+    name: search-sync-source-password
+    key: password
+
+# The Jobs' oc: the lab's own image (kind-mesh/images/oc: UBI 9 minimal plus Red Hat's oc from its public mirror),
+# built in the VM and loaded into every node by search-up.sh. Why not the chart's default is in its Containerfile. A
+# versioned tag, so Kubernetes uses the loaded image and never tries to pull it.
+jobs:
+  image:
+    repository: localhost/kind-mesh/oc
+    tag: "4.20.42"
+
+# OpenShift's parts, and the monitoring that needs the Prometheus operator, off on kind.
+route:
+  enabled: false
+monitoring:
+  serviceMonitors:
+    enabled: false
+  alerts:
+    enabled: false
+  persesDashboard:
+    enabled: false

@@ -1,0 +1,26 @@
+# The oc image the chart's Jobs run on kind (kind-mesh/values/search.yaml, jobs.image). The chart's default is Red Hat's
+# ose-cli, which needs a Red Hat login; OKD's public origin-cli is amd64 only, and kind's kubelet will not run an amd64
+# image on an arm64 node; Red Hat's hardened kubectl has no shell for the Jobs' bash scripts. So: the public UBI 9
+# minimal base, multi-arch, with Red Hat's own oc build from its public mirror, checked against the mirror's published
+# sha256 (https://mirror.openshift.com/pub/openshift-v4/<arch>/clients/ocp/4.20.42/sha256sum.txt).
+#   docker build -f kind-mesh/images/oc/Containerfile -t localhost/kind-mesh/oc:4.20.42 kind-mesh/images/oc
+FROM registry.access.redhat.com/ubi9/ubi-minimal@sha256:c4c285d42941ebb2bd4da878479008e1e4536bb599aad1dbe568f89de9053661
+ARG TARGETARCH
+ARG OC_VERSION=4.20.42
+# What the Jobs' scripts call besides oc: bash, sed, awk, grep, base64 (coreutils), and tar and gzip for the install.
+RUN microdnf install -y --nodocs bash sed gawk grep coreutils-single tar gzip && microdnf clean all
+RUN set -eu; \
+    case "$TARGETARCH" in \
+      arm64) dir=aarch64; file=openshift-client-linux-arm64-rhel9-$OC_VERSION.tar.gz; \
+             sum=d0f0998eb854e77dc5df80d7cf18c0166f25645273773fc0b745900bc83493b6 ;; \
+      amd64) dir=x86_64; file=openshift-client-linux-amd64-rhel9-$OC_VERSION.tar.gz; \
+             sum=b64aa5d214513e82275d60121f38933ef0241681dfc31122dd663d86dffbbe38 ;; \
+      *) echo "no oc build pinned for $TARGETARCH" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /tmp/oc.tar.gz "https://mirror.openshift.com/pub/openshift-v4/$dir/clients/ocp/$OC_VERSION/$file"; \
+    echo "$sum  /tmp/oc.tar.gz" | sha256sum -c -; \
+    tar -xzf /tmp/oc.tar.gz -C /usr/local/bin oc kubectl; \
+    rm /tmp/oc.tar.gz; \
+    oc version --client
+# The Jobs run with runAsNonRoot, which needs a numeric non-root user in the image.
+USER 1001

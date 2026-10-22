@@ -1,0 +1,4 @@
+== drill: mesh2's mongod, on another cluster's Envoy after a failover, is restarted
+[t+  2s] before: one search through mesh2's member added nothing to mesh2's Envoy (0 -> 0): it went to another cluster
+[t+ 20s] mesh2's mongod restarted and back in the replica set (secondary or primary: true)
+[t+ 22s] after: one search through mesh2's member added 2 to mesh2's Envoy (0 -> 2)

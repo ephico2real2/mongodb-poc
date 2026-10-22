@@ -1,0 +1,98 @@
+# One replica set member: rendered per cluster by scripts/mongo-up.sh (__MESH__ is the cluster). Its pod carries
+# mesh=__MESH__, which only its own member Service selects (11-member-services.yaml).
+#
+# mongod's search parameters are set from the first start, pointing at mongot-global, a global Service over the Envoy
+# of every cluster (22-mongot-global.yaml). Until search exists a search fails and nothing else does, and setting
+# them now spares a rolling restart of the replica set later.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongo
+  namespace: mongodb
+  labels: {app: mongo, mesh: __MESH__}
+spec:
+  serviceName: mongo-__MESH__
+  replicas: 1
+  selector:
+    matchLabels: {app: mongo, mesh: __MESH__}
+  template:
+    metadata:
+      labels: {app: mongo, mesh: __MESH__}
+    spec:
+      # The image's user, mongod, is 1000:1000 (read with `id` in the image). fsGroup gives it the data volume.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      terminationGracePeriodSeconds: 30
+      initContainers:
+        # mongod reads its key and certificate from one PEM file and refuses a keyfile that its group can read, which a
+        # Secret volume with fsGroup is: both are rebuilt into a memory volume, owned by mongod, mode 0400.
+        - name: tls-files
+          image: quay.io/mongodb/mongodb-community-server:8.3.4-ubi9
+          command:
+            - sh
+            - -ec
+            - |
+              cat /certs/tls.key /certs/tls.crt > /run/mongod/mongod.pem
+              cp /certs/ca.crt /run/mongod/ca.crt
+              cp /keyfile/keyfile /run/mongod/keyfile
+              chmod 0400 /run/mongod/mongod.pem /run/mongod/keyfile
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 100m, memory: 64Mi}
+          volumeMounts:
+            - {name: certs, mountPath: /certs, readOnly: true}
+            - {name: keyfile, mountPath: /keyfile, readOnly: true}
+            - {name: run, mountPath: /run/mongod}
+      containers:
+        - name: mongod
+          image: quay.io/mongodb/mongodb-community-server:8.3.4-ubi9
+          command:
+            - mongod
+            - --replSet=rs0
+            - --bind_ip_all
+            - --port=27017
+            - --dbpath=/data/db
+            - --keyFile=/run/mongod/keyfile
+            # Members and mongot speak TLS; a client without a certificate may connect and authenticates by password.
+            - --tlsMode=requireTLS
+            - --tlsCertificateKeyFile=/run/mongod/mongod.pem
+            - --tlsCAFile=/run/mongod/ca.crt
+            - --tlsAllowConnectionsWithoutCertificates
+            - --wiredTigerCacheSizeGB=0.25
+            - --setParameter=mongotHost=mongot-global.search.svc.cluster.local:27028
+            - --setParameter=searchIndexManagementHostAndPort=mongot-global.search.svc.cluster.local:27028
+            - --setParameter=useGrpcForSearch=true
+            - --setParameter=skipAuthenticationToSearchIndexManagementServer=false
+            - --setParameter=searchTLSMode=requireTLS
+          ports:
+            - {name: mongodb, containerPort: 27017}
+          readinessProbe:
+            tcpSocket: {port: 27017}
+            periodSeconds: 10
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources:
+            requests: {cpu: 500m, memory: 1Gi}
+            limits: {cpu: "1", memory: 2Gi}
+          volumeMounts:
+            - {name: data, mountPath: /data/db}
+            - {name: run, mountPath: /run/mongod, readOnly: true}
+      volumes:
+        - name: certs
+          secret: {secretName: mongod-tls}
+        - name: keyfile
+          secret: {secretName: mongo-keyfile}
+        - name: run
+          emptyDir: {medium: Memory, sizeLimit: 1Mi}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: standard
+        resources:
+          requests: {storage: 10Gi}

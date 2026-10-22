@@ -1,0 +1,52 @@
+# One Service per replica set member, applied unchanged in all three clusters. Each is a Cilium global Service: the
+# same name and namespace in every cluster, so Cilium merges their backends across the mesh. Each selects its member
+# by the label mesh=<cluster>, which only that cluster's pod carries, so a member's name resolves in every cluster and
+# always reaches the one pod. The replica set is initiated with these names (scripts/mongo-up.sh), so mongod, every
+# driver and every mongot find the members by them, in any cluster, with no DNS rewrite.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-mesh0
+  namespace: mongodb
+  annotations:
+    service.cilium.io/global: "true"
+spec:
+  selector:
+    app: mongo
+    mesh: mesh0
+  ports:
+    - name: mongodb
+      port: 27017
+      targetPort: 27017
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-mesh1
+  namespace: mongodb
+  annotations:
+    service.cilium.io/global: "true"
+spec:
+  selector:
+    app: mongo
+    mesh: mesh1
+  ports:
+    - name: mongodb
+      port: 27017
+      targetPort: 27017
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-mesh2
+  namespace: mongodb
+  annotations:
+    service.cilium.io/global: "true"
+spec:
+  selector:
+    app: mongo
+    mesh: mesh2
+  ports:
+    - name: mongodb
+      port: 27017
+      targetPort: 27017

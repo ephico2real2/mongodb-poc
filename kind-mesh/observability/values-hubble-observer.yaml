@@ -1,0 +1,71 @@
+# hubble-observer in mesh0 (namespace observability): `hubble observe` against mesh0's relay, which reaches every node
+# of the three clusters, printing one JSON flow per line for the collector to ship to Loki. From
+# cilium-implementation-poc demos/25-hubble-observer-loki/values-hubble-observer.yaml, with the chart vendored from
+# the operator's fork (chart/UPSTREAM-COMMIT.txt). Changed here: forwarded flows as well as drops, but only flows from
+# or to the namespaces mongodb and search, each counted once (a forwarded flow at its destination, a drop where it fell).
+image:
+  # The cilium image carries the hubble CLI at the lab's own version (demo 25 Part 7d: the chart's default image is
+  # unmaintained). Multi-arch.
+  repository: quay.io/cilium/cilium
+  tag: "v1.20.2@sha256:2939231d0d3e3ebddcd80fffa168b7ddcc78fdf0dc864d1c8c126ff523c54f01"
+verdictFilter: none
+excludeUnsupportedL3Protocols: false
+# --namespace matches the source or the destination; --type trace:to-endpoint keeps a forwarded flow's event at the
+# destination endpoint, so a flow that crosses nodes is not counted again where it leaves its source. The types are
+# ORed and a drop is its own event type (1), not a trace (4): without --type drop no DROPPED flow reaches Loki.
+extraArgs: ["--namespace", "mongodb", "--namespace", "search", "--type", "trace:to-endpoint", "--type", "drop"]
+# The smallest mask that still feeds every panel of the dashboard (demo 25 Part 9).
+fieldMask:
+  - time
+  - uuid
+  - verdict
+  - drop_reason
+  - drop_reason_desc
+  - traffic_direction
+  - node_name
+  - Type
+  - Summary
+  - IP
+  - l4
+  - l7
+  - source.namespace
+  - source.pod_name
+  - source.labels
+  - source.identity
+  - source.cluster_name
+  - destination.namespace
+  - destination.pod_name
+  - destination.labels
+  - destination.identity
+  - destination.cluster_name
+  - destination_names
+  - egress_denied_by
+  - ingress_denied_by
+hubbleRelay:
+  serviceName: hubble-relay
+  namespace: kube-system
+  port: "443"
+  tls:
+    enabled: true
+    serverName: hubble.hubble-relay.cilium.io
+    # The relay asks for a client certificate signed by the lab's CA: 10-relay-client-cert.yaml.
+    ca: {secretName: hubble-observer-relay-certs}
+    client: {enabled: true, secretName: hubble-observer-relay-certs}
+resources:
+  requests: {cpu: 50m, memory: 64Mi}
+  limits: {memory: 256Mi}
+# The hubble CLI needs no privilege: no capabilities, no escalation, the runtime's default seccomp profile. The image's
+# user is kept (the chart's defaults set none of these).
+podSecurityContext:
+  seccompProfile: {type: RuntimeDefault}
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities: {drop: [ALL]}
+# The chart's dashboard is a GrafanaDashboard for the Grafana operator, which this lab doesn't run: the dashboard is
+# provisioned by Grafana's sidecar instead (scripts/observability-up.sh).
+grafanaDashboard:
+  enabled: false
+ciliumNetworkPolicy:
+  enabled: false
+cf2cnp:
+  enabled: false

@@ -1,0 +1,3 @@
+  write failed at 13.8 s: Socket 'secureConnect' timed out after 5002ms (connectTimeoutMS: 5000)
+  write failed at 24.3 s: Socket 'secureConnect' timed out after 5002ms (connectTimeoutMS: 5000)
+RESULT {"search":{"ok":266,"fail":0,"maxMs":12,"maxAt":"0.0"},"write":{"ok":264,"fail":2,"maxMs":10028,"maxAt":"13.8"},"firstFailAt":"13.8","lastFailAt":"24.3"}

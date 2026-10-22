@@ -1,0 +1,22 @@
+# The one name every mongod dials for search (its mongotHost), applied unchanged in all three clusters. A Cilium
+# global Service over the operator's Envoy pods (label app: <MongoDBSearch name>-search-lb-<cluster index>, as this
+# repo's manifests/30-envoy-lb-service.yaml selects them). It is our own Service, not an annotation on the operator's,
+# which the operator owns and may rewrite.
+#
+# affinity local: a mongod is sent to its own cluster's Envoy while that has a ready backend, and to another
+# cluster's otherwise. mongod keeps its gRPC connections open, so the choice is made per connection, not per search.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongot-global
+  namespace: search
+  annotations:
+    service.cilium.io/global: "true"
+    service.cilium.io/affinity: local
+spec:
+  selector:
+    app: mongot-search-lb-0
+  ports:
+    - name: grpc
+      port: 27028
+      targetPort: 27028

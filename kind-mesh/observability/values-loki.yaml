@@ -1,0 +1,44 @@
+# Loki for the Hubble flows dashboard, in mesh0 (namespace observability). From cilium-implementation-poc
+# demos/25-hubble-observer-loki/values-loki.yaml: one process, one tenant, the pod's volume as the store, and the
+# labels the grafana.com 23862 dashboard selects on indexed from the collector's resource attributes. Changed here:
+# 6 h of retention instead of 24 h (this lab keeps every flow between mongodb and search, not only drops), and kind's
+# storage class.
+deploymentMode: SingleBinary
+loki:
+  auth_enabled: false
+  commonConfig: {replication_factor: 1}
+  storage: {type: filesystem}
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index: {prefix: loki_index_, period: 24h}
+  compactor:
+    retention_enabled: true
+    delete_request_store: filesystem
+  limits_config:
+    retention_period: 6h
+    allow_structured_metadata: true
+    otlp_config:
+      resource_attributes:
+        attributes_config:
+          - action: index_label
+            attributes: [namespace, container, k8s.cluster.name]
+singleBinary:
+  replicas: 1
+  persistence: {enabled: true, size: 2Gi, storageClass: standard}
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 512Mi}
+read: {replicas: 0}
+write: {replicas: 0}
+backend: {replicas: 0}
+gateway: {enabled: false}
+minio: {enabled: false}
+chunksCache: {enabled: false}
+resultsCache: {enabled: false}
+lokiCanary: {enabled: false}
+test: {enabled: false}
+monitoring: {selfMonitoring: {enabled: false, grafanaAgent: {installOperator: false}}}

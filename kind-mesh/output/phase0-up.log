@@ -1,0 +1,236 @@
+
+== create Colima profile mongodb-mesh: 8 CPUs, 16 GiB, 60 GiB disk  (18:40:44)
+time="2026-10-21T18:40:45-05:00" level=info msg="starting colima [profile=mongodb-mesh]"
+time="2026-10-21T18:40:45-05:00" level=info msg="runtime: docker"
+time="2026-10-21T18:40:45-05:00" level=info msg="creating and starting ..." context=vm
+time="2026-10-21T18:40:45-05:00" level=info msg="Terminal is not available, proceeding without opening an editor"
+time="2026-10-21T18:40:46-05:00" level=info msg="Starting the instance `colima-mongodb-mesh` with internal VM driver `vz`"
+time="2026-10-21T18:40:46-05:00" level=info msg="Attempting to download the image" arch=aarch64 digest= location=~/Library/Caches/colima/caches/b0992ab88f5a3c0c436bbb3065c01466f20dc1dd0eb0a60299d410176f21a1c3
+time="2026-10-21T18:40:46-05:00" level=info msg="Decompressing the image (b0992ab88f5a3c0c436bbb3065c01466f20dc1dd0eb0a60299d410176f21a1c3)"
+time="2026-10-21T18:40:46-05:00" level=info msg="decompressing  with external \"gzip\""
+time="2026-10-21T18:40:47-05:00" level=info msg="Downloaded the image from `~/Library/Caches/colima/caches/b0992ab88f5a3c0c436bbb3065c01466f20dc1dd0eb0a60299d410176f21a1c3`"
+time="2026-10-21T18:40:47-05:00" level=info msg="Resize instance colima-mongodb-mesh's disk from 3.5GiB to 20GiB"
+time="2026-10-21T18:40:48-05:00" level=info msg="[hostagent] hostagent socket created at ~/.colima/_lima/colima-mongodb-mesh/ha.sock"
+time="2026-10-21T18:40:48-05:00" level=info msg="[hostagent] Starting VZ (hint: to watch the boot progress, see `~/.colima/_lima/colima-mongodb-mesh/serial*.log`)"
+time="2026-10-21T18:40:48-05:00" level=info msg="[hostagent] Mounting disk `colima-mongodb-mesh` on `/mnt/lima-colima-mongodb-mesh`"
+time="2026-10-21T18:40:48-05:00" level=info msg="[hostagent] Converting `~/.colima/_lima/_disks/colima-mongodb-mesh/datadisk` (raw) to a raw disk `~/.colima/_lima/_disks/colima-mongodb-mesh/datadisk`"
+time="2026-10-21T18:40:48-05:00" level=info msg="[hostagent] [VZ] - vm state change: running"
+time="2026-10-21T18:40:53-05:00" level=info msg="[hostagent] SSH server does not seem to be running on vsock port, using usernet forwarder"
+time="2026-10-21T18:40:53-05:00" level=info msg="SSH Local Port: 56059"
+time="2026-10-21T18:40:53-05:00" level=info msg="[hostagent] Waiting for the essential requirement 1 of 3: `ssh`"
+time="2026-10-21T18:40:54-05:00" level=info msg="[hostagent] The essential requirement 1 of 3 is satisfied"
+time="2026-10-21T18:40:54-05:00" level=info msg="[hostagent] Waiting for the essential requirement 2 of 3: `user session is ready for ssh`"
+time="2026-10-21T18:40:54-05:00" level=info msg="[hostagent] The essential requirement 2 of 3 is satisfied"
+time="2026-10-21T18:40:54-05:00" level=info msg="[hostagent] Waiting for the essential requirement 3 of 3: `Explicitly start ssh ControlMaster`"
+time="2026-10-21T18:40:54-05:00" level=info msg="[hostagent] The essential requirement 3 of 3 is satisfied"
+time="2026-10-21T18:40:54-05:00" level=info msg="[hostagent] Waiting for the guest agent to be running"
+time="2026-10-21T18:40:54-05:00" level=info msg="[hostagent] Forwarding `/var/run/docker.sock` (guest) to `~/.colima/mongodb-mesh/docker.sock` (host)"
+time="2026-10-21T18:40:54-05:00" level=info msg="[hostagent] Forwarding `/var/run/containerd/containerd.sock` (guest) to `~/.colima/mongodb-mesh/containerd.sock` (host)"
+time="2026-10-21T18:40:54-05:00" level=info msg="[hostagent] Guest agent is running"
+time="2026-10-21T18:40:54-05:00" level=info msg="[hostagent] Waiting for the final requirement 1 of 1: `boot scripts must have finished`"
+time="2026-10-21T18:40:54-05:00" level=info msg="[hostagent] Time sync: guest agent is alive, starting time synchronization"
+time="2026-10-21T18:40:54-05:00" level=info msg="[hostagent] Not forwarding TCP 0.0.0.0:22"
+time="2026-10-21T18:40:54-05:00" level=info msg="[hostagent] Not forwarding TCP [::]:22"
+time="2026-10-21T18:41:03-05:00" level=info msg="[hostagent] The final requirement 1 of 1 is satisfied"
+time="2026-10-21T18:41:03-05:00" level=info msg="READY. Run `limactl shell colima-mongodb-mesh` to open the shell."
+installing: 386 OK
+installing: amd64 OK
+{
+  "supported": [
+    "linux/arm64",
+    "linux/amd64",
+    "linux/386"
+  ],
+  "emulators": [
+    "python3.12",
+    "qemu-i386",
+    "qemu-x86_64"
+  ]
+}
+time="2026-10-21T18:41:03-05:00" level=info msg="provisioning ..." context=docker
+colima-mongodb-mesh
+Successfully created context "colima-mongodb-mesh"
+time="2026-10-21T18:41:05-05:00" level=info msg="starting ..." context=docker
+time="2026-10-21T18:41:05-05:00" level=info msg=done
+
+== inotify limits in the VM  (18:41:05)
+fs.inotify.max_user_instances = 512
+fs.inotify.max_user_watches = 1048576
+PROFILE         STATUS     ARCH       CPUS    MEMORY    DISK     RUNTIME    ADDRESS
+mongodb-mesh    Running    aarch64    8       16GiB     60GiB    docker     192.168.64.10
+
+== tools  (18:41:06)
+kind 0.33.0 | helm v4.3.0+gbec5b06 | cilium-cli: v0.20.0 compiled with go1.27.0 on darwin/arm64 | docker 29.5.2 at unix://~/.colima/mongodb-mesh/docker.sock
+
+== the kind docker network: 172.18.0.0/16, containers from 172.18.0.0/17  (18:41:07)
+created
+
+== create mesh0  (18:41:07)
+Creating cluster "mesh0" ...
+ • Ensuring node image (kindest/node:v1.36.4) 🖼️  ...
+ ✓ Ensuring node image (kindest/node:v1.36.4) 🖼️
+ • Preparing nodes 📦 📦   ...
+ ✓ Preparing nodes 📦 📦 
+ • Writing configuration 📜  ...
+ ✓ Writing configuration 📜
+ • Starting control-plane 🕹️  ...
+ ✓ Starting control-plane 🕹️
+ • Installing StorageClass 💾  ...
+ ✓ Installing StorageClass 💾
+ • Joining worker nodes 🚜  ...
+ ✓ Joining worker nodes 🚜
+Set kubectl context to "kind-mesh0"
+You can now use your cluster with:
+
+kubectl cluster-info --context kind-mesh0
+
+Have a question, bug, or feature request? Let us know! https://kind.sigs.k8s.io/#community 🙂
+
+== create mesh1  (18:41:32)
+Creating cluster "mesh1" ...
+ • Ensuring node image (kindest/node:v1.36.4) 🖼️  ...
+ ✓ Ensuring node image (kindest/node:v1.36.4) 🖼️
+ • Preparing nodes 📦 📦   ...
+ ✓ Preparing nodes 📦 📦 
+ • Writing configuration 📜  ...
+ ✓ Writing configuration 📜
+ • Starting control-plane 🕹️  ...
+ ✓ Starting control-plane 🕹️
+ • Installing StorageClass 💾  ...
+ ✓ Installing StorageClass 💾
+ • Joining worker nodes 🚜  ...
+ ✓ Joining worker nodes 🚜
+Set kubectl context to "kind-mesh1"
+You can now use your cluster with:
+
+kubectl cluster-info --context kind-mesh1
+
+Have a nice day! 👋
+
+== create mesh2  (18:41:50)
+Creating cluster "mesh2" ...
+ • Ensuring node image (kindest/node:v1.36.4) 🖼️  ...
+ ✓ Ensuring node image (kindest/node:v1.36.4) 🖼️
+ • Preparing nodes 📦 📦   ...
+ ✓ Preparing nodes 📦 📦 
+ • Writing configuration 📜  ...
+ ✓ Writing configuration 📜
+ • Starting control-plane 🕹️  ...
+ ✓ Starting control-plane 🕹️
+ • Installing StorageClass 💾  ...
+ ✓ Installing StorageClass 💾
+ • Joining worker nodes 🚜  ...
+ ✓ Joining worker nodes 🚜
+Set kubectl context to "kind-mesh2"
+You can now use your cluster with:
+
+kubectl cluster-info --context kind-mesh2
+
+Not sure what to do next? 😅  Check out https://kind.sigs.k8s.io/docs/user/quick-start/
+
+== mesh0: Cilium 1.20.2 (no Hubble yet: its certificates need cert-manager)  (18:42:07)
+  mesh0-control-plane Ready 172.18.0.2
+  mesh0-worker Ready 172.18.0.3
+
+== mesh0: CoreDNS upstreams  (18:42:48)
+  resolved: Address: 2606:4700:4700::1001
+
+== mesh0: its LoadBalancer block and L2 announcements  (18:43:00)
+mesh-pool   172.18.255.200   172.18.255.239
+
+== mesh0: metrics-server 3.14.0 (kind's kubelets: --kubelet-insecure-tls)  (18:43:01)
+
+== mesh0: cert-manager v1.21.1, the shared root, ClusterIssuer mesh-ca  (18:43:22)
+  root CA 9E:48:06:4F:39:B9:73:EE…, issuer Ready
+
+== mesh1: Cilium 1.20.2 (no Hubble yet: its certificates need cert-manager)  (18:43:36)
+  mesh1-control-plane Ready 172.18.0.4
+  mesh1-worker Ready 172.18.0.5
+
+== mesh1: CoreDNS upstreams  (18:44:02)
+  resolved: Address: 1.1.1.1
+
+== mesh1: its LoadBalancer block and L2 announcements  (18:44:13)
+mesh-pool   172.18.255.136   172.18.255.175
+
+== mesh1: metrics-server 3.14.0 (kind's kubelets: --kubelet-insecure-tls)  (18:44:13)
+
+== mesh1: cert-manager v1.21.1, the shared root, ClusterIssuer mesh-ca  (18:44:35)
+  root CA 9E:48:06:4F:39:B9:73:EE…, issuer Ready
+
+== mesh2: Cilium 1.20.2 (no Hubble yet: its certificates need cert-manager)  (18:44:49)
+  mesh2-control-plane Ready 172.18.0.6
+  mesh2-worker Ready 172.18.0.7
+
+== mesh2: CoreDNS upstreams  (18:45:22)
+  resolved: Address: 2606:4700:4700::1111
+
+== mesh2: its LoadBalancer block and L2 announcements  (18:45:40)
+mesh-pool   172.18.255.72   172.18.255.111
+
+== mesh2: metrics-server 3.14.0 (kind's kubelets: --kubelet-insecure-tls)  (18:45:40)
+
+== mesh2: cert-manager v1.21.1, the shared root, ClusterIssuer mesh-ca  (18:46:03)
+  root CA 9E:48:06:4F:39:B9:73:EE…, issuer Ready
+
+== Hubble and Cluster Mesh on mesh0 mesh1 mesh2  (18:46:17)
+mesh0: mesh apiserver at 172.18.0.2:32379, 3 members declared
+mesh1: mesh apiserver at 172.18.0.4:32379, 3 members declared
+mesh2: mesh apiserver at 172.18.0.6:32379, 3 members declared
+⚠️  Service type NodePort detected! Service may fail when nodes are removed from the cluster!
+✅ Service "clustermesh-apiserver" of type "NodePort" found
+✅ Cluster access information is available:
+  - 172.18.0.2:32379
+✅ Deployment clustermesh-apiserver is ready
+ℹ️  KVStoreMesh is enabled
+
+✅ All 2 nodes are connected to all clusters [min:2 / avg:2.0 / max:2]
+✅ All 1 KVStoreMesh replicas are connected to all clusters [min:2 / avg:2.0 / max:2]
+
+🔌 Cluster Connections:
+  - mesh1: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  - mesh2: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+
+⚠️  Service type NodePort detected! Service may fail when nodes are removed from the cluster!
+✅ Service "clustermesh-apiserver" of type "NodePort" found
+✅ Cluster access information is available:
+  - 172.18.0.4:32379
+✅ Deployment clustermesh-apiserver is ready
+ℹ️  KVStoreMesh is enabled
+
+✅ All 2 nodes are connected to all clusters [min:2 / avg:2.0 / max:2]
+✅ All 1 KVStoreMesh replicas are connected to all clusters [min:2 / avg:2.0 / max:2]
+
+🔌 Cluster Connections:
+  - mesh0: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  - mesh2: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+
+⚠️  Service type NodePort detected! Service may fail when nodes are removed from the cluster!
+✅ Service "clustermesh-apiserver" of type "NodePort" found
+✅ Cluster access information is available:
+  - 172.18.0.6:32379
+✅ Deployment clustermesh-apiserver is ready
+ℹ️  KVStoreMesh is enabled
+
+✅ All 2 nodes are connected to all clusters [min:2 / avg:2.0 / max:2]
+✅ All 1 KVStoreMesh replicas are connected to all clusters [min:2 / avg:2.0 / max:2]
+
+🔌 Cluster Connections:
+  - mesh0: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  - mesh1: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+
+
+== mesh0: OLM v0.46.0  (18:52:08)
+operatorhubio-catalog   quay.io/operatorhubio/catalog:latest   CONNECTING
+
+== mesh1: OLM v0.46.0  (18:52:26)
+operatorhubio-catalog   quay.io/operatorhubio/catalog:latest   TRANSIENT_FAILURE
+
+== mesh2: OLM v0.46.0  (18:52:47)
+operatorhubio-catalog   quay.io/operatorhubio/catalog:latest   TRANSIENT_FAILURE
+
+== the Mac's path to 172.18.255.0/24  (18:52:59)
+for the Mac to reach the clusters' LoadBalancer addresses, once per VM start: sudo route -n add -net 172.18.255.0/24 192.168.64.10
+
+== platform up: mesh0 mesh1 mesh2; KUBECONFIG=~/.kube/mongodb-mesh.config  (18:53:00)
+exit 0

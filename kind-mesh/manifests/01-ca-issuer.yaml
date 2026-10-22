@@ -1,0 +1,8 @@
+# The issuer every certificate of the lab names, in every cluster, signing with the shared root (00-root-ca.yaml).
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: mesh-ca
+spec:
+  ca:
+    secretName: mesh-root-ca

@@ -1,0 +1,26 @@
+# The member's certificate, from the shared CA, rendered per cluster by scripts/mongo-up.sh (__MESH__ is the cluster).
+# It names the member's global Service, which is the name the replica set and every client use, and localhost, for
+# mongosh inside the pod. Server and client usage: the members authenticate to each other with it, and mongod presents
+# it to Envoy, which asks for a client certificate.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mongod
+  namespace: mongodb
+spec:
+  secretName: mongod-tls
+  duration: 8760h
+  renewBefore: 720h
+  commonName: mongo-__MESH__.mongodb.svc.cluster.local
+  dnsNames:
+    - mongo-__MESH__.mongodb.svc.cluster.local
+    - mongo-__MESH__.mongodb.svc
+    - localhost
+  usages: [server auth, client auth, digital signature, key encipherment]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: mesh-ca
+    kind: ClusterIssuer
+    group: cert-manager.io

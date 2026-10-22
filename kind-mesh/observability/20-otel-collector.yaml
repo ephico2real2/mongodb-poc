@@ -1,0 +1,83 @@
+# Ships the hubble-observer's flows to Loki: an OpenTelemetry collector on each mesh0 node reads only that pod's log
+# files from the kubelet's pod log directory and sends them to Loki's OTLP endpoint, with the labels the dashboard
+# selects on. From cilium-implementation-poc demos/10-tracing/otel-collector.yaml (its demo 25 part), without the
+# trace pipelines that lab also carries.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector
+  namespace: observability
+data:
+  config.yaml: |
+    receivers:
+      filelog/hubble-observer:
+        include:
+          - /var/log/pods/observability_hubble-observer-*/hubble-observer/*.log
+        include_file_path: true
+        # From the end on first start; a restart resumes from its checkpoint, so nothing is counted twice or lost.
+        start_at: end
+        storage: file_storage
+        operators:
+          - type: container
+    extensions:
+      file_storage:
+        directory: /var/lib/otelcol
+        create_directory: true
+    processors:
+      batch: {}
+      # The dashboard (grafana.com 23862) selects {namespace="…", container="hubble-observer"}; Loki indexes these.
+      # The cluster here is where the flows were collected; each flow carries its own source and destination cluster.
+      resource/loki-labels:
+        attributes:
+          - {key: namespace, from_attribute: k8s.namespace.name, action: insert}
+          - {key: container, from_attribute: k8s.container.name, action: insert}
+          - {key: k8s.cluster.name, value: mesh0, action: insert}
+    exporters:
+      otlphttp/loki:
+        endpoint: http://loki.observability.svc.cluster.local:3100/otlp
+        sending_queue: {storage: file_storage, queue_size: 5000}
+        retry_on_failure: {max_elapsed_time: 0}
+    service:
+      extensions: [file_storage]
+      pipelines:
+        logs/hubble-observer:
+          receivers: [filelog/hubble-observer]
+          processors: [resource/loki-labels, batch]
+          exporters: [otlphttp/loki]
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: otel-collector
+  namespace: observability
+spec:
+  selector: {matchLabels: {app: otel-collector}}
+  template:
+    metadata: {labels: {app: otel-collector}}
+    spec:
+      # Root, deliberately: the pod log files and the checkpoint directory on the node are root's (demo 10 measured
+      # "permission denied" as the image's uid 10001). It reads one host directory and writes one.
+      # Root needs no capability for files root owns: none are kept.
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: collector
+          image: otel/opentelemetry-collector-contrib:0.160.0
+          args: ["--config=/etc/otelcol/config.yaml"]
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          volumeMounts:
+            - {name: config, mountPath: /etc/otelcol, readOnly: true}
+            - {name: checkpoints, mountPath: /var/lib/otelcol}
+            - {name: pod-logs, mountPath: /var/log/pods, readOnly: true}
+      volumes:
+        - name: config
+          configMap: {name: otel-collector}
+        - name: checkpoints
+          hostPath: {path: /var/lib/otelcol, type: DirectoryOrCreate}
+        - name: pod-logs
+          hostPath: {path: /var/log/pods, type: Directory}
