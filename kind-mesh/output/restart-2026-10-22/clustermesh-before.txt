@@ -1,0 +1,21 @@
+== mesh0
+✅ All 1 KVStoreMesh replicas are connected to all clusters [min:2 / avg:2.0 / max:2]
+
+🔌 Cluster Connections:
+  - mesh1: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  - mesh2: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+
+== mesh1
+✅ All 1 KVStoreMesh replicas are connected to all clusters [min:2 / avg:2.0 / max:2]
+
+🔌 Cluster Connections:
+  - mesh0: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  - mesh2: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+
+== mesh2
+✅ All 1 KVStoreMesh replicas are connected to all clusters [min:2 / avg:2.0 / max:2]
+
+🔌 Cluster Connections:
+  - mesh0: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+  - mesh1: 2/2 configured, 2/2 connected - KVStoreMesh: 1/1 configured, 1/1 connected
+

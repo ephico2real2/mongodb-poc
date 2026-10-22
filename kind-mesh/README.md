@@ -8,7 +8,7 @@ installed by this repository's chart. The design, why it is built this way and h
 
 ## What runs where
 
-Everything is in one Colima VM, `mongodb-mesh` (8 CPUs, 16 GiB, 60 GB disk): the docker network `kind`, and in it six
+Everything is in one Colima VM, `mongodb-mesh` (8 CPUs, 24 GiB, 60 GB disk): the docker network `kind`, and in it six
 node containers, one control plane and one worker for each of `mesh0`, `mesh1` and `mesh2`. The clusters' contexts
 are in `~/.kube/mongodb-mesh.config`; the default docker context and `~/.kube/config` are not touched.
 
@@ -97,5 +97,5 @@ The scripts are adapted from cilium-implementation-poc (`scripts/lab-up.sh`, `po
 | | |
 | --- | --- |
 | Delete the clusters, keep the VM | `kind-mesh/scripts/down.sh` |
-| Stop the VM, keep everything | `kind-mesh/scripts/colima-down.sh` (a restart may give the nodes new addresses; not yet tested) |
+| Stop the VM, keep everything | `kind-mesh/scripts/colima-down.sh` records each node's address in `~/.kube/mongodb-mesh.node-ips`, stops the nodes with their restart policy off, then the VM; `kind-mesh/scripts/colima-up.sh` starts the VM at the size in `versions.env`, each node pinned to its address, and waits for the API servers, Cilium and the mesh. Measured 2026-10-22, 16 to 24 GiB: down 35 s, up 73 s, all six nodes back on their addresses with `on-failure:1`, the mesh connected; mongot Ready about 47 s after `colima-up.sh` returned, then `check.sh` 0 failed and a search drill 0 of 237 (`output/restart-2026-10-22/`). The Mac's route to the LoadBalancer block is printed, not run (your sudo) |
 | Delete the VM and its disk | `colima delete --profile mongodb-mesh --data`. Without `--data`, Colima keeps the docker disk, and a new VM of the same name picks up the old one, clusters and all |

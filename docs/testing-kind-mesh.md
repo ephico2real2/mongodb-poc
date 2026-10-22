@@ -149,6 +149,14 @@ With two mongot per cluster, the GUI and the observability stack: 13.1 GiB of th
 60 GB disk. Per pod: mongod 179 to 240 Mi, mongot 622 to 677 Mi, Envoy 19 to 21 Mi (`kind-mesh/scripts/evidence.sh`,
 `evidence-2026-10-21.txt`).
 
+The VM grew to 24 GiB on 2026-10-22 (#162) with one restart, by `colima-down.sh` and `colima-up.sh`: available memory
+2,086 MiB before, 16,478 MiB after (`free -m`). The six nodes came back on their addresses (172.18.0.2 to .7), the mesh
+connected, and once mongot was Ready (about 47 s after `colima-up.sh` returned) `check.sh` passed and a search drill lost
+0 of 237 (`kind-mesh/output/restart-2026-10-22/`). Run straight after `colima-up.sh`, `check.sh` failed 12 checks, all of
+them mongot not yet Ready (`check-after-immediately.txt`). The first `colima-up.sh` stopped before starting any node:
+Docker 29.5.2 prints a stopped container's address as `invalid IP`, and the script read that as an address
+(`colima-up-attempt1-invalid-ip.txt`); fixed in `lib.sh` `node_ip`.
+
 ## Problems found while building, and the fix
 
 | Problem | Fix |

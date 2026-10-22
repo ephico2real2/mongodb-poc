@@ -1,0 +1,6 @@
+{"name":"mongodb-mesh","status":"Running","arch":"aarch64","cpus":8,"memory":25769803776,"disk":64424509440,"address":"192.168.64.10","runtime":"docker"}
+MemTotal:       24556976 kB
+8
+               total        used        free      shared  buff/cache   available
+Mem:           23981        7503        9136          89        7743       16478
+Swap:              0           0           0

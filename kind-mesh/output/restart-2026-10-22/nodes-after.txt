@@ -1,0 +1,6 @@
+/mesh0-control-plane running on-failure:1 pin=172.18.0.2
+/mesh0-worker running on-failure:1 pin=172.18.0.3
+/mesh1-control-plane running on-failure:1 pin=172.18.0.4
+/mesh1-worker running on-failure:1 pin=172.18.0.5
+/mesh2-control-plane running on-failure:1 pin=172.18.0.6
+/mesh2-worker running on-failure:1 pin=172.18.0.7

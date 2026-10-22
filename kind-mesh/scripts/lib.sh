@@ -19,6 +19,51 @@ lab_env() {
   mkdir -p "$(dirname "$KUBECONFIG")"
 }
 
+# Every kind node of CLUSTERS as "<role> <name>", control planes first. One docker call, so a failure reaches the
+# caller (pipefail) instead of reading as "no nodes".
+lab_nodes() {
+  docker ps -a --filter label=io.x-k8s.kind.cluster \
+    --format '{{.Label "io.x-k8s.kind.cluster"}} {{.Label "io.x-k8s.kind.role"}} {{.Names}}' \
+    | awk -v want=" $CLUSTERS " 'index(want, " " $1 " ") {print $2, $3}' | sort
+}
+
+# A kind node's address on the kind network; for a stopped node, the one it last booted with, which kind's entrypoint
+# writes to /kind/old-ipv4 at every boot (and rewrites the node's kubeadm files from when it changes).
+node_ip() {
+  local ip
+  ip=$(docker inspect "$1" --format '{{with index .NetworkSettings.Networks "kind"}}{{.IPAddress}}{{end}}')
+  # Docker 29 prints a stopped container's unset address as "invalid IP" (Go's zero netip.Addr), not as nothing
+  # (measured 2026-10-22, Docker 29.5.2): only an IPv4 address counts.
+  is_ipv4 "$ip" || ip=$(docker cp "$1:/kind/old-ipv4" - 2>/dev/null | tar -xO 2>/dev/null || true)
+  if is_ipv4 "$ip"; then printf '%s' "$ip"; fi
+}
+is_ipv4() { [[ "$1" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; }
+
+# The lab's VM as `colima list --json` reports it: "<status> <cpus> <memory in bytes> <address>", nothing when the
+# profile does not exist. The size is the one the VM was last started with (Lima's lima.yaml, rewritten at each start).
+colima_info() {
+  colima list --json 2>/dev/null | python3 -c '
+import json, sys
+for line in sys.stdin:
+    if line.strip():
+        d = json.loads(line)
+        if d.get("name") == sys.argv[1]:
+            print(d.get("status", ""), d.get("cpus", 0), d.get("memory", 0), d.get("address") or ""); break' "$COLIMA_PROFILE"
+}
+
+# The Mac reaches the LoadBalancer blocks through the VM: Docker's FORWARD policy drops what does not come from a
+# docker bridge, so the VM accepts the block onto the kind bridge; the Mac's route is your sudo, printed, never run
+# (cilium-implementation-poc poc1-colima-up.sh). The VM keeps no iptables rule across a stop (no netfilter-persistent),
+# so up.sh and colima-up.sh both run this.
+lb_path() {
+  local br addr
+  br="br-$(docker network inspect kind --format '{{.Id}}' | cut -c1-12)"
+  colima ssh --profile "$COLIMA_PROFILE" -- sudo sh -c \
+    "iptables -C DOCKER-USER -d $LB_RANGE -o $br -j ACCEPT 2>/dev/null || iptables -I DOCKER-USER -d $LB_RANGE -o $br -j ACCEPT"
+  addr=$(colima_info | awk '{print $4}')
+  echo "for the Mac to reach the clusters' LoadBalancer addresses, once per VM start: sudo route -n add -net $LB_RANGE ${addr:-<the VM address>}"
+}
+
 # helm, three tries: a chart repository's transient refusal is not the lab's failure, and upgrade --install is
 # idempotent (cilium-implementation-poc scripts/lab-up.sh, helm_r).
 helm_r() {

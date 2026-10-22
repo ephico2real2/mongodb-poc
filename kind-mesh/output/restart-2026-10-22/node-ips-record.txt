@@ -1,0 +1,6 @@
+mesh0-control-plane 172.18.0.2
+mesh1-control-plane 172.18.0.4
+mesh2-control-plane 172.18.0.6
+mesh0-worker 172.18.0.3
+mesh1-worker 172.18.0.5
+mesh2-worker 172.18.0.7
