@@ -1,0 +1,26 @@
+== after: 2026-10-22T22:36Z; expecting every agent on 1.20.2 9e5a34a5, workloads named at scope mesh
+== mesh0
+PASS  mesh0: every agent on 9e5a34a5                                      cilium-5v497=1.20.2:9e5a34a525 cilium-kzpmg=1.20.2:9e5a34a525 
+PASS  mesh0: every CiliumEndpoint of an owned pod carries status.workloads  25 of 25; missing: -
+      searches through mesh0's member: {"ok":16,"fail":0,"maxMs":9,"maxAt":"0.5","firstFailAt":null,"lastFailAt":null}; mongod on mesh0-worker, read on its agent cilium-kzpmg
+PASS  mesh0: other-node L3/L4 attribution                                 L3_L4=9/9 L7=8/8
+PASS  mesh0: mongod -> mongot-search-0-0 (other node) names StatefulSet/mongot-search-0  named/flows: L3_L4=9/9 L7=8/8
+PASS  mesh0: mongod -> mongot-search-0-1 (same node, the control) names StatefulSet/mongot-search-0  named/flows: L7=8/8
+PASS  mesh0: mongod -> the other clusters' mongod names StatefulSet/mongo  named/flows: L3_L4=12/12
+== mesh1
+PASS  mesh1: every agent on 9e5a34a5                                      cilium-28wd7=1.20.2:9e5a34a525 cilium-6rm99=1.20.2:9e5a34a525 
+PASS  mesh1: every CiliumEndpoint of an owned pod carries status.workloads  18 of 18; missing: -
+      searches through mesh1's member: {"ok":16,"fail":0,"maxMs":11,"maxAt":"0.0","firstFailAt":null,"lastFailAt":null}; mongod on mesh1-control-plane, read on its agent cilium-6rm99
+PASS  mesh1: other-node L3/L4 attribution                                 L3_L4=9/9 L7=8/8
+PASS  mesh1: mongod -> mongot-search-0-1 (other node) names StatefulSet/mongot-search-0  named/flows: L3_L4=9/9 L7=8/8
+PASS  mesh1: mongod -> mongot-search-0-0 (same node, the control) names StatefulSet/mongot-search-0  named/flows: L7=8/8
+PASS  mesh1: mongod -> the other clusters' mongod names StatefulSet/mongo  named/flows: L3_L4=10/10
+== mesh2
+PASS  mesh2: every agent on 9e5a34a5                                      cilium-7qhv7=1.20.2:9e5a34a525 cilium-jp4xl=1.20.2:9e5a34a525 
+PASS  mesh2: every CiliumEndpoint of an owned pod carries status.workloads  18 of 18; missing: -
+      searches through mesh2's member: {"ok":16,"fail":0,"maxMs":11,"maxAt":"0.0","firstFailAt":null,"lastFailAt":null}; mongod on mesh2-control-plane, read on its agent cilium-7qhv7
+PASS  mesh2: other-node L3/L4 attribution                                 L3_L4=9/9 L7=8/8
+PASS  mesh2: mongod -> mongot-search-0-0 (other node) names StatefulSet/mongot-search-0  named/flows: L3_L4=9/9 L7=8/8
+PASS  mesh2: mongod -> mongot-search-0-1 (same node, the control) names StatefulSet/mongot-search-0  named/flows: L7=8/8
+PASS  mesh2: mongod -> the other clusters' mongod names StatefulSet/mongo  named/flows: L3_L4=14/14
+== after: 0 failed

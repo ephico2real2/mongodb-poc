@@ -1,0 +1,3 @@
+2026-10-22T22:23:33Z L7 mesh2: 20 searches answered, Envoy on mesh2-control-plane counted 20 (1273 -> 1293)
+2026-10-22T22:26:50Z L7 mesh1: 20 searches answered, Envoy on mesh1-control-plane counted 20 (874 -> 894)
+2026-10-22T22:31:09Z L7 mesh0: 20 searches answered, Envoy on mesh0-worker counted 20 (1299 -> 1319)
