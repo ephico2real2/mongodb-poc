@@ -1,0 +1,8 @@
+== drill: the primary's cluster mesh0 lost by freeze, mesh1 writes and searches (150 s)
+[t+  1s] primary mongo-mesh0; lab.drill holds 4722 documents
+[t+ 15s] docker pause mesh0's two nodes
+[t+ 26s] primary now: mongo-mesh2 (elected 5.2 s after the freeze, by its log)
+[t+ 75s] docker unpause mesh0's two nodes
+[t+154s] primary after: mongo-mesh0
+RESULT {"search":{"ok":220,"fail":0,"maxMs":10,"maxAt":"73.9"},"write":{"ok":220,"fail":0,"maxMs":37685,"maxAt":"12.8"}}
+[t+154s] acknowledged writes: 220; lab.drill grew by 220 (4722 -> 4942): every acknowledged write is there, once

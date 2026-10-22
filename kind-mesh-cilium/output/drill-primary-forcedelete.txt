@@ -1,0 +1,14 @@
+== drill: the primary's cluster mesh0 lost by kill, mesh1 writes and searches (150 s)
+[t+  2s] primary mongo-mesh0; lab.drill holds 931 documents
+[t+ 15s] force-delete mesh0's mongod pod: no shutdown, no step-down
+[t+ 16s] primary now: mongo-mesh1
+[t+ 75s] nothing to undo: the StatefulSet made mongo-0 again
+[t+154s] primary after: mongo-mesh0
+RESULT {"search":{"ok":293,"fail":0,"maxMs":39,"maxAt":"0.0"},"write":{"ok":293,"fail":0,"maxMs":58,"maxAt":"12.9"}}
+[t+154s] acknowledged writes: 293; lab.drill grew by 293 (931 -> 1224): every acknowledged write is there, once
+
+# Read afterwards: this was not a crash. A force-deleted pod's container still gets SIGTERM, mongod shut down
+# cleanly and handed the primary to mesh1 (mesh1's log, 'kubectl --context kind-mesh1 -n mongodb logs mongo-0 -c mongod'):
+#   {"t":{"$date":"2026-10-22T03:57:18.397+00:00"},"s":"I",  "c":"COMMAND",  "id":21581,   "ctx":"conn1167","msg":"Received replSetStepUp request"}
+#   {"t":{"$date":"2026-10-22T03:57:18.398+00:00"},"s":"I",  "c":"ELECTION", "id":4615661, "ctx":"conn1167","msg":"Starting an election due to step up request"}
+# drills.sh's kill mode now sends SIGKILL to mongod on its node instead (drill-primary-kill.txt).

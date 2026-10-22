@@ -142,6 +142,82 @@ main chart's csv-reclaim script unchanged (`templates/00-csv-reclaim.yaml`, H5 a
 
 Not tested: installing the chart on a cluster that never ran steps 1 and 2 (no objects to adopt), or through Argo CD.
 
+## Story #131: the primary's cluster is lost
+
+What a client sees when mesh0, the primary's cluster, is lost, and which client settings help. The client is mongosh
+2.6.0 (Node.js driver 6.19.0, as mongod logs it) in mesh1's member.
+
+- **Run one:** `CLIENT_OPTS='<options>' kind-mesh-cilium/drills.sh primary freeze|kill|partition`.
+  **Run all twelve:** `kind-mesh-cilium/scripts/primary-matrix.sh` (about 40 minutes; mesh0 takes the primary back
+  between runs by itself, priority 2).
+- **What a run does:** for 150 s, every 0.5 s, a majority write through the replica set (`wtimeout` 3 s) and a search
+  through mesh1's member. From 15 s to 75 s mesh0 is lost:
+  - **freeze:** `docker pause` of mesh0's two nodes. Nothing there answers, and connections hang.
+  - **kill:** SIGKILL of mesh0's mongod on its node; the kubelet restarts it.
+  - **partition:** a Cilium deny policy cuts mesh0's mongod off from the other clusters
+    (`kind-mesh-cilium/manifests/50-partition-mesh0.yaml`); mesh0 keeps running and steps down.
+- **Read afterwards:** when the new primary was elected, from its own log; and whether `lab.drill` grew by exactly the
+  number of acknowledged writes. A lost or doubled write, or a failed write that committed anyway, would show as a
+  mismatch.
+- **Passes when:** no search fails, and every acknowledged write is there, once.
+
+**Result: passed in all twelve runs**, one run per row (`primary-matrix.txt`; each run's record is
+`drill-primary-<mode>[-<options>].txt`):
+
+| Lost by | Client options | Writes failed | Longest write | Searches failed | New primary elected after | Acknowledged writes all there, once |
+| --- | --- | --- | --- | --- | --- | --- |
+| freeze | `defaults` | 0 of 220 | 37.7 s | 0 of 220 | 10.8 s (mongo-mesh2) | yes |
+| freeze | `connectTimeoutMS=5000&socketTimeoutMS=5000` | 2 of 264 | 10.0 s | 0 of 264 | 10.7 s (mongo-mesh2) | yes |
+| freeze | `timeoutMS=10000` | 2 of 255 | 10.0 s | 0 of 255 | 9.9 s (mongo-mesh2) | yes |
+| freeze | `heartbeatFrequencyMS=2000&connectTimeoutMS=5000` | 0 of 272 | 11.5 s | 0 of 272 | 9.9 s (mongo-mesh2) | yes |
+| kill | `defaults` | 0 of 274 | 10.1 s | 0 of 274 | 10.4 s (mongo-mesh2) | yes |
+| kill | `connectTimeoutMS=5000&socketTimeoutMS=5000` | 0 of 273 | 10.2 s | 0 of 273 | 10.4 s (mongo-mesh2) | yes |
+| kill | `timeoutMS=10000` | 1 of 274 | 10.0 s | 0 of 274 | 10.4 s (mongo-mesh1) | yes |
+| kill | `heartbeatFrequencyMS=2000&connectTimeoutMS=5000` | 0 of 275 | 9.7 s | 0 of 275 | 10.0 s (mongo-mesh2) | yes |
+| partition | `defaults` | 0 of 201 | 47.2 s | 0 of 201 | 16.1 s (mongo-mesh2) | yes |
+| partition | `connectTimeoutMS=5000&socketTimeoutMS=5000` | 4 of 245 | 10.0 s | 0 of 245 | 15.9 s (mongo-mesh2) | yes |
+| partition | `timeoutMS=10000` | 3 of 235 | 10.0 s | 0 of 235 | 16.3 s (mongo-mesh2) | yes |
+| partition | `heartbeatFrequencyMS=2000&connectTimeoutMS=5000` | 0 of 249 | 22.8 s | 0 of 249 | 16.2 s (mongo-mesh2) | yes |
+
+- No search failed: searches run on mesh1's own member and mongot, which none of the modes touch.
+- A new primary was elected 9.9–10.8 s after a freeze or a kill, and 15.9–16.3 s after a partition.
+- **With the defaults no write failed, but one waited 37.7 s (freeze) or 47.2 s (partition).** It was held on its
+  connection to the lost primary, which has no socket timeout. A killed mongod closes its connections, so there the
+  wait was the election's, 10.1 s.
+- **Timeouts cap the wait at 10.0 s, and the application must retry:** with `connectTimeoutMS=5000&socketTimeoutMS=5000`
+  or `timeoutMS=10000`, up to 4 writes failed per run, after a freeze or a partition (each error is listed in
+  `primary-matrix.txt`).
+- **`heartbeatFrequencyMS=2000&connectTimeoutMS=5000`: no write failed in any mode.** The longest waits were 11.5 s
+  (freeze), 9.7 s (kill) and 22.8 s (partition).
+
+### The same, with a shorter election timeout
+
+The replica set's `electionTimeoutMillis` from 10000 (the default) to 5000, then back
+(`election5s-reconfig.txt`). Run with `DRILL_TAG=election5s`, the default client and the heartbeat setting
+(`primary-matrix-election5s.txt`):
+
+| Lost by | Client options | Writes failed | Longest write | Searches failed | New primary elected after | Acknowledged writes all there, once |
+| --- | --- | --- | --- | --- | --- | --- |
+| freeze | `defaults` | 0 of 220 | 37.7 s | 0 of 220 | 5.2 s (mongo-mesh2) | yes |
+| freeze | `heartbeatFrequencyMS=2000&connectTimeoutMS=5000` | 0 of 274 | 10.5 s | 0 of 274 | 4.8 s (mongo-mesh2) | yes |
+| kill | `defaults` | 0 of 285 | 5.1 s | 0 of 285 | 5.3 s (mongo-mesh2) | yes |
+| kill | `heartbeatFrequencyMS=2000&connectTimeoutMS=5000` | 0 of 286 | 4.6 s | 0 of 286 | 4.8 s (mongo-mesh2) | yes |
+| partition | `defaults` | 0 of 208 | 44.6 s | 0 of 208 | 8.0 s (mongo-mesh2) | yes |
+| partition | `heartbeatFrequencyMS=2000&connectTimeoutMS=5000` | 0 of 273 | 11.3 s | 0 of 273 | 7.3 s (mongo-mesh2) | yes |
+
+- The new primary came in about half the time: 4.8–5.3 s after a freeze or a kill, 7.3–8.0 s after a partition.
+- With the heartbeat setting no write failed, and the longest wait was 10.5 s (freeze), 4.6 s (kill) and 11.3 s
+  (partition).
+- With the defaults the long waits stayed (37.7 s, 44.6 s): they are the client's, not the election's.
+- Not measured: whether 5 s causes elections that should not happen on a network slower than this lab's, where all
+  three clusters share one VM.
+
+### Found on the way: a force-deleted pod is not a crash
+
+The first kill drill force-deleted mesh0's mongod pod. mongod still received SIGTERM, stepped down and handed the
+primary to mesh1 within a second (mesh1's log: "Received replSetStepUp request"); no write failed and the longest took
+58 ms (`drill-primary-forcedelete.txt`). The kill mode now sends SIGKILL on the node instead.
+
 ## Compared with the Envoy lab
 
 | mesh2 loses… | With the operator's Envoy | Step 1: per connection | Step 2: per request |

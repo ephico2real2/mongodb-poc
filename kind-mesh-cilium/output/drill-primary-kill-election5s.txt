@@ -1,0 +1,8 @@
+== drill: the primary's cluster mesh0 lost by kill, mesh1 writes and searches (150 s)
+[t+  1s] primary mongo-mesh0; lab.drill holds 5216 documents
+[t+ 15s] SIGKILL mesh0's mongod on mesh0-worker: no shutdown, no step-down
+[t+ 20s] primary now: mongo-mesh2 (elected 5.3 s after the kill, by its log)
+[t+ 75s] nothing to undo: the kubelet restarted mongod (1 restart in this run)
+[t+153s] primary after: mongo-mesh0
+RESULT {"search":{"ok":285,"fail":0,"maxMs":16,"maxAt":"37.8"},"write":{"ok":285,"fail":0,"maxMs":5096,"maxAt":"13.2"}}
+[t+154s] acknowledged writes: 285; lab.drill grew by 285 (5216 -> 5501): every acknowledged write is there, once

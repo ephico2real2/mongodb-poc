@@ -196,11 +196,16 @@ What this trades:
 
 ## Client guidance
 
-- **Choose the client's timeouts deliberately; the defaults let a hung primary hold a write for 36.7 s.** That write
-  was held on its connection to the frozen primary with mongosh 2.6.0's defaults (no socket timeout), then retried on
-  the new primary. With `connectTimeoutMS=5000&socketTimeoutMS=5000` the longest wait was 10.0 s, but 2 writes
-  failed on the connect timeout to the frozen member, so the application must retry. Which settings to recommend,
-  and how they behave under a killed process or a partition, is story #131.
+- **Set `heartbeatFrequencyMS=2000&connectTimeoutMS=5000` on the client** (story #131, `docs/testing-kind-mesh-cilium.md`).
+  With the primary's cluster frozen, its mongod killed, or the cluster cut off, no write failed in any run, and the
+  longest wait was 11.5 s, 9.7 s and 22.8 s. With the defaults no write failed either, but one waited 37.7 s (freeze)
+  and 47.2 s (partition) on its connection to the lost primary. `timeoutMS=10000`, or 5 s connect and socket
+  timeouts, cap the wait at 10.0 s, but up to 4 writes failed per run, so the application must retry them. One run per
+  setting, mongosh 2.6.0; another driver should be measured the same way (`kind-mesh-cilium/drills.sh primary`).
+- **A shorter `electionTimeoutMillis` halves the time without a primary**: 5000 instead of 10000 elected the new primary
+  4.8–5.3 s after a freeze or a kill and 7.3–8.0 s after a partition, and with the client settings above the longest
+  wait was 11.3 s. This lab's clusters share one VM; on a real network, measure first that 5 s does not cause needless
+  elections. The lab runs the default.
 - **Connect with all three member names and `replicaSet=rs0`**, so the driver follows the primary across clusters.
 - **Read from the local member by connecting to it** (`directConnection=true` with `readPreference=nearest`, as the GUI
   and the drills did) when reads may be stale and should stay in their cluster; searches run on secondaries too.
@@ -233,14 +238,13 @@ Read with `kubectl top` and `free -m` (`kind-mesh/scripts/evidence.sh`, `kind-me
 
 ## What is not proven
 
-- **All of a cluster's mongot lost behind a ready Envoy** is not failed over (measured above); search on Cilium alone,
-  without the operator's Envoy, is story #132.
+- **All of a cluster's mongot lost behind a ready Envoy** is not failed over (measured above); without the operator's
+  Envoy it is (Step 1 and Step 2 above).
 - **Searches moving back** after a failover happen when mongod reconnects: a restart does it (measured); whether a
   connection is ever replaced by itself was not measured.
-- **Client settings beyond one pair of timeouts**, and failure modes other than a hung node (a killed process, a
-  partition between clusters): story #131.
+- **Client settings in other drivers**: story #131 measured mongosh 2.6.0 only, one run per setting.
 - **Latency between clusters**: all three clusters ran in one VM, so cross-cluster round trips were near zero.
-- **Losing two clusters**, a network partition between clusters, and a VM restart (node addresses may change, and
+- **Losing two clusters**, a partition that splits the other two clusters from each other, and a VM restart (node addresses may change, and
   the mesh is declared by address) were not run.
 - **Support**: MongoDB documents an external source for search as Enterprise-only; the operator does not check it,
   and this lab runs Community. The replica set's StatefulSets are this repository's, not the operator's: initiation,

@@ -1,0 +1,26 @@
+# Story #131's partition: mesh0's mongod cut off from every endpoint of the other clusters, both ways, while mesh0 itself
+# keeps running. Deny rules only, with default deny left off, so nothing else changes. The cluster label is named:
+# since Cilium 1.19 a selector without it matches the local cluster only (cilium-implementation-poc gotcha #62); the
+# namespace key matches endpoints of any namespace. Applied and removed by kind-mesh-cilium/drills.sh.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: partition-from-other-clusters
+  namespace: mongodb
+spec:
+  endpointSelector:
+    matchLabels:
+      app: mongo
+  enableDefaultDeny:
+    ingress: false
+    egress: false
+  ingressDeny:
+    - fromEndpoints:
+        - matchExpressions:
+            - {key: io.cilium.k8s.policy.cluster, operator: NotIn, values: [mesh0]}
+            - {key: k8s:io.kubernetes.pod.namespace, operator: Exists}
+  egressDeny:
+    - toEndpoints:
+        - matchExpressions:
+            - {key: io.cilium.k8s.policy.cluster, operator: NotIn, values: [mesh0]}
+            - {key: k8s:io.kubernetes.pod.namespace, operator: Exists}
