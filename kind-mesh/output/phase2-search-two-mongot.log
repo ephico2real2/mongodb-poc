@@ -1,0 +1,107 @@
+
+== the Jobs' image, localhost/kind-mesh/oc:4.20.42, built and loaded into every node  (20:05:05)
+Image: "localhost/kind-mesh/oc:4.20.42" with ID "sha256:bbbc170a18a4000924fc73eed550635bf48dccf0081a2d7bca3d5cc98238d553" not yet present on node "mesh0-worker", loading...
+Image: "localhost/kind-mesh/oc:4.20.42" with ID "sha256:bbbc170a18a4000924fc73eed550635bf48dccf0081a2d7bca3d5cc98238d553" not yet present on node "mesh0-control-plane", loading...
+  mesh0: loaded
+Image: "localhost/kind-mesh/oc:4.20.42" with ID "sha256:bbbc170a18a4000924fc73eed550635bf48dccf0081a2d7bca3d5cc98238d553" not yet present on node "mesh1-control-plane", loading...
+Image: "localhost/kind-mesh/oc:4.20.42" with ID "sha256:bbbc170a18a4000924fc73eed550635bf48dccf0081a2d7bca3d5cc98238d553" not yet present on node "mesh1-worker", loading...
+  mesh1: loaded
+Image: "localhost/kind-mesh/oc:4.20.42" with ID "sha256:bbbc170a18a4000924fc73eed550635bf48dccf0081a2d7bca3d5cc98238d553" not yet present on node "mesh2-control-plane", loading...
+Image: "localhost/kind-mesh/oc:4.20.42" with ID "sha256:bbbc170a18a4000924fc73eed550635bf48dccf0081a2d7bca3d5cc98238d553" not yet present on node "mesh2-worker", loading...
+  mesh2: loaded
+
+== mesh0: the chart's TLS Secrets and trust bundle  (20:05:10)
+  certificates Ready, ent-trust-bundle applied
+
+== mesh1: the chart's TLS Secrets and trust bundle  (20:05:10)
+  certificates Ready, ent-trust-bundle applied
+
+== mesh2: the chart's TLS Secrets and trust bundle  (20:05:11)
+  certificates Ready, ent-trust-bundle applied
+
+== mesh0: the chart (helm upgrade --install mongot, namespace search)  (20:05:12)
+Release "mongot" has been upgraded. Happy Helming!
+NAME: mongot
+LAST DEPLOYED: Wed Oct 21 20:05:12 2026
+NAMESPACE: search
+STATUS: deployed
+REVISION: 2
+DESCRIPTION: Upgrade complete
+TEST SUITE: None
+NOTES:
+MongoDB Search "mongot" in search: mongot x2 behind Envoy x1.
+
+  The gate's verdict:  oc logs -n search job/mongot-mongodb-search-helm-wait   (kept 600 s)
+  The resource:        oc get mongodbsearch mongot -n search
+  The operator:        oc get subscription,installplan,csv -n search
+
+Upgrades: only operator 1.13.0 is approved. A newer version OLM stages waits; to take it, set
+operator.version and upgrade this release.
+mongot is pinned to 1.70.1 (search.version).
+
+Still by hand (docs/mongot-envoy-mtls-fresh-install-runbook.md): point DNS for mongot-global.search.svc.cluster.local at the router, and
+have the mongod hosts trust the company CA and use mongot-global.search.svc.cluster.local:443 for search (Steps 6c, 6d).
+
+== mesh1: the chart (helm upgrade --install mongot, namespace search)  (20:06:00)
+Release "mongot" has been upgraded. Happy Helming!
+NAME: mongot
+LAST DEPLOYED: Wed Oct 21 20:06:00 2026
+NAMESPACE: search
+STATUS: deployed
+REVISION: 2
+DESCRIPTION: Upgrade complete
+TEST SUITE: None
+NOTES:
+MongoDB Search "mongot" in search: mongot x2 behind Envoy x1.
+
+  The gate's verdict:  oc logs -n search job/mongot-mongodb-search-helm-wait   (kept 600 s)
+  The resource:        oc get mongodbsearch mongot -n search
+  The operator:        oc get subscription,installplan,csv -n search
+
+Upgrades: only operator 1.13.0 is approved. A newer version OLM stages waits; to take it, set
+operator.version and upgrade this release.
+mongot is pinned to 1.70.1 (search.version).
+
+Still by hand (docs/mongot-envoy-mtls-fresh-install-runbook.md): point DNS for mongot-global.search.svc.cluster.local at the router, and
+have the mongod hosts trust the company CA and use mongot-global.search.svc.cluster.local:443 for search (Steps 6c, 6d).
+
+== mesh2: the chart (helm upgrade --install mongot, namespace search)  (20:06:57)
+Release "mongot" has been upgraded. Happy Helming!
+NAME: mongot
+LAST DEPLOYED: Wed Oct 21 20:06:57 2026
+NAMESPACE: search
+STATUS: deployed
+REVISION: 2
+DESCRIPTION: Upgrade complete
+TEST SUITE: None
+NOTES:
+MongoDB Search "mongot" in search: mongot x2 behind Envoy x1.
+
+  The gate's verdict:  oc logs -n search job/mongot-mongodb-search-helm-wait   (kept 600 s)
+  The resource:        oc get mongodbsearch mongot -n search
+  The operator:        oc get subscription,installplan,csv -n search
+
+Upgrades: only operator 1.13.0 is approved. A newer version OLM stages waits; to take it, set
+operator.version and upgrade this release.
+mongot is pinned to 1.70.1 (search.version).
+
+Still by hand (docs/mongot-envoy-mtls-fresh-install-runbook.md): point DNS for mongot-global.search.svc.cluster.local at the router, and
+have the mongod hosts trust the company CA and use mongot-global.search.svc.cluster.local:443 for search (Steps 6c, 6d).
+
+== mongot-global: every cluster's Envoy, seen from each  (20:07:45)
+mesh0:
+  22   10.11.172.155:27028/TCP   ClusterIP      1 => 10.10.0.228:27028/TCP (active)   
+  23   10.11.159.127:9946/TCP    ClusterIP      1 => 10.10.0.169:9946/TCP (active)    
+                                                2 => 10.10.1.74:9946/TCP (active)     
+  24   10.11.179.211:9946/TCP    ClusterIP      1 => 10.30.0.151:9946/TCP (active)    
+mesh1:
+  23   10.21.100.207:27028/TCP   ClusterIP      1 => 10.20.0.14:27028/TCP (active)    
+  24   10.21.239.140:9946/TCP    ClusterIP      1 => 10.10.0.169:9946/TCP (active)    
+                                                2 => 10.10.1.74:9946/TCP (active)     
+  25   10.21.38.20:9946/TCP      ClusterIP      1 => 10.20.0.212:9946/TCP (active)    
+mesh2:
+  23   10.31.68.185:27028/TCP    ClusterIP      1 => 10.30.0.150:27028/TCP (active)   
+  24   10.31.119.119:9946/TCP    ClusterIP      1 => 10.10.0.169:9946/TCP (active)    
+                                                2 => 10.10.1.74:9946/TCP (active)     
+  25   10.31.36.146:9946/TCP     ClusterIP      1 => 10.20.0.212:9946/TCP (active)    
+exit 0

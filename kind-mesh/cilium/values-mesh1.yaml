@@ -1,0 +1,5 @@
+# The cluster's identity in the mesh: the name and id must be unique across the mesh, and the id is part of every
+# security identity Cilium issues, so it is set at install and never changed.
+cluster:
+  name: mesh1
+  id: 2

@@ -1,0 +1,29 @@
+# mesh0: one control plane and one worker, no kindnet and no kube-proxy (Cilium replaces both). Each cluster has its
+# own pod and Service ranges, which Cluster Mesh needs: mesh0 10.10/10.11, mesh1 10.20/10.21, mesh2 10.30/10.31.
+# The control plane carries no taint, so both nodes take workloads. kind picks the kubeadm apiVersion by Kubernetes
+# version and silently ignores a patch of the other one, so both are listed (cilium-implementation-poc
+# clusters/ci/poc1.yaml).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: mesh0
+networking:
+  disableDefaultCNI: true
+  kubeProxyMode: none
+  podSubnet: "10.10.0.0/16"
+  serviceSubnet: "10.11.0.0/16"
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
+    kubeadmConfigPatches:
+      - |
+        apiVersion: kubeadm.k8s.io/v1beta3
+        kind: InitConfiguration
+        nodeRegistration:
+          taints: []
+      - |
+        apiVersion: kubeadm.k8s.io/v1beta4
+        kind: InitConfiguration
+        nodeRegistration:
+          taints: []
+  - role: worker
+    image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed

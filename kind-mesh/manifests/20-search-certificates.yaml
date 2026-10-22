@@ -1,0 +1,54 @@
+# The three TLS Secrets the chart's preflight requires in namespace search (tls.certsSecretPrefix ent, search.name
+# mongot), issued in every cluster from the shared CA, so a mongod of one cluster trusts the Envoy and mongot of any
+# other. The names follow the operator's convention for a MongoDBSearch named mongot (this repo's
+# manifests/88-internal-certs.yaml).
+#   ent-mongot-search-cert             mongot's own server certificate, for Envoy's second leg
+#   ent-mongot-search-lb-0-cert        Envoy's server certificate, for the name mongod dials (the global Service)
+#   ent-mongot-search-lb-0-client-cert Envoy's client certificate towards mongot
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ent-mongot-search-cert
+  namespace: search
+spec:
+  secretName: ent-mongot-search-cert
+  commonName: mongot-search-0-svc.search.svc.cluster.local
+  dnsNames:
+    - mongot-search-0-svc.search.svc.cluster.local
+    - "*.mongot-search-0-svc.search.svc.cluster.local"
+    - mongot-search-0-proxy-svc.search.svc.cluster.local
+  duration: 8760h
+  renewBefore: 720h
+  usages: [server auth, client auth, digital signature, key encipherment]
+  privateKey: {algorithm: ECDSA, size: 256}
+  issuerRef: {name: mesh-ca, kind: ClusterIssuer, group: cert-manager.io}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ent-mongot-search-lb-0-cert
+  namespace: search
+spec:
+  secretName: ent-mongot-search-lb-0-cert
+  commonName: mongot-global.search.svc.cluster.local
+  dnsNames:
+    - mongot-global.search.svc.cluster.local
+  duration: 8760h
+  renewBefore: 720h
+  usages: [server auth, digital signature, key encipherment]
+  privateKey: {algorithm: ECDSA, size: 256}
+  issuerRef: {name: mesh-ca, kind: ClusterIssuer, group: cert-manager.io}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ent-mongot-search-lb-0-client-cert
+  namespace: search
+spec:
+  secretName: ent-mongot-search-lb-0-client-cert
+  commonName: envoy-client
+  duration: 8760h
+  renewBefore: 720h
+  usages: [client auth, digital signature, key encipherment]
+  privateKey: {algorithm: ECDSA, size: 256}
+  issuerRef: {name: mesh-ca, kind: ClusterIssuer, group: cert-manager.io}

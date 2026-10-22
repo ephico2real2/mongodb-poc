@@ -1,0 +1,32 @@
+{{- if .Values.grafanaDashboard.enabled }}
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard 
+metadata:
+  name: cilium-flows-hubble-observer
+  namespace: {{ .Release.Namespace }}
+  labels:
+    helm.sh/chart: {{ include "hubble-observer.chart" . }}
+    {{- with .Values.grafanaDashboard.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  instanceSelector:
+    {{- with .Values.grafanaDashboard.instanceSelector }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  allowCrossNamespaceImport: true
+  folder: "{{ .Values.grafanaDashboard.folder }}"
+  datasources:
+    - inputName: DS_LOKI
+      datasourceName: ${datasource}
+    - inputName: VAR_HUBBLEOBSERVERNAMESPACE
+      datasourceName: {{ .Release.Namespace }}
+    - inputName: VAR_HUBBLEOBSERVERCF2CNPURL
+      {{- if .Values.cf2cnp.httpRoute.enabled }}
+      datasourceName: https://{{ index .Values.cf2cnp.httpRoute.hostnames 0 }}
+      {{- else }}
+      datasourceName: https://{{ (index .Values.cf2cnp.ingress.hosts 0).host }}
+      {{- end }}
+  json: |-
+{{ .Files.Get "dashboard/cilium-hubble-flows.json" | indent 4 }}
+{{- end }}

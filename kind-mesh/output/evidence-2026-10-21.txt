@@ -1,0 +1,90 @@
+== recorded 2026-10-22T02:29:44Z by kind-mesh/scripts/evidence.sh
+
+== mongod's election and rollback lines (mesh1's member)
+2026-10-21T23:53:41.828+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh0.mongodb.svc.cluster.local:27017', 'newState': 'SECONDARY'}
+2026-10-21T23:53:41.831+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh2.mongodb.svc.cluster.local:27017', 'newState': 'STARTUP'}
+2026-10-21T23:53:41.835+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh2.mongodb.svc.cluster.local:27017', 'newState': 'STARTUP2'}
+2026-10-21T23:53:42.879+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh2.mongodb.svc.cluster.local:27017', 'newState': 'SECONDARY'}
+2026-10-21T23:53:51.694+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh0.mongodb.svc.cluster.local:27017', 'newState': 'PRIMARY'}
+2026-10-22T00:09:37.294+00:00 Starting an election, since we've seen no PRIMARY in electio | {'electionTimeoutPeriodMillis': 10000}
+2026-10-22T00:09:37.296+00:00 Election succeeded, assuming primary role | {'term': 2}
+2026-10-22T00:09:38.723+00:00 Transition to primary complete; database writes are now perm | {'term': 2}
+2026-10-22T00:10:27.321+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh0.mongodb.svc.cluster.local:27017', 'newState': 'ROLLBACK'}
+2026-10-22T00:10:29.321+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh0.mongodb.svc.cluster.local:27017', 'newState': 'SECONDARY'}
+2026-10-22T00:10:39.861+00:00 Stepping down from primary, because a new term has begun | {'term': 3}
+2026-10-22T00:10:39.868+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh0.mongodb.svc.cluster.local:27017', 'newState': 'PRIMARY'}
+2026-10-22T00:15:04.146+00:00 Starting an election, since we've seen no PRIMARY in electio | {'electionTimeoutPeriodMillis': 10000}
+2026-10-22T00:15:04.148+00:00 Election succeeded, assuming primary role | {'term': 4}
+2026-10-22T00:15:04.392+00:00 Transition to primary complete; database writes are now perm | {'term': 4}
+2026-10-22T00:15:53.555+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh0.mongodb.svc.cluster.local:27017', 'newState': 'ROLLBACK'}
+2026-10-22T00:15:55.555+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh0.mongodb.svc.cluster.local:27017', 'newState': 'SECONDARY'}
+2026-10-22T00:16:06.699+00:00 Stepping down from primary, because a new term has begun | {'term': 5}
+2026-10-22T00:16:06.701+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh0.mongodb.svc.cluster.local:27017', 'newState': 'PRIMARY'}
+2026-10-22T00:30:13.940+00:00 Starting an election, since we've seen no PRIMARY in electio | {'electionTimeoutPeriodMillis': 10000}
+2026-10-22T00:30:13.942+00:00 Election succeeded, assuming primary role | {'term': 6}
+2026-10-22T00:30:15.222+00:00 Transition to primary complete; database writes are now perm | {'term': 6}
+2026-10-22T00:31:03.254+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh0.mongodb.svc.cluster.local:27017', 'newState': 'SECONDARY'}
+2026-10-22T00:31:15.703+00:00 Stepping down from primary, because a new term has begun | {'term': 7}
+2026-10-22T00:31:15.712+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh0.mongodb.svc.cluster.local:27017', 'newState': 'PRIMARY'}
+2026-10-22T00:38:18.248+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh2.mongodb.svc.cluster.local:27017', 'newState': 'SECONDARY'}
+2026-10-22T01:02:06.261+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh2.mongodb.svc.cluster.local:27017', 'newState': 'SECONDARY'}
+2026-10-22T02:26:44.398+00:00 Member is in new state | {'hostAndPort': 'mongo-mesh2.mongodb.svc.cluster.local:27017', 'newState': 'SECONDARY'}
+
+== rollback: each rolled-back _id on mesh0, looked up on the primary
+67548621-2a53-49bb-a653-358532afa4e0/removed.2026-10-22T00-10-27.2.bson (lab.drill): each _id on the primary: 1
+67548621-2a53-49bb-a653-358532afa4e0/removed.2026-10-22T00-15-53.4.bson (lab.drill): each _id on the primary: 1
+67548621-2a53-49bb-a653-358532afa4e0/removed.2026-10-22T00-31-03.6.bson (lab.drill): each _id on the primary: 0
+c84aa3ad-545e-4beb-803a-be9c4b3e0605/removed.2026-10-22T00-10-27.1.bson (__mdb_internal_search.serverState): each _id on the primary: 1 1
+lab.drill documents: 710
+
+== OLM's catalog
+mesh0: READY
+mesh1: READY
+mesh2: READY
+
+== Hubble: flows a second, each agent
+mesh0 pod/cilium-2gvhf: Hubble: Ok Current/Max Flows: 4095/4095 (100.00%), Flows/s: 47.47 Metrics: Disabled
+mesh0 pod/cilium-tb9f5: Hubble: Ok Current/Max Flows: 4095/4095 (100.00%), Flows/s: 33.06 Metrics: Disabled
+mesh1 pod/cilium-77kts: Hubble: Ok Current/Max Flows: 4095/4095 (100.00%), Flows/s: 53.93 Metrics: Disabled
+mesh1 pod/cilium-xbrhr: Hubble: Ok Current/Max Flows: 4095/4095 (100.00%), Flows/s: 26.71 Metrics: Disabled
+mesh2 pod/cilium-48ccp: Hubble: Ok Current/Max Flows: 4095/4095 (100.00%), Flows/s: 45.05 Metrics: Disabled
+mesh2 pod/cilium-nd9v5: Hubble: Ok Current/Max Flows: 4095/4095 (100.00%), Flows/s: 33.35 Metrics: Disabled
+
+== flows by source -> destination cluster, last 15 min (Loki in mesh0)
+   mesh1 -> mesh1 11808
+   mesh0 -> mesh1 10185
+   mesh1 -> mesh0 10166
+   mesh2 -> mesh2 9501
+   mesh1 -> mesh2 9160
+   mesh2 -> mesh1 9056
+   mesh0 -> mesh2 8199
+   mesh0 -> mesh0 8101
+   mesh2 -> mesh0 8086
+   (no pod) -> mesh0 3817
+   (no pod) -> mesh2 3470
+   (no pod) -> mesh1 3425
+   mesh0 -> (no pod) 30
+   mesh1 -> (no pod) 30
+
+== memory used by the lab's pods (metrics-server)
+mesh0 mongodb mongo-0   53m   221Mi   
+mesh0 search  mongodb-kubernetes-operator-f7958c55c-dd7dz   1m    26Mi    
+mesh0 search  mongot-gui-5f589b967c-zx25v                   1m    10Mi    
+mesh0 search  mongot-search-0-0                             8m    671Mi   
+mesh0 search  mongot-search-0-1                             9m    659Mi   
+mesh0 search  mongot-search-lb-0-6fd8d5568d-ptmkf           3m    19Mi    
+mesh1 mongodb mongo-0   16m   240Mi   
+mesh1 search  mongodb-kubernetes-operator-5444488d76-z9kmd   1m    28Mi    
+mesh1 search  mongot-search-0-0                              9m    677Mi   
+mesh1 search  mongot-search-0-1                              9m    653Mi   
+mesh1 search  mongot-search-lb-0-6fd8d5568d-7cz9b            3m    21Mi    
+mesh2 mongodb mongo-0   11m   179Mi   
+mesh2 search  mongodb-kubernetes-operator-7f6794fbdd-hgvdp   1m    32Mi    
+mesh2 search  mongot-search-0-0                              10m   636Mi   
+mesh2 search  mongot-search-0-1                              12m   622Mi   
+mesh2 search  mongot-search-lb-0-6fd8d5568d-6z4cb            3m    20Mi    
+
+== the VM
+               total        used        free      shared  buff/cache   available
+Mem:           15957       13394         255          88        2645        2562
+/dev/vdb1        59G   37G   19G  67% /var/lib/docker

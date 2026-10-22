@@ -219,6 +219,14 @@ All optional, from `mongot-gui-config`. The defaults reproduce this repo's lab.
 Pods are addressed as `<SEARCH_NAME>-search-<CLUSTER_INDEX>-<n>.<MONGOT_SVC>`, the names the
 operator gives them.
 
+Two more, for a search spread over several clusters (`kind-mesh/`, where they are set in
+`kind-mesh/manifests/31-search-gui.yaml`). Both empty by default, which keeps everything above:
+
+| Variable | Example | Meaning |
+|---|---|---|
+| `MONGOT_TARGETS` | `mesh0/0=http://mongot-metrics-mesh0-0.search.svc.cluster.local:9946/metrics,…` | name=URL of each mongot pod's metrics, read instead of the pods above; the page names the one whose counter moved |
+| `MEMBERS` | `mesh0=mongo-mesh0.mongodb.svc.cluster.local:27017,…` | name=host:port of replica set members; the page offers "through `<name>`'s mongod", which connects to that member directly (`directConnection=true&readPreference=nearest`, the credentials and other options kept from `MONGO_URI`) |
+
 **One limit of vector mode:** it has no embedding model. It maps a few theme words
 (`underdog`, `karate`, `americana`, `baseball`, `creature`, `horror`, `space`,
 `astronaut`, `noir`, `detective`) to fixed 5-dimension vectors that match this repo's demo

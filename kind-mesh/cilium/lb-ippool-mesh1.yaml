@@ -1,0 +1,21 @@
+# mesh1's own block of LoadBalancer addresses. Every cluster announces on the same kind bridge and LB IPAM allocates
+# per cluster, so each takes its own /26 of 172.18.255.0/24 (Docker hands containers only 172.18.0.0/17):
+#   mesh0 172.18.255.192/26 (Services .200-.239)   mesh1 .128/26 (.136-.175)   mesh2 .64/26 (.72-.111)
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: mesh-pool
+spec:
+  blocks:
+    - start: "172.18.255.136"
+      stop: "172.18.255.175"
+---
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: mesh-l2
+spec:
+  interfaces:
+    - ^eth0$
+  externalIPs: false
+  loadBalancerIPs: true

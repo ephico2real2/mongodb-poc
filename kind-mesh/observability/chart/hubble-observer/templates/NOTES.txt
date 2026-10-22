@@ -1,0 +1,34 @@
+Hubble Observer has been installed!
+
+To verify the installation, you can check the status of the pod:
+
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "hubble-observer.name" . }}
+
+The Hubble Observer is configured to filter flows with verdict: {{ .Values.verdictFilter }}
+
+It connects to Hubble Relay at {{ include "hubble-observer.relayAddress" . }} using
+{{- $tls := .Values.hubbleRelay.tls | default dict }}
+{{- $client := $tls.client | default dict }}
+{{- if and $tls.enabled $client.enabled }} mTLS (server verification and client certificate).
+{{- else if $tls.enabled }} TLS (server verification only).
+{{- else }} plaintext. Set `hubbleRelay.tls.enabled=true` if TLS is enabled on your Hubble Relay.
+{{- end }}
+
+To view the logs:
+
+  kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "hubble-observer.name" . }}
+
+To modify the verdict filter, you can set the verdictFilter value during installation or upgrade by setting `verdictFilter`:
+
+Available verdict options:
+- DROPPED
+- FORWARDED
+- AUDIT
+- REDIRECTED
+- ERROR
+- TRACED
+- TRANSLATED
+- none (to disable filtering) 
+
+ONZACK says thank you for installing the hubble observer.
+For more information about ONZACK, please visit: https://onzack.com 

@@ -1,0 +1,12 @@
+
+== every cluster's mongot metrics, one global Service each  (19:37:22)
+  mesh0: mongot-metrics-mesh0 selects its mongot; the other two select nothing here
+  mesh1: mongot-metrics-mesh1 selects its mongot; the other two select nothing here
+  mesh2: mongot-metrics-mesh2 selects its mongot; the other two select nothing here
+
+== the GUI's user, search-gui (read on sample_mflix), and its connection string  (19:37:22)
+  the Secret exists, kept
+
+== the GUI in mesh0  (19:37:22)
+  the GUI: http://172.18.255.200/  (from the Mac, with the route up.sh printed;
+  or: kubectl --context kind-mesh0 -n search port-forward svc/mongot-gui 8080:80, then http://localhost:8080/)

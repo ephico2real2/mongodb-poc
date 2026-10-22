@@ -1,0 +1,7 @@
+== drill: mesh2 loses its Envoy while its mongod searches (120 s)
+[t+  2s] mesh2's mongod is on its own Envoy (4 -> 6 requests)
+[t+ 15s] cordon mesh2's nodes and delete its Envoy pod: its replacement cannot be scheduled
+[t+ 75s] uncordon mesh2: its Envoy is scheduled again
+[t+122s] mesh2's Envoy ready again: true
+[t+123s] requests through the other clusters' Envoys: mesh0 228 -> 228, mesh1 492 -> 703; mesh2's new Envoy: 0
+RESULT {"search":{"ok":237,"fail":0,"maxMs":15,"maxAt":"13.7"},"write":{"ok":0,"fail":0},"firstFailAt":null,"lastFailAt":null}

@@ -1,0 +1,16 @@
+
+== namespace observability and the observer's client certificate for the relay  (21:22:01)
+
+== Loki 3.6 (chart 7.3.0), one process, 6 h of flows  (21:22:01)
+
+== hubble-observer (vendored chart) and the collector that ships its flows  (21:22:02)
+
+== Grafana 12.3 (chart 10.5.15) with Loki and the flows dashboard  (21:22:16)
+  grafana-84ffb5dcf5-vdnwp 2/2 Running
+  hubble-observer-54bdffc489-5sd6s 1/1 Terminating
+  hubble-observer-74b6566c6b-2nrq9 1/1 Running
+  loki-0 2/2 Running
+  otel-collector-9l4bh 1/1 Running
+  otel-collector-nrlpm 1/1 Running
+  Grafana: http://172.18.255.201/d/hubble-observer-23862  (user admin; password:
+  kubectl --context kind-mesh0 -n observability get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d)

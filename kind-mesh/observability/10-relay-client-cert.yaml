@@ -1,0 +1,17 @@
+# The observer's own client certificate for mesh0's Hubble relay, which requires mutual TLS (cilium/values-mesh.yaml,
+# hubble.relay.tls.server.mtls). From the lab's CA, like every certificate here; the Secret also carries ca.crt, which
+# the observer uses to check the relay. cilium-implementation-poc demos/25-hubble-observer-loki/30-relay-mtls-client-cert.yaml.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: hubble-observer-relay-certs
+  namespace: observability
+spec:
+  secretName: hubble-observer-relay-certs
+  commonName: hubble-observer.hubble-relay-client.cilium.io
+  dnsNames: [hubble-observer.hubble-relay-client.cilium.io]
+  duration: 8760h
+  renewBefore: 720h
+  usages: [digital signature, key encipherment, client auth]
+  privateKey: {algorithm: ECDSA, size: 256}
+  issuerRef: {group: cert-manager.io, kind: ClusterIssuer, name: mesh-ca}

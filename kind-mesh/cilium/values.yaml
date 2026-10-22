@@ -1,0 +1,26 @@
+# Cilium values common to mesh0, mesh1 and mesh2, for the first install; values-<cluster>.yaml adds the cluster's name
+# and id, and values-mesh.yaml adds Hubble and the mesh apiserver later. Taken from
+# cilium-implementation-poc (cilium/values-poc2.yaml, values-ci.yaml), trimmed to what this lab uses: no Gateway API,
+# no Tetragon, no Hubble UI.
+ipam:
+  mode: kubernetes
+image:
+  pullPolicy: IfNotPresent
+operator:
+  # Two nodes per cluster: the chart's default of 2 replicas would leave one Pending.
+  replicas: 1
+# The clusters are made with kubeProxyMode: none, so Cilium does all Service load balancing, global Services included.
+kubeProxyReplacement: true
+bpf:
+  masquerade: true
+# LoadBalancer addresses from each cluster's own block (lb-ippool-<cluster>.yaml), answered by L2 announcements on the
+# kind bridge, with the client rate limits Cilium's docs suggest for L2 announcements on small clusters.
+l2announcements:
+  enabled: true
+k8sClientRateLimit:
+  qps: 50
+  burst: 100
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi

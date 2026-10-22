@@ -1,0 +1,30 @@
+# The lab's one root CA, made once in mesh0 by cert-manager and copied, as a Secret, to mesh1 and mesh2
+# (scripts/up.sh). Every certificate of the lab comes from it: Cilium's mesh apiserver and Hubble, each mongod, and the
+# chart's mongot and Envoy certificates, so every cluster trusts every other one with one CA file.
+# The pattern of cilium-implementation-poc demos/08-certmanager-ca/01-root-ca-poc1.yaml.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: selfsigned-bootstrap
+  namespace: cert-manager
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mesh-root-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: mongodb-mesh-root-ca
+  duration: 87600h
+  renewBefore: 720h
+  secretName: mesh-root-ca
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: selfsigned-bootstrap
+    kind: Issuer
+    group: cert-manager.io

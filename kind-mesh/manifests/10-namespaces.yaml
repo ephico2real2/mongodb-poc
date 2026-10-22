@@ -1,0 +1,11 @@
+# The lab's two namespaces, the same in every cluster: mongodb holds mongod and the member Services; search holds the
+# operator, mongot and Envoy (installed there by the chart).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mongodb
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: search

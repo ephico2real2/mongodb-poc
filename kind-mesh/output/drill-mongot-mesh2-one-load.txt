@@ -1,0 +1,1 @@
+RESULT {"search":{"ok":237,"fail":0,"maxMs":161,"maxAt":"98.9"},"write":{"ok":0,"fail":0},"firstFailAt":null,"lastFailAt":null}

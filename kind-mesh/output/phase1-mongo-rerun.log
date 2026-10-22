@@ -1,0 +1,34 @@
+
+== namespaces and member Services in mesh0 mesh1 mesh2  (21:22:37)
+
+== the keyfile and the passwords, shared by the three clusters  (21:22:38)
+  mongodb/mongo-keyfile: exists in mesh0, kept
+  mongodb/mongo-admin: exists in mesh0, kept
+  search/search-sync-source-password: exists in mesh0, kept
+
+== mesh0: certificate and mongod  (21:22:39)
+
+== mesh1: certificate and mongod  (21:22:39)
+
+== mesh2: certificate and mongod  (21:22:39)
+mesh0: Running on mesh0-worker, 10.10.1.120
+mesh1: Running on mesh1-control-plane, 10.20.0.135
+mesh2: Running on mesh2-control-plane, 10.30.0.141
+
+== initiate rs0 from mesh0  (21:22:40)
+already initiated
+
+== users: labAdmin (root) and search-sync-source (searchCoordinator)  (21:22:41)
+labAdmin: exists
+search-sync-source: exists
+
+== rs0 as each member sees it  (21:22:41)
+mesh0 sees:  mongo-mesh0.mongodb.svc.cluster.local:27017  PRIMARY  health 1
+mesh0 sees:  mongo-mesh1.mongodb.svc.cluster.local:27017  SECONDARY  health 1
+mesh0 sees:  mongo-mesh2.mongodb.svc.cluster.local:27017  SECONDARY  health 1
+mesh1 sees:  mongo-mesh0.mongodb.svc.cluster.local:27017  PRIMARY  health 1
+mesh1 sees:  mongo-mesh1.mongodb.svc.cluster.local:27017  SECONDARY  health 1
+mesh1 sees:  mongo-mesh2.mongodb.svc.cluster.local:27017  SECONDARY  health 1
+mesh2 sees:  mongo-mesh0.mongodb.svc.cluster.local:27017  PRIMARY  health 1
+mesh2 sees:  mongo-mesh1.mongodb.svc.cluster.local:27017  SECONDARY  health 1
+mesh2 sees:  mongo-mesh2.mongodb.svc.cluster.local:27017  SECONDARY  health 1

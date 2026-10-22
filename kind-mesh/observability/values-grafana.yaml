@@ -1,0 +1,41 @@
+# Grafana in mesh0 (namespace observability) for the Hubble flows dashboard: Loki as its data source, the dashboard
+# provisioned by the sidecar from a labelled ConfigMap (scripts/observability-up.sh), a LoadBalancer address from
+# mesh0's block. The admin password is made once by the script and kept only in the Secret grafana-admin.
+admin:
+  existingSecret: grafana-admin
+  userKey: admin-user
+  passwordKey: admin-password
+grafana.ini:
+  users:
+    default_theme: light
+  analytics:
+    reporting_enabled: false
+    check_for_updates: false
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Loki
+        uid: loki
+        type: loki
+        url: http://loki.observability.svc.cluster.local:3100
+        access: proxy
+        isDefault: true
+sidecar:
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+    labelValue: "1"
+    folderAnnotation: grafana_folder
+    provider:
+      foldersFromFilesStructure: true
+service:
+  type: LoadBalancer
+  port: 80
+persistence:
+  enabled: false
+resources:
+  requests: {cpu: 50m, memory: 128Mi}
+  limits: {memory: 384Mi}
+testFramework:
+  enabled: false

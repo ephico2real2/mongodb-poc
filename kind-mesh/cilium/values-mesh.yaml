@@ -1,0 +1,37 @@
+# What scripts/up.sh adds once cert-manager and the shared CA exist in every cluster: Hubble, and the mesh apiserver,
+# both with certificates from ClusterIssuer mesh-ca. The first install cannot carry these: cert-manager needs pod
+# networking, which is Cilium (cilium-implementation-poc cilium/values-ci-certmanager.yaml). The mesh's members are
+# declared by up.sh from the live control-plane addresses.
+# Hubble with its relay, for evidence of which cluster answered a flow.
+hubble:
+  enabled: true
+  relay:
+    enabled: true
+    tls:
+      server:
+        enabled: true
+        mtls: true
+  ui:
+    enabled: false
+  tls:
+    enabled: true
+    auto:
+      enabled: true
+      method: certmanager
+      certValidityDuration: 1095
+      certManagerIssuerRef:
+        group: cert-manager.io
+        kind: ClusterIssuer
+        name: mesh-ca
+# The mesh apiserver's certificates from the same CA, so every cluster trusts every other one's.
+clustermesh:
+  apiserver:
+    tls:
+      auto:
+        enabled: true
+        method: certmanager
+        certValidityDuration: 365
+        certManagerIssuerRef:
+          group: cert-manager.io
+          kind: ClusterIssuer
+          name: mesh-ca
