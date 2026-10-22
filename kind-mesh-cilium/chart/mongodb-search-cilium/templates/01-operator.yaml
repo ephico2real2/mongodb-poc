@@ -1,0 +1,32 @@
+{{- include "msc.validate" . }}
+{{- if .Values.operator.install }}
+{{- if .Values.operator.createOperatorGroup }}
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: {{ .Values.operator.operatorGroupName | default (include "msc.fullname" .) }}
+  namespace: {{ include "msc.namespace" . }}
+  labels:
+    {{- include "msc.labels" . | nindent 4 }}
+spec:
+  targetNamespaces:
+    - {{ include "msc.namespace" . }}
+---
+{{- end }}
+# Manual approval pinned to one version: OLM stages newer versions as InstallPlans that wait for a human; the approver
+# hook (02-approver.yaml) approves this version only.
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: {{ .Values.operator.package }}
+  namespace: {{ include "msc.namespace" . }}
+  labels:
+    {{- include "msc.labels" . | nindent 4 }}
+spec:
+  channel: {{ .Values.operator.channel }}
+  installPlanApproval: Manual
+  name: {{ .Values.operator.package }}
+  source: {{ .Values.operator.source }}
+  sourceNamespace: {{ .Values.operator.sourceNamespace }}
+  startingCSV: {{ include "msc.csv" . }}
+{{- end }}

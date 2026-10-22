@@ -1,0 +1,29 @@
+{{- /*
+The name every mongod dials for search: a Cilium global Service over the mongot pods of every cluster of the mesh
+(the same name and namespace in each, so Cilium merges their backends). An unready mongot gets no new requests, and
+with affinity local a cluster with no ready mongot is served by another cluster's (Cilium v1.20.2
+pkg/clustermesh/selectbackends.go). With lb-l7, Cilium's Envoy balances each gRPC request, so searches return to their
+own cluster as soon as a mongot there is ready; without it, each connection, and a failover lasts until mongod
+reconnects.
+*/ -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.globalService.name }}
+  namespace: {{ include "msc.namespace" . }}
+  labels:
+    {{- include "msc.labels" . | nindent 4 }}
+  annotations:
+    service.cilium.io/global: "true"
+    service.cilium.io/affinity: {{ .Values.globalService.affinity | quote }}
+    {{- if .Values.globalService.lbL7.enabled }}
+    service.cilium.io/lb-l7: enabled
+    service.cilium.io/lb-l7-algorithm: {{ .Values.globalService.lbL7.algorithm | quote }}
+    {{- end }}
+spec:
+  selector:
+    app: {{ .Values.search.name }}-search-0-svc
+  ports:
+    - name: grpc
+      port: 27028
+      targetPort: 27028

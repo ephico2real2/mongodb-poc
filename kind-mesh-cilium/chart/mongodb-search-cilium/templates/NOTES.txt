@@ -1,0 +1,16 @@
+MongoDB Search on Cilium alone, release {{ .Release.Name }} in {{ include "msc.namespace" . }}.
+
+Every mongod of the replica set must dial the global Service, with the matching TLS mode:
+  --setParameter=mongotHost={{ include "msc.endpoint" . }}
+  --setParameter=searchIndexManagementHostAndPort={{ include "msc.endpoint" . }}
+  --setParameter=useGrpcForSearch=true
+  --setParameter=searchTLSMode={{ if .Values.searchTLS.enabled }}requireTLS{{ else }}disabled{{ end }}
+{{- if not .Values.searchTLS.enabled }}
+
+The search hop is cleartext gRPC: run it only on a mesh whose every cluster encrypts with Cilium (WireGuard).
+{{- end }}
+{{- if .Values.globalService.lbL7.enabled }}
+Per-request balancing needs Cilium's loadBalancer.l7.backend=envoy in every cluster.
+{{- end }}
+
+Install the same release, with the same values, in every cluster of the mesh.

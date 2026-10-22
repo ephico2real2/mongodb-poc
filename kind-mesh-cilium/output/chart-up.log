@@ -1,0 +1,31 @@
+
+== mesh0: release mongot-search (chart mongodb-search-cilium)  (22:38:45)
+  adopted operatorgroup/mongot-mongodb-search-helm
+  adopted subscription/mongodb-kubernetes
+  adopted mongodbsearch/mongot
+  adopted service/mongot-global
+  the Subscription cannot resolve beside mongodb-kubernetes.v1.13.0, left by an earlier install: deleting that CSV
+  release deployed revision 2
+  MongoDBSearch generation 4 -> 4 (spec unchanged: no mongot rolled)
+  approver: [approver 03:39:02] install-jf2jm is Complete
+
+== mesh1: release mongot-search (chart mongodb-search-cilium)  (22:39:05)
+  adopted operatorgroup/mongot-mongodb-search-helm
+  adopted subscription/mongodb-kubernetes
+  adopted mongodbsearch/mongot
+  adopted service/mongot-global
+  the Subscription cannot resolve beside mongodb-kubernetes.v1.13.0, left by an earlier install: deleting that CSV
+  release deployed revision 1
+  MongoDBSearch generation 4 -> 4 (spec unchanged: no mongot rolled)
+  approver: [approver 03:39:23] install-d7dvn is Complete
+
+== mesh2: release mongot-search (chart mongodb-search-cilium)  (22:39:25)
+  adopted operatorgroup/mongot-mongodb-search-helm
+  adopted subscription/mongodb-kubernetes
+  adopted mongodbsearch/mongot
+  adopted service/mongot-global
+  the Subscription cannot resolve beside mongodb-kubernetes.v1.13.0, left by an earlier install: deleting that CSV
+  release deployed revision 1
+  MongoDBSearch generation 4 -> 4 (spec unchanged: no mongot rolled)
+  approver: [approver 03:39:43] install-5j4p5 is Complete
+exit 0

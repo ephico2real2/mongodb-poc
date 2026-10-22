@@ -8,6 +8,25 @@ The change: each cluster's MongoDBSearch keeps its two mongot but drops the oper
 (`loadBalancer.unmanaged`). `mongot-global`, the Cilium global Service every mongod dials, now points straight at the
 mongot pods of the three clusters, and still prefers the local ones. mongod and mongot keep mutual TLS.
 
+Steps 1 and 2 below were applied by hand (scripts and manifests). The search side is now installed by the lab's chart,
+`kind-mesh-cilium/chart/mongodb-search-cilium`, which took over the same objects ([the lab's chart](#the-labs-chart-mongodb-search-cilium)).
+
+## Summary
+
+Results, a search every half second through mesh2's own member:
+
+| mesh2 loses… | Operator's Envoy | Step 1: no Envoy | Step 2: Cilium balances each search |
+| --- | --- | --- | --- |
+| all its mongot | 160 of 234 failed | 0 of 237 | 0 of 235, then 0 of 236 |
+| one mongot | 0 of 237 | 0 of 237 | 0 of 237 |
+| when they come back | stays remote until mongod restarts | stays remote until mongod restarts | returns to mesh2 by itself |
+| spread over a cluster's two mongot | Envoy's round robin | no | yes, 20 and 20 |
+
+- **Step 1 fixed the first problem.** With the operator's Envoy gone, a cluster with no ready mongot sends its
+  searches to another cluster on its own.
+- **Step 2 fixed the second.** Cilium sends each search to a local mongot when one is ready, so searches go back
+  without a restart. Between nodes the search hop travels inside WireGuard (`kind-mesh-cilium/output/wire-check.txt`).
+
 ## Before you start
 
 The Envoy lab built and passing (`kind-mesh/check.sh`). Then `export KUBECONFIG=~/.kube/mongodb-mesh.config`.
@@ -97,6 +116,31 @@ and mesh1 in equal numbers (71 and 71) during the outages, and to mesh2 the rest
 | 1 | After the Helm upgrade every agent still reported `Encryption: Disabled`: the agents read Cilium's configuration only when they start. The run was stopped before the search hop changed (its log was overwritten by run 2) | restart the agents after the upgrade; a gate that stops unless every agent reports WireGuard |
 | 2 | mesh0's agents did not start: with the L7 backend on, they wait for CRDs the Cilium operator registers, and the operator had not been restarted (`step2-apply.run2-failed.log`) | restart the operator first and wait for its CRDs |
 | 2 | While mesh0 encrypted and mesh1 and mesh2 did not, mesh0's mongod was cut off. The replica set elected mesh2 on its own, and mesh0 took the primary back once all three encrypted, with no action (`step2-mixed-mesh-evidence.txt`) | Cilium's docs say every cluster of a mesh must have WireGuard: the gate keeps the search hop unchanged until all do |
+
+## The lab's chart: mongodb-search-cilium
+
+The search side of this design as a Helm chart, for this lab (`kind-mesh-cilium/chart/`, not released): the operator
+through OLM pinned to 1.13.0 with an approver hook, the MongoDBSearch with no operator Envoy, and `mongot-global`.
+`searchTLS.enabled` and `globalService.lbL7.enabled` choose step 1's or step 2's form; the chart refuses both on.
+
+| # | What | Command | Passes when | Result |
+| --- | --- | --- | --- | --- |
+| H1 | Render tests | `kind-mesh-cilium/chart/test.sh` | 0 failed | 18 PASS, 0 failed (`chart-test.txt`) |
+| H2 | The lab's search onto the chart, in place | `kind-mesh-cilium/scripts/chart-up.sh` | release `deployed` in every cluster; the MongoDBSearch's generation unchanged | Passed: generation 4 → 4, no mongot rolled (`chart-up.log`) |
+| H3 | OLM manages the operator | `kubectl -n search get subscription mongodb-kubernetes` | 1.13.0 installed; any newer version waits | `UpgradePending`: 1.13.0 installed, 1.14.0 staged and not approved, in every cluster |
+| H4 | The lab is healthy, the drill unchanged | `kind-mesh/check.sh`; `kind-mesh-cilium/drills.sh mongot mesh2 both` | 0 failed; no search fails | 0 failed (`check-chart.txt`); 0 of 236 searches failed, mesh2's searches came back by themselves (`drill-mongot-mesh2-both.chart.txt`) |
+| H5 | The chart's CSV reclaim, nothing to clear | `kind-mesh-cilium/scripts/chart-up.sh mesh2` | the reclaim exits without deleting; the approver finds 1.13.0 installed | Passed in 7.9 s: "nothing could be orphaned, not waiting" (`chart-reclaim.txt`, R1) |
+| H6 | The chart's CSV reclaim, a CSV left without its Subscription | on mesh2: `kubectl -n search delete subscription mongodb-kubernetes`, then `chart-up.sh mesh2`, with a search every 0.5 s through mesh2's member | the reclaim deletes the CSV; 1.13.0 is installed again; no search fails | Passed in 27.3 s: ResolutionFailed seen after 5 s, the CSV deleted, the approver's InstallPlan Complete 14 s later; mongot not restarted; 296 searches, 0 failed, the longest 45 ms (`chart-reclaim.txt`, R2) |
+
+**Found on the way:** since step 1's swap, every cluster's Subscription had been `ResolutionFailed`: the CSV the
+earlier chart installed blocked the new Subscription ("@existing/search//mongodb-kubernetes.v1.13.0 and
+operatorhubio-catalog … provide"). The operator kept running, so every result above stands, but OLM no longer
+managed it, and `swap-search.sh` checked only the CSV's phase. The first takeover failed on it
+(`chart-up.run1-failed.log`). H2 passed with `chart-up.sh` deleting that CSV. The chart now does it itself, with the
+main chart's csv-reclaim script unchanged (`templates/00-csv-reclaim.yaml`, H5 and H6), so a plain
+`helm upgrade --install` recovers from it.
+
+Not tested: installing the chart on a cluster that never ran steps 1 and 2 (no objects to adopt), or through Argo CD.
 
 ## Compared with the Envoy lab
 

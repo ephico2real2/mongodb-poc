@@ -1,0 +1,19 @@
+PASS  helm lint with the lab's values
+PASS  lab: the MongoDBSearch's endpoint is the global Service
+PASS  lab: no operator Envoy (no loadBalancer.managed)
+PASS  lab: no TLS on the search hop (searchTLS.enabled: false)
+PASS  lab: mongot-global balanced per request
+PASS  lab: mongot-global is global, local first
+PASS  lab: mongot-global selects the mongot pods
+PASS  lab: two mongot
+PASS  lab: the operator pinned to 1.13.0, Manual approval
+PASS  lab: the approver approves 1.13.0 only
+PASS  lab: the MongoDBSearch is kept on uninstall
+PASS  step 1 form: TLS on the search hop, balanced per connection
+PASS  refused: TLS with per-request balancing
+PASS  refused: no members in source.hostAndPorts
+PASS  operator.install false: no Subscription, no approver, the MongoDBSearch still
+PASS  lab: the CSV reclaim (weight -2) runs before the approver (-1)
+PASS  the CSV reclaim's script is chart/mongodb-search-helm's, unchanged
+PASS  csvReclaim.enabled false: no reclaim, the Subscription still
+== 0 failed

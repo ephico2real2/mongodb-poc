@@ -1,9 +1,9 @@
 == drill: mesh2 loses both of its mongot while its mongod searches (120 s); no Envoy, mongot-global straight to mongot
-[t+  1s] mesh2's mongod is served by its own mongot-search-0-1
-[t+  2s] searches answered before: mesh0=81 mesh1=81 mesh2=296 
+[t+  2s] mesh2's mongod is served by its own mongot-search-0-1
+[t+  2s] searches answered before: mesh0=261 mesh1=263 mesh2=196 
 [t+ 15s] cordon mesh2's nodes and delete mongot-search-0-0 mongot-search-0-1: no replacement can be scheduled
-[t+ 45s] searches answered so far: mesh0=110 mesh1=111 mesh2=0 
+[t+ 45s] searches answered so far: mesh0=290 mesh1=293 mesh2=0 
 [t+ 75s] uncordon mesh2: its mongot are scheduled again
-[t+123s] searches answered after: mesh0=160 mesh1=162 mesh2=51 ; mesh2's mongot: mongot-search-0-0 mongot-search-0-1
+[t+123s] searches answered after: mesh0=342 mesh1=345 mesh2=49 ; mesh2's mongot: mongot-search-0-0 mongot-search-0-1
 [t+125s] after the drill, one search through mesh2's member is served by: mongot-search-0-1
-RESULT {"ok":236,"fail":0,"maxMs":179,"maxAt":"115.3","firstFailAt":null,"lastFailAt":null}
+RESULT {"ok":236,"fail":0,"maxMs":150,"maxAt":"116.4","firstFailAt":null,"lastFailAt":null}

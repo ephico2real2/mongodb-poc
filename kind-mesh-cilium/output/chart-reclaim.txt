@@ -1,0 +1,59 @@
+# R1, 2026-10-22T03:52:53Z: the chart's CSV reclaim when nothing blocks the Subscription (mesh2)
+$ kubectl -n search get subscription mongodb-kubernetes -o jsonpath='{.status.installedCSV} {.status.state}'
+mongodb-kubernetes.v1.13.0 UpgradePending
+$ kind-mesh-cilium/scripts/chart-up.sh mesh2
+
+== mesh2: release mongot-search (chart mongodb-search-cilium)  (22:52:53)
+  adopted operatorgroup/mongot-mongodb-search-helm
+  adopted subscription/mongodb-kubernetes
+  adopted mongodbsearch/mongot
+  adopted service/mongot-global
+  release deployed revision 2
+  MongoDBSearch generation 4 -> 4 (spec unchanged: no mongot rolled)
+  [csv-reclaim 03:52:55] namespace=search subscription=mongodb-kubernetes budget=120s
+  [csv-reclaim 03:52:56] no unowned, unreferenced, non-copy CSV in search — nothing could be orphaned, not waiting
+  [approver 03:52:58] mongodb-kubernetes.v1.13.0 is installed; nothing to approve
+bash kind-mesh-cilium/scripts/chart-up.sh mesh2 2>&1  1.16s user 0.71s system 23% cpu 7.899 total
+
+# R2, 2026-10-22T03:53:20Z: a CSV left without its Subscription (mesh2), a search through mesh2's member every 0.5 s throughout
+$ kubectl -n search get pods -o custom-columns=NAME:.metadata.name,STARTED:.status.startTime,RESTARTS:.status.containerStatuses[0].restartCount
+(eval):7: no matches found: custom-columns=NAME:.metadata.name,STARTED:.status.startTime,RESTARTS:.status.containerStatuses[0].restartCount
+$ kubectl -n search delete subscription mongodb-kubernetes     # OLM keeps the CSV, as after an uninstall
+subscription.operators.coreos.com "mongodb-kubernetes" deleted from search namespace
+$ kubectl -n search get csv
+NAME                         PHASE
+mongodb-kubernetes.v1.13.0   Succeeded
+$ kind-mesh-cilium/scripts/chart-up.sh mesh2     # Helm makes the Subscription again; OLM cannot resolve it beside the CSV
+
+== mesh2: release mongot-search (chart mongodb-search-cilium)  (22:53:21)
+  adopted operatorgroup/mongot-mongodb-search-helm
+  adopted mongodbsearch/mongot
+  adopted service/mongot-global
+  release deployed revision 3
+  MongoDBSearch generation 4 -> 4 (spec unchanged: no mongot rolled)
+  [csv-reclaim 03:53:22] namespace=search subscription=mongodb-kubernetes budget=120s
+  [csv-reclaim 03:53:23] possible orphan present (mongodb-kubernetes.v1.13.0); confirming with OLM before deleting anything
+  [csv-reclaim 03:53:24] waiting for OLM to report installedCSV or ResolutionFailed ...
+  [csv-reclaim 03:53:29] Subscription reports ResolutionFailed — looking for an orphaned CSV to clear
+  [csv-reclaim 03:53:30]   mongodb-kubernetes.v1.13.0: ORPHANED (no owner, unreferenced, not a copy) — deleting so OLM can resolve
+      clusterserviceversion.operators.coreos.com "mongodb-kubernetes.v1.13.0" deleted
+  [csv-reclaim 03:53:31] reclaimed: mongodb-kubernetes.v1.13.0 — OLM will re-resolve the Subscription on its own
+  [approver 03:53:45] install-4t5tp is Complete
+bash kind-mesh-cilium/scripts/chart-up.sh mesh2 2>&1  1.10s user 0.62s system 6% cpu 27.347 total
+$ kubectl -n search get subscription mongodb-kubernetes -o jsonpath='{.status.installedCSV} {.status.state}'
+mongodb-kubernetes.v1.13.0 UpgradePending
+$ kubectl -n search get csv; get installplan
+NAME                         PHASE       CREATED
+mongodb-kubernetes.v1.13.0   Succeeded   2026-10-22T03:53:41Z
+NAME            CSV                          APPROVED   PHASE
+install-4t5tp   mongodb-kubernetes.v1.13.0   true       Complete
+install-nxbsn   mongodb-kubernetes.v1.14.0   false      RequiresApproval
+$ kubectl -n search get pods (mongot started before R2 began at 03:53:20Z: not restarted)
+NAME                                                    STARTED                RESTARTS
+mongodb-kubernetes-operator-5b9d85c99d-fz5qp            2026-10-22T03:53:44Z   0
+mongot-search-0-0                                       2026-10-22T03:41:28Z   0
+mongot-search-0-1                                       2026-10-22T03:41:50Z   0
+mongot-search-mongodb-search-cilium-approver-qfx6b      2026-10-22T03:53:34Z   0
+mongot-search-mongodb-search-cilium-csv-reclaim-nbl68   2026-10-22T03:53:22Z   0
+$ kind-mesh-cilium/drills.sh load-only mesh2 150     # started 5 s before the Subscription was deleted
+RESULT {"ok":296,"fail":0,"maxMs":45,"maxAt":"0.0","firstFailAt":null,"lastFailAt":null}

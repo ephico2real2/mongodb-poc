@@ -1,0 +1,10 @@
+
+== mesh0: release mongot-search (chart mongodb-search-cilium)  (22:27:53)
+  adopted operatorgroup/mongot-mongodb-search-helm
+  adopted subscription/mongodb-kubernetes
+  adopted mongodbsearch/mongot
+  adopted service/mongot-global
+Release "mongot-search" does not exist. Installing it now.
+Error: failed post-install: resource Job/search/mongot-search-mongodb-search-cilium-approver not ready. status: InProgress, message: Job in progress
+context deadline exceeded
+kind-mesh: the release did not install on mesh0

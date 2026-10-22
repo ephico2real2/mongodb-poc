@@ -1,0 +1,66 @@
+{{- /*
+The MongoDBSearch with no operator Envoy: loadBalancer.unmanaged names the global Service as the endpoint, so the
+operator deploys no Envoy and no proxy Service, and lets more than one mongot run (MCK 1.13.0
+mongodbsearch_validation.go:150-158, mongodbsearch_types.go:419-425). The source is external: the operator writes
+nothing into mongod's configuration, so each mongod's mongotHost names the same endpoint itself.
+*/ -}}
+apiVersion: mongodb.com/v1
+kind: MongoDBSearch
+metadata:
+  name: {{ .Values.search.name }}
+  namespace: {{ include "msc.namespace" . }}
+  labels:
+    {{- include "msc.labels" . | nindent 4 }}
+  {{- if .Values.search.keepOnUninstall }}
+  annotations:
+    helm.sh/resource-policy: keep
+  {{- end }}
+spec:
+  version: {{ .Values.search.version | quote }}
+  clusters:
+    - loadBalancer:
+        unmanaged:
+          endpoint: {{ include "msc.endpoint" . }}
+      persistence:
+        single:
+          storage: {{ .Values.search.persistence.storage }}
+          storageClass: {{ .Values.search.persistence.storageClass }}
+      replicas: {{ .Values.search.replicas }}
+      resourceRequirements:
+        {{- toYaml .Values.search.resources | nindent 8 }}
+  observability:
+    metricsForwarder:
+      deployment:
+        spec:
+          template:
+            spec:
+              containers:
+                - name: metrics-forwarder
+                  image: {{ .Values.search.metricsForwarderImage | quote }}
+      mode: auto
+      resourceRequirements:
+        limits: {cpu: 250m, memory: 256Mi}
+        requests: {cpu: 100m, memory: 128Mi}
+    prometheus:
+      mode: enabled
+      port: {{ .Values.search.prometheusPort }}
+  {{- if .Values.searchTLS.enabled }}
+  # mongot serves TLS with <certsSecretPrefix>-<name>-search-cert; with the source CA below the operator requires a
+  # client certificate from mongod (mutual TLS).
+  security:
+    tls:
+      certsSecretPrefix: {{ .Values.searchTLS.certsSecretPrefix }}
+  {{- end }}
+  source:
+    external:
+      hostAndPorts:
+        {{- range .Values.source.hostAndPorts }}
+        - {{ . | quote }}
+        {{- end }}
+      tls:
+        ca:
+          name: {{ .Values.source.caConfigMap }}
+    passwordSecretRef:
+      key: {{ .Values.source.passwordSecret.key }}
+      name: {{ .Values.source.passwordSecret.name }}
+    username: {{ .Values.source.username }}
