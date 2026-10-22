@@ -14,7 +14,8 @@ data:
         include:
           - /var/log/pods/observability_hubble-observer-*/hubble-observer/*.log
         include_file_path: true
-        # From the end on first start; a restart resumes from its checkpoint, so nothing is counted twice or lost.
+        # From the end on first start; a restart resumes from its checkpoint (file offsets: what fails downstream can
+        # still be lost).
         start_at: end
         storage: file_storage
         operators:
@@ -33,7 +34,8 @@ data:
           directory: /var/lib/otelcol
           cleanup_on_start: true
     processors:
-      # First in the pipeline: refuses data before the container's limit is reached (OpenTelemetry's recommendation).
+      # First in the pipeline (OpenTelemetry's recommendation). It watches the Go heap only: the memory-mapped queue
+      # file and other memory outside the heap need the limit's headroom.
       memory_limiter:
         check_interval: 1s
         limit_percentage: 80
@@ -51,8 +53,10 @@ data:
         # Loki refuses a push over 4 MiB (gRPC max message, "received message larger than max (5903337 vs. 4194304)",
         # a 503) and above 4 MiB/s (a 429). The batch processor had no maximum, so one batch that could never be
         # accepted was retried forever and the queue behind it never drained (#184). Batching in the queue, by bytes,
-        # splits every request to at most 3 MiB, also those already stored; two consumers keep a drain near the rate.
-        # The queue is bounded in bytes, at half the file's max_size: a full file refused even the deletes of a drain
+        # splits every request to at most 3 MiB of OTLP after it leaves the queue, also those already stored (Loki's own
+        # encoding of it may differ). Two consumers bound the exports in flight, not the bytes per second.
+        # The queue admits at most 64 MiB of serialized data, half the file's max_size (bbolt's own pages come on top,
+        # so this is headroom, not a guarantee): a full file refused even the deletes of a drain
         # ("the storage extension has run out of available space"). Past 64 MiB a long Loki outage drops new flows,
         # counted by otelcol_exporter_enqueue_failed_log_records.
         sending_queue:
@@ -61,6 +65,9 @@ data:
           queue_size: 67108864
           num_consumers: 2
           batch: {min_size: 1048576, max_size: 3145728, flush_timeout: 1s}
+        # Retried until Loki takes it, as the shared-services design asks of every writer (#159): an outage loses no flow
+        # that is in the queue. A request Loki refuses with a retryable status for another reason than size would hold
+        # an export worker; the upstream default, 5m, would drop it instead.
         retry_on_failure: {max_elapsed_time: 0}
     service:
       extensions: [file_storage]
@@ -93,8 +100,8 @@ spec:
           args: ["--config=/etc/otelcol/config.yaml"]
           securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
           resources:
-            # 512Mi: about 260 MB of anonymous memory measured while a backlog drained, plus at most 128 MiB of the
-            # memory-mapped queue file (#184).
+            # 512Mi: about 260 MB of anonymous memory measured while a backlog drained (#184), and room for the
+            # memory-mapped queue file (max_size 128 MiB), which memory_limiter does not see.
             requests: {cpu: 20m, memory: 128Mi}
             limits: {memory: 512Mi}
           volumeMounts:
