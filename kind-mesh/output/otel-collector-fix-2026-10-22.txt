@@ -1,0 +1,16 @@
+pod pod/otel-collector-xp22p, from 2026-10-22T19:30:25Z
+19:30:28Z restarts=0 peak=58863616 file=2097152 queue_size=60605 sent_log_records=1832 
+19:35:31Z restarts=0 peak=68886528 file=2097152 queue_size=245474 sent_log_records=29520 
+19:40:34Z restarts=0 peak=68915200 file=2097152 queue_size=141685 sent_log_records=57982 
+19:45:37Z restarts=0 peak=68915200 file=2097152 queue_size=32947 sent_log_records=86335 
+19:50:40Z restarts=0 peak=69640192 file=2097152 queue_size=88534 sent_log_records=114604 
+19:55:44Z restarts=0 peak=70918144 file=2097152 queue_size=38376 sent_log_records=143141 
+20:00:47Z restarts=0 peak=70918144 file=2097152 queue_size=77626 sent_log_records=171405 
+flows in Loki per 5 minutes:
+  19:30:00Z 27846
+  19:35:00Z 27527
+  19:40:00Z 28009
+  19:45:00Z 28064
+  19:50:00Z 28086
+  19:55:00Z 28088
+  20:00:00Z 28042
