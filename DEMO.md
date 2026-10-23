@@ -306,7 +306,7 @@ The fixes' commands, in the table's order:
 # mongot/Envoy restarting, or a cert mismatch: after 60 s
 oc get pods -n mongodb-poc
 
-# load-data.sh hangs before QUERYABLE
+# If load-data.sh hangs before QUERYABLE
 oc logs mongot-search-0-0 -n mongodb-poc | grep -i auth
 
 # flags must come BEFORE the query: this one fails
