@@ -1,0 +1,23 @@
+== 2026-10-23T03:28:06Z clean up: the main chart's release in vanity-lab (keepOnUninstall false: the MongoDBSearch and its volumes go), then the namespace; the search release and Cilium's Ingress controller stay
+release "mongot" uninstalled
+exit=0
+03:28:17Z mongodbsearch,pvc left: 0
+NAME                                              READY   STATUS        RESTARTS   AGE
+pod/mongodb-kubernetes-operator-8f58755dd-ccjzq   1/1     Running       0          10m
+pod/mongot-mongodb-search-helm-wait-g9g6w         0/1     Completed     0          10m
+pod/mongot-public-preflight-w4bk7                 0/1     Completed     0          3m59s
+pod/mongot-search-lb-0-6fd8d5568d-gvgzp           1/1     Terminating   0          10m
+namespace "vanity-lab" deleted
+exit=0 at 2026-10-23T03:29:45Z
+--- the search release on mesh2, untouched (pod ages), and the Ingress controller kept
+NAME                                           CREATED                READY
+mongodb-kubernetes-operator-5b9d85c99d-fz5qp   2026-10-22T03:53:44Z   true
+mongot-search-0-0                              2026-10-22T22:37:05Z   true
+mongot-search-0-1                              2026-10-22T22:38:21Z   true
+NAME         	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART                      	APP VERSION
+mongot-search	search   	3       	2026-10-21 22:53:21.858911 -0500 CDT	deployed	mongodb-search-cilium-0.1.0	1.13.0     
+NAME     CONTROLLER                     PARAMETERS   AGE
+cilium   cilium.io/ingress-controller   <none>       13m
+NAME             TYPE           CLUSTER-IP      EXTERNAL-IP     PORT(S)                      AGE
+cilium-ingress   LoadBalancer   10.31.129.141   172.18.255.72   80:31058/TCP,443:31603/TCP   13m
+3

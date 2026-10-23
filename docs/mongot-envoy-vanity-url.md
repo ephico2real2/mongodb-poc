@@ -22,7 +22,8 @@ name, then do the same through an Ingress; Verify proves which path the traffic 
   does not name the vanity hostname, or when the mongot Service is absent; a public UBI 9 image, no `oc`, no pull
   secret.
 - `expose.enabled=false` as the troubleshooting and DR-test switch: the Route goes, a mongod on the vanity name
-  stops reaching search, and setting it back restores it.
+  stops reaching search, and setting it back restores it (proved on the kind lab through Cilium's Ingress:
+  [the record](testing-mongot-envoy-vanity-url.md), K9).
 
 ## Architecture
 

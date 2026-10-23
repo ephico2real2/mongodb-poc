@@ -1,0 +1,55 @@
+# Story #198's lab run: the main chart (chart/mongodb-search-helm) in a namespace of its own, vanity-lab, on ONE
+# cluster, beside the lab's own search release, which it never touches: a MongoDBSearch with the operator's Envoy
+# (loadBalancer.managed), the shape the vanity chart sits beside on OpenShift. Its mongot syncs from the lab's replica
+# set, as the search release does; its TLS secrets and trust bundle are made by the chart's prerequisites script from
+# throwaway PEMs signed by the lab's CA (docs/testing-mongot-envoy-vanity-url.md, "Run it"). The operator is a second
+# OLM install of the same package in this namespace (OwnNamespace): the search release's operator watches search only.
+#   helm install mongot chart/mongodb-search-helm -n vanity-lab --kube-context kind-mesh2 -f kind-mesh/values/vanity-lab-search.yaml --timeout 20m
+namespace: vanity-lab
+
+operator:
+  source: operatorhubio-catalog
+  sourceNamespace: olm
+
+search:
+  replicas: 2
+  resources:
+    requests: {cpu: 500m, memory: 1Gi}
+    limits: {cpu: "2", memory: 2Gi}
+  persistence:
+    storage: 10Gi
+    storageClass: standard
+  # Nothing of this namespace outlives the test: an uninstall removes the MongoDBSearch and its volumes.
+  keepOnUninstall: false
+
+# The operator's Envoy accepts this one name; the vanity chart adds mongot-public.lab.example beside it. Both are SANs
+# of the throwaway server certificate.
+loadBalancer:
+  externalHostname: mongot-search.vanity-lab.example
+  replicas: 1
+
+source:
+  hostAndPorts:
+    - mongo-mesh0.mongodb.svc.cluster.local:27017
+    - mongo-mesh1.mongodb.svc.cluster.local:27017
+    - mongo-mesh2.mongodb.svc.cluster.local:27017
+  username: search-sync-source
+  passwordSecret:
+    name: search-sync-source-password
+    key: password
+
+# The Jobs' oc: the lab's own image, loaded into every node by search-up.sh.
+jobs:
+  image:
+    repository: localhost/kind-mesh/oc
+    tag: "4.20.42"
+
+route:
+  enabled: false
+monitoring:
+  serviceMonitors:
+    enabled: false
+  alerts:
+    enabled: false
+  persesDashboard:
+    enabled: false

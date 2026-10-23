@@ -1,0 +1,45 @@
+== 2026-10-23T03:21:12Z K1: helm install mongot-public (expose.type=ingress, class cilium, path /, Cilium's passthrough annotation; kind assigns no uid)
+$ helm install mongot-public chart/mongot-envoy-vanity-url-helm -n vanity-lab --kube-context kind-mesh2 --set vanityHostname=mongot-public.lab.example --set expose.type=ingress --set expose.ingressClassName=cilium --set expose.ingressPath=/ --set 'expose.annotations.ingress\.cilium\.io/tls-passthrough=enabled' --set envoy.runAsUser=101 --set jobs.runAsUser=1001
+NAME: mongot-public
+LAST DEPLOYED: Thu Oct 22 22:21:12 2026
+NAMESPACE: vanity-lab
+STATUS: deployed
+REVISION: 1
+DESCRIPTION: Install complete
+TEST SUITE: None
+NOTES:
+Envoy x2 for mongot-public.lab.example in vanity-lab, in front of the mongot pods of MongoDB Search "mongot" (mongot-search-0-svc.vanity-lab.svc.cluster.local:27028), reached through Ingress mongot-public on mongot-public.lab.example:443.
+TLS server names accepted: ["mongot-public.lab.example"]
+
+  The preflight's verdict:  oc logs -n vanity-lab job/mongot-public-preflight   (kept 600 s)
+  The pods:                 oc get deploy,pods -n vanity-lab -l app=mongot-public-lb
+  The entry:                oc get ingress mongot-public -n vanity-lab   (and the Route OpenShift made from it: oc get route -n vanity-lab)
+
+Still by hand: point DNS for mongot-public.lab.example at the router, and have the mongod hosts use
+mongot-public.lab.example:443 for search (mongotHost) with the company CA trusted.
+
+After a certificate rotation, restart the pods: Envoy reads the certificate files once, at start.
+  oc rollout restart deploy/mongot-public-lb -n vanity-lab
+exit=0
+== 2026-10-23T03:21:18Z the preflight's log
+[preflight 03:21:15] checking what Envoy for mongot-public.lab.example mounts and dials in vanity-lab
+[preflight 03:21:15] ok: secret ent-mongot-search-lb-0-client-cert (ca.crt tls.crt tls.key)
+[preflight 03:21:15] ok: configmap ent-trust-bundle (ca.crt)
+[preflight 03:21:15] ok: service mongot-search-0-svc (the mongot pods Envoy dials)
+[preflight 03:21:15] ok: secret ent-mongot-search-lb-0-cert (ca.crt tls.crt tls.key)
+[preflight 03:21:15] secret ent-mongot-search-lb-0-cert names: mongot-search.vanity-lab.example mongot-public.lab.example
+[preflight 03:21:15] ok: mongot-public.lab.example is a name of the certificate in ent-mongot-search-lb-0-cert
+[preflight 03:21:15] everything Envoy mounts and dials is present, and the certificate names every server name
+== 2026-10-23T03:21:18Z the pods of both Envoys, and the Ingress
+pod/mongot-public-lb-7886bc55b4-v5cqd condition met
+pod/mongot-public-lb-7886bc55b4-xzjrg condition met
+NAME                                  READY   STATUS    RESTARTS   AGE     IP            NODE                  NOMINATED NODE   READINESS GATES
+mongot-public-lb-7886bc55b4-v5cqd     1/1     Running   0          11s     10.30.1.173   mesh2-worker          <none>           <none>
+mongot-public-lb-7886bc55b4-xzjrg     1/1     Running   0          11s     10.30.0.158   mesh2-control-plane   <none>           <none>
+mongot-search-lb-0-6fd8d5568d-gvgzp   1/1     Running   0          3m52s   10.30.1.68    mesh2-worker          <none>           <none>
+NAME            CLASS    HOSTS                       ADDRESS         PORTS   AGE
+mongot-public   cilium   mongot-public.lab.example   172.18.255.72   80      11s
+cilium enabled mongot-public.lab.example / Prefix 172.18.255.72
+== 2026-10-23T03:21:29Z the probe pod
+pod/vanity-probe created
+pod/vanity-probe condition met
