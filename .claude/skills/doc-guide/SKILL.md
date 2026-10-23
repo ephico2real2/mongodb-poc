@@ -176,14 +176,17 @@ python3 test/doc-structure.py docs/<page>.md          # one page, strictly
 python3 test/doc-structure.py                         # every tracked page, against the baseline (CI)
 python3 test/doc-structure.py --prune                 # drop the baseline's lines that no longer occur
 bash scripts/mdfmt fix docs/<page>.md                 # markdownlint-cli2 with .markdownlint-cli2.yaml
+bash scripts/mdfmt baseline                           # every page not in test/markdownlint-baseline.txt (CI)
+python3 test/doc-structure.py --guard origin/main     # neither baseline has more entries than main (CI)
+bash test/doc-structure-test.sh                       # the checks' own tests (CI)
 ```
 
 The documents written before #199 do not meet the shape yet. `test/doc-structure-baseline.txt` lists their
 violations as they were (one line per inline command, one per page whose headings do not fit its kind), and
 `test/markdownlint-baseline.txt` the pages markdownlint does not pass yet. CI fails on a violation that is not
 listed, and on a listed one that is gone: after rewriting a page, prune the first list and remove the page from
-the second. Both lists only shrink; a new violation is fixed in the page,
-never added to a list. Vendored, generated and recorded files (`ignores` in `.markdownlint-cli2.yaml`) are skipped
+the second. On a pull request, CI also fails when either list has more entries than at the base. A new violation is
+fixed in the page, never added to a list. Vendored, generated and recorded files (`ignores` in `.markdownlint-cli2.yaml`) are skipped
 by both tools.
 
 ## The process

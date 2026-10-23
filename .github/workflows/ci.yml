@@ -87,23 +87,27 @@ jobs:
       # Rule 3 (no command inline) on every tracked page, and each guide's and record's headings and steps.
       - name: Document structure, against test/doc-structure-baseline.txt
         run: python3 test/doc-structure.py
-      # The pages in test/markdownlint-baseline.txt are not linted until they are rewritten; each must still fail,
-      # or its line is stale.
-      - name: mdfmt check, every page not in test/markdownlint-baseline.txt
-        if: ${{ !cancelled() }}
+      # Neither baseline may have more entries than the pull request's base: counts, so a renamed page passes. The
+      # base is fetched on its own (the checkout is one commit deep). Not on a push to main: that is the base.
+      - name: The baselines did not grow
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
-          mapfile -t listed < <(grep -v '^#' test/markdownlint-baseline.txt)
-          mapfile -t pages < <(git ls-files '*.md' | grep -vxF -f <(printf '%s\n' "${listed[@]}"))
-          scripts/mdfmt check "${pages[@]}"
-          stale=0
-          for page in "${listed[@]}"; do
-            if markdownlint-cli2 "${page}" >/dev/null 2>&1; then
-              echo "passes now, remove it from test/markdownlint-baseline.txt: ${page}"
-              stale=1
-            fi
-          done
-          exit "${stale}"
+          git fetch --no-tags --depth=1 origin "${BASE_REF}"
+          python3 test/doc-structure.py --guard FETCH_HEAD
+      # The two checks' own tests, on a copy of the tree under mktemp.
+      - name: The document checks' tests
+        if: ${{ !cancelled() }}
+        run: test/doc-structure-test.sh
+      # Every page not in test/markdownlint-baseline.txt passes; a listed page must still fail, or its line is stale.
+      - name: mdfmt baseline
+        if: ${{ !cancelled() }}
+        run: scripts/mdfmt baseline
+      - name: The tests left the tree as it was
+        if: ${{ !cancelled() }}
+        run: git status --porcelain && git diff --exit-code
   # Publishes the chart when its version is new: the package of this commit, as the release
   # mongodb-search-helm-<version>. A version that is already released is left alone. Only on main, and only after
   # the other jobs passed. To release: change `version` in chart/mongodb-search-helm/Chart.yaml and merge.

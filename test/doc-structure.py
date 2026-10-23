@@ -5,6 +5,7 @@
   test/doc-structure.py [--kind K] FILE...   the named files, strictly: no baseline
   test/doc-structure.py --list               today's violations, one per line, in the baseline's format
   test/doc-structure.py --prune              remove the baseline's lines that no longer occur (never adds one)
+  test/doc-structure.py --guard REF          neither baseline has more entries than at REF (CI, on a pull request)
 
 Two checks:
   rule 3   no command inline in prose or in a table cell: a backticked span that starts with a command word
@@ -15,7 +16,8 @@ Two checks:
 
 The baseline lists the violations that were already there when the checks came in (#199), so CI passes while the
 documents are rewritten. A violation that is not in it fails; so does a line of it that no longer occurs, so the
-list only shrinks and always says what is left. Exit 0 = passes, 1 = fails, 2 = usage.
+list always says what is left. --guard keeps it, and test/markdownlint-baseline.txt, from growing: it compares
+counts, not lines, so a renamed page does not trip it. Exit 0 = passes, 1 = fails, 2 = usage.
 """
 import argparse
 import collections
@@ -27,6 +29,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BASELINE = ROOT / "test" / "doc-structure-baseline.txt"
+LINT_BASELINE = ROOT / "test" / "markdownlint-baseline.txt"
 LINT_CONFIG = ROOT / ".markdownlint-cli2.yaml"
 
 # First match wins; every other page is a reference. Keep in step with the skill's "The three kinds".
@@ -191,15 +194,38 @@ def read_baseline():
     return [l for l in lines if l and not l.startswith("#")], [l for l in lines if l.startswith("#")]
 
 
+def guard(ref):
+    """Neither baseline has more entries than at ref. A baseline that is not at ref yet has nothing to compare."""
+    def count(text):
+        return sum(1 for l in text.splitlines() if l.strip() and not l.startswith("#"))
+
+    failed = False
+    for path in (BASELINE, LINT_BASELINE):
+        rel = path.relative_to(ROOT).as_posix()
+        now = count(path.read_text(encoding="utf-8"))
+        shown = subprocess.run(["git", "show", f"{ref}:{rel}"], cwd=ROOT, capture_output=True, text=True)
+        if shown.returncode:
+            print(f"{rel}: {now} entries; not at {ref}, nothing to compare")
+            continue
+        then = count(shown.stdout)
+        grew = now > then
+        print(f"{rel}: {now} entries, {then} at {ref}: {'GREW, fix the page instead' if grew else 'ok'}")
+        failed |= grew
+    return 1 if failed else 0
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--kind", choices=sorted(KINDS))
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--prune", action="store_true")
+    ap.add_argument("--guard", metavar="REF")
     ap.add_argument("files", nargs="*")
     args = ap.parse_args()
     if args.kind and not args.files:
         ap.error("--kind needs the files it applies to")
+    if args.guard:
+        return guard(args.guard)
 
     if args.files:  # strict: the named files, no baseline
         failed = False

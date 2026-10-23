@@ -2,6 +2,8 @@
 # mdfmt — format and lint this repository's Markdown, the same way every time, without rewriting what people wrote.
 #   mdfmt check [paths…]   report every problem; exit 1 if any
 #   mdfmt fix   [paths…]   fix in place what can be fixed mechanically, then report what remains
+#   mdfmt baseline         CI: check every page not in test/markdownlint-baseline.txt, and fail on a listed page
+#                          that passes now (its line is stale: remove it)
 # Defaults to every tracked *.md. The rules are in .markdownlint-cli2.yaml (recorded evidence, vendored and generated
 # files are never touched). The engine is markdownlint-cli2: blank lines around headings, lists and fences; trailing
 # spaces; consistent list markers and heading style; ordered-list numbering; no hard tabs — and nothing else.
@@ -18,7 +20,16 @@ MODE="${1:-check}"; shift || true
 if [ $# -gt 0 ]; then FILES=("$@"); else IFS=$'\n' read -r -d '' -a FILES < <(git ls-files '*.md' && printf '\0'); fi
 command -v markdownlint-cli2 >/dev/null || { echo "mdfmt: markdownlint-cli2 not installed (npm i -g markdownlint-cli2)" >&2; exit 2; }
 case "$MODE" in
+  baseline)
+    LIST=test/markdownlint-baseline.txt; LISTED="$(grep -vE '^(#|$)' "$LIST")"; PAGES=(); RC=0
+    for f in "${FILES[@]}"; do printf '%s\n' "$LISTED" | grep -qxF -- "$f" || PAGES+=("$f"); done
+    markdownlint-cli2 "${PAGES[@]}" || RC=1
+    while IFS= read -r f; do
+      [ -n "$f" ] && markdownlint-cli2 "$f" >/dev/null 2>&1 && { echo "mdfmt: $f passes now: remove it from $LIST" >&2; RC=1; }
+    done <<< "$LISTED"
+    echo "mdfmt baseline: ${#PAGES[@]} pages not listed and checked, $(printf '%s' "$LISTED" | grep -c .) listed in $LIST"
+    exit "$RC" ;;
   check) markdownlint-cli2 "${FILES[@]}" ;;
   fix)   markdownlint-cli2 --fix "${FILES[@]}"; echo "--- remaining (not auto-fixable) ---"; markdownlint-cli2 "${FILES[@]}" 2>&1 | tail -3 ;;
-  *)     echo "usage: mdfmt check|fix [paths…]" >&2; exit 2 ;;
+  *)     echo "usage: mdfmt check|fix [paths…] | mdfmt baseline" >&2; exit 2 ;;
 esac
