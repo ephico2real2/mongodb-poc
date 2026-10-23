@@ -30,6 +30,14 @@ expect() {
     FAILED=$((FAILED + 1)); echo "FAIL  $1: exit ${got} (want $2), no line with: $3"; sed 's/^/      /' "${TMP}/out"
   fi
 }
+# absent <case> <text the output must not contain>
+absent() {
+  if grep -qF -- "$2" "${TMP}/out"; then
+    FAILED=$((FAILED + 1)); echo "FAIL  $1: a line with: $2"; sed 's/^/      /' "${TMP}/out"
+  else
+    PASSED=$((PASSED + 1)); echo "ok    $1"
+  fi
+}
 reset() { git -C "${REPO}" reset -q --hard && git -C "${REPO}" clean -qfd; }
 check() { run python3 test/doc-structure.py "$@"; }
 entries() { grep -cvE '^(#|$)' "${REPO}/$1"; }
@@ -243,6 +251,136 @@ check fx/reference.md
 expect "a reference without an intro fails" 1 "reference: no intro between the H1 and the first H2"
 reset
 
+# --- rule 12: the layout inside a bash, sh or shell block, one page strictly ---
+mkdir "${REPO}/fx12"
+long="echo $(printf 'x%.0s' $(seq 1 116))"   # 121 characters
+# page12 <name> <line>...: a reference page whose one block (```${INFO:-bash}) holds the lines; the first is line 6
+page12() {
+  local f="${REPO}/fx12/$1.md"
+  shift
+  { printf '# Rule 12\n\nA page.\n\n```%s\n' "${INFO:-bash}"; printf '%s\n' "$@"; printf '```\n'; } > "${f}"
+}
+
+cat > "${REPO}/fx12/clean.md" <<'MD'
+# Rule 12
+
+A page.
+
+```bash
+# The namespace every later command uses
+NS=mongodb-poc
+
+echo "a # b" 'c #d' $'e\'#f' a#b ${#NS}  # a trailing comment
+curl -s http://example.invalid/#frag     # on the same column
+oc get pods -n "${NS}" \
+  -o wide
+for c in mesh1 mesh2; do
+  kubectl --context "kind-${c}" get pods \
+    -n "${NS}"
+done
+cat <<EOF | oc apply -f -
+$ not a prompt LONG
+# kubectl get pods is not a commented-out command in a heredoc
+
+
+EOF
+cat <<'END' > /dev/null
+LONG
+END
+mongosh --quiet --eval '
+$ x # inside a quote: data, not a prompt or a comment
+'
+WIDTH
+```
+
+1. In a list item:
+
+   ```bash
+   oc get pods \
+     -n x
+   WIDTH
+   ```
+MD
+sed -i.orig -e "s/LONG/${long}/" -e "s/WIDTH$/${long%x}/" "${REPO}/fx12/clean.md" && rm "${REPO}/fx12/clean.md.orig"
+check fx12/clean.md
+expect "rule 12: quotes, \${#x}, a#b, a URL's #, heredocs, a quoted line, 120 characters, nesting and a list item pass" 0 \
+  "PASS (reference): fx12/clean.md"
+
+page12 prompt '$ oc get pods'
+check fx12/prompt.md
+expect "rule 12: a \$ prompt fails" 1 "fx12/prompt.md:6: bash block (rule 12): a prompt at the start of a line (\$)"
+
+page12 root '# kubectl get pods -n x' '# Check the pods' 'oc get pods'
+check fx12/root.md
+expect "rule 12: # before a command fails" 1 \
+  "fx12/root.md:6: bash block (rule 12): a prompt at the start of a line (# before a command"
+absent "rule 12: a comment in words passes" "fx12/root.md:7:"
+
+page12 column 'oc get pods  # a' 'oc get pvc -n x  # b'
+check fx12/column.md
+expect "rule 12: trailing comments on two columns fail" 1 \
+  "fx12/column.md:7: bash block (rule 12): trailing comments not on one column (columns 14, 18)"
+
+page12 spaces 'oc get pods # a'
+check fx12/spaces.md
+expect "rule 12: one space before a trailing comment fails" 1 \
+  "fx12/spaces.md:6: bash block (rule 12): fewer than two spaces before a trailing comment"
+
+page12 quote 'echo "#" # c'
+check fx12/quote.md
+expect "rule 12: a comment after a closed quote is read" 1 \
+  "fx12/quote.md:6: bash block (rule 12): fewer than two spaces before a trailing comment"
+
+page12 length 'echo ${#NS} # c'
+check fx12/length.md
+expect "rule 12: a comment after \${#x} is read" 1 \
+  "fx12/length.md:6: bash block (rule 12): fewer than two spaces before a trailing comment"
+
+page12 width "${long}"
+check fx12/width.md
+expect "rule 12: a line over 120 characters fails" 1 "fx12/width.md:6: bash block (rule 12): a line over 120 characters (121)"
+
+page12 cont "oc get pods \\" '    -n x'
+check fx12/cont.md
+expect "rule 12: a continuation indented four spaces fails" 1 \
+  "fx12/cont.md:7: bash block (rule 12): a continuation line not indented two spaces from the command's first line (4)"
+
+page12 blanks '' 'oc get pods' '' '' 'oc get pvc' ''
+check fx12/blanks.md
+expect "rule 12: a blank line at the start fails" 1 "fx12/blanks.md:6: bash block (rule 12): a blank line at the start of the block"
+expect "rule 12: two blank lines in a row fail" 1 "fx12/blanks.md:9: bash block (rule 12): two blank lines in a row"
+expect "rule 12: a blank line at the end fails" 1 "fx12/blanks.md:11: bash block (rule 12): a blank line at the end of the block"
+
+page12 heredoc 'cat <<EOF' "${long}" 'EOF' "${long}"
+check fx12/heredoc.md
+expect "rule 12: the line after a heredoc's end is read" 1 "fx12/heredoc.md:9: bash block (rule 12): a line over 120"
+absent "rule 12: a heredoc's body is not read" "fx12/heredoc.md:7:"
+
+page12 herestring 'grep -c x <<< mongodb' "${long}"
+check fx12/herestring.md
+expect "rule 12: a here-string opens no heredoc" 1 "fx12/herestring.md:7: bash block (rule 12): a line over 120"
+
+INFO="sh" page12 sh '$ oc get pods'
+INFO="shell" page12 shell '$ oc get pods'
+check fx12/sh.md fx12/shell.md
+expect "rule 12: an sh block is checked" 1 "fx12/sh.md:6: bash block (rule 12): a prompt"
+expect "rule 12: a shell block is checked" 1 "fx12/shell.md:6: bash block (rule 12): a prompt"
+
+INFO="console" page12 console '$ oc get pods'
+check fx12/console.md
+expect "rule 12: a console block is not checked" 0 "PASS (reference): fx12/console.md"
+
+printf '# Rule 12\n\nA page.\n\n> ```bash\n> $ oc get pods\n> ```\n' > "${REPO}/fx12/quoted.md"
+check fx12/quoted.md
+expect "rule 12: a block in a blockquote is checked" 1 "fx12/quoted.md:6: bash block (rule 12): a prompt"
+reset
+
+printf '\n```bash\n%s\n```\n' "${long}" >> "${REPO}/README.md"
+check
+expect "rule 12: a new problem in a tracked page fails against the baseline" 1 \
+  "README.md:$(($(wc -l < "${REPO}/README.md") - 1)): bash block (rule 12): a line over 120 characters (121)"
+reset
+
 # --- the baselines never grow (counts, not lines) ---
 check --guard HEAD
 expect "baselines as at the base pass the guard" 0 "test/doc-structure-baseline.txt: $(entries test/doc-structure-baseline.txt) entries"
@@ -275,6 +413,30 @@ sed -i.orig "s|^${fixed}"$'\t'"|docs/renamed-page.md"$'\t'"|" "${REPO}/test/doc-
 rm "${REPO}/test/doc-structure-baseline.txt.orig"
 check --guard HEAD
 expect "a renamed page in the baseline does not trip the guard" 0 "${before} entries, ${before} at HEAD: ok"
+reset
+
+printf 'README.md\tblock\ta line over 120 characters\n' >> "${REPO}/test/doc-structure-baseline.txt"
+check --guard HEAD
+expect "a rule-12 line added to the structure baseline fails the guard" 1 \
+  "test/doc-structure-baseline.txt: $((before + 1)) entries, ${before} at HEAD: GREW"
+reset
+
+# A base without the block kind: the pull request that brings rule 12 in also brings its entries.
+blocks="$(grep -c "$(printf '\tblock\t')" "${REPO}/test/doc-structure-baseline.txt")"
+grep -v "$(printf '\tblock\t')" "${REPO}/test/doc-structure-baseline.txt" > "${TMP}/no-blocks"
+cp "${REPO}/test/doc-structure-baseline.txt" "${TMP}/with-blocks"
+cp "${TMP}/no-blocks" "${REPO}/test/doc-structure-baseline.txt"
+git -C "${REPO}" -c user.name=test -c user.email=test@example.invalid -c commit.gpgsign=false \
+  commit -q --no-verify -am "a base before rule 12"
+cp "${TMP}/with-blocks" "${REPO}/test/doc-structure-baseline.txt"
+check --guard HEAD
+expect "a kind of entry the base does not have is not compared" 0 \
+  "$((before - blocks)) entries, $((before - blocks)) at HEAD: ok; ${blocks} of a kind not at HEAD ['block'], not compared"
+printf 'README.md\tinline\toc get pods\n' >> "${REPO}/test/doc-structure-baseline.txt"
+check --guard HEAD
+expect "beside a new kind, a kind the base has still may not grow" 1 \
+  "$((before - blocks + 1)) entries, $((before - blocks)) at HEAD: GREW"
+git -C "${REPO}" reset -q --hard HEAD~1
 reset
 
 # --- mdfmt baseline: every page not listed passes; a listed page still fails ---
