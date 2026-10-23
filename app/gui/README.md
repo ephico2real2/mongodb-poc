@@ -131,7 +131,8 @@ percent-encoded inside the command, never typed or printed:
 PW=$(oc get secret search-sync-source-password -n $NS -o jsonpath='{.data.password}' | base64 -d \
   | python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(), safe=""))')
 
-export MONGO_URI="mongodb://mongotuser:${PW}@<mongod-host>:<port>/admin?replicaSet=<rsName>&tls=true&tlsCAFile=/etc/mongo-ca/ca.crt"
+MONGO_URI="mongodb://mongotuser:${PW}@<mongod-host>:<port>/admin?replicaSet=<rsName>"
+export MONGO_URI="${MONGO_URI}&tls=true&tlsCAFile=/etc/mongo-ca/ca.crt"
 unset PW
 ```
 

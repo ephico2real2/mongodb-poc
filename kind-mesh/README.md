@@ -67,10 +67,6 @@ sudo; never run by the scripts).
 
 **One command, from nothing to the lab as it is today:**
 
-```bash
-kind-mesh/scripts/rebuild.sh --yes
-```
-
 It deletes the three clusters (`down.sh`), then runs steps 2 to 5 and 8 to 9 above and `kind-mesh-cilium/`'s steps 1, 4,
 6 and 9 (the swap, step 2, the lab's chart, the network policy), then `check.sh`: each phase timed and logged under
 `output/rebuild-<date>/`, stopping at the first failure. Without `--yes` it only prints what is lost (the replica set's
@@ -78,6 +74,10 @@ data and indexes, mongot's indexes, Loki's flows, Grafana's state, every passwor
 the images in the VM's docker, the recorded runs). `--reclaim-docker` requires `--yes` and after the rebuild frees the
 VM docker's build cache and unused images, never `localhost/kind-mesh/oc`, our Cilium images or kind's node image. What
 each step sets and why: [docs/building-the-kind-mesh-lab.md](../docs/building-the-kind-mesh-lab.md).
+
+```bash
+kind-mesh/scripts/rebuild.sh --yes
+```
 
 **Which script owns which Cilium values.** `up.sh` installs each cluster's release from `cilium/values.yaml`,
 `cilium/values-<cluster>.yaml` and, at the mesh step, `cilium/values-mesh.yaml`, with the images `versions.env` pins

@@ -82,10 +82,19 @@ kind-mesh-cilium/scripts/wire-check.sh
 # 6. The search side onto the chart
 kind-mesh-cilium/scripts/chart-up.sh
 
-# 7. Story #131: the drill matrix, or one run of it
+# 7. Story #131: the drill matrix
 kind-mesh-cilium/scripts/primary-matrix.sh
-CLIENT_OPTS='…' kind-mesh-cilium/drills.sh primary <freeze|kill|partition>
+```
 
+Or run one drill instead of the matrix. Replace `…` with the client options; choose `freeze`, `kill` or `partition`:
+
+```bash
+CLIENT_OPTS='…' kind-mesh-cilium/drills.sh primary freeze
+```
+
+Continue with the remaining steps:
+
+```bash
 # 8. Election tuning, then the link outage test
 kind-mesh-cilium/scripts/election-tuning.sh
 kind-mesh-cilium/scripts/blip-test.sh
