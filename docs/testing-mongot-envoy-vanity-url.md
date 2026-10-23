@@ -63,7 +63,7 @@ and the trust bundle mounted); the commands are under "Run it", the outputs unde
 | K5 | The preflight refuses a missing secret | helm fails on the hook; the log says `MISSING: secret no-such-secret: NotFound secrets "no-such-secret" not found` and `FAILED: 1 problem`; the Deployment is unchanged | **Passed** (`vanity-preflight-missing.txt`): helm `pre-upgrade hooks failed`, the two lines as expected, `generation 1, client secret ent-mongot-search-lb-0-client-cert`, revision 2 `failed` |
 | K6 | The preflight refuses a certificate without the name | the log says `its certificate does not name other.lab.example (SANs: …)`; nothing changed | **Passed** (`vanity-preflight-name.txt`): `does not name other.lab.example (SANs: mongot-search.vanity-lab.example mongot-public.lab.example)`, `FAILED: 1 problem(s)`; the Ingress's host still `mongot-public.lab.example`, revision 3 `failed` |
 | K7 | The operator reconciles its own Envoy and not ours | our Deployment's generation unchanged and no ownerReference after a no-op patch of the MongoDBSearch; the operator's Deployment still its own | **Passed** (`vanity-reconcile.txt`): ours `generation 1, ownerReferences` empty before and after (`mongodbsearch.mongodb.com/mongot patched (no change)`); the operator's `generation 2, annotation test=x, ownerReferences mongot` |
-| K8 | The ServiceMonitor with #191's Prometheus | the two Envoy pods scraped | **Not run**: the lab has no Prometheus (`observability` holds Grafana, Loki and the Hubble observer only) |
+| K8 | The ServiceMonitor with #191's Prometheus | the two Envoy pods scraped | **Not run**: the lab has no Prometheus (`observability` holds Grafana, Loki and the Hubble observer only). The evidence is the main chart's own dashboard (`chart/mongodb-search-helm/files/mongodb-search.json`), fed by the ServiceMonitors, with this chart's ServiceMonitor on our Envoy: pictured with #191 on kind, or on the owner's OpenShift run |
 | K9 | DR toggle: traffic through the vanity hostname | with `expose.enabled=false` the Ingress is gone and the K2 check at `$INGRESS` fails; with `true` the Ingress returns and the K2 check answers again | **Passed** (`vanity-dr-toggle.txt`): after `false`, `No resources found` for ingresses and `Immediate connect fail for 172.18.255.72: No route to host`, curl's exit 7; after `true`, the Ingress back with its address, the check 4 s later curl's exit 35 (the handshake, Cilium's Envoy not yet programmed) and at 03:26:37Z `HTTP/2 200`, `grpc-status: 0`, `00 00 00 00 02 08 01` |
 | K10 | Uninstall leaves the main chart's objects | everything named `mongot-public…` gone, the Ingress included; the main chart's Deployment, Services, secrets, trust bundle and MongoDBSearch as before | **Passed** (`vanity-uninstall.txt`): `release "mongot-public" uninstalled`; left: `mongodb-kubernetes-operator`, `mongot-search-lb-0`, the three Services, the three secrets, `ent-trust-bundle`, the MongoDBSearch `Running`; our two pods `Terminating`, no Ingress, no `mongot-public-lb` Service |
 
@@ -97,7 +97,6 @@ company names scrubbed; screenshots in `docs/screenshots/`, light and dark where
 | `kind-mesh/output/vanity-install.txt`, `vanity-reach.txt`, `vanity-wrong-sni.txt`, `vanity-spread.txt`, `vanity-preflight-missing.txt`, `vanity-preflight-name.txt`, `vanity-reconcile.txt`, `vanity-dr-toggle.txt`, `vanity-uninstall.txt` | the kind rows K1 to K10, one file each (K8 not run) |
 | `kind-mesh/output/vanity-lab-cleanup.txt`, `vanity-lab-check-after.txt` | the clean-up of `vanity-lab`, and the lab's own check afterwards (`== 0 failed`) |
 | `kind-mesh/values/vanity-lab-search.yaml`, `kind-mesh-cilium/cilium/values-ingress.yaml`, `kind-mesh-cilium/scripts/ingress-up.sh` | the main chart's values for `vanity-lab`; Cilium's Ingress values and the script that adds them |
-| `docs/screenshots/vanity-grafana-unique-flows.png`, `.dark.png`, `vanity-grafana-history.png`, `.dark.png` | Grafana's Hubble flows over the K2 and K4 traffic, filtered on `mongot-public`, light and dark |
 | `docs/screenshots/vanity-console-*.png` | the owner's OpenShift screenshots *(to be taken)* |
 
 ## Run it
@@ -252,13 +251,6 @@ kubectl --context kind-mesh2 -n vanity-lab get deploy,svc,ingress,secret,configm
 helm uninstall mongot -n vanity-lab --kube-context kind-mesh2
 kubectl --context kind-mesh2 delete namespace vanity-lab --timeout=5m
 kind-mesh/check.sh
-```
-
-The Grafana pictures of the Hubble flows over the K2 and K4 traffic (03:21 to 03:24Z), filtered on the lines naming
-`mongot-public`:
-
-```bash
-~/.local/share/diagram-kit/.venv/bin/python kind-mesh/scripts/grafana-screenshots.py --from 2026-10-23T03:21:00Z --to 2026-10-23T03:24:00Z --prefix vanity-grafana --query 'var-searchregex=mongot-public' --only kind-mesh-grafana-history,kind-mesh-grafana-unique-flows
 ```
 
 OpenShift: the guide's steps as written, O7 being its "Prove which path the traffic takes".
@@ -631,10 +623,6 @@ mongot-search-0-0   1/1     Running   0          5m10s   10.30.1.137   mesh2-wor
 mongot-search-0-1   1/1     Running   0          4m43s   10.30.0.118   mesh2-control-plane   <none>           <none>
 ```
 
-The Hubble flows of that window in Grafana, filtered on `mongot-public`, light and dark:
-`docs/screenshots/vanity-grafana-unique-flows.png`, `vanity-grafana-unique-flows.dark.png`, `vanity-grafana-history.png`,
-`vanity-grafana-history.dark.png`.
-
 ### K5. The preflight refuses a missing secret, and K6, a certificate without the name
 
 ```bash
@@ -734,7 +722,9 @@ exit 0. The negative control of C9, `CONTAINER_ENGINE=nosuchengine`: `1 failed`,
 - The owner's OpenShift run (O1 to O7): pending, its commands and pass conditions above; nothing of its results is
   written before it runs.
 - K8, the ServiceMonitor with Prometheus: not run, the lab has no Prometheus (`observability` holds Grafana, Loki and
-  the Hubble observer).
+  the Hubble observer). Its screenshots are the main chart's dashboard (`files/mongodb-search.json`), with #191 on kind
+  or on the owner's OpenShift run, not the lab's Hubble flows dashboard: the observer collects only `mongodb` and
+  `search`.
 - The kind run reached the vanity name from a probe pod inside the cluster, through the Ingress's LoadBalancer address;
   not from the Mac (the route `up.sh` prints was not added on this machine).
 - A certificate rotation under traffic: the chart's answer is a rollout restart (the README), as for the operator's

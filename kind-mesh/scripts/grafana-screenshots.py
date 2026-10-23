@@ -65,14 +65,8 @@ def main():
     ap.add_argument("--from", dest="start")
     ap.add_argument("--to", dest="end")
     ap.add_argument("--only", help="comma-separated file names from SHOTS")
-    ap.add_argument("--prefix", help="file names start with this instead of kind-mesh-grafana (another test's pictures "
-                                     "of the same panels, e.g. vanity-grafana for story #198)")
-    ap.add_argument("--query", help="added to the dashboard URL's query: the dashboard's variables, e.g. "
-                                    "var-destinationnamespace=vanity-lab to show the flows to one namespace")
     a = ap.parse_args()
     rng = (f"from={epoch_ms(a.start)}&to={epoch_ms(a.end)}" if a.start and a.end else "from=now-1h&to=now")
-    if a.query:
-        rng += "&" + a.query
     secret = json.loads(subprocess.check_output(KUBE + ["get", "secret", "grafana-admin", "-o", "json"]))
     password = base64.b64decode(secret["data"]["admin-password"]).decode()
     pf = subprocess.Popen(KUBE + ["port-forward", "svc/grafana", f"{PORT}:80"], stdout=subprocess.DEVNULL,
@@ -94,8 +88,7 @@ def main():
                     if wanted and name not in wanted:
                         continue
                     suffix = "" if theme == "light" else ".dark"
-                    stem = name.replace("kind-mesh-grafana", a.prefix, 1) if a.prefix else name
-                    path = OUT / f"{stem}{suffix}.png"
+                    path = OUT / f"{name}{suffix}.png"
                     if "panel" in spec:
                         page.set_viewport_size({"width": 1600, "height": 900})
                         page.goto(f"{base}&theme={theme}&viewPanel={spec['panel']}")

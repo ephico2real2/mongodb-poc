@@ -80,7 +80,7 @@ a { color: var(--remote); }
             <line x1="200" y1="180" x2="200" y2="206" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
             <text x="212" y="198" fill="var(--muted)">host = externalHostname</text>
             <line x1="840" y1="180" x2="840" y2="206" stroke="var(--host)" stroke-width="1.4" stroke-dasharray="6 5" marker-end="url(#ah)"/>
-            <text x="852" y="198" fill="var(--host)">OpenShift, pending: host = &lt;vanity&gt;</text>
+            <text x="852" y="198" fill="var(--host)">pending: host = &lt;vanity&gt;</text>
             <!-- routes -->
             <rect x="30" y="208" width="340" height="66" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
             <text x="44" y="228" font-weight="600" fill="var(--remote)">passthrough Route<tspan font-weight="400" fill="var(--muted)">  mongodb-search-helm</tspan></text>
@@ -122,7 +122,7 @@ a { color: var(--remote); }
             <text x="850" y="380" fill="var(--host)">mTLS with Envoy's</text>
             <text x="850" y="396" fill="var(--host)">client certificate; on kind</text>
             <text x="850" y="412" fill="var(--muted)">31 checks, 16 and 15 per pod;</text>
-            <text x="850" y="428" fill="var(--muted)">mongot checks its CA, not its name</text>
+            <text x="850" y="428" fill="var(--muted)">mongot checks the CA only</text>
             <!-- the mongot pods -->
             <rect x="270" y="440" width="500" height="82" rx="8" fill="none" stroke="currentColor" stroke-width="1.3"/>
             <rect x="290" y="452" width="140" height="40" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
