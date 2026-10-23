@@ -2,13 +2,17 @@
 
 Oct 5, 2026
 
-## Overview
+This runbook sets up mTLS for MongoDB Search in `dvh-gp6-rnd` from scratch, using company-signed certs. Use it when none of the secrets or the trust bundle exist yet. To swap certs on a running setup, use [mongot & Envoy mTLS Cert Runbook](mongot-envoy-mtls-cert-runbook.md) instead.
 
-This runbook sets up mTLS for MongoDB Search in `dvh-gp6-rnd` from scratch, using company-signed certs. Use it when none of the secrets or the trust bundle exist yet. To swap certs on a running setup, use mongot & Envoy mTLS Cert Runbook instead.
+## What you get
 
-**Steps 1 to 5 are also a script.** [`generate-mongodbsearch-prerequisites.sh`](../chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh), a file of the chart, does them for any namespace, with the same checks. The decrypted key is never a file of its own there: it is only in the `*.secret.yaml` the script writes, which `--clean` removes. See [Prerequisites and Setup](prerequisite-and-setup-doc.md), Part 1. The steps below are the same thing by hand, and say what each check is for.
+- One ConfigMap, three TLS secrets and one password secret, all created before mongot and Envoy are deployed.
+- The MongoDBSearch resource deployed: mongot (3 pods) and Envoy (2 pods) Running and Ready, with no TLS errors in their logs.
+- The passthrough Route `mongot-search` on `mongot-search-rnd.company.net`, whose public endpoint returns `Verify return code: 0 (ok)`.
+- A `$search` query returning results through every hop.
+- The decrypted key files deleted from your workstation.
 
-**A certificate is issued for one namespace.** The mongot certificate's name is `mongot-search-0-svc.<namespace>.svc.cluster.local`. Every command below names `dvh-gp6-rnd`; for another namespace the PEMs must have been issued for it, and `NS` set to it.
+## Architecture
 
 You create one ConfigMap, three TLS secrets and one password secret, all before mongot and Envoy are deployed:
 
@@ -55,7 +59,7 @@ NAMESPACE dvh-gp6-rnd
 
 The mongod box stands for every upstream mongod listed in `hostAndPorts`; only `abc234.uat.company.net:26018` is set today. On every hop the caller checks the other side's cert against the company CA, so mongod, Envoy and mongot all have to trust it.
 
-**Before you start**
+## Prerequisites
 
 - [ ] Logged in with `oc` and able to create secrets and ConfigMaps in `dvh-gp6-rnd`
 - [ ] The three PEM files and the passphrase for each
@@ -63,7 +67,13 @@ The mongod box stands for every upstream mongod listed in `hostAndPorts`; only `
 - [ ] A private working directory; decrypted keys are created there and deleted in Step 7
 - [ ] Commands work with OpenSSL 3 and with the LibreSSL that ships with macOS
 
-## Step 1: Set variables and check the files
+**A certificate is issued for one namespace.** The mongot certificate's name is `mongot-search-0-svc.<namespace>.svc.cluster.local`. Every command below names `dvh-gp6-rnd`; for another namespace the PEMs must have been issued for it, and `NS` set to it.
+
+## Steps
+
+**Steps 1 to 5 are also a script.** [`generate-mongodbsearch-prerequisites.sh`](../chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh), a file of the chart, does them for any namespace, with the same checks. The decrypted key is never a file of its own there: it is only in the `*.secret.yaml` the script writes, which `--clean` removes. See [Prerequisites and Setup](prerequisite-and-setup-doc.md), Part 1. The steps below are the same thing by hand, and say what each check is for, in order:
+
+### 1. Set variables and check the files
 
 Set every name once, then run all later steps in the same terminal session. Fill in the two values in angle brackets.
 
@@ -98,7 +108,7 @@ oc get configmap $TRUST_CM -n $NS
 oc get secret $MONGOT_SECRET $ENVOY_CLIENT_SECRET $LB_SECRET $SYNC_PW_SECRET -n $NS
 ```
 
-If any already exist, this is not a fresh install; use the retrofit runbook linked in the Overview.
+Result: `NotFound` on each line. If any already exist, this is not a fresh install; use the retrofit runbook linked in the intro.
 
 Confirm what is inside each PEM:
 
@@ -108,9 +118,9 @@ for f in "$MONGOT_PEM" "$ENVOY_CLIENT_PEM" "$LB_PEM"; do echo "== $f"; grep -E '
 
 Expected per file: one `ENCRYPTED PRIVATE KEY` (or `RSA PRIVATE KEY` with a `Proc-Type: 4,ENCRYPTED` line), then several `CERTIFICATE` blocks with the leaf last.
 
-## Step 2: Split the certs and remove the key passwords
+### 2. Split the certs and remove the key passwords
 
-**2a. Split out the certificates**
+#### 2a. Split out the certificates
 
 Paste this helper once (bash or zsh). It sorts each PEM's cert blocks into the leaf and the CA chain, then builds `tls.crt` with the leaf first. No passphrase is needed; certificates are never password-protected.
 
@@ -135,9 +145,9 @@ split_pem "$ENVOY_CLIENT_PEM" envoy-client
 split_pem "$LB_PEM"           lb
 ```
 
-**2b. Remove the password from each key**
+#### 2b. Remove the password from each key
 
-`openssl pkey` reads the encrypted key out of the PEM, asks for its passphrase, and writes the key back out with no password. Leaving off a cipher option such as `-aes256` is what makes the output unencrypted. Kubernetes needs it this way, because pods cannot type a passphrase at startup.
+openssl's `pkey` command reads the encrypted key out of the PEM, asks for its passphrase, and writes the key back out with no password. Leaving off a cipher option such as `-aes256` is what makes the output unencrypted. Kubernetes needs it this way, because pods cannot type a passphrase at startup.
 
 ```bash
 openssl pkey -in "$MONGOT_PEM"       -out mongot.key         # mongot PEM passphrase
@@ -157,14 +167,14 @@ openssl pkey -in "$LB_PEM"           -out lb.key           -passin file:lb.pass
 
 Avoid `-passin pass:<password>`; the password ends up in shell history. Step 7d deletes the `.pass` files.
 
-**2c. Confirm the passwords are gone**
+#### 2c. Confirm the passwords are gone
 
 ```bash
 head -1 mongot.key envoy-client.key lb.key     # expect: -----BEGIN PRIVATE KEY-----
 for k in mongot envoy-client lb; do openssl pkey -in $k.key -noout && echo "$k key: no password"; done
 ```
 
-None of these may prompt for a passphrase. `BEGIN ENCRYPTED PRIVATE KEY`, or a `Proc-Type: 4,ENCRYPTED` line, means the key is still encrypted: rerun 2b.
+Result: `-----BEGIN PRIVATE KEY-----` on each key, then `mongot key: no password`, `envoy-client key: no password` and `lb key: no password`. None of these may prompt for a passphrase. `BEGIN ENCRYPTED PRIVATE KEY`, or a `Proc-Type: 4,ENCRYPTED` line, means the key is still encrypted: rerun 2b.
 
 You now have, for each of `mongot`, `envoy-client` and `lb`:
 
@@ -175,7 +185,7 @@ You now have, for each of `mongot`, `envoy-client` and `lb`:
 | `<name>.crt` | Leaf, then CA chain | `tls.crt` in the secret |
 | `<name>.key` | Private key, no password | `tls.key` in the secret |
 
-## Step 3: Verify the certs before touching the cluster
+### 3. Verify the certs before touching the cluster
 
 Every check must pass. A bad cert caught here is a failed handshake avoided later.
 
@@ -207,7 +217,7 @@ diff mongot-ca.crt envoy-client-ca.crt && echo "envoy-client: same CA"
 diff mongot-ca.crt lb-ca.crt           && echo "lb: same CA"
 ```
 
-What check 2 must show:
+Result: each check prints what its comment says, and check 2 shows:
 
 | Item | mongot | Envoy client | Public LB |
 | --- | --- | --- | --- |
@@ -218,7 +228,7 @@ What check 2 must show:
 
 If check 6 shows the public LB cert has a different CA, that is fine; Step 4 builds the trust bundle from both. A missing SAN or EKU cannot be fixed with openssl: ask the company signer to reissue.
 
-## Step 4: Create the ent-trust-bundle ConfigMap
+### 4. Create the ent-trust-bundle ConfigMap
 
 `ent-trust-bundle` holds the company CA under the key `ca.crt`, and the mongot and Envoy pods mount it to check the certs they receive. This runbook treats the CA extracted in Step 2 as the company CA.
 
@@ -252,20 +262,18 @@ openssl s_client -connect $SOURCE_HOST -servername ${SOURCE_HOST%:*} \
   -CAfile trust-bundle.pem </dev/null 2>/dev/null | grep 'Verify return code'
 ```
 
-Expected: `Verify return code: 0 (ok)`. If not, the mongod cert was signed by a CA that is not in the bundle. Get that CA, append it to `trust-bundle.pem`, and reload the ConfigMap:
+Result: expected: `Verify return code: 0 (ok)`. If not, the mongod cert was signed by a CA that is not in the bundle. Get that CA, append it to `trust-bundle.pem`, and reload the ConfigMap:
 
 ```bash
 oc create configmap $TRUST_CM --from-file=ca.crt=trust-bundle.pem \
   -n $NS --dry-run=client -o yaml | oc apply -f -
 ```
 
-## Step 5: Create the secrets
+### 5. Create the secrets
 
-Use the secret names exactly as set in Step 1. The operator finds the three TLS secrets by the `ent-mongot-search-*` naming convention (see the Overview), not by any reference in the YAML.
+Use the secret names exactly as set in Step 1. The operator finds the three TLS secrets by the `ent-mongot-search-*` naming convention (see [Architecture](#architecture)), not by any reference in the YAML.
 
-Each secret is type `kubernetes.io/tls`. The operator reads `tls.crt` (leaf then chain) and `tls.key` (no password); these commands also write a harmless `ca.crt` copy of the company CA. The TLS secrets' `ca.crt` is not used for peer verification. Envoy and mongot use `ca.crt` from the source trust ConfigMap, `ent-trust-bundle` in this runbook.
-
-Operator 1.13.0 projects Envoy's trusted CA from the source CA volume ([`mongodbsearchenvoy_controller.go:628–633`](https://github.com/mongodb/mongodb-kubernetes/blob/1.13.0/controllers/operator/mongodbsearchenvoy_controller.go#L628-L633)). For an external source, that volume uses `ca.crt` from the ConfigMap named by `spec.source.external.tls.ca` ([`external_search_source.go:41–42`](https://github.com/mongodb/mongodb-kubernetes/blob/1.13.0/controllers/searchcontroller/external_search_source.go#L41-L42)); mongot's `CertificateAuthorityFile` points at the same CA mount ([`mongodbsearch_reconcile_helper.go:1918–2061`](https://github.com/mongodb/mongodb-kubernetes/blob/1.13.0/controllers/searchcontroller/mongodbsearch_reconcile_helper.go#L1918-L2061)).
+Each secret is type `kubernetes.io/tls`. The operator reads `tls.crt` (leaf then chain) and `tls.key` (no password); these commands also write a harmless `ca.crt` copy of the company CA. The TLS secrets' `ca.crt` is not used for peer verification. Envoy and mongot use `ca.crt` from the source trust ConfigMap, `ent-trust-bundle` in this runbook. Where the operator reads it: [Operator source references](#operator-source-references).
 
 ```bash
 # mongot: server and client auth
@@ -296,7 +304,9 @@ for s in $MONGOT_SECRET $ENVOY_CLIENT_SECRET $LB_SECRET; do
 done
 ```
 
-`oc create secret tls` rejects a key that does not match its cert, but `generic` does not. Step 3 check 4 is what guards against a mismatch here.
+Result: each secret holds the right leaf, issued by the company CA.
+
+The `tls` form (oc create secret tls) rejects a key that does not match its cert, but `generic` does not. Step 3 check 4 is what guards against a mismatch here.
 
 **Sync user password secret**
 
@@ -314,15 +324,17 @@ unset SYNC_PW
 oc get secret $SYNC_PW_SECRET -n $NS -o jsonpath='{.data.password}' | base64 -d | wc -c
 ```
 
+Result: the length of the password, not the password.
+
 `printf '%s'` matters: `echo` or a here-string would add a trailing newline, which becomes part of the password and makes sign-in fail. `IFS= read -r` matters too: a plain `read` drops the spaces at either end of what is typed and takes a backslash as an escape, and both can be part of a password.
 
-## Step 6: Deploy mongot and Envoy, and set trust on mongod
+### 6. Deploy mongot and Envoy, and set trust on mongod
 
 With the ConfigMap and secrets in place, the operator finds them on the first reconcile, and the pods start without crash-looping on missing files.
 
-The Helm chart `chart/mongodb-search-helm` does 6a, 6b and 6d in one `helm install`, and installs the operator as well: see [Prerequisites and Setup](prerequisite-and-setup-doc.md). The steps below are the same thing by hand.
+The Helm chart `chart/mongodb-search-helm` does 6a, 6b and 6d in one helm install, and installs the operator as well: see [Prerequisites and Setup](prerequisite-and-setup-doc.md). The steps below are the same thing by hand.
 
-**6a. Apply the MongoDBSearch resource**
+#### 6a. Apply the MongoDBSearch resource
 
 The resource never names the TLS secrets directly. `certsSecretPrefix: ent` plus the resource name `mongot` tells the operator to look for `ent-mongot-search-cert`, `ent-mongot-search-lb-0-cert` and `ent-mongot-search-lb-0-client-cert`, the names created in Step 5. The sync password is referenced by name in `passwordSecretRef`.
 
@@ -415,7 +427,7 @@ Changing `metadata.name` or `certsSecretPrefix` changes the secret names the ope
 oc apply -f mongodbsearch.yaml -n $NS
 ```
 
-**6b. Wait for the workloads and check the mounts**
+#### 6b. Wait for the workloads and check the mounts
 
 ```bash
 oc rollout status statefulset/$MONGOT_STS  -n $NS   # 3 pods
@@ -425,7 +437,9 @@ oc rollout status deployment/$ENVOY_DEPLOY -n $NS   # 2 pods
 oc get sts/$MONGOT_STS deploy/$ENVOY_DEPLOY -n $NS -o yaml | grep -E 'ent-trust-bundle|ent-mongot-search'
 ```
 
-**6c. Make the source mongod trust the company CA**
+Result: the StatefulSet's 3 pods and the Deployment's 2 pods rolled out, and all four object names in the pod specs.
+
+#### 6c. Make the source mongod trust the company CA
 
 The source mongod runs outside this cluster at `abc234.uat.company.net:26018`, so it is not configured here. It reaches mongot through `mongot-search-rnd.company.net` and checks Envoy's public cert (`ent-mongot-search-lb-0-cert`) when it does.
 
@@ -434,7 +448,7 @@ Ask the mongod host owners to confirm two things:
 - [ ] The CA file in mongod's TLS settings includes the company CA in `trust-bundle.pem`
 - [ ] mongod's search settings point at `mongot-search-rnd.company.net` on port 443
 
-**6d. Expose Envoy on the public FQDN with a passthrough Route**
+#### 6d. Expose Envoy on the public FQDN with a passthrough Route
 
 mongod reaches Envoy through an OpenShift Route named `mongot-search` on `mongot-search-rnd.company.net`. The Route must use **passthrough**, so the router forwards the TLS stream untouched. Envoy does the SNI matching on `externalHostname` and presents `ent-mongot-search-lb-0-cert` itself. With edge or reencrypt, mongod would get the router's cert instead.
 
@@ -489,6 +503,8 @@ oc get route mongot-search -n $NS \
 oc get route mongot-search -n $NS -o jsonpath='{.status.ingress[0].routerCanonicalHostname}{"\n"}'
 ```
 
+Result: TERMINATION reads passthrough, the endpoints list both Envoy pod IPs on 27028, the balance prints roundrobin, and the last command prints the router hostname.
+
 Ask the DNS owner to point `mongot-search-rnd.company.net` at that router hostname. mongod then connects to `mongot-search-rnd.company.net:443`; the router listens on 443 and forwards to Envoy on 27028.
 
 If you use an Ingress instead of a Route, it needs the passthrough annotation. Without it, OpenShift defaults to edge. Set the balance annotation on the Ingress as well; OpenShift copies the Ingress annotations onto the Route it generates:
@@ -525,9 +541,11 @@ oc get route -n $NS \
   -o jsonpath='{range .items[*]}{.metadata.name}{"  "}{.spec.tls.termination}{"  "}{.metadata.annotations.haproxy\.router\.openshift\.io/balance}{"\n"}{end}'
 ```
 
-## Step 7: Verify end to end, then clean up
+## Verify
 
-**7a. Check the logs for TLS errors**
+Step 7, end to end; the clean-up that ends it, 7d, is under [Clean up](#clean-up).
+
+### 7a. Check the logs for TLS errors
 
 ```bash
 oc logs -n $NS -l app=mongot-search-0-svc --all-containers --prefix --since=10m | grep -iE 'tls|ssl|certificate|handshake'
@@ -536,7 +554,7 @@ oc logs -n $NS -l app=mongot-search-lb-0  --all-containers --prefix --since=10m 
 
 No handshake or verify errors means the internal mTLS hop is working.
 
-**7b. Test the public endpoint**
+### 7b. Test the public endpoint
 
 From a machine that can reach the public FQDN (the Route listens on 443):
 
@@ -547,7 +565,7 @@ openssl s_client -connect $PUBLIC_FQDN:443 -servername $PUBLIC_FQDN \
 
 Expected: the subject shows the public FQDN, the issuer is the company CA, and `Verify return code: 0 (ok)`. A `certificate required` alert means the endpoint also wants a client cert; that part is mongod's and is not tested here.
 
-**7c. Confirm search works**
+### 7c. Confirm search works
 
 Run a `$search` query against a collection that has a search index. Results back means every hop is working.
 
@@ -561,21 +579,21 @@ done
 
 Each mongod keeps one long-lived connection, and a connection stays on the Envoy pod it first landed on. With one mongod sending queries, one pod showing every request and the other showing 0 is expected. Once several mongod servers are connected, a pod that stays at 0 means the connections are not being spread: check the balance annotation from Step 6d.
 
-**7d. Delete the decrypted keys**
-
-```bash
-rm -f mongot.key envoy-client.key lb.key *.pass
-```
-
-This unlinks the files; nothing overwrites them. On current macOS `rm -P` does nothing (its manual page says "This flag has no effect"), and on a solid-state or copy-on-write disk `shred` cannot overwrite a file in place either. Do this work in a directory on an encrypted disk.
-
-Keep the original PEM files somewhere access-controlled.
-
 - [ ] mongot (3 pods) and Envoy (2 pods) Running and Ready
 - [ ] No TLS errors in mongot or Envoy logs
 - [ ] Public endpoint returns `Verify return code: 0 (ok)`
 - [ ] `$search` query returns results
 - [ ] Decrypted key files deleted
+
+## Reference
+
+### Operator source references
+
+Operator 1.13.0 projects Envoy's trusted CA from the source CA volume ([`mongodbsearchenvoy_controller.go:628–633`](https://github.com/mongodb/mongodb-kubernetes/blob/1.13.0/controllers/operator/mongodbsearchenvoy_controller.go#L628-L633)). For an external source, that volume uses `ca.crt` from the ConfigMap named by `spec.source.external.tls.ca` ([`external_search_source.go:41–42`](https://github.com/mongodb/mongodb-kubernetes/blob/1.13.0/controllers/searchcontroller/external_search_source.go#L41-L42)); mongot's `CertificateAuthorityFile` points at the same CA mount ([`mongodbsearch_reconcile_helper.go:1918–2061`](https://github.com/mongodb/mongodb-kubernetes/blob/1.13.0/controllers/searchcontroller/mongodbsearch_reconcile_helper.go#L1918-L2061)).
+
+### Diagram sources
+
+The figure under Architecture comes from `diagrams/mongot-runbooks/source.html`, rendered to a light and a dark PNG; this document embeds the light one. The page holds two figures, in this order: `fresh-install-path` and `cert-parties`. To change a figure, edit the page, re-render both PNGs, and update its `alt` text and its `text` twin in the same commit.
 
 ## Troubleshooting
 
@@ -583,17 +601,17 @@ Keep the original PEM files somewhere access-controlled.
 | --- | --- | --- |
 | `bad decrypt` in Step 2 | Wrong passphrase | Rerun 2b with the correct passphrase |
 | `unsupported`, or `unable to load key` with no `bad decrypt`, in Step 2 | The key's encryption is one this openssl build does not have (an old PBE cipher on OpenSSL 3, scrypt on LibreSSL) | Use the other build, for example `/opt/homebrew/bin/openssl` in place of the system's |
-| Leaf count is 0 or 2 in Step 3 | Leaf marked as CA, or the PEM layout differs | Run `openssl x509 -noout -subject -text` on each cert block and sort them by hand |
+| Leaf count is 0 or 2 in Step 3 | Leaf marked as CA, or the PEM layout differs | Run openssl x509 -noout -subject -text on each cert block (the inspection below) and sort them by hand |
 | No `DNS:<fqdn>` in Step 3 check 3 | Public cert issued for a different name | Confirm the FQDN; reissue if wrong |
 | `unable to get local issuer certificate` | CA bundle missing an intermediate or the root | Get the full chain from the company signer |
 | `AlreadyExists` in Step 4 or 5 | Object already there; not a fresh install | Use the retrofit runbook |
-| Pods stuck in `ContainerCreating` | A secret or ConfigMap name in the spec is wrong or missing | `oc describe pod` shows the missing name; compare with Step 1 |
+| Pods stuck in `ContainerCreating` | A secret or ConfigMap name in the spec is wrong or missing | The pod's description (below) shows the missing name; compare with Step 1 |
 | `unsupported certificate purpose` in logs | EKU missing Server or Client Auth | Reissue with the right EKU |
 | `hostname mismatch` or SAN error | SAN does not match the name being called | Reissue with the correct SAN |
 | `unknown ca` or `certificate verify failed` | A party does not trust the CA | Step 4 for mongot and Envoy; Step 6c for mongod |
-| Step 7b times out | DNS not pointing at the load balancer, or a firewall | Step 6d; check `nslookup $PUBLIC_FQDN` |
+| Step 7b times out | DNS not pointing at the load balancer, or a firewall | Step 6d; check the public FQDN resolves (below) |
 | `-ext` option not recognised | macOS LibreSSL | Use the `-text \| grep` forms in this runbook |
-| Operator reports a missing secret, or mongot or Envoy pods never start | TLS secret name does not follow the `certsSecretPrefix` convention | Compare `oc get secret -n $NS \| grep ent-mongot-search` with the Overview naming table; recreate any misnamed secret |
+| Operator reports a missing secret, or mongot or Envoy pods never start | TLS secret name does not follow the `certsSecretPrefix` convention | Compare the list of `ent-mongot-search` secrets (below) with the naming table under Architecture; recreate any misnamed secret |
 | Step 7b shows the router's certificate, not the company-signed one | Route uses edge or reencrypt termination | Step 6d: set `tls.termination: passthrough` on the `mongot-search` Route |
 | One Envoy pod logs every request and the other logs none, with several mongod servers connected | Route has no balance annotation, so the router uses `source` | Step 6d: set `haproxy.router.openshift.io/balance: roundrobin`; connections already open move only when they reconnect |
 
@@ -615,6 +633,20 @@ for c in cert-*.pem; do echo "== $c"; openssl x509 -in $c -noout -subject -text 
 rm cert-*.pem
 ```
 
-## Diagram sources
+## Clean up
 
-The figure in the Overview comes from `diagrams/mongot-runbooks/source.html`, rendered to a light and a dark PNG; this document embeds the light one. The page holds two figures, in this order: `fresh-install-path` and `cert-parties`. To change a figure, edit the page, re-render both PNGs, and update its `alt` text and its `text` twin in the same commit.
+### 7d. Delete the decrypted keys
+
+```bash
+rm -f mongot.key envoy-client.key lb.key *.pass
+```
+
+This unlinks the files; nothing overwrites them. On current macOS `rm -P` does nothing (its manual page says "This flag has no effect"), and on a solid-state or copy-on-write disk `shred` cannot overwrite a file in place either. Do this work in a directory on an encrypted disk.
+
+Keep the original PEM files somewhere access-controlled.
+
+## What's next
+
+- Install the operator, the MongoDBSearch and the Route with the chart instead of 6a, 6b and 6d: [Prerequisites and Setup](prerequisite-and-setup-doc.md).
+- Why the Route balances round robin, with the lab measurements: [mongot Route Balance Rationale](mongot-route-balance-rationale.md).
+- Swap the certs later on the running setup: [mongot & Envoy mTLS Cert Runbook](mongot-envoy-mtls-cert-runbook.md).
