@@ -42,7 +42,7 @@ Every step has two forms. `--dry-run` writes the YAML file and contacts no clust
 
 ### Step 1: Name the namespace and make its folder
 
-The namespace is never assumed. Name it on each command as a plain word (`--check dvh-gp6-rnd`) or with `--target-namespace <namespace>`, or once for the session with `export TargetNamespace=<namespace>`; with none, every command refuses, and two that differ are refused.
+The namespace is never assumed. Name it in one of three ways, shown after the setup below; with none, every command refuses, and two that differ are refused.
 
 ```bash
 NS=dvh-gp6-rnd                            # Part 2 uses $NS
@@ -56,6 +56,14 @@ PREREQ=chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
 mkdir -m 700 $NS                          # the script never creates it
 cp /path/to/mongot.pem /path/to/envoy.pem /path/to/public.pem "$NS/"   # or leave them in the current directory
 bash $PREREQ --check $NS
+```
+
+The three ways to name the namespace:
+
+```bash
+bash $PREREQ --check dvh-gp6-rnd                              # a plain word on each command
+bash $PREREQ --check --target-namespace dvh-gp6-rnd           # the option on each command
+export TargetNamespace=dvh-gp6-rnd                            # once for the session
 ```
 
 The script finds each PEM that is not named, and prints the file chosen with its leaf's subject and names before any passphrase is asked:
