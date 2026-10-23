@@ -11,6 +11,7 @@ config:
   MD041: false        # first line need not be a heading
   MD036: false        # emphasis used as a heading: "**Expect:**"-style lead-ins are a deliberate style
   MD034: false        # bare URLs appear inside recorded output
+  MD010: { code_blocks: false }   # tabs stay inside code: Go source is tab-indented, and recorded output is verbatim
   MD060: false        # table column style: tables are not padded (see scripts/mdfmt)
 ignores:
   # vendored: the Hubble Observer chart, copied from upstream (UPSTREAM-COMMIT.txt)

@@ -21,6 +21,7 @@ kind-mesh-cilium/scripts/chart-up.sh    # helm upgrade --install mongot-search i
 `searchTLS.enabled: true` with `lbL7.enabled: false` is step 1's. The chart refuses both on.
 
 The chart does not make what it depends on. Step 2's form needs, in every cluster:
+
 - Cilium with WireGuard and the L7 backend (`cilium/values-step2.yaml`, applied by `scripts/cleartext-l7.sh`);
 - each mongod with `searchTLSMode=disabled` (also `cleartext-l7.sh`);
 - the sync user's password Secret, `search-sync-source-password` (`kind-mesh/scripts/mongo-up.sh`), and the members'

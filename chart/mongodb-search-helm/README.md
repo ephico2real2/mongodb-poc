@@ -556,6 +556,7 @@ The same day the lab's viewer was given the role, and the console showed the ale
 *The alert in the console, as a user who is not a cluster administrator: one rule, three alerts, one a pod. The levels were lowered on the lab so that it would fire. The dark capture is [beside it](../../docs/screenshots/console-alert-data-path-filling-up.dark.png).*
 
 **Not in it: a "full in N days" rule.** The mixins that ship with Kubernetes also alert on a volume predicted to fill. It was looked at and left out: an index store grows in steps (a merge, a rebuild that keeps two copies for a time, then drops one), on the lab the slope of 6 hours was that of the node's other writers, and a restarted pod left a second series whose prediction alone would have fired.
+
 ## Replication lag
 
 Each mongot pod follows the source deployment by itself, so a search can be answered from an index that is a little behind the collection, and one pod can be further behind than another. This is what MongoDB says about it, where this chart shows it, and what was decided about alerting on it.
@@ -611,6 +612,7 @@ MongoDB's remedies, in its order, with where each is said and how it is done wit
 **This chart has no alert on the lag itself**, by the owner's decision of 2026-10-09: the panels show it, and `MongotIndexNotFollowing` fires once a pod has stopped following. `MongotIndexesDifferByPod` does not cover it either: it never compares an index that is written to at least once every 10 minutes. MongoDB does publish an alert for it, in the table above; whoever wants it can add that expression to a PrometheusRule of their own in the namespace. Before taking its 60 seconds as it is, note what the lab's idle gauge reads, below.
 
 **Measured on the lab**, 2026-10-09: while two inserts a second were written to one index for 14 minutes, twice, its lag read 0 on two pods at each of 61 readings and 0 or 1 second on the third (1 second at 5 of 61 readings in the first run and 14 of 61 in the second). The document counts of the three pods read 17 to 24 apart during the same minutes: Prometheus reads the first pod 9 seconds after the other two. With nothing written, the gauge read 6 to 10 seconds for minutes at a time on one pod or another (Prometheus's 15-second samples of the same hours hold 10 s for up to 5 minutes running, once 11 s and once 17 s); why was not looked into.
+
 ## Volumes and scaling
 
 Six documents beside this one, two test records in `docs/`, and a script, for running mongot once it is installed.

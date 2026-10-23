@@ -4,7 +4,6 @@
 > laptop reproduction: every command, every measurement, and the network stitching
 > that only a single-machine setup requires. Nothing here is part of the target design.
 
-
 Reproduces, on a single MacBook, the architecture MongoDB's vendor team specifies:
 **an L7 proxy (Envoy) load-balancing gRPC across 3 `mongot` pods**, with MongoDB
 itself running *outside* Kubernetes.
@@ -64,7 +63,6 @@ predicate so a retry lands on a *different* `mongot`, 300s stream/request/route 
 *CRC has **no host interface at all** — it is reached only by port-forwards over a unix
 socket. colima sits on a real vmnet bridge the Mac routes to. No IP range is on-link to
 both, so the path is stitched at L3, and only one direction works unaided.*
-
 
 Three separate network stacks live on this Mac. Two of them cannot see each other
 directly, and that constraint drives the whole design.
@@ -135,7 +133,6 @@ curl -X POST http://192.168.127.254/services/forwarder/expose \
 > neither possible nor wanted. See
 > [One hostname, two entry paths](README.md#one-hostname-two-entry-paths).
 
-
 <!-- markdownlint-disable MD033 -->
 <img alt="mongod opens one long-lived HTTP/2 connection, so Envoy is required to split individual gRPC streams across three mongot pods; the sync leg runs in the opposite direction back to the external replica set." src="docs/diagrams/mongot-openshift/grpc-path.light.png">
 <!-- markdownlint-enable MD033 -->
@@ -143,7 +140,6 @@ curl -X POST http://192.168.127.254/services/forwarder/expose \
 *Every hop verified on the running cluster. `mongot-grpc-lb` is hand-written because
 `ManagedLBConfig` has no Service-type field and the operator hardcodes its proxy Service
 to `ClusterIP`, leaving MetalLB nothing to bind to.*
-
 
 ```
 mongod rs0 (colima, 3 members)
@@ -517,4 +513,3 @@ rs0                                   PRIMARY + 2 SECONDARY, health=1
 - **`$search` verified.** 40 queries distributed 13 / 14 / 14 across the three `mongot`,
   confirmed from each pod's own Prometheus counter and Envoy's `upstream_rq_total: 41`.
 - `mongot-grpc-lb` has no `ownerReferences`.
-

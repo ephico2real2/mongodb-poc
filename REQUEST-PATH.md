@@ -146,4 +146,3 @@ C. a 90s load, 19,457 queries           0-0: 37.1%   0-1: 31.3%   0-2: 31.6%
   `./app/entry-path.sh` proves which one is live.
 - **Anything about the reverse sync leg's balancing.** Each `mongot` opens its own change
   stream directly to the replica set; it does not pass through Envoy.
-

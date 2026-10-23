@@ -281,8 +281,13 @@ reset
 run bash scripts/mdfmt baseline
 expect "mdfmt baseline passes on the tree as committed" 0 "listed in test/markdownlint-baseline.txt"
 
-run "${BASH_UNDER_TEST:-bash}" scripts/mdfmt baseline README.md
+# The list is empty once every page passes: the cases below list a page of their own.
+printf '# Listed\n\n\n\nStill failing.\n' > "${REPO}/docs/listed-page.md"
+printf 'docs/listed-page.md\n' >> "${REPO}/test/markdownlint-baseline.txt"
+git -C "${REPO}" add docs/listed-page.md
+run "${BASH_UNDER_TEST:-bash}" scripts/mdfmt baseline docs/listed-page.md
 expect "mdfmt baseline on listed pages only checks none and passes" 0 "mdfmt baseline: 0 pages not listed and checked"
+reset
 
 printf '# New page\n\n\n\nText.\n' > "${REPO}/docs/new-page.md"
 git -C "${REPO}" add docs/new-page.md
@@ -290,8 +295,8 @@ run bash scripts/mdfmt baseline
 expect "a lint error in a page not listed fails" 1 "docs/new-page.md:3 error MD012/no-multiple-blanks"
 reset
 
-clean="$(grep -vE '^(#|$)' "${REPO}/test/markdownlint-baseline.txt" | head -1)"
-printf '# Rewritten\n\nA page markdownlint passes.\n' > "${REPO}/${clean}"
+clean=TLS.md
+printf '%s\n' "${clean}" >> "${REPO}/test/markdownlint-baseline.txt"
 run bash scripts/mdfmt baseline
 expect "a listed page that passes now fails" 1 "mdfmt: ${clean} passes now: remove it from test/markdownlint-baseline.txt"
 reset

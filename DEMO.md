@@ -37,6 +37,7 @@ Three checks. All three must pass before continuing.
 ```bash
 oc get mongodbsearch mongot -n mongodb-poc
 ```
+
 ```text
 NAME     PHASE     AGE
 mongot   Running   3h
@@ -45,6 +46,7 @@ mongot   Running   3h
 ```bash
 oc get pods -n mongodb-poc
 ```
+
 ```text
 NAME                                  READY   STATUS    RESTARTS   AGE
 mongodb-kubernetes-operator-...       1/1     Running   0          3h
@@ -59,12 +61,14 @@ mongot-toolbox-...                    1/1     Running   0          1h
 ```bash
 docker compose -f mongodb/compose.yaml --env-file mongodb/.env ps
 ```
+
 ```text
 NAME     IMAGE                                             SERVICE  STATUS
 mongo1   docker.io/mongodb/mongodb-community-server:8.3.4-ubi9   mongo1   Up 2 hours
 mongo2   docker.io/mongodb/mongodb-community-server:8.3.4-ubi9   mongo2   Up 2 hours
 mongo3   docker.io/mongodb/mongodb-community-server:8.3.4-ubi9   mongo3   Up 2 hours
 ```
+
 (There is no `STATE` column; check `STATUS` reads `Up`.)
 
 > **If `PHASE` is not `Running`**, stop here. Nothing below will work. See §8.
@@ -100,6 +104,7 @@ Two datasets: **24 curated** documents that the correctness assertions depend on
 cd mongodb
 ./scripts/load-data.sh          # the curated 24 + both search indexes
 ```
+
 ```text
 documents loaded: 24
 index requested: default (search)
@@ -111,6 +116,7 @@ QUERYABLE: default, vector_index
 ```bash
 ./scripts/load-bulk.sh          # + 20,000 generated documents
 ```
+
 ```text
 loading 20000 documents from data/bulk-movies.json in batches of 2000
   inserted 20000/20000
@@ -139,6 +145,7 @@ Envoy or Kubernetes.
 ```bash
 cd .. && ./app/search-cli.sh detective
 ```
+
 ```text
   query   : "detective"   mode: text
   corpus  : 20,024 documents
@@ -155,6 +162,7 @@ cd .. && ./app/search-cli.sh detective
 ```bash
 ./app/search-cli.sh -v -y 1990 -n 4 space
 ```
+
 ```text
   query   : "space"   mode: vector   filter: year >= 1990
   corpus  : 20,024 documents
@@ -180,6 +188,7 @@ everything.
 ```bash
 cd mongodb && ./scripts/verify-search.sh
 ```
+
 ```text
 === 1. correctness: $search ===
   PASS  $search "karate" -> The Karate Kid  score=8.308
@@ -224,6 +233,7 @@ after — not from the proxy's self-report.
 ```bash
 ./scripts/load-test.sh -c 4 -n 100          # 4 workers x 100 queries
 ```
+
 ```text
 === load test: 4 workers x 100 text queries = 400 total ===
     corpus: 20024 documents
@@ -246,6 +256,7 @@ Then push it until it hurts:
 ```bash
 ./scripts/load-test.sh -c 12 -n 250         # 3,000 queries
 ```
+
 ```text
   queries ok : 3,000   errors: 0
   wall clock : 194.6s     throughput: 15 q/s

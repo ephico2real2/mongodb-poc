@@ -30,7 +30,6 @@ oc rollout status deploy/mongot-toolbox -n mongodb-poc
 
 ---
 
-
 ## The test suite
 
 ```bash
@@ -120,7 +119,6 @@ MongotTrafficNotDistributed   Warning   User
 
 Filter with `?name=Mongot&alert-source=user`. The default `alert-source=platform` hides them
 entirely, which looks exactly like the rules having failed to load.
-
 
 ## Step 1 — the sample data
 
