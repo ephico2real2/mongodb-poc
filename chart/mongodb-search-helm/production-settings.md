@@ -4,12 +4,6 @@ Which values MongoDB Search runs with in production, and why. The MongoDBSearch 
 (MongoDB Controllers for Kubernetes 1.13.0) leave several things that cannot be set, or cannot be changed once the
 search exists. So the first values an install is given decide more here than they would elsewhere.
 
-Each line says where it comes from: **lab** (measured on the lab by this repository), **MongoDB** (its documents,
-its CRD or its operator's source), **Kubernetes**, **OpenShift**, **the chart** (its `values.yaml` and templates),
-**not run** (nobody has shown it), or **to decide** (yours: a number or a name this repository does not have).
-[examples/values-production.yaml](examples/values-production.yaml) is the same as a file. It does not install as
-it is: `search.resources` holds the word `TO-DECIDE`, which the chart refuses, until the numbers are yours.
-
 ## In short
 
 - **Size the volumes once, with room.** The operator cannot grow a volume. Growing one is a runbook, by hand or by
@@ -23,6 +17,14 @@ it is: `search.resources` holds the word `TO-DECIDE`, which the chart refuses, u
 - **Name every version**: the operator's, mongot's, Envoy's image and the Jobs' image.
 - **Sync by hand, from a release tag.**
 - **Keep the production values where the real names may be written**: not in this repository, which is public.
+
+## Where each line comes from
+
+Each line says where it comes from: **lab** (measured on the lab by this repository), **MongoDB** (its documents,
+its CRD or its operator's source), **Kubernetes**, **OpenShift**, **the chart** (its `values.yaml` and templates),
+**not run** (nobody has shown it), or **to decide** (yours: a number or a name this repository does not have).
+[examples/values-production.yaml](examples/values-production.yaml) is the same as a file. It does not install as
+it is: `search.resources` holds the word `TO-DECIDE`, which the chart refuses, until the numbers are yours.
 
 ## What the resource does not let you do
 
@@ -50,16 +52,22 @@ it is: `search.resources` holds the word `TO-DECIDE`, which the chart refuses, u
 | `search.replicas` | `3` | Each pod holds every index; three leave two answering while one restarts or rebuilds. More pods add searches a second, and add one change stream an index a pod to the source | MongoDB; lab |
 | `search.allowVolumeLoss` | `false`, always in git | It is the switch that lets a scale-down delete volumes. Set it for the one sync that needs it and take it out with the next commit | lab |
 | `search.podDisruptionBudget` | `enabled: true`, `maxUnavailable: 1`, the chart's | A node drain takes one mongot pod at a time and waits for it to be Ready again. On the lab the same evictions failed 37 of 195 searches without it and none of 191 with it | lab; Kubernetes |
-| `search.keepOnUninstall` | `true` | Keeps the MongoDBSearch, its pods and its volumes through `helm uninstall`, an Argo CD prune and the deletion of the Application | lab |
+| `search.keepOnUninstall` | `true` | Keeps the MongoDBSearch, its pods and its volumes through helm uninstall, an Argo CD prune and the deletion of the Application | lab |
 | `search.version` | The mongot version, named: `"1.70.1"` with operator 1.13.0 | An operator upgrade then does not move mongot by itself | The chart |
-| `search.persistence.storageClass` | `thin-csi` | It allows expansion as it ships, so the runbook can be used. Its reclaim policy is `Delete`: see the volumes below | OpenShift; to confirm on the cluster: `oc get storageclass thin-csi -o jsonpath='{.allowVolumeExpansion} {.reclaimPolicy}'` |
+| `search.persistence.storageClass` | `thin-csi` | It allows expansion as it ships, so the runbook can be used. Its reclaim policy is `Delete`: see the volumes below | OpenShift; to confirm on the cluster (below the table) |
 | `search.persistence.storage` | **To decide.** At least 1.47 times the indexes of one pod; for 190 GB of indexes, `300Gi` | Below | MongoDB; the arithmetic is this repository's |
 | `search.resources` | **To decide**, from QA | Below | MongoDB |
 
-**The volume's size.** mongot builds no index above 85% used, stops following the source above 90% and exits at
-95%; MongoDB: "Plan for roughly 125% of the expected steady-state footprint during a rebuild." A rebuild of
-everything on a volume therefore fits only while the indexes are under 68% of it (0.85 / 1.25), and the chart's
-first alert is at 70%. Growing the volume later is the runbook, by hand or with `autoExpand`; neither has been run on vSphere yet.
+To confirm the storage class on the cluster (the `search.persistence.storageClass` row):
+
+```bash
+oc get storageclass thin-csi -o jsonpath='{.allowVolumeExpansion} {.reclaimPolicy}'
+```
+
+**The volume's size.** mongot builds no index above 85% used, stops following the source above 90% and exits at 95%;
+MongoDB: "Plan for roughly 125% of the expected steady-state footprint during a rebuild." A rebuild of everything on a
+volume therefore fits only while the indexes are under 68% of it (0.85 / 1.25), and the chart's first alert is at 70%.
+Growing the volume later is the runbook, by hand or with `autoExpand`; neither has been run on vSphere yet.
 
 | Indexes on one pod | The smallest volume a full rebuild fits on | On `300Gi` | On `400Gi` |
 | --- | --- | --- | --- |
@@ -67,9 +75,9 @@ first alert is at 70%. Growing the volume later is the runbook, by hand or with 
 | 250 GB (233 GiB) | 342 GiB | 78%: no room for a full rebuild, the info alert firing | 58%; 73% |
 
 So `300Gi` holds today's indexes with a rebuild, and its room for a full rebuild ends at about 219 GB of indexes
-(204 GiB), 15% above today's. If the indexes are expected to grow by more than that, choose the larger size now. The figures take
-the owner's "180 to 190 GB" as decimal gigabytes; if they were read from `df`, they are GiB and every size above
-is 7% short.
+(204 GiB), 15% above today's. If the indexes are expected to grow by more than that, choose the larger size now. The
+figures take the owner's "180 to 190 GB" as decimal gigabytes; if they were read from `df`, they are GiB and every size
+above is 7% short.
 
 **CPU and memory.** MongoDB gives the rule, not the number: "As an estimate, allocate 50% of the total available
 system memory, without exceeding a maximum of approximately 30GB" to the heap, the rest being the file system's
@@ -152,10 +160,10 @@ are taken from what the projects that ship Envoy on Kubernetes set, and from two
   with searches of ten small results, the Envoy pod that carried them used about 0.4 CPUs at 1,000 searches a
   second; the two Envoy pods together used 0.7 to 0.9 thousandths of a CPU for each search a second at the lowest
   rate, 0.2 to 0.3 at the highest.
-- **Memory, 256Mi requested and 1Gi at most.** On the lab no Envoy pod used more than 32 MiB over a day, near
-  idle, and 36 MiB under load (42 MiB by its cgroup's count, which adds its cache). 1Gi is Istio's limit; Emissary's documentation says to "keep ... memory usage below 50% of the pod's
-  limit". The limit is the only guard: the operator's Envoy has no overload manager, so a pod that reaches it is
-  killed, not slowed.
+- **Memory, 256Mi requested and 1Gi at most.** On the lab no Envoy pod used more than 32 MiB over a day, near idle, and
+  36 MiB under load (42 MiB by its cgroup's count, which adds its cache). 1Gi is Istio's limit; Emissary's documentation
+  says to "keep ... memory usage below 50% of the pod's limit". The limit is the only guard: the operator's Envoy has no
+  overload manager, so a pod that reaches it is killed, not slowed.
 - **What decides it is QA**, on the dashboard's Envoy section and these two: the share of periods in which the
   pod was throttled, `rate(container_cpu_cfs_throttled_periods_total[5m]) / rate(container_cpu_cfs_periods_total[5m])`
   for the Envoy container, which should stay near zero; and `container_memory_working_set_bytes` against the
@@ -169,7 +177,9 @@ its `pilot/cmd/pilot-agent/config/config.go` and its
 Envoy Gateway's [`api/v1alpha1/shared_types.go`](https://github.com/envoyproxy/gateway/blob/v1.9.2/api/v1alpha1/shared_types.go);
 Kuma's [`pkg/config/plugins/runtime/k8s/config.go`](https://github.com/kumahq/kuma/blob/v2.14.5/pkg/config/plugins/runtime/k8s/config.go);
 Emissary-ingress's [chart values](https://github.com/emissary-ingress/emissary/blob/v4.1.0/charts/emissary-ingress/values.yaml)
-and its documentation's [scaling page](https://github.com/datawire/ambassador-docs/blob/master/docs/emissary/latest/topics/running/scaling.md); Envoy's documentation at v1.37.0, `operations/cli`, `faq/performance/how_fast_is_envoy` and
+and its documentation's
+[scaling page](https://github.com/datawire/ambassador-docs/blob/master/docs/emissary/latest/topics/running/scaling.md);
+Envoy's documentation at v1.37.0, `operations/cli`, `faq/performance/how_fast_is_envoy` and
 `faq/performance/how_to_benchmark_envoy`. All read on 2026-10-10.
 
 What is given in `loadBalancer.resources` replaces the operator's defaults whole. A change restarts the Envoy

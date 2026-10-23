@@ -48,7 +48,7 @@ search:
     limits: {cpu: "4", memory: 12Gi}
 ```
 
-Then a sync of the Argo CD Application (or `helm upgrade` with the release's values file). Run under Argo CD on
+Then a sync of the Argo CD Application (or helm upgrade with the release's values file). Run under Argo CD on
 the lab: [argocd.md](argocd.md), "Changing, scaling and growing". The operator changes the StatefulSet's pod
 template, and Kubernetes restarts the pods one at a time, the highest number first, each Ready before the next.
 
@@ -58,7 +58,7 @@ template, and Kubernetes restarts the pods one at a time, the highest number fir
   "to half of `spec.clusters[].resourceRequirements.requests.memory`".
 - **The other pods stay up while one restarts.**
 
-Measured on the lab: the memory request raised from 1Gi to 1100Mi with `helm upgrade`. The three pods were restarted
+Measured on the lab: the memory request raised from 1Gi to 1100Mi with helm upgrade. The three pods were restarted
 one at a time, 32 seconds apart, the third first; the upgrade and its gate took 118 seconds; each pod kept its
 volume claim (the same three uids before and after); and the pods then ran with `-Xms550m -Xmx550m`.
 
@@ -69,9 +69,9 @@ search:
   replicas: 4
 ```
 
-A new pod gets a new, empty volume and builds every index from the collection before it serves it. On a large
-deployment that is hours (4 to 5 for about 180 to 190 GB a pod, as the owner reports for QA), during which the source carries
-that pod's initial sync. Add pods one upgrade at a time, and wait for each to be `STEADY` on every index.
+A new pod gets a new, empty volume and builds every index from the collection before it serves it. On a large deployment
+that is hours (4 to 5 for about 180 to 190 GB a pod, as the owner reports for QA), during which the source carries that
+pod's initial sync. Add pods one upgrade at a time, and wait for each to be `STEADY` on every index.
 
 ## Fewer pods: `search.replicas`, downward
 
@@ -93,7 +93,8 @@ kubectl edit statefulsets <stateful-set-name>        # and change .spec.replicas
 and its pods are given other resources by changing the pod template, which restarts them one by one:
 
 ```bash
-kubectl set resources statefulset <stateful-set-name> -c <container> --requests=cpu=2,memory=8Gi --limits=cpu=4,memory=12Gi
+kubectl set resources statefulset <stateful-set-name> -c <container> \
+  --requests=cpu=2,memory=8Gi --limits=cpu=4,memory=12Gi
 kubectl rollout status statefulset <stateful-set-name>
 ```
 
@@ -105,8 +106,14 @@ resource and undoes what was changed by hand. On the lab:
 
 | Done by hand | What followed |
 | --- | --- |
-| `oc scale statefulset mongot-search-0 --replicas=2` | The operator set 3 again within 5 s. The third pod was already terminating, and its volume claim was deleted 8 s after the command, by the controller manager's log. The StatefulSet then ran with 2 pods for 7 min 11 s before the third came back, on a new volume, and built its indexes again |
+| The StatefulSet scaled to 2 pods (below the table) | The operator set 3 again within 5 s. The third pod was already terminating, and its volume claim was deleted 8 s after the command, by the controller manager's log. The StatefulSet then ran with 2 pods for 7 min 11 s before the third came back, on a new volume, and built its indexes again |
 | The volume retention policy patched on the StatefulSet | Put back by the operator within 11 s |
+
+The first row's command, as it was run on the lab:
+
+```bash
+oc scale statefulset mongot-search-0 --replicas=2
+```
 
 So a change made on the StatefulSet does not last, and a scale-down made there costs a volume all the same. The
 one thing done to this StatefulSet by hand is the delete with `--cascade=orphan` of the

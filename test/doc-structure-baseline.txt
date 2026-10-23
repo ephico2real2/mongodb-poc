@@ -44,60 +44,13 @@ TESTING.md	inline	oc logs mongot-search-0-0 -n mongodb-poc | grep -i auth
 TESTING.md	inline	oc rollout restart deploy/mongot-search-lb-0 -n mongodb-poc
 TLS.md	inline	openssl x509
 TLS.md	inline	openssl x509 -req
-app/gui/README.md	inline	oc apply
-app/gui/README.md	inline	oc apply
 chart/mongodb-search-helm/README.md	inline	helm install
 chart/mongodb-search-helm/README.md	inline	helm uninstall
 chart/mongodb-search-helm/README.md	inline	helm upgrade
 chart/mongodb-search-helm/README.md	inline	oc adm policy add-role-to-user monitoring-rules-view <user> -n $NS
 chart/mongodb-search-helm/README.md	inline	oc auth can-i get persesdashboards
 chart/mongodb-search-helm/README.md	inline	oc create
-chart/mongodb-search-helm/argocd.md	inline	helm get values
-chart/mongodb-search-helm/argocd.md	inline	helm install
-chart/mongodb-search-helm/argocd.md	inline	helm install
-chart/mongodb-search-helm/argocd.md	inline	helm install --take-ownership
-chart/mongodb-search-helm/argocd.md	inline	helm uninstall
-chart/mongodb-search-helm/argocd.md	inline	helm uninstall
-chart/mongodb-search-helm/argocd.md	inline	helm uninstall
-chart/mongodb-search-helm/argocd.md	inline	helm uninstall
-chart/mongodb-search-helm/argocd.md	inline	helm upgrade
-chart/mongodb-search-helm/argocd.md	inline	helm upgrade
-chart/mongodb-search-helm/argocd.md	inline	oc delete csv
-chart/mongodb-search-helm/argocd.md	inline	oc delete csv mongodb-kubernetes.v<version> -n <namespace>
-chart/mongodb-search-helm/argocd.md	inline	oc delete mongodbsearch
-chart/mongodb-search-helm/argocd.md	inline	oc delete mongodbsearch
-chart/mongodb-search-helm/argocd.md	inline	oc delete mongodbsearch <search.name> -n <namespace>
-chart/mongodb-search-helm/argocd.md	inline	oc get application <name> -n <argo cd's namespace> -o jsonpath='{.status.operationState.phase}: {.status.operationState.message}'
-chart/mongodb-search-helm/argocd.md	inline	oc get mongodbsearch -n <namespace>
-chart/mongodb-search-helm/argocd.md	inline	oc logs -n <namespace> job/mongot-mongodb-search-helm-preflight
-chart/mongodb-search-helm/argocd.md	inline	oc logs -n <namespace> job/mongot-mongodb-search-helm-wait
-chart/mongodb-search-helm/argocd.md	inline	test/run.sh search
-chart/mongodb-search-helm/argocd.md	inline	test/run.sh search
-chart/mongodb-search-helm/disruption-budgets.md	inline	oc adm drain
-chart/mongodb-search-helm/disruption-budgets.md	inline	oc delete pod
-chart/mongodb-search-helm/disruption-budgets.md	inline	oc get pdb
 chart/mongodb-search-helm/docs/testing-mongot-storage-resize.md	shape	record
-chart/mongodb-search-helm/mongot-settings.md	inline	helm upgrade
-chart/mongodb-search-helm/production-settings.md	inline	helm uninstall
-chart/mongodb-search-helm/production-settings.md	inline	oc get storageclass thin-csi -o jsonpath='{.allowVolumeExpansion} {.reclaimPolicy}'
-chart/mongodb-search-helm/scaling.md	inline	helm upgrade
-chart/mongodb-search-helm/scaling.md	inline	helm upgrade
-chart/mongodb-search-helm/scaling.md	inline	oc scale statefulset mongot-search-0 --replicas=2
-chart/mongodb-search-helm/volume-auto-expansion.md	inline	expand-mongot-volumes.sh --expand
-chart/mongodb-search-helm/volume-auto-expansion.md	inline	helm upgrade
-chart/mongodb-search-helm/volume-auto-expansion.md	inline	oc logs job/<release>-mongodb-search-helm-expand-volumes -n <namespace>
-chart/mongodb-search-helm/volumes.md	inline	helm install
-chart/mongodb-search-helm/volumes.md	inline	helm install
-chart/mongodb-search-helm/volumes.md	inline	helm uninstall
-chart/mongodb-search-helm/volumes.md	inline	helm uninstall
-chart/mongodb-search-helm/volumes.md	inline	helm uninstall
-chart/mongodb-search-helm/volumes.md	inline	helm uninstall
-chart/mongodb-search-helm/volumes.md	inline	helm uninstall
-chart/mongodb-search-helm/volumes.md	inline	oc delete mongodbsearch
-chart/mongodb-search-helm/volumes.md	inline	oc delete mongodbsearch
-chart/mongodb-search-helm/volumes.md	inline	oc delete mongodbsearch <search.name> -n <namespace>
-chart/mongodb-search-helm/volumes.md	inline	oc delete pod
-chart/mongodb-search-helm/volumes.md	inline	oc scale statefulset
 docs/building-the-kind-mesh-lab.md	inline	DOCKER_HOST=unix://$HOME/.colima/mongodb-mesh/docker.sock docker image inspect quay.io/cilium/cilium-dev:remote-workload-cm-9e5a34a5 quay.io/cilium/clustermesh-apiserver:remote-workload-cm-9e5a34a5 --format '{{.RepoTags}}'
 docs/building-the-kind-mesh-lab.md	inline	DOCKER_HOST=unix://$HOME/.colima/mongodb-mesh/docker.sock docker run --rm --entrypoint cilium-agent quay.io/cilium/cilium-dev:remote-workload-cm-9e5a34a5 --version
 docs/building-the-kind-mesh-lab.md	inline	cilium clustermesh status --context kind-mesh0
@@ -230,18 +183,3 @@ enhancement/README.md	inline	oc logs -n kube-system deploy/csi-nfs-controller -c
 enhancement/README.md	inline	oc logs -n kube-system ds/csi-nfs-node -c nfs
 enhancement/README.md	inline	oc whoami
 enhancement/README.md	inline	sudo options/macbook-nfs/mac-nfs-server.sh
-kind-mesh-cilium/README.md	inline	CLIENT_OPTS='…' drills.sh primary freeze\|kill\|partition
-kind-mesh-cilium/README.md	inline	DRILL_TAG=policy drills.sh mongot mesh2 one
-kind-mesh-cilium/README.md	inline	drills.sh mongot mesh2 both
-kind-mesh-cilium/README.md	inline	kind-mesh-cilium/drills.sh mongot mesh2 both
-kind-mesh-cilium/README.md	inline	kind-mesh-cilium/scripts/cilium-build.sh measure before
-kind-mesh-cilium/README.md	inline	kind-mesh-cilium/scripts/mongot-reach.sh open
-kind-mesh-cilium/README.md	inline	kind-mesh/scripts/rebuild.sh --yes
-kind-mesh-cilium/README.md	inline	kubectl --context kind-meshN apply -f kind-mesh-cilium/manifests/60-mongot-ingress.yaml
-kind-mesh-cilium/README.md	inline	mongot-reach.sh policy
-kind-mesh-cilium/README.md	inline	scripts/drill-capture.sh <tag> mongot mesh2 both
-kind-mesh/README.md	inline	colima delete --profile mongodb-mesh --data
-kind-mesh/README.md	inline	kind-mesh/drills.sh envoy mesh2
-kind-mesh/README.md	inline	kind-mesh/scripts/rebuild.sh --yes
-kind-mesh/README.md	inline	kind-mesh/scripts/rebuild.sh --yes
-kind-mesh/README.md	inline	kubectl --context kind-<cluster> -n mongodb delete pod mongo-0

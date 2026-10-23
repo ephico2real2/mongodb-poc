@@ -39,9 +39,15 @@ search:
 | --- | --- |
 | 1 | Check before starting: step 0 of the [runbook](volume-expansion-runbook.md), all of it |
 | 2 | In the values: the larger size and the flag. In one change, or the size first and the flag after |
-| 3 | Sync (Argo CD) or `helm upgrade`. Helm waits for the Job only up to its `--timeout`, five minutes unless given: give one longer than the growth may take |
-| 4 | Read the Job's verdict: `oc logs job/<release>-mongodb-search-helm-expand-volumes -n <namespace>`, while the Job is there: Argo CD removes it when the sync has succeeded, and Kubernetes removes it ten minutes after it has ended, failed or not (`jobs.ttlSecondsAfterFinished`, 600) |
+| 3 | Sync (Argo CD) or helm upgrade. Helm waits for the Job only up to its `--timeout`, five minutes unless given: give one longer than the growth may take |
+| 4 | Read the Job's verdict, its log (below the table), while the Job is there: Argo CD removes it when the sync has succeeded, and Kubernetes removes it ten minutes after it has ended, failed or not (`jobs.ttlSecondsAfterFinished`, 600) |
 | 5 | The flag `false` again, and sync. Under Argo CD without automated pruning, one sync with pruning removes the Job's service account, role and script |
+
+Step 4's command:
+
+```bash
+oc logs job/<release>-mongodb-search-helm-expand-volumes -n <namespace>
+```
 
 **The size first, the flag after** also works: the first sync stops at the gate, as it does without the flag, and
 the sync that carries the flag takes it from there. Under Argo CD with automated sync that second sync begins only
@@ -100,7 +106,7 @@ for each step, then syncs again; with `autoExpand` on, the chart's Job runs that
 | --- | --- | --- |
 | The values | the larger size | the larger size, and the flag on |
 | The sync | stops at the gate, by design: the resource is `Failed` | one sync: the Job runs before the gate |
-| Grow the claims | a person: `expand-mongot-volumes.sh --expand` | the Job, with the same script |
+| Grow the claims | a person: expand-mongot-volumes.sh --expand | the Job, with the same script |
 | The StatefulSet again | a person: `--recreate-statefulset` | the Job |
 | A pod whose volume waits | a person, if a claim waits: `--restart-pending` | the Job, if a claim waits |
 | Sync again | a second sync, by hand once the retries are spent | not needed |
