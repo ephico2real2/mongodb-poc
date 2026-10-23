@@ -1,0 +1,150 @@
+<!-- SPDX-License-Identifier: MIT-0. Started from the diagram-kit template, https://github.com/ephico2real2/diagram-kit -->
+<title>Vanity URL Envoy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --ground: #f5f6f8; --surface: #ffffff; --ink: #18212c; --muted: #58636f; --rule: #d7dce3;
+  --host: #a55a0b; --host-wash: #fbf1e4; --remote: #0e6f68; --remote-wash: #e3f3f1;
+  --gap: #b3261e; --gap-wash: #fbe9e7; --none: #5f6a77; --none-wash: #eef0f3;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+    --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+    --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+  --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+  --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55; margin: 0; }
+.page { max-width: 1060px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 72px; display: grid; gap: 44px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0 0 6px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+.lede { font-size: 17px; max-width: 70ch; }
+code { font-family: var(--font-mono); font-size: .9em; }
+section { display: grid; gap: 14px; }
+figure { margin: 0; display: grid; gap: 10px; }
+.fig-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px; }
+.fig-scroll svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--ink); }
+figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; font-style: italic; }
+a { color: var(--remote); }
+:focus-visible { outline: 2px solid var(--remote); outline-offset: 2px; }
+</style>
+<div class="page">
+  <header>
+    <div class="eyebrow">mongodb-poc · vanity hostname · issue #198 · proposed</div>
+    <h1>A vanity hostname through a second Envoy, to the same mongot pods</h1>
+    <p class="lede">The operator's Envoy accepts one TLS server name, <code>externalHostname</code>, and the operator reconciles it, so it cannot be given a second one. The proposed chart <code>mongot-envoy-vanity-url-helm</code> runs a second Envoy whose only filter chain accepts the vanity name, behind its own passthrough Route, and sends to the same mongot pods with the same secrets.</p>
+  </header>
+
+  <section>
+    <h2>Two entry paths, one set of mongot pods</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1040 692" role="img" aria-label="Two entry paths, side by side, into the same mongot pods. Existing, shipped: a mongod with mongotHost externalHostname port 443 sends externalHostname as SNI to the OpenShift router, which picks the passthrough Route from mongodb-search-helm by SNI and tunnels the still-encrypted connection to the operator's Envoy, name-search-lb-0, whose one filter chain has server_names externalHostname; it sends gRPC over mutual TLS to every mongot pod behind the headless Service name-search-0-svc on port 27028. The vanity name sent as SNI to the operator's Envoy is refused: it has one server name and closes the handshake. Proposed, added by mongot-envoy-vanity-url-helm: a client with mongotHost vanity port 443 sends the vanity name as SNI to the same router, which picks the passthrough Route name-public, or the Route OpenShift makes from an Ingress of class openshift-default annotated route.openshift.io/termination passthrough, and tunnels to our Envoy, name-public-lb, the operator's configuration with only server_names changed to the vanity name; it sends to the same mongot pods with Envoy's client certificate, and mongot checks the certificate's CA, not its name. Both Envoys use the same secrets: ent-name-search-lb-0-cert with every SAN, ent-name-search-lb-0-client-cert and ent-trust-bundle. The operator reconciles only its own Envoy.">
+          <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+            <!-- lane headers -->
+            <text x="30" y="24" font-family="IBM Plex Mono, monospace" font-size="12" letter-spacing="1" fill="var(--muted)">EXISTING: THE OPERATOR'S ENVOY</text>
+            <text x="670" y="24" font-family="IBM Plex Mono, monospace" font-size="12" letter-spacing="1" fill="var(--host)">PROPOSED: OUR ENVOY</text>
+            <!-- clients -->
+            <rect x="30" y="36" width="340" height="66" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="44" y="56" font-weight="600" fill="var(--remote)">mongod<tspan font-weight="400" fill="var(--muted)">  replica set member</tspan></text>
+            <text x="44" y="74" font-family="IBM Plex Mono, monospace" font-size="12">mongotHost = &lt;externalHostname&gt;:443</text>
+            <text x="44" y="92">sends externalHostname as SNI</text>
+            <rect x="670" y="36" width="340" height="66" rx="6" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.3" stroke-dasharray="6 4"/>
+            <text x="684" y="56" font-weight="600" fill="var(--host)">a client of the vanity name</text>
+            <text x="684" y="74" font-family="IBM Plex Mono, monospace" font-size="12">mongotHost = &lt;vanity&gt;:443</text>
+            <text x="684" y="92">a mongod; sends the vanity name as SNI</text>
+            <line x1="200" y1="102" x2="200" y2="128" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="212" y="120" fill="var(--muted)">TLS, SNI = externalHostname</text>
+            <line x1="840" y1="102" x2="840" y2="128" stroke="var(--host)" stroke-width="1.4" stroke-dasharray="6 5" marker-end="url(#ah)"/>
+            <text x="852" y="120" fill="var(--host)">proposed: SNI = &lt;vanity&gt;</text>
+            <!-- one router for both -->
+            <rect x="30" y="130" width="980" height="50" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="44" y="150" font-weight="600" fill="var(--remote)">OpenShift router (HAProxy) :443<tspan font-weight="400" fill="var(--muted)">  one router, a passthrough Route per name</tspan></text>
+            <text x="44" y="168">picks the passthrough Route by SNI and tunnels the TCP connection; it does not decrypt</text>
+            <line x1="200" y1="180" x2="200" y2="206" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="212" y="198" fill="var(--muted)">host = externalHostname</text>
+            <line x1="840" y1="180" x2="840" y2="206" stroke="var(--host)" stroke-width="1.4" stroke-dasharray="6 5" marker-end="url(#ah)"/>
+            <text x="852" y="198" fill="var(--host)">proposed: host = &lt;vanity&gt;</text>
+            <!-- routes -->
+            <rect x="30" y="208" width="340" height="66" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="44" y="228" font-weight="600" fill="var(--remote)">passthrough Route<tspan font-weight="400" fill="var(--muted)">  mongodb-search-helm</tspan></text>
+            <text x="44" y="246">host = <tspan font-family="IBM Plex Mono, monospace" font-size="12">externalHostname</tspan></text>
+            <text x="44" y="264" font-family="IBM Plex Mono, monospace" font-size="12" fill="var(--muted)">templates/20-route.yaml</text>
+            <rect x="670" y="208" width="340" height="66" rx="6" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.3" stroke-dasharray="6 4"/>
+            <text x="684" y="228" font-weight="600" fill="var(--host)">passthrough Route <tspan font-family="IBM Plex Mono, monospace" font-size="12">&lt;name&gt;-public</tspan><tspan font-weight="400" fill="var(--muted)">  default</tspan></text>
+            <text x="684" y="246">or an Ingress, class <tspan font-family="IBM Plex Mono, monospace" font-size="12">openshift-default</tspan>, with</text>
+            <text x="684" y="264" font-family="IBM Plex Mono, monospace" font-size="12">route.openshift.io/termination: passthrough</text>
+            <line x1="200" y1="274" x2="200" y2="298" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="212" y="291" fill="var(--muted)">to the Envoy pods, still encrypted</text>
+            <line x1="840" y1="274" x2="840" y2="298" stroke="var(--host)" stroke-width="1.4" stroke-dasharray="6 5" marker-end="url(#ah)"/>
+            <text x="828" y="291" text-anchor="end" fill="var(--host)">proposed: an Ingress becomes a Route</text>
+            <!-- the two Envoys -->
+            <rect x="30" y="300" width="340" height="66" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="44" y="320" font-weight="600" fill="var(--remote)">the operator's Envoy <tspan font-family="IBM Plex Mono, monospace" font-size="12">&lt;name&gt;-search-lb-0</tspan></text>
+            <text x="44" y="338" font-family="IBM Plex Mono, monospace" font-size="12">server_names = [externalHostname]</text>
+            <text x="44" y="356" fill="var(--muted)">terminates TLS; reconciled by the operator</text>
+            <rect x="670" y="300" width="340" height="66" rx="6" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.3" stroke-dasharray="6 4"/>
+            <text x="684" y="320" font-weight="600" fill="var(--host)">our Envoy <tspan font-family="IBM Plex Mono, monospace" font-size="12">&lt;name&gt;-public-lb</tspan></text>
+            <text x="684" y="338" font-family="IBM Plex Mono, monospace" font-size="12">server_names = [&lt;vanity&gt;]</text>
+            <text x="684" y="356" fill="var(--muted)">the operator's config; only server_names changed</text>
+            <!-- failure: the vanity name at the operator's Envoy -->
+            <line x1="370" y1="333" x2="398" y2="333" stroke="var(--gap)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <rect x="400" y="300" width="240" height="66" rx="6" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.3"/>
+            <text x="414" y="320" font-weight="600" fill="var(--gap)">the vanity name as SNI</text>
+            <text x="414" y="338">refused at the operator's Envoy:</text>
+            <text x="414" y="356" fill="var(--muted)">one server name; handshake closed</text>
+            <!-- the operator's Envoy to every mongot pod -->
+            <path d="M196,366 C196,408 354,408 354,450" fill="none" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <path d="M200,366 C200,408 514,408 514,450" fill="none" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <path d="M204,366 C204,408 674,408 674,450" fill="none" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ah)"/>
+            <text x="188" y="384" text-anchor="end" fill="var(--remote)">gRPC, mTLS, :27028</text>
+            <text x="188" y="400" text-anchor="end" fill="var(--muted)">to every mongot pod</text>
+            <!-- our Envoy to the same pods (proposed) -->
+            <path d="M836,366 C836,408 366,408 366,450" fill="none" stroke="var(--host)" stroke-width="1.4" stroke-dasharray="6 5" marker-end="url(#ah)"/>
+            <path d="M840,366 C840,408 526,408 526,450" fill="none" stroke="var(--host)" stroke-width="1.4" stroke-dasharray="6 5" marker-end="url(#ah)"/>
+            <path d="M844,366 C844,408 686,408 686,450" fill="none" stroke="var(--host)" stroke-width="1.4" stroke-dasharray="6 5" marker-end="url(#ah)"/>
+            <text x="850" y="380" fill="var(--host)">proposed: mTLS with</text>
+            <text x="850" y="396" fill="var(--host)">Envoy's client certificate;</text>
+            <text x="850" y="412" fill="var(--muted)">mongot checks its CA,</text>
+            <text x="850" y="428" fill="var(--muted)">not its name</text>
+            <!-- the mongot pods -->
+            <rect x="270" y="440" width="500" height="82" rx="8" fill="none" stroke="currentColor" stroke-width="1.3"/>
+            <rect x="290" y="452" width="140" height="40" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="360" y="477" text-anchor="middle" font-weight="600" fill="var(--remote)">mongot</text>
+            <rect x="450" y="452" width="140" height="40" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="520" y="477" text-anchor="middle" font-weight="600" fill="var(--remote)">mongot</text>
+            <rect x="610" y="452" width="140" height="40" rx="6" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.3"/>
+            <text x="680" y="477" text-anchor="middle" font-weight="600" fill="var(--remote)">mongot</text>
+            <text x="284" y="512">mongot pods behind the headless <tspan font-family="IBM Plex Mono, monospace" font-size="12">&lt;name&gt;-search-0-svc</tspan> :27028</text>
+            <!-- the shared secrets -->
+            <rect x="30" y="540" width="980" height="70" rx="6" fill="var(--none-wash)" stroke="var(--none)" stroke-width="1.3"/>
+            <text x="44" y="560">The same secrets for both Envoys: <tspan font-family="IBM Plex Mono, monospace" font-size="12">ent-&lt;name&gt;-search-lb-0-cert</tspan> (the server certificate, already with every SAN),</text>
+            <text x="44" y="578"><tspan font-family="IBM Plex Mono, monospace" font-size="12">ent-&lt;name&gt;-search-lb-0-client-cert</tspan> (Envoy's client certificate to mongot) and <tspan font-family="IBM Plex Mono, monospace" font-size="12">ent-trust-bundle</tspan> (the CA).</text>
+            <text x="44" y="596" fill="var(--muted)">The operator reconciles only its own Envoy; it never touches our Envoy, its Service or its Route.</text>
+            <!-- takeaway and legend -->
+            <text x="30" y="636">Two names, two Envoys, one set of mongot pods: the vanity name gets its own filter chain, in an Envoy the operator does not reconcile.</text>
+            <text x="30" y="656" fill="var(--muted)">Solid: shipped today. Teal curves: the operator's Envoy to every mongot pod. Amber dashed curves: our Envoy to the same pods.</text>
+            <text x="30" y="676" fill="var(--host)">dashed: added by mongot-envoy-vanity-url-helm (proposed); the client's mongotHost is set by its owner, not by the chart.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>Shipped: the operator's path, with one server name at its Envoy (operator 1.13.0; <code>docs/envoy/lds.json</code>; README, "What a wrong SNI does"). Proposed (issue #198, not built): the chart <code>mongot-envoy-vanity-url-helm</code>, a second Envoy with the vanity name as its only server name, behind its own passthrough Route or an Ingress that OpenShift turns into one, sending to the same mongot pods with the same secrets.</figcaption>
+    </figure>
+  </section>
+</div>
