@@ -190,7 +190,8 @@ case "$1 ${2:-}" in
   "get secret"|"get configmap")
     [[ -f "${OC_STATE}/$3" ]] || exit 1
     case "$*" in *go-template*) sed -n '/^data:/,$p' "${OC_STATE}/$3" | grep -E '^  [a-z.]+: ' | sed -e 's/^  //' -e 's/:.*//' | sort | tr '\n' ' ' ;; esac ;;
-  "create -f")            [[ ! -f "${OC_STATE}/$(sed -n 's/^  name: //p' "$3" | head -1)" ]] || { echo AlreadyExists >&2; exit 1; }
+  "create -f")            [[ -z "${OC_REFUSE_CREATE:-}" || "$3" != *${OC_REFUSE_CREATE}* ]] || { echo "Error from server (Forbidden): exceeded quota" >&2; exit 42; }
+                          [[ ! -f "${OC_STATE}/$(sed -n 's/^  name: //p' "$3" | head -1)" ]] || { echo AlreadyExists >&2; exit 1; }
                           cp "$3" "${OC_STATE}/$(sed -n 's/^  name: //p' "$3" | head -1)"; echo created ;;
   "replace -f")           cp "$3" "${OC_STATE}/$(sed -n 's/^  name: //p' "$3" | head -1)"; echo replaced ;;
   "project "|"project -q") echo "${OC_NAMESPACE}" ;;
@@ -703,6 +704,9 @@ export TargetNamespace="${NS}"
 refused "two namespaces as plain arguments" "two namespaces were given" -- --check "${NS}" another-ns
 refused "a PEM given with no role" "which role is ${pki}/mongot.pem?" -- "${pki}/mongot.pem" --dry-run "${P[@]}"
 refused "a word that is neither a file nor a namespace" "is not a namespace name (lower-case letters, digits and '-'), nor a file here" -- --mongot missing.pem --dry-run "${P[@]}"
+# An empty word is what "$x" gives when x is unset: main refused it ("unknown argument", "--mongot needs a value").
+refused "an empty word, as an unset variable in quotes gives" "an empty argument (an unset variable?)" -- --check ""
+refused "--mongot and an empty word: refused, the PEM found is not taken instead" "an empty argument (an unset variable?)" -- --mongot "" --dry-run "${P[@]}"
 refused "a PEM found, its key and no terminal: the PEM is found before any passphrase" "no terminal to ask its passphrase on" -- --mongot --dry-run
 grep -q "^PEM files for ${NS}$" "${work}/out" && grep -q "mongot  ${NS}/a.pem, found by its certificate" "${work}/out" && grep -q "leaf   CN=mongot-search-0-svc" "${work}/out" \
   && ok "the PEM chosen, its leaf and its names are printed before the passphrase is asked" || bad "the table before the passphrase: $(said | head -6 | tr '\n' '|')"
@@ -728,6 +732,14 @@ tls_file --route  "${NS}" ent-mongot-search-lb-0-cert "${pki}/lb.key" "--route w
 fresh folderwins; pem_to mongot "${NS}/a.pem"; pem_to mongot61 b.pem
 run --mongot --dry-run "${P[@]}" && made ent-mongot-search-cert "${pki}/mongot.key" \
   && ok "the folder's PEMs are the candidates; those of the current directory are not looked at" || bad "the folder first: $(said | head -3 | tr '\n' ' ')"
+# The same for a file of the conventional name: here, another mongot certificate of this namespace (10 days left, as
+# last year's would be) is not taken over the folder's PEM; with no PEM in the folder, it is found by its name.
+fresh cwdname; pem_to mongot "${NS}/a.pem"; pem_to soon "${MONGOT_CN}"
+run --mongot --dry-run "${P[@]}" && made ent-mongot-search-cert "${pki}/mongot.key" \
+  && ok "a file of mongot's name here is not taken over the folder's PEM" || bad "the folder's PEM and a file of the name here: $(said | head -3 | tr '\n' ' ')"
+rm -f "${here}/${NS}/a.pem"; made_none
+run --mongot --dry-run "${P[@]}" && made ent-mongot-search-cert "${pki}/soon.key" && grep -q "found by its name (MONGOT_PEM_NAME)" "${work}/out" \
+  && ok "with no PEM in the folder, the file of mongot's name here is found by its name" || bad "the name here, the folder empty: $(said | head -3 | tr '\n' ' ')"
 
 fresh names; pem_to mongot "${NS}/${MONGOT_CN}"; pem_to envoy "${NS}/${ENVOY_CN}"; pem_to lb "${NS}/search-qa.example.test.pem"
 pem_to mongot61 "${NS}/another-mongot.pem"; pem_to publicboth "${NS}/another-public.pem"   # by content, two for each
@@ -794,6 +806,35 @@ run --all --dry-run "${P[@]}" --password-file "${work}/pw"; rc=$?
   && [[ ! -e "${here}/${NS}/search-sync-source-password.secret.yaml" ]] && [[ -z "$(find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'mdbs-prereq.*' 2>/dev/null)" ]] \
   && ok "--all stops at the first refusal and names the step; what came before stays, nothing after is made" \
   || bad "--all, a step refused: rc=${rc} $(ls -A "${here}/${NS}" | tr '\n' ' ') $(tr '\n' '|' < "${work}/err")"
+# A step ended by a command that fails, not by the script's own refusal: oc refusing the create, as a quota does.
+fresh ocrefuses; pem_to mongot "${NS}/a.pem"; pem_to envoy "${NS}/b.pem"; pem_to lb "${NS}/c.pem"; rm -f "${OC_STATE:?}"/*
+( export OC_REFUSE_CREATE=trust-bundle; run --all --apply --yes "${P[@]}" --password-file "${work}/pw" ); rc=$?
+[[ ${rc} -eq 42 ]] && grep -q "exceeded quota" "${work}/err" && grep -q "all stopped at --trustca (step 1 of 5) (exit status 42)" "${work}/err" \
+  && ! grep -q "step 2 of 5" "${work}/out" \
+  && ok "--all stopped by a command that fails (oc refusing the create) names the step too, and keeps its exit status" || bad "--all, oc refusing: rc=${rc} $(tr '\n' '|' < "${work}/err")"
+# The same at step 3: the objects of steps 1 and 2 are in the cluster, the failed step's file stays, nothing after is made.
+fresh ocrefuses3; pem_to mongot "${NS}/a.pem"; pem_to envoy "${NS}/b.pem"; pem_to lb "${NS}/c.pem"; rm -f "${OC_STATE:?}"/*
+( export OC_REFUSE_CREATE=lb-0-client; run --all --apply --yes "${P[@]}" --password-file "${work}/pw" ); rc=$?
+[[ ${rc} -eq 42 ]] && [[ "$(grep -c -- '--all stopped at' "${work}/err")" == 1 ]] \
+  && grep -q "all stopped at --envoy (step 3 of 5) (exit status 42); what the steps before it made is kept" "${work}/err" \
+  && [[ -f "${OC_STATE}/ent-trust-bundle" && -f "${OC_STATE}/ent-mongot-search-cert" && ! -f "${OC_STATE}/ent-mongot-search-lb-0-client-cert" ]] \
+  && [[ -f "${here}/${NS}/ent-mongot-search-lb-0-client-cert.secret.yaml" && ! -e "${here}/${NS}/ent-mongot-search-lb-0-cert.secret.yaml" ]] \
+  && ok "an oc failure at step 3 names the step once, keeps the exit status and what came before" || bad "--all, oc failure at step 3: rc=${rc} $(tr '\n' '|' < "${work}/err")"
+rm -f "${OC_STATE:?}"/*
+
+# The other reviewer's regressions: repeated namespace flags, an option-shaped file name, a named PEM for two roles.
+fresh repeatedflags
+refused "two differing --target-namespace" "two namespaces were given: wrong and ${NS}" -- --check --target-namespace wrong --target-namespace="${NS}"
+run --check --target-namespace "${NS}" --target-namespace="${NS}" \
+  && ok "the same --target-namespace twice is taken" || bad "matching namespace flags: $(said | head -3 | tr '\n' ' ')"
+fresh optionfile; pem_to mongot "${NS}/a.pem"; pem_to mongot --dry-run
+run --mongot --dry-run "${P[@]}" && made ent-mongot-search-cert "${pki}/mongot.key" \
+  && ok "a file called --dry-run does not take the place of the option" || bad "a file swallowed --dry-run: $(said | head -3 | tr '\n' ' ')"
+made_none
+run --mongot ./--dry-run --dry-run "${P[@]}" && made ent-mongot-search-cert "${pki}/mongot.key" \
+  && ok "./--dry-run is the PEM of that name" || bad "./--dry-run as a path: $(said | head -3 | tr '\n' ' ')"
+fresh namedambiguous; pem_to both "${NS}/${MONGOT_CN}"; pem_to lb "${NS}/b.pem"
+refused "a PEM of mongot's name that fits mongot and Envoy" "it fits mongot and envoy, and is given to neither" -- --mongot --dry-run "${P[@]}"
 here="${saved_here}"
 
 shellcheck -S warning "${SCRIPT}" >/dev/null 2>&1 && ok "shellcheck: no warning" || { command -v shellcheck >/dev/null 2>&1 && bad "shellcheck warns about the script" || ok "shellcheck: not installed, skipped"; }

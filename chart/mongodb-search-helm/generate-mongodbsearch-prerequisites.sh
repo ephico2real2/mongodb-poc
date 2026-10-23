@@ -21,13 +21,14 @@
 # export TargetNamespace=<ns>; two that differ are refused.
 #
 # A PEM not named is found, and shown before any passphrase is asked. In this order:
-#   its file name, the certificate's common name, in ./<ns>/ and then here:
+#   its file name, the certificate's common name, in ./<ns>/ (when it holds no PEM, here):
 #     mongot-search-0-svc.<ns>.svc.cluster.local.pem, mongot-search-0-proxy-svc.<ns>.svc.cluster.local.pem, and
 #     <fqdn>.pem for the route when --hostname <fqdn> is given. Set MONGOT_PEM_NAME, ENVOY_PEM_NAME, ROUTE_PEM_NAME
 #     for other names (tokens {search}, {ns}, {hostname}), or MONGOT_PEM, ENVOY_PEM, ROUTE_PEM to one file's path;
 #   else the one PEM in ./<ns>/ (when it has none, here) whose certificate fits the role. None, or two, is refused.
 # --envoy tells its PEM from the public one by the route PEM found, as --route-reference does. --trustca with no PEM
-# takes the CA certificates of the three PEMs. --all stops at the first step refused.
+# takes the CA certificates of the three PEMs. --all stops at the first step refused. A PEM path that begins with
+# "-" is written ./-..., so that it is not read as an option.
 #
 # --dry-run writes the file and contacts no cluster. --apply writes it and creates the object with `oc create`;
 # --replace lets it replace one that exists, --yes skips typing the namespace back. For automation, the key's
@@ -62,8 +63,9 @@ NOTE=prerequisites.mongodb-search          # the prefix of the annotations each 
 [[ -n "${ROUTE_PEM_NAME:-}" ]]  || ROUTE_PEM_NAME='{hostname}.pem'
 ME="$(basename "$0")"
 
-# STEP names the step of --all that is running, so that a refusal says where --all stopped.
-die()  { printf '%s: %s%s\n' "${ME}" "${STEP:+--all stopped at ${STEP}: }" "$*" >&2; exit 1; }
+# STEP names the step of --all that is running, so that a refusal says where --all stopped. die says it with its
+# reason; cleanup says it for a step ended otherwise (oc refusing the create, a full disk).
+die()  { printf '%s: %s%s\n' "${ME}" "${STEP:+--all stopped at ${STEP}: }" "$*" >&2; STEP=""; exit 1; }
 say()  { printf '%s\n' "$*"; }
 usage() { sed -n '2,/^set +x/p' "$0" | sed -e '$d' -e 's/^# \{0,1\}//'; }
 
@@ -79,6 +81,9 @@ action() { [[ -z "${ACTION}" || "${ACTION}" == "$1" ]] || die "one action a run:
 value()  { [[ $# -ge 2 && -n "$2" ]] || die "$1 needs a value"; }
 upper()  { tr '[:lower:]' '[:upper:]' <<<"$1"; }
 given()  { printf -v "PEM_$(upper "$1")" '%s' "$2"; printf -v "HOW_$(upper "$1")" '%s' "named on the command line"; }
+# A PEM is a word that is a file, and not an option: a file called "--dry-run" is written ./--dry-run.
+pem_word() { [[ "$1" != -* && -f "$1" ]]; }
+ns_flag()  { [[ -z "${NS_FLAG}" || "${NS_FLAG}" == "$1" ]] || die "two namespaces were given: ${NS_FLAG} and $1"; NS_FLAG="$1"; }
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --check)   CHECK=yes ;;
@@ -86,18 +91,18 @@ while [[ $# -gt 0 ]]; do
     # The next word is the role's PEM only when it is a file: without one, the script finds the PEM itself.
     --mongot|--envoy|--route)
                if [[ "${CHECK}" == yes || "${ALL}" == yes ]]; then
-                 ROLES+=("${1#--}"); [[ $# -lt 2 || ! -f "$2" ]] || { given "${1#--}" "$2"; shift; }
+                 ROLES+=("${1#--}"); [[ $# -lt 2 ]] || ! pem_word "$2" || { given "${1#--}" "$2"; shift; }
                else
-                 action "${1#--}"; [[ $# -lt 2 || ! -f "$2" ]] || { PEM="$2"; shift; }
+                 action "${1#--}"; [[ $# -lt 2 ]] || ! pem_word "$2" || { PEM="$2"; shift; }
                fi ;;
     --route-reference) value "$@"; ROUTE_REFERENCE="$2"; shift ;;
     --trustca) action trustca
-               while [[ $# -ge 2 && -f "$2" ]]; do TRUST_PEMS+=("$2"); shift; done ;;
+               while [[ $# -ge 2 ]] && pem_word "$2"; do TRUST_PEMS+=("$2"); shift; done ;;
     --dbcred)  action dbcred ;;
     --clean)   action clean ;;
     --dry-run|--apply) [[ -z "${MODE}" || "${MODE}" == "${1#--}" ]] || die "--dry-run and --apply were both given"; MODE="${1#--}" ;;
-    --target-namespace) value "$@"; NS_FLAG="$2"; shift ;;
-    --target-namespace=*) value --target-namespace "${1#*=}"; NS_FLAG="${1#*=}" ;;
+    --target-namespace) value "$@"; ns_flag "$2"; shift ;;
+    --target-namespace=*) value --target-namespace "${1#*=}"; ns_flag "${1#*=}" ;;
     --hostname)      value "$@"; HOSTNAME_WANTED="$2"; shift ;;
     --username)      value "$@"; USERNAME="$2"; shift ;;
     --passin-file)   value "$@"; PASSIN_FILE="$2"; shift ;;
@@ -107,8 +112,10 @@ while [[ $# -gt 0 ]]; do
     --yes)     YES=yes ;;
     -h|--help) usage; exit 0 ;;
     -*) die "unknown argument $1 (--help lists them)" ;;
-    # A plain word is the namespace; a file there would be a PEM given no role.
-    *) [[ ! -f "$1" ]] || die "which role is $1? --mongot, --envoy, --route or --trustca"
+    # A plain word is the namespace; a file there would be a PEM given no role. An empty word is what "$x" gives
+    # when x is unset: refused, as before (--mongot "" needed a value), and never read as "find the PEM".
+    *) [[ -n "$1" ]] || die "an empty argument (an unset variable?): name the namespace, or the PEM after its option"
+       [[ ! -f "$1" ]] || die "which role is $1? --mongot, --envoy, --route or --trustca"
        [[ -z "${NS_ARG}" || "${NS_ARG}" == "$1" ]] || die "two namespaces were given: ${NS_ARG} and $1"
        NS_ARG="$1" ;;
   esac
@@ -183,7 +190,10 @@ need_folder() { local p; p="$(folder_problem)"; [[ -z "${p}" ]] || die "${p}"; }
 
 WORK="" TTY_STATE="" PARTIAL=""
 cleanup() {
+  local rc=$?
   trap '' HUP INT QUIT TERM         # the tidying is not stopped half way (bash hangs up its own group a second time)
+  [[ -z "${STEP}" || ${rc} -eq 0 ]] \
+    || printf '%s: --all stopped at %s (exit status %s); what the steps before it made is kept\n' "${ME}" "${STEP}" "${rc}" >&2
   [[ -z "${TTY_STATE}" ]] || stty "${TTY_STATE}" < /dev/tty 2>/dev/null || true       # stopped while asking a secret
   [[ -z "${WORK}" ]] || rm -rf "${WORK}"
   [[ -z "${PARTIAL}" ]] || rm -f "${PARTIAL}"                 # this run's own, in a folder that passed need_folder
@@ -385,7 +395,8 @@ warn_if_soon() { "${OPENSSL}" x509 -in "$1" -noout -checkend 2592000 >/dev/null 
 
 # ---------------------------------------------------------------------------------------------------- which PEM
 # A role's PEM, when none is named on the command line: the file of the role's name (MONGOT_PEM_NAME and the others,
-# or MONGOT_PEM and the others by path) in ./<ns>/ and then here, else the one PEM whose certificate fits the role.
+# or MONGOT_PEM and the others by path) in ./<ns>/ (when it holds no PEM, here), else the one PEM whose certificate
+# fits the role.
 # Only certificates are read, which are plaintext: no key is opened and no passphrase asked until the PEM is shown.
 CAND=() CAND_LEAF=() FIT_MONGOT=() FIT_ENVOY=() FIT_ROUTE=() DISCOVERED=no SETTLED=no ENVOY_READY=no WHY="" REFERENCE_FOUND=""
 first_leaf() {  # after read_pem: the first certificate that is not a CA's
@@ -399,6 +410,7 @@ leaf_into() {  # $1 = pem, $2 = the file its leaf is copied to; prints why it ha
   said="$( (STEP=""; read_pem "$1"; f="$(first_leaf)" || { say "it holds no leaf certificate"; exit 0; }; cp "${f}" "$2") 2>&1 )" || true
   [[ -z "${said}" ]] || say "${said#"${ME}: "}"
 }
+folder_has_pem() { local f; for f in "${NS}"/*.pem; do [[ ! -f "${f}" ]] || return 0; done; return 1; }
 fit_at() {  # $1 = role, $2 = a candidate's index: why it does not fit the role, or nothing
   case "$1" in mongot) say "${FIT_MONGOT[$2]}" ;; envoy) say "${FIT_ENVOY[$2]}" ;; route) say "${FIT_ROUTE[$2]}" ;; esac
 }
@@ -444,7 +456,7 @@ settle_reference() {
   done
 }
 pick() {  # $1 = role: sets PEM_<ROLE> and HOW_<ROLE>, or WHY and returns 1
-  local role="$1" up var name="" file="" how="" why i n=0 fitting="" others="" fits where
+  local role="$1" up var name="" file="" how="" why i n=0 fitting="" others="" fits where other
   up="$(upper "${role}")"; var="PEM_${up}"; WHY=""
   [[ -z "${!var}" ]] || return 0
   [[ "${role}" == route ]] || settle_reference
@@ -458,13 +470,22 @@ pick() {  # $1 = role: sets PEM_<ROLE> and HOW_<ROLE>, or WHY and returns 1
     if [[ "${name}" == *"{hostname}"* ]]; then                 # no --hostname: the public name is not known
       if [[ -n "${HOSTNAME_WANTED}" ]]; then name="${name//\{hostname\}/${HOSTNAME_WANTED}}"; else name=""; fi
     fi
-    if [[ -n "${name}" && -f "${NS}/${name}" ]]; then file="${NS}/${name}"; elif [[ -n "${name}" && -f "${name}" ]]; then file="${name}"; fi
+    # Here only when the folder holds no PEM, as for a PEM found by its certificate: a file of the name left here
+    # (last year's) is never taken over the folder's.
+    if [[ -n "${name}" && -f "${NS}/${name}" ]]; then file="${NS}/${name}"
+    elif [[ -n "${name}" && -f "${name}" ]] && ! folder_has_pem; then file="${name}"; fi
     how="its name (${var})"
   fi
   if [[ -n "${file}" ]]; then                                  # a file found by its name must still fit its role
     why="$(leaf_into "${file}" "${WORK}/named.crt")"
     [[ -n "${why}" ]] || why="$(fits_role "${role}" "${WORK}/named.crt")"
     [[ -z "${why}" ]] || { WHY="${file}, found by ${how}, is not the ${role} certificate for ${NS}: ${why}"; return 1; }
+    if [[ "${how}" == "its name ("* ]]; then                   # a name is no choice of role: one path given is
+      fits=""
+      for other in mongot envoy route; do [[ -n "$(fits_role "${other}" "${WORK}/named.crt")" ]] || fits="${fits} ${other}"; done
+      fits="${fits# }"
+      [[ "${fits}" != *" "* ]] || { WHY="${file}: it fits ${fits// / and }, and is given to neither: name it with the option of its role"; return 1; }
+    fi
     printf -v "PEM_${up}" '%s' "${file}"; printf -v "HOW_${up}" '%s' "found by ${how}"; return 0
   fi
   discover_pems
