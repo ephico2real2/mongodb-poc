@@ -86,28 +86,6 @@ chart/mongodb-search-helm/scaling.md	inline	oc scale statefulset mongot-search-0
 chart/mongodb-search-helm/volume-auto-expansion.md	inline	expand-mongot-volumes.sh --expand
 chart/mongodb-search-helm/volume-auto-expansion.md	inline	helm upgrade
 chart/mongodb-search-helm/volume-auto-expansion.md	inline	oc logs job/<release>-mongodb-search-helm-expand-volumes -n <namespace>
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	bash $X --check --statefulset $STS
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	helm uninstall
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	helm upgrade
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	helm upgrade
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	helm upgrade
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	helm upgrade
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc delete
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc delete
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc delete statefulset --cascade=orphan
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc delete statefulset ...
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc delete statefulset <name> -n <namespace> --cascade=orphan --wait=false
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc describe pod
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc describe pvc
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc describe pvc
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc describe pvc <claim> -n $TargetNamespace
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc edit
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc get pods -n <the operator's namespace> \| grep mongodb-kubernetes-operator
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc get pvc,pv
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc patch
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc rollout restart statefulset ...
-chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc scale statefulset ...
-chart/mongodb-search-helm/volume-expansion-runbook.md	shape	guide
 chart/mongodb-search-helm/volumes.md	inline	helm install
 chart/mongodb-search-helm/volumes.md	inline	helm install
 chart/mongodb-search-helm/volumes.md	inline	helm uninstall
@@ -168,47 +146,8 @@ docs/investigating-automatic-volume-expansion.md	inline	oc auth can-i delete ...
 docs/investigating-automatic-volume-expansion.md	inline	oc delete
 docs/investigating-automatic-volume-expansion.md	inline	oc delete
 docs/investigating-automatic-volume-expansion.md	inline	oc get --raw /metrics
-docs/mongot-envoy-mtls-cert-runbook.md	inline	oc apply
-docs/mongot-envoy-mtls-cert-runbook.md	inline	oc delete pod mongot-search-0-0 -n $NS
-docs/mongot-envoy-mtls-cert-runbook.md	inline	oc get pods -l app=mongot-search-lb-0 -n $NS
-docs/mongot-envoy-mtls-cert-runbook.md	inline	oc get sts/mongot-search-0 deploy/mongot-search-lb-0 -n $NS -o yaml | grep -B2 -A2 ent-trust-bundle
-docs/mongot-envoy-mtls-cert-runbook.md	inline	openssl pkey
-docs/mongot-envoy-mtls-cert-runbook.md	inline	openssl version
-docs/mongot-envoy-mtls-cert-runbook.md	inline	openssl x509
-docs/mongot-envoy-mtls-cert-runbook.md	inline	openssl x509 -in "$MONGOT_PEM"
-docs/mongot-envoy-mtls-cert-runbook.md	inline	openssl x509 -in file.pem -out file.crt
-docs/mongot-envoy-mtls-cert-runbook.md	inline	openssl x509 -noout -subject -text
-docs/mongot-envoy-mtls-cert-runbook.md	shape	guide
-docs/mongot-envoy-mtls-fresh-install-runbook.md	inline	helm install
-docs/mongot-envoy-mtls-fresh-install-runbook.md	inline	oc create secret tls
-docs/mongot-envoy-mtls-fresh-install-runbook.md	inline	oc describe pod
-docs/mongot-envoy-mtls-fresh-install-runbook.md	inline	oc get secret -n $NS \| grep ent-mongot-search
-docs/mongot-envoy-mtls-fresh-install-runbook.md	inline	openssl pkey
-docs/mongot-envoy-mtls-fresh-install-runbook.md	inline	openssl x509 -noout -subject -text
-docs/mongot-envoy-mtls-fresh-install-runbook.md	shape	guide
 docs/mongot-recommended-alerts-comparison.md	inline	kind-mesh-cilium/drills.sh primary kill
 docs/mongot-route-balance-rationale.md	inline	oc logs
-docs/prerequisite-and-setup-doc.md	inline	git would track
-docs/prerequisite-and-setup-doc.md	inline	helm install
-docs/prerequisite-and-setup-doc.md	inline	helm install
-docs/prerequisite-and-setup-doc.md	inline	helm install
-docs/prerequisite-and-setup-doc.md	inline	helm install
-docs/prerequisite-and-setup-doc.md	inline	helm install --dry-run=server
-docs/prerequisite-and-setup-doc.md	inline	helm uninstall
-docs/prerequisite-and-setup-doc.md	inline	helm upgrade
-docs/prerequisite-and-setup-doc.md	inline	helm upgrade
-docs/prerequisite-and-setup-doc.md	inline	helm upgrade
-docs/prerequisite-and-setup-doc.md	inline	helm upgrade --set search.replicas=3
-docs/prerequisite-and-setup-doc.md	inline	mkdir -m 700 search-qa
-docs/prerequisite-and-setup-doc.md	inline	oc apply
-docs/prerequisite-and-setup-doc.md	inline	oc apply
-docs/prerequisite-and-setup-doc.md	inline	oc create
-docs/prerequisite-and-setup-doc.md	inline	oc create
-docs/prerequisite-and-setup-doc.md	inline	oc delete csv mongodb-kubernetes.v1.13.0 -n $NS
-docs/prerequisite-and-setup-doc.md	inline	oc delete pod <name>-search-0-0 -n $NS
-docs/prerequisite-and-setup-doc.md	inline	oc describe pod
-docs/prerequisite-and-setup-doc.md	inline	oc get pods -n $NS
-docs/prerequisite-and-setup-doc.md	shape	guide
 docs/reference-architecture-search-on-cluster-mesh.md	inline	kind-mesh-cilium/drills.sh primary
 docs/reference-architecture-search-on-cluster-mesh.md	inline	kind-mesh/drills.sh failback
 docs/reference-architecture-search-on-cluster-mesh.md	inline	kubectl top

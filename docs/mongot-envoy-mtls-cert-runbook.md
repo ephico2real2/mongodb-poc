@@ -2,9 +2,17 @@
 
 Oct 5, 2026
 
-## Overview
-
 This runbook turns two company-signed PEM files into the Kubernetes TLS secrets that mongot and Envoy use for mTLS in namespace `dvh-gp6-rnd`. It replaces the secrets cert-manager issued from `internal-ca`.
+
+## What you get
+
+- `ent-mongot-search-cert` and `ent-mongot-search-lb-0-client-cert` holding the company-signed leaf certs, under the names the operator and Envoy already reference.
+- No cert-manager Certificate left to overwrite them.
+- `ent-trust-bundle` holding the company CA, mounted by the mongot and Envoy pods.
+- mongot and Envoy restarted on the new certs, with no TLS errors in their logs and a `$search` query returning results.
+- The decrypted key files deleted from your workstation.
+
+## Architecture
 
 | File | Used by | Leaf cert must allow |
 | --- | --- | --- |
@@ -29,13 +37,6 @@ Company CA: ent-trust-bundle for Envoy and mongot; mongod uses its own TLS CA co
 
 Each numbered arrow is a TLS connection where the caller checks the other side's cert, so all three parties need the company CA.
 
-**Before you start**
-
-- [ ] Logged in with `oc` and able to edit secrets and certificates in `dvh-gp6-rnd`
-- [ ] The passphrase for each PEM
-- [ ] Working in a private directory on your workstation; decrypted keys are created there and deleted in Step 7
-- [ ] Commands below work with both OpenSSL 3 and the LibreSSL that ships with macOS (`openssl version` shows which)
-
 **Terms used in this runbook**
 
 - **Leaf cert**: the certificate for the service itself (mongot or Envoy), not a CA.
@@ -44,9 +45,24 @@ Each numbered arrow is a TLS connection where the caller checks the other side's
 - **EKU**: Extended Key Usage, what a cert may be used for (server auth, client auth).
 - **mTLS**: both sides present a cert, and each side checks the other's cert against a trusted CA.
 
-## Step 1: Set variables and check the files
+## Prerequisites
 
-Set short names once so every later command can reuse them. Run all steps in the same terminal session.
+- [ ] Logged in with `oc` and able to edit secrets and certificates in `dvh-gp6-rnd`
+- [ ] The passphrase for each PEM
+- [ ] Working in a private directory on your workstation; decrypted keys are created there and deleted in Step 7
+- [ ] Commands below work with both OpenSSL 3 and the LibreSSL that ships with macOS; this shows which:
+
+  ```bash
+  openssl version
+  ```
+
+## Steps
+
+Run all steps in the same terminal session, in order:
+
+### 1. Set variables and check the files
+
+Set short names once so every later command can reuse them.
 
 ```bash
 NS=dvh-gp6-rnd
@@ -61,13 +77,13 @@ grep -E 'BEGIN|END' "$MONGOT_PEM"
 grep -E 'BEGIN|END' "$ENVOY_PEM"
 ```
 
-Expected: one `ENCRYPTED PRIVATE KEY` (or `RSA PRIVATE KEY` followed by a `Proc-Type: 4,ENCRYPTED` line), then several `CERTIFICATE` blocks. The CA certs come first and the leaf cert is last.
+Result: expected: one `ENCRYPTED PRIVATE KEY` (or `RSA PRIVATE KEY` followed by a `Proc-Type: 4,ENCRYPTED` line), then several `CERTIFICATE` blocks. The CA certs come first and the leaf cert is last.
 
-Do not run `openssl x509 -in "$MONGOT_PEM"` to inspect the leaf. It reads only the first certificate in the file, which here is a CA cert. Step 3 checks the leaf after it has been split out.
+Do not run *openssl x509 -in "$MONGOT_PEM"* to inspect the leaf. It reads only the first certificate in the file, which here is a CA cert. Step 3 checks the leaf after it has been split out.
 
-## Step 2: Split the certs and remove the key passwords
+### 2. Split the certs and remove the key passwords
 
-**2a. Split out the certificates**
+#### 2a. Split out the certificates
 
 Paste this helper into your terminal once. It works in bash and zsh. It sorts the cert blocks into the leaf and the CA chain, then builds `tls.crt` with the leaf first.
 
@@ -93,9 +109,9 @@ split_pem "$ENVOY_PEM"  envoy
 
 No passphrase is needed here. Certificates are never password-protected; only the key is.
 
-**2b. Remove the password from each key**
+#### 2b. Remove the password from each key
 
-`openssl pkey` reads the encrypted key out of the PEM, asks for its passphrase, and writes the key back out with no password. Leaving off a cipher option such as `-aes256` is what makes the output unencrypted.
+openssl's `pkey` command reads the encrypted key out of the PEM, asks for its passphrase, and writes the key back out with no password. Leaving off a cipher option such as `-aes256` is what makes the output unencrypted.
 
 ```bash
 openssl pkey -in "$MONGOT_PEM" -out mongot.key   # enter the mongot PEM passphrase
@@ -112,7 +128,7 @@ openssl pkey -in "$ENVOY_PEM"  -out envoy.key  -passin file:envoy.pass
 
 Avoid `-passin pass:<password>`; the password ends up in shell history. Delete the `.pass` files in Step 7c along with the keys.
 
-**2c. Confirm the password is gone**
+#### 2c. Confirm the password is gone
 
 ```bash
 head -1 mongot.key envoy.key        # expect: -----BEGIN PRIVATE KEY-----
@@ -120,7 +136,7 @@ openssl pkey -in mongot.key -noout && echo "mongot key: no password"
 openssl pkey -in envoy.key  -noout && echo "envoy key: no password"
 ```
 
-The last two commands must not prompt for a passphrase. If the first line reads `BEGIN ENCRYPTED PRIVATE KEY`, or a `Proc-Type: 4,ENCRYPTED` line follows it, the key is still encrypted: rerun 2b without any cipher option.
+Result: `-----BEGIN PRIVATE KEY-----` on each key, then `mongot key: no password` and `envoy key: no password`. The last two commands must not prompt for a passphrase. If the first line reads `BEGIN ENCRYPTED PRIVATE KEY`, or a `Proc-Type: 4,ENCRYPTED` line follows it, the key is still encrypted: rerun 2b without any cipher option.
 
 You now have these files for each service:
 
@@ -133,7 +149,7 @@ You now have these files for each service:
 
 Kubernetes TLS secrets need the key without a password; pods cannot type a passphrase at startup. That is why 2b is required.
 
-## Step 3: Verify before touching the cluster
+### 3. Verify before touching the cluster
 
 Every check below must pass. If one fails, stop and use Troubleshooting; a bad cert here becomes a failed handshake later.
 
@@ -163,7 +179,7 @@ openssl verify -CAfile envoy-ca.crt  envoy-leaf.crt
 diff mongot-ca.crt envoy-ca.crt && echo "same CA"
 ```
 
-What check 3 must show:
+Result: each check prints what its comment says, and check 3 shows:
 
 | Item | mongot leaf | Envoy leaf |
 | --- | --- | --- |
@@ -174,11 +190,11 @@ What check 3 must show:
 
 A missing SAN or EKU cannot be fixed with openssl. Ask the company signer to reissue the cert.
 
-## Step 4: Confirm the existing secrets and stop cert-manager managing them
+### 4. Confirm the existing secrets and stop cert-manager managing them
 
 Keep the existing secret names. The operator and Envoy already reference them, so you only swap their contents. If cert-manager still owns a secret, it will overwrite your company cert on its next reconcile.
 
-**4a. Set the secret names and confirm the current secrets**
+#### 4a. Set the secret names and confirm the current secrets
 
 ```bash
 ENVOY_SECRET=ent-mongot-search-lb-0-client-cert
@@ -202,9 +218,9 @@ done
 oc get certificate $MONGOT_SECRET $ENVOY_SECRET -n $NS
 ```
 
-Before the change, the issuer shows `internal-ca`. The Certificate names printed are the ones Step 4c deletes.
+Result: before the change, the issuer shows `internal-ca`. The Certificate names printed are the ones Step 4c deletes.
 
-**4b. Back up the current secrets**
+#### 4b. Back up the current secrets
 
 ```bash
 oc get secret $ENVOY_SECRET  -n $NS -o yaml > backup-$ENVOY_SECRET.yaml
@@ -213,7 +229,7 @@ oc get secret $MONGOT_SECRET -n $NS -o yaml > backup-$MONGOT_SECRET.yaml
 
 These backups contain private keys. Store them as securely as the PEM files.
 
-**4c. Delete the cert-manager Certificate objects**
+#### 4c. Delete the cert-manager Certificate objects
 
 ```bash
 oc delete certificate $ENVOY_SECRET  -n $NS
@@ -224,7 +240,7 @@ The Certificate name usually matches the secret name; confirm with the `cert-man
 
 If a Certificate comes back within a few minutes, something else creates it (the operator or a GitOps tool). Remove it at that source first.
 
-## Step 5: Create or replace the secrets
+### 5. Create or replace the secrets
 
 Write a `kubernetes.io/tls` secret with `tls.crt` and `tls.key`. These commands also retain a harmless `ca.crt` copy, matching the cert-manager format; peer verification uses the mounted trust ConfigMap (Step 6). The `--dry-run=client -o yaml | oc apply` pattern creates the secret if it is missing and replaces its data if it exists.
 
@@ -253,9 +269,9 @@ for s in $MONGOT_SECRET $ENVOY_SECRET; do
 done
 ```
 
-The issuer must be the company CA, not `internal-ca`. `oc apply` may warn about a missing last-applied annotation the first time; that warning is harmless.
+Result: the issuer must be the company CA, not `internal-ca`. oc's `apply` may warn about a missing last-applied annotation the first time; that warning is harmless.
 
-## Step 6: Make every party trust the company CA
+### 6. Make every party trust the company CA
 
 Every party must trust the company CA before the new certs go live. A party that still trusts only `internal-ca` rejects the new certs with an unknown CA error.
 
@@ -265,11 +281,9 @@ Every party must trust the company CA before the new certs go live. A party that
 | mongot | Client certs from mongod and Envoy; mongod's server cert when it syncs | `ca.crt` from the source trust ConfigMap (`ent-trust-bundle`), mounted on its pod |
 | Envoy | mongot's server cert | `ca.crt` from the source trust ConfigMap (`ent-trust-bundle`), mounted on its pod |
 
-**ca.crt in the secret vs the mounted bundle.** The TLS secrets' `ca.crt` is not read for peer verification. The mounted trust bundle determines whose certificates Envoy and mongot accept and can hold several CAs. Keep the company CA in `ent-trust-bundle`.
+**ca.crt in the secret vs the mounted bundle.** The TLS secrets' `ca.crt` is not read for peer verification. The mounted trust bundle determines whose certificates Envoy and mongot accept and can hold several CAs. Keep the company CA in `ent-trust-bundle`. Where the operator reads it: [Operator source references](#operator-source-references).
 
-Operator 1.13.0 projects Envoy's trusted CA from the source CA volume ([`mongodbsearchenvoy_controller.go:628–633`](https://github.com/mongodb/mongodb-kubernetes/blob/1.13.0/controllers/operator/mongodbsearchenvoy_controller.go#L628-L633)). For an external source, that volume uses `ca.crt` from the ConfigMap named by `spec.source.external.tls.ca` ([`external_search_source.go:41–42`](https://github.com/mongodb/mongodb-kubernetes/blob/1.13.0/controllers/searchcontroller/external_search_source.go#L41-L42)); mongot's `CertificateAuthorityFile` points at the same CA mount ([`mongodbsearch_reconcile_helper.go:1918–2061`](https://github.com/mongodb/mongodb-kubernetes/blob/1.13.0/controllers/searchcontroller/mongodbsearch_reconcile_helper.go#L1918-L2061)).
-
-**6a. Create ent-trust-bundle from the company CA**
+#### 6a. Create ent-trust-bundle from the company CA
 
 This runbook treats the `ca.crt` extracted in Step 2 as the company CA. Step 3 check 6 confirmed `mongot-ca.crt` and `envoy-ca.crt` are identical, so either file works.
 
@@ -289,9 +303,15 @@ oc get configmap $TRUST_CM -n $NS -o jsonpath='{.data.ca\.crt}' | grep -c 'BEGIN
 
 Replacing the contents removes every CA that was there before, including `internal-ca`. If some pods will still present `internal-ca` certs during the change, use the cutover tip below instead.
 
-The mongot and Envoy pods must mount this ConfigMap. Check with `oc get sts/mongot-search-0 deploy/mongot-search-lb-0 -n $NS -o yaml | grep -B2 -A2 ent-trust-bundle`. Pods load it at startup, so the restarts in Step 7 pick it up.
+The mongot and Envoy pods must mount this ConfigMap. Check with:
 
-**6b. Check the bundle covers both leaf certs**
+```bash
+oc get sts/mongot-search-0 deploy/mongot-search-lb-0 -n $NS -o yaml | grep -B2 -A2 ent-trust-bundle
+```
+
+Pods load it at startup, so the restarts in Step 7 pick it up.
+
+#### 6b. Check the bundle covers both leaf certs
 
 ```bash
 TRUST_CM=ent-trust-bundle
@@ -304,7 +324,7 @@ grep -c 'BEGIN CERTIFICATE' mounted-bundle.pem   # how many CA certs it holds
 openssl verify -CAfile mounted-bundle.pem mongot-leaf.crt envoy-leaf.crt
 ```
 
-Both lines must print `OK`. If not, the CA in the PEM files does not match the leaf certs; go back to Step 3 check 5. mongod's CA ConfigMap needs the same company CA (see the table above).
+Result: both lines must print `OK`. If not, the CA in the PEM files does not match the leaf certs; go back to Step 3 check 5. mongod's CA ConfigMap needs the same company CA (see the table above).
 
 **Cutover tip:** if mongod and the search pods cannot all restart at once, put both the company CA and `internal-ca` in the bundles during the change. Remove `internal-ca` once everything runs on company certs. The old CA is in your Step 4 backup:
 
@@ -320,11 +340,9 @@ oc create configmap $TRUST_CM --from-file=ca.crt=transition-bundle.pem \
 # After the cutover, rerun 6a to go back to the company CA only
 ```
 
-## Step 7: Restart, verify and clean up
+### 7. Restart mongot and Envoy
 
-Pods read certs at startup, so restart them after Steps 5 and 6.
-
-**7a. Restart**
+Step 7a; 7b is under [Verify](#verify) and 7c under [Clean up](#clean-up). Pods read certs at startup, so restart them after Steps 5 and 6.
 
 ```bash
 MONGOT_STS=mongot-search-0        # StatefulSet, 3 pods (label app=mongot-search-0-svc)
@@ -336,9 +354,18 @@ oc rollout status  statefulset/$MONGOT_STS -n $NS
 oc rollout status  deployment/$ENVOY_DEPLOY -n $NS
 ```
 
-Both workloads are created by the MongoDB operator. If the operator reverts the restart, delete the pods one at a time instead and wait for each to return Ready: `oc delete pod mongot-search-0-0 -n $NS`, then `-1`, then `-2`. Do the same for Envoy's two pods; `oc get pods -l app=mongot-search-lb-0 -n $NS` lists their names.
+Result: mongot's 3 pods and Envoy's 2 pods Running and Ready.
 
-**7b. Check the logs for TLS errors**
+Both workloads are created by the MongoDB operator. If the operator reverts the restart, delete the pods one at a time instead and wait for each to return Ready, then do the same for Envoy's two pods; the second command lists their names:
+
+```bash
+oc delete pod mongot-search-0-0 -n $NS          # then -1, then -2
+oc get pods -l app=mongot-search-lb-0 -n $NS
+```
+
+## Verify
+
+### 7b. Check the logs for TLS errors
 
 ```bash
 oc logs -n $NS -l app=mongot-search-0-svc --all-containers --prefix --since=10m | grep -iE 'tls|ssl|certificate|handshake'
@@ -347,7 +374,53 @@ oc logs -n $NS -l app=mongot-search-lb-0  --all-containers --prefix --since=10m 
 
 No handshake or verify errors means mTLS is working. Confirm end to end by running a `$search` query against a collection with a search index.
 
-**7c. Delete the decrypted keys**
+## Reference
+
+### Operator source references
+
+Operator 1.13.0 projects Envoy's trusted CA from the source CA volume ([`mongodbsearchenvoy_controller.go:628–633`](https://github.com/mongodb/mongodb-kubernetes/blob/1.13.0/controllers/operator/mongodbsearchenvoy_controller.go#L628-L633)). For an external source, that volume uses `ca.crt` from the ConfigMap named by `spec.source.external.tls.ca` ([`external_search_source.go:41–42`](https://github.com/mongodb/mongodb-kubernetes/blob/1.13.0/controllers/searchcontroller/external_search_source.go#L41-L42)); mongot's `CertificateAuthorityFile` points at the same CA mount ([`mongodbsearch_reconcile_helper.go:1918–2061`](https://github.com/mongodb/mongodb-kubernetes/blob/1.13.0/controllers/searchcontroller/mongodbsearch_reconcile_helper.go#L1918-L2061)).
+
+### Concepts and FAQ
+
+**Why does only the key have a password?** Certificates are public by design, so a PEM never encrypts them. Only the private key is protected. (PKCS#12 `.p12` or `.pfx` files are different: the whole container is password-protected.)
+
+**Why not just run openssl x509 -in file.pem -out file.crt?** openssl's `x509` command outputs only the first certificate in the file. In these PEMs the first cert is a CA, so you would get the wrong cert and lose the chain.
+
+**Why must the leaf come first in `tls.crt`?** TLS sends the chain in file order and expects the server's own cert first. A chain that starts with a CA cert fails validation.
+
+**Why not pass the whole PEM as the cert?** The secret needs the cert and the key in separate fields. Passing the PEM would put the encrypted key inside `tls.crt`.
+
+**Do we need `ca.crt` in the secret?** No, for Operator 1.13.0. The commands retain that harmless copy, but Envoy and mongot verify peers using the source trust ConfigMap (`ent-trust-bundle` here). See [Operator source references](#operator-source-references) for the pinned operator source references.
+
+**Why keep the old secret names?** The MongoDBSearch resource and Envoy config already reference them. New names would mean editing those resources too.
+
+### Diagram sources
+
+The figure under Architecture comes from `diagrams/mongot-runbooks/source.html`, rendered to a light and a dark PNG; this document embeds the light one. The page holds two figures, in this order: `fresh-install-path` and `cert-parties`. To change a figure, edit the page, re-render both PNGs, and update its `alt` text and its `text` twin in the same commit.
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| `bad decrypt` or `unable to load key` in Step 2 | Wrong passphrase | Rerun `split_pem` with the correct passphrase |
+| Leaf count is 0 or 2 in Step 3 | Leaf marked as CA, or the PEM layout differs | Run the command below on each cert block and sort them by hand |
+| `unable to get local issuer certificate` in Step 3 | CA bundle missing an intermediate or the root | Get the full chain from the company signer |
+| `key values mismatch` or Step 3 diff prints differences | Key and cert from different requests | Use the matching key, or reissue the cert |
+| `unsupported certificate purpose` in logs | EKU missing Server or Client Auth | Reissue with the right EKU |
+| `hostname mismatch` or SAN error in logs | SAN does not match the service DNS name | Reissue with the correct SAN |
+| `unknown ca` or `certificate verify failed` in logs | A party does not trust the company CA | Step 6: add the company CA to that party's bundle |
+| Secret reverts to `internal-ca` after a few minutes | cert-manager Certificate still exists | Step 4c: delete it, or remove it at its source |
+| `-ext` option not recognised | macOS LibreSSL | Use the `-text \| grep` forms in this runbook |
+
+Command referenced in the table:
+
+```bash
+openssl x509 -noout -subject -text    # on each cert block
+```
+
+## Clean up
+
+### 7c. Delete the decrypted keys
 
 ```bash
 rm -f mongot.key envoy.key *.pass
@@ -362,34 +435,7 @@ Keep the original PEM files and Step 4 backups somewhere access-controlled. Dele
 - [ ] `$search` query returns results
 - [ ] Decrypted key files deleted
 
-## Troubleshooting
+## What's next
 
-| Symptom | Likely cause | Fix |
-| --- | --- | --- |
-| `bad decrypt` or `unable to load key` in Step 2 | Wrong passphrase | Rerun `split_pem` with the correct passphrase |
-| Leaf count is 0 or 2 in Step 3 | Leaf marked as CA, or the PEM layout differs | Run `openssl x509 -noout -subject -text` on each cert block and sort them by hand |
-| `unable to get local issuer certificate` in Step 3 | CA bundle missing an intermediate or the root | Get the full chain from the company signer |
-| `key values mismatch` or Step 3 diff prints differences | Key and cert from different requests | Use the matching key, or reissue the cert |
-| `unsupported certificate purpose` in logs | EKU missing Server or Client Auth | Reissue with the right EKU |
-| `hostname mismatch` or SAN error in logs | SAN does not match the service DNS name | Reissue with the correct SAN |
-| `unknown ca` or `certificate verify failed` in logs | A party does not trust the company CA | Step 6: add the company CA to that party's bundle |
-| Secret reverts to `internal-ca` after a few minutes | cert-manager Certificate still exists | Step 4c: delete it, or remove it at its source |
-| `-ext` option not recognised | macOS LibreSSL | Use the `-text \| grep` forms in this runbook |
-
-## Concepts and FAQ
-
-**Why does only the key have a password?** Certificates are public by design, so a PEM never encrypts them. Only the private key is protected. (PKCS#12 `.p12` or `.pfx` files are different: the whole container is password-protected.)
-
-**Why not just run `openssl x509 -in file.pem -out file.crt`?** `openssl x509` outputs only the first certificate in the file. In these PEMs the first cert is a CA, so you would get the wrong cert and lose the chain.
-
-**Why must the leaf come first in `tls.crt`?** TLS sends the chain in file order and expects the server's own cert first. A chain that starts with a CA cert fails validation.
-
-**Why not pass the whole PEM as the cert?** The secret needs the cert and the key in separate fields. Passing the PEM would put the encrypted key inside `tls.crt`.
-
-**Do we need `ca.crt` in the secret?** No, for Operator 1.13.0. The commands retain that harmless copy, but Envoy and mongot verify peers using the source trust ConfigMap (`ent-trust-bundle` here). See Step 6 for the pinned operator source references.
-
-**Why keep the old secret names?** The MongoDBSearch resource and Envoy config already reference them. New names would mean editing those resources too.
-
-## Diagram sources
-
-The figure in the Overview comes from `diagrams/mongot-runbooks/source.html`, rendered to a light and a dark PNG; this document embeds the light one. The page holds two figures, in this order: `fresh-install-path` and `cert-parties`. To change a figure, edit the page, re-render both PNGs, and update its `alt` text and its `text` twin in the same commit.
+- To set up mTLS where none of the secrets or the trust bundle exist yet: the [fresh install runbook](mongot-envoy-mtls-fresh-install-runbook.md).
+- The five prerequisites made by a script, then the chart: [Prerequisites and Setup](prerequisite-and-setup-doc.md).
