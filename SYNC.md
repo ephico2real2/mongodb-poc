@@ -348,12 +348,17 @@ independence and the L7 round robin, visible without a terminal.
 
 | Symptom | Likely cause | Where to look |
 |---|---|---|
-| A new document is searchable, then is not | replicas have not converged yet | `./app/sync-probe.sh -r` |
+| A new document is searchable, then is not | replicas have not converged yet | `./app/sync-probe.sh` with `-r` (below the table) |
 | Search returns nothing after creating an index | initial sync still running | `mongot_initialsync_dispatcher_inProgressSyncs` |
 | Results are stale by minutes, not milliseconds | change stream stalled or re-establishing | `mongot_change_stream_sync_dispatcher_executor_completed_tasks_total` stops climbing |
 | One pod serves every query | the L7 has been bypassed | [README](README.md#the-failure-that-produces-no-error), `./app/trace-query.sh` |
 | PVC filling up | usually `diagnostic.data`, not the index | `./app/index-storage.sh` |
 | Index missing after a pod is recreated | the PVC was deleted with it | PVCs outlive the StatefulSet by design |
+
+```bash
+# A new document is searchable, then is not
+./app/sync-probe.sh -r
+```
 
 The index is **derived data**. Losing a mongot PVC costs an initial sync, not data —
 the source of truth is always MongoDB.

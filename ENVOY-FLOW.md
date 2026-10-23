@@ -77,7 +77,11 @@ disk differ but nothing Envoy watches has changed. No config change, no reload, 
 presenting the old certificate.
 
 That is the failure seen after a CA rotation, and why [TLS.md](TLS.md) calls for an explicit
-`oc rollout restart deploy/mongot-search-lb-0`.
+restart of the Envoy Deployment:
+
+```bash
+oc rollout restart deploy/mongot-search-lb-0
+```
 
 ---
 
@@ -181,7 +185,7 @@ The MCK Envoy restricts its admin listener to four paths, so `/clusters` and `/c
 return 403. `/stats` is the one that matters:
 
 ```bash
-P=$(oc get pods -n mongodb-poc -l app=mongot-search-lb-0 -o jsonpath='{.items[0].metadata.name}')
+# P: the Envoy pod, set in "Getting the config out of the pod"
 IP=$(oc get pod -n mongodb-poc "$P" -o jsonpath='{.status.podIP}')
 TB=$(oc get pods -n mongodb-poc -l app=mongot-toolbox -o jsonpath='{.items[0].metadata.name}')
 oc exec -n mongodb-poc "$TB" -- curl -s http://$IP:9901/stats \
@@ -236,5 +240,10 @@ being headless and the L7 tier has quietly become a pass-through.
 | `lb_policy` set to something sticky | round robin lost; distribution collapses toward one pod |
 | `previous_hosts` removed | retries can land on the same shedding pod they just failed on |
 
-The test suite asserts the ones that are cheap to check; `./test/run.sh tls` and
-`./test/run.sh distribution` cover the first, fourth and fifth rows.
+The test suite asserts the ones that are cheap to check; its `tls` and `distribution`
+suites cover the first, fourth and fifth rows:
+
+```bash
+./test/run.sh tls
+./test/run.sh distribution
+```

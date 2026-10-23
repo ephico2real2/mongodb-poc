@@ -63,7 +63,10 @@ query, get results, and see **which pod answered**.
 ```bash
 oc apply -f manifests/95-search-gui.yaml
 echo "https://$(oc get route mongot-gui -n mongodb-poc -o jsonpath='{.spec.host}')"
-#   https://mongot-gui-mongodb-poc.apps-crc.testing
+```
+
+```text
+https://mongot-gui-mongodb-poc.apps-crc.testing
 ```
 
 <!-- markdownlint-disable MD033 -->
@@ -329,7 +332,10 @@ User-workload monitoring must be on. On CRC it already is; elsewhere:
 
 ```bash
 oc -n openshift-monitoring get cm cluster-monitoring-config -o jsonpath='{.data.config\.yaml}'
-#   enableUserWorkload: true
+```
+
+```text
+enableUserWorkload: true
 ```
 
 Then apply the scrape configuration:
@@ -364,9 +370,9 @@ Prometheus reloads on its own cycle — targets read `0` for a while and that is
 fault. Check the Secret to tell "not yet" from "never":
 
 ```bash
+# non-zero => config generated, Prometheus has not reloaded yet
 oc get secret prometheus-user-workload -n openshift-user-workload-monitoring \
   -o jsonpath='{.data.prometheus\.yaml\.gz}' | base64 -d | gunzip | grep -c mongodb-poc
-#   non-zero => config generated, Prometheus has not reloaded yet
 ```
 
 > **Envoy does not block the scrape.** MCK restricts its admin listener to `/stats`,
@@ -416,7 +422,8 @@ joined across both sides without time-guessing.
 ## 5. The script (best for a one-off check)
 
 ```bash
-cd mongodb && ./scripts/verify-search.sh
+cd mongodb \
+  && ./scripts/verify-search.sh
 ```
 
 Snapshots each pod's counter before and after a fixed number of queries and prints the
@@ -489,14 +496,27 @@ An iteration count is the wrong knob — 60 polls completed in 5s here and still
 
 ## The commands, briefly
 
-| Command | Answers |
+| Script | Answers |
 |---|---|
-| `./app/trace-query.sh "term"` | which `mongot` pod served **this** query — one line per gRPC request, from Envoy's access log |
-| `./app/trace-query.sh -n 12 -q "pods"` | the spread across pods over twelve queries, census only |
+| `./app/trace-query.sh` with a term | which `mongot` pod served **this** query — one line per gRPC request, from Envoy's access log |
+| `./app/trace-query.sh` with `-n 12 -q` | the spread across pods over twelve queries, census only |
 | `./app/entry-path.sh` | is traffic entering by the Route or the MetalLB VIP, proven at the hop that carries it |
-| `./app/sync-probe.sh -n 3` | how long a write takes to become searchable |
+| `./app/sync-probe.sh` with `-n 3` | how long a write takes to become searchable |
 | `./app/index-storage.sh` | what each replica holds on its volume |
-| `cd mongodb && ./scripts/verify-search.sh` | a one-off before/after distribution check |
+| `mongodb/scripts/verify-search.sh` | a one-off before/after distribution check |
+
+The commands, in the table's order:
+
+```bash
+./app/trace-query.sh "term"
+./app/trace-query.sh -n 12 -q "pods"
+./app/entry-path.sh
+./app/sync-probe.sh -n 3
+./app/index-storage.sh
+
+cd mongodb \
+  && ./scripts/verify-search.sh
+```
 
 Two results that look wrong and are not: `only 1 of 3 pods answered` is correct for a single
 query, and `trace-query.sh` taking a few seconds per query is Envoy's 10s access-log flush,

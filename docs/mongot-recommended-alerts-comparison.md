@@ -242,13 +242,17 @@ With the lab running:
 ```bash
 export KUBECONFIG=~/.kube/mongodb-mesh.config
 for ctx in kind-mesh0 kind-mesh1 kind-mesh2; do
-  for pod in $(kubectl --context "${ctx}" -n search get pods -l app=mongot-search-0-svc -o jsonpath='{.items[*].metadata.name}'); do
-    kubectl --context "${ctx}" get --raw "/api/v1/namespaces/search/pods/${pod}:9946/proxy/metrics" > "/tmp/${ctx}_${pod}.prom"
+  for pod in $(kubectl --context "${ctx}" -n search get pods -l app=mongot-search-0-svc \
+    -o jsonpath='{.items[*].metadata.name}'); do
+    kubectl --context "${ctx}" get --raw "/api/v1/namespaces/search/pods/${pod}:9946/proxy/metrics" \
+      > "/tmp/${ctx}_${pod}.prom"
   done
 done
+
 # One count a pod: 1 means the name is there, 0 that it is not
 grep -c '^mongot_process_start_time_seconds' /tmp/kind-mesh*.prom
 grep -c '^mongot_mongot_ftdc_executor_failure_total' /tmp/kind-mesh*.prom
+
 # The queue of the two scheduled pools, and the number of indexes, on each pod
 grep -H -E '^mongot_index_(commit|refresh)_executor_queued_tasks' /tmp/kind-mesh*.prom
 grep -c -E '^mongot_index_stats_indexStatusCode\{.*status="STEADY"\} 1' /tmp/kind-mesh*.prom
@@ -268,7 +272,7 @@ becomes a story, under epic #167: a rule with its promtool tests, or for G7 and 
 | --- | --- | --- | --- | --- | --- |
 | G1 | P1, E5 | `MongotDown`: `up{job="mongot-search-0-svc"} == 0`. `MongotPodsMissing`: `(count(up{job="mongot-search-0-svc"} == 1) or vector(0)) < 3`, 3 being `search.replicas`: fewer pods answer than the chart deploys, also when a pod is no longer a target | 1 m and 15 m, critical | On a cluster with Prometheus: whether a pod that is not Ready stays a target and reads `up` 0; that a restart one pod at a time (README, *Replication lag*) fires neither | A story, #168 |
 | G2 | P2 | `MongotCrashLooping`: `max by (namespace, pod) (changes(mongot_process_start_time_seconds{job="mongot-search-0-svc"}[30m])) > 3`. 30 minutes and not 10: the kubelet waits 10 s before a restart, twice as long each time, up to 300 s, so a pod in a steady loop starts at most twice in 10 minutes and MongoDB's rule holds only in the loop's first minutes | none, critical | A start that ends before its first scrape (15 s) is not seen; G1 is what fires then | A story, #169 |
-| G3 | P4 | `MongotIndexSyncErrors`: `sum by (namespace, pod, indexId_logString) (increase(mongot_index_stats_indexing_steadyStateExceptions_total{job="mongot-search-0-svc"}[10m])) > 0` | none, warning: MongoDB says Page, but transient errors are counted too | What a lost primary (`kind-mesh-cilium/drills.sh primary kill`) does to this counter and to the counter by kind, read as above | A story, #170 |
+| G3 | P4 | `MongotIndexSyncErrors`: `sum by (namespace, pod, indexId_logString) (increase(mongot_index_stats_indexing_steadyStateExceptions_total{job="mongot-search-0-svc"}[10m])) > 0` | none, warning: MongoDB says Page, but transient errors are counted too | What a lost primary (the drill below the table) does to this counter and to the counter by kind, read as above | A story, #170 |
 | G4 | P5 | `MongotHeapNearlyFull`: `max by (namespace, pod) (mongot_jvm_gc_live_data_size_bytes{job="mongot-search-0-svc"} / mongot_jvm_gc_max_data_size_bytes{job="mongot-search-0-svc"}) > 0.85`: MongoDB's form after garbage collection, per pod | 5 m, critical | How often the value changes when only young collections run | A story, #171 |
 | G5 | T1 | `MongotSearchLatencyHigh`: `max by (namespace, pod) (mongot_command_searchCommandTotalLatency_seconds{job="mongot-search-0-svc",quantile="0.99"}) > 0.5`; for vector search the same of `mongot_command_vectorSearchCommandTotalLatency_seconds`, `> 1` | to decide, warning | The service level objective to use in place of MongoDB's starting points | A story, #172 |
 | G6 | T2 | `MongotExecutorQueueing`: `max by (namespace, pod) ({__name__=~"mongot_(decoding\|change_stream_sync_dispatcher\|indexing_work\|indexing_lifecycle)_executor_queued_tasks",job="mongot-search-0-svc"}) > 10`: the four pools that read 0 at rest, and not `index_commit`, which holds a task for each index | 5 m, warning | Whether these queues grow under a load test (`test/load/`) | A story, #173 |
@@ -279,6 +283,11 @@ becomes a story, under epic #167: a rule with its promtool tests, or for G7 and 
 | G11 | T8 | None: the metric is off by default and the chart cannot turn it on | | | A story, #178 |
 | G12 | E1, E2; E4 remains without a proposed rule | With the operator Envoy's own counters, as the dashboard reads them: `MongotEnvoyFailuresHigh`, `sum(rate(envoy_cluster_upstream_rq_xx_total{envoy_cluster_name="mongot_rs_cluster",envoy_response_code_class="5"}[5m])) / sum(rate(envoy_cluster_upstream_rq_total{envoy_cluster_name="mongot_rs_cluster"}[5m])) > 0.10`. It counts 5xx responses only; what MongoDB's transcoding counters count was not established | to decide, warning | With the operator's Envoy, which the lab now does not run: what a failed search does to these counters | A story, #179 |
 | G13 | E8 | `MongotNativeMemoryHigh`: `(max by (namespace, pod) (mongot_system_memory_phys_inUse_bytes{job="mongot-search-0-svc"}) - sum by (namespace, pod) (mongot_jvm_memory_used_bytes{job="mongot-search-0-svc",area="heap"})) / max by (namespace, pod) (mongot_system_memory_phys_total_bytes{job="mongot-search-0-svc"}) > 0.5`: per pod, since one pod is more than 5% of three | 55 m, warning | | A story, #180 |
+
+```bash
+# G3: a lost primary
+kind-mesh-cilium/drills.sh primary kill
+```
 
 The 13 proposed rules parse with promtool 3.15.0. G9 and G10 take each counter on its own and join the results with
 `or`: their counters carry the same labels, and `increase` over one selector that matches several of their names drops

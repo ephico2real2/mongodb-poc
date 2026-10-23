@@ -15,12 +15,19 @@ given as measured or verified at it was measured at the old one.
 
 | Component | Version | Source |
 |---|---|---|
-| OpenShift (CRC) | 4.22.7 | `crc version` |
-| Kubernetes | v1.35.6 | `oc get nodes` |
+| OpenShift (CRC) | 4.22.7 | CRC's version (below the table) |
+| Kubernetes | v1.35.6 | the node list (below the table) |
 | MCK (MongoDB Controllers for Kubernetes) | 1.12.0 | OLM, `certified-operators` |
 | MetalLB | 4.22.0-202609151747 | OLM, `redhat-operators` |
 | MongoDB Community Server | 8.3.4-ubi9 (arm64) | Docker Hub |
 | mongot | 1.70.1 | `spec.version` |
+
+The two commands, in the table's order:
+
+```bash
+crc version
+oc get nodes
+```
 
 ---
 
@@ -67,7 +74,7 @@ both, so the path is stitched at L3, and only one direction works unaided.*
 Three separate network stacks live on this Mac. Two of them cannot see each other
 directly, and that constraint drives the whole design.
 
-```
+```text
                               ┌──────────────────────── macOS host ────────────────────────┐
                               │                                                            │
                               │  en0 192.168.166.180        bridge100 192.168.64.1         │
@@ -141,7 +148,7 @@ curl -X POST http://192.168.127.254/services/forwarder/expose \
 `ManagedLBConfig` has no Service-type field and the operator hardcodes its proxy Service
 to `ClusterIP`, leaving MetalLB nothing to bind to.*
 
-```
+```text
 mongod rs0 (colima, 3 members)
   │  mongotHost = 192.168.64.1:27028
   ▼
@@ -176,8 +183,11 @@ oc patch operatorhub cluster --type=merge \
   -p '{"spec":{"sources":[{"name":"certified-operators","disabled":false}]}}'
 ```
 
-Verify: `oc get packagemanifest mongodb-kubernetes -n openshift-marketplace`
-→ `channel=stable  csv=mongodb-kubernetes.v1.12.0`
+Verify; the result is `channel=stable  csv=mongodb-kubernetes.v1.12.0`:
+
+```bash
+oc get packagemanifest mongodb-kubernetes -n openshift-marketplace
+```
 
 ### 2. Install MCK via OLM — `manifests/10-mck-olm.yaml`
 
@@ -191,7 +201,7 @@ SingleNamespace and AllNamespaces) plus a `Subscription` pinned to
 (`OwnNamespace=false SingleNamespace=false AllNamespaces=true`). An OperatorGroup with
 `targetNamespaces` set fails with:
 
-```
+```text
 reason=UnsupportedOperatorGroup
 message=OwnNamespace InstallModeType not supported
 ```
@@ -205,7 +215,10 @@ and `.254` (gvproxy services endpoint). `autoAssign: false` so only an explicitl
 annotated Service claims one.
 
 Also confirm the node is not excluded from external load balancers:
-`oc get node crc -o jsonpath='{.metadata.labels}' | grep exclude-from-external`
+
+```bash
+oc get node crc -o jsonpath='{.metadata.labels}' | grep exclude-from-external
+```
 
 ### 5. MongoDB replica set in colima — `mongodb/compose.yaml`
 
@@ -214,14 +227,20 @@ The replica set has a colima machine of its own, `mongodb-poc`, with nothing els
 `mongodb/vm.sh` defines it:
 
 ```bash
-mongodb/vm.sh up          # 2 CPUs, 3 GiB, 20 GiB; prints the address: ADVERTISED_HOST in .env
+# 2 CPUs, 3 GiB, 20 GiB; prints the address: ADVERTISED_HOST in .env
+mongodb/vm.sh up
 cd mongodb
 DOCKER_CONTEXT=colima-mongodb-poc docker compose --env-file .env up -d
 ```
 
 The address is the machine's: a lease of the Mac's shared network (`/var/db/dhcpd_leases`),
-which `mongodb/vm.sh address` prints. Read it again when the machine is made again. These
-carry it: `ADVERTISED_HOST`, the `ipAddresses` of the mongod certificate
+which this prints. Read it again when the machine is made again:
+
+```bash
+mongodb/vm.sh address
+```
+
+These carry it: `ADVERTISED_HOST`, the `ipAddresses` of the mongod certificate
 (`manifests/70-tls-certs.yaml`), `source.hostAndPorts` of the search, the EndpointSlice of
 `manifests/40-external-mongod-dns.yaml`, and the GUI's Secret `mongot-gui-mongo-uri`
 (`app/gui/deploy.sh`).
@@ -236,10 +255,13 @@ but **not** running `usersInfo`, so the scripts attempt `createUser` and treat c
 as success):
 
 ```bash
+# rs.initiate + labAdmin
 docker exec -i mongo1 mongosh "mongodb://localhost:27017/admin?directConnection=true" \
-  --quiet --file /dev/stdin < scripts/rs-init.js      # rs.initiate + labAdmin
+  --quiet --file /dev/stdin < scripts/rs-init.js
+
+# search-sync-source
 docker exec -i mongo1 mongosh "mongodb://labAdmin:...@localhost:27017/admin?directConnection=true" \
-  --quiet --file /dev/stdin < scripts/users.js        # search-sync-source
+  --quiet --file /dev/stdin < scripts/users.js
 ```
 
 `searchCoordinator` is a **built-in role from MongoDB 8.2+**; on older servers the
@@ -287,7 +309,7 @@ reconciled), and its selector is a hand-copied operator-internal name
 
 The operator **never touches an external `mongod`**, so these are set in `compose.yaml`:
 
-```
+```text
 --setParameter=mongotHost=192.168.64.1:27028
 --setParameter=searchIndexManagementHostAndPort=192.168.64.1:27028
 --setParameter=useGrpcForSearch=true
@@ -380,7 +402,7 @@ and editing the `openshift-dns` CoreDNS ConfigMap directly is unsupported.
 The native pattern is a **selector-less headless Service + hand-written EndpointSlice**
 (`manifests/40-external-mongod-dns.yaml`). Verified:
 
-```
+```text
 mongod-external.mongodb-poc.svc.cluster.local -> 192.168.64.9
   :27017 CONNECTED   :27018 CONNECTED   :27019 CONNECTED
 ```
@@ -494,7 +516,7 @@ answering a non-gRPC path — a real response, not a timeout.*
 
 ## Verified end state
 
-```
+```text
 mongot-search-0-0/1/2                 1/1 Running      3 mongot
 mongot-search-lb-0-...-kt2cx/zcjxr    1/1 Running      2 Envoy
 MongoDBSearch mongot                  phase=Running

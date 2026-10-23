@@ -162,7 +162,7 @@ reconciled) and a selector copied from an Operator-internal naming convention.
 **MetalLB supports `AllNamespaces` only.** An `OperatorGroup` with `targetNamespaces` set
 fails the CSV with:
 
-```
+```text
 reason=UnsupportedOperatorGroup
 message=OwnNamespace InstallModeType not supported, cannot configure to watch own namespace
 ```
@@ -186,7 +186,7 @@ creates it as a custom role.
 
 **`mongod` accepts the search parameters at startup.** Confirmed in the log:
 
-```
+```text
 "Applied --setParameter options" ... "mongotHost":{"default":"","value":"..."},
 "searchTLSMode":{"default":"globalTLS","value":"disabled"},
 "useGrpcForSearch":{"default":false,"value":true}

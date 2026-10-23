@@ -27,6 +27,12 @@ Pick **77** when TLS to the cluster edge is enough and you want the fewest certi
 > Every number below comes from these runs; statements taken from reading the operator
 > source or the router template, rather than from a run, say so.
 
+The commands on this page use the lab's namespace:
+
+```bash
+NS=mongodb-poc
+```
+
 ---
 
 ## 1. Why there are only these two
@@ -104,14 +110,18 @@ IngressController; the default certificate stays `no-alpn`.
 ### Deploy
 
 ```bash
-NS=mongodb-poc
-
 # 1. HTTP/2 on the default router (cluster-wide)
 oc annotate ingresscontroller default -n openshift-ingress-operator \
   ingress.operator.openshift.io/default-enable-http2=true
 oc rollout status deploy/router-default -n openshift-ingress --timeout=300s
-oc exec -n openshift-ingress deploy/router-default -- printenv ROUTER_DISABLE_HTTP2   # false
+oc exec -n openshift-ingress deploy/router-default -- printenv ROUTER_DISABLE_HTTP2
+```
 
+```text
+false
+```
+
+```bash
 # 2. the company hostname certificate - a single serving cert, not a chain
 oc create secret tls grpc-search-route-tls -n $NS --cert=grpc-search.crt --key=grpc-search.key
 
@@ -121,7 +131,7 @@ oc apply -f manifests/77-route-edge.yaml
 oc apply -f manifests/77-search-plaintext-sync-tls.yaml
 ```
 
-> **`oc apply` will not remove `spec.security` if it was added with `kubectl patch`.**
+> **oc apply will not remove `spec.security` if it was added with kubectl patch.**
 > Client-side apply deletes only fields recorded in its last-applied-configuration.
 > Measured here: the apply reported `configured` and changed nothing, leaving Envoy on TLS
 > behind a router sending h2c. Remove it explicitly:
@@ -135,9 +145,16 @@ oc apply -f manifests/77-search-plaintext-sync-tls.yaml
 ```bash
 openssl s_client -connect <router>:443 -servername grpc-search.apps-crc.testing \
   -alpn h2 -CAfile company-root.crt </dev/null 2>/dev/null | grep -E 'ALPN|Verify return'
-#   ALPN protocol: h2
-#   Verify return code: 0 (ok)
-cd mongodb && ./scripts/verify-search.sh
+```
+
+```text
+ALPN protocol: h2
+Verify return code: 0 (ok)
+```
+
+```bash
+cd mongodb \
+  && ./scripts/verify-search.sh
 ```
 
 Measured: `$search`, `$vectorSearch` and filtered `$vectorSearch` PASS; 40 queries split
@@ -280,8 +297,13 @@ certificate at all.
   root able to read. Not applied or tested.
 - **Renewal is manual and needs an Envoy restart.** There is no cert-manager machinery
   for an imported certificate, and Envoy does not reload a changed Secret. Replace the
-  Secret, then `oc rollout restart deploy/mongot-search-lb-0 -n mongodb-poc`. Put the
-  expiry on a calendar:
+  Secret, then restart Envoy:
+
+  ```bash
+  oc rollout restart deploy/mongot-search-lb-0 -n mongodb-poc
+  ```
+
+  Put the expiry on a calendar:
 
   ```bash
   oc get secret ent-mongot-search-lb-0-cert -n mongodb-poc -o jsonpath='{.data.tls\.crt}' \
@@ -319,11 +341,11 @@ Restoring both roots and restarting brought search back.
 
 ### Automating the bundle with trust-manager — not tested here
 
-The deploy steps below build `ent-trust-bundle` by hand (`cat company-root.crt
-internal-root.crt`). trust-manager, a cert-manager project since 2021 (v0.1.0 on
+The deploy steps below build `ent-trust-bundle` by hand (step 3 concatenates
+`company-root.crt` and `internal-root.crt`). trust-manager, a cert-manager project since 2021 (v0.1.0 on
 2021-11-08; v0.25.0 on 2026-09-11), does that with a `Bundle`.
 
-What it would do for 88. A `Bundle` replaces the manual `cat company-root internal-root > ca.crt`:
+What it would do for 88. A `Bundle` replaces the manual concatenation of the two roots into `ca.crt`:
 
 ```yaml
 apiVersion: trust.cert-manager.io/v1alpha1
@@ -365,8 +387,6 @@ that operator-owned CRD here, and is outside Red Hat support.
 ### Deploy
 
 ```bash
-NS=mongodb-poc
-
 # 1. the internal CA and the two internal certificates
 oc apply -f manifests/88-internal-ca.yaml
 oc wait certificate/internal-root-ca -n $NS --for=condition=Ready --timeout=120s
@@ -395,7 +415,9 @@ oc rollout restart deploy/mongot-search-lb-0 -n $NS    # Envoy does not reload c
 # Envoy demands a client cert, and names the roots it accepts
 openssl s_client -connect <router>:443 -servername grpc-search.apps-crc.testing -alpn h2 \
   </dev/null 2>/dev/null | sed -n '/Acceptable client certificate CA names/,/Requested/p'
-cd mongodb && ./scripts/verify-search.sh
+
+cd mongodb \
+  && ./scripts/verify-search.sh
 ```
 
 Measured: Envoy mounts `ent-mongot-search-lb-0-cert`, `ent-…-client-cert` and
@@ -417,7 +439,7 @@ across pods `1 → 0 → 2 → 1 → 0 → 2`.
   stopped on 2026-05-01, and the Chrome Root Program requires serverAuth-only for all new
   public TLS certificates from 2027-03-15.
 - **Envoy does not reload renewed certificates.** mongot restarts on its own (hash-named
-  PEM); Envoy keeps the old certificate until `oc rollout restart deploy/mongot-search-lb-0`.
+  PEM); Envoy keeps the old certificate until its Deployment is restarted (step 4 of the deploy).
   The internal certificates last one year and renew 30 days before expiry.
 - **Avoiding the two-root bundle** would need the internal CA to be a subordinate of the
   company CA, so the bundle holds only the company root. Not tested.
@@ -439,8 +461,16 @@ The two options share the Route name and host (`mongot-grpc`,
 
 | From → to | Steps |
 |---|---|
-| 77 → 88 | the 88 deploy steps above; `oc apply -f manifests/80-route-passthrough.yaml` removes the edge-only fields |
-| 88 → 77 | the 77 deploy steps, including the explicit `oc patch … remove /spec/security` |
+| 77 → 88 | the 88 deploy steps above; applying `manifests/80-route-passthrough.yaml` removes the edge-only fields |
+| 88 → 77 | the 77 deploy steps, including the explicit patch that removes `/spec/security` |
+
+```bash
+# 77 → 88: the passthrough Route, without the edge-only fields
+oc apply -f manifests/80-route-passthrough.yaml
+
+# 88 → 77: remove spec.security explicitly
+oc patch mongodbsearch mongot -n $NS --type=json -p '[{"op":"remove","path":"/spec/security"}]'
+```
 
 HTTP/2 on the router does not affect a passthrough Route, so it can stay on for either.
 

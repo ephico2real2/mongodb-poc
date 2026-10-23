@@ -41,11 +41,16 @@ OTel Collector, Prometheus      Hubble UI, relay, observer: the relay sees      
 
 | What | Fact | Source |
 | --- | --- | --- |
-| A connection | Gets one backend, chosen at random among the Service's slots when it connects, and keeps it. With socket LB, on in the lab (`cilium-dbg status`: Socket LB Enabled, Coverage Full), the pod's socket is connected to the backend itself; on the per-packet path the choice is kept in conntrack and later packets follow it. A Loki push or a Prometheus remote_write on a kept-alive connection stays on one cluster | Cilium v1.20.2 `bpf/bpf_sock.c:123-127`, `:428`, `:460`; `bpf/lib/lb.h:2004-2015`, `:2321-2358`; `Documentation/network/clustermesh/global-services.rst:19-22` ("automatically perform load-balancing to pods in both clusters") |
-| Mirroring | None in the L4 load balancer: a search of `pkg/clustermesh`, `pkg/loadbalancer` and `bpf/lib/lb.h` for mirror, fan-out and duplicate finds only EndpointSlice mirroring. The one request mirror is the Gateway API `RequestMirror` filter, for HTTP routes through Cilium's Envoy | `git grep` at v1.20.2; `operator/pkg/model/translation/envoy_virtual_host.go:436-457` |
+| A connection | Gets one backend, chosen at random among the Service's slots when it connects, and keeps it. With socket LB, on in the lab (cilium-dbg status, below the table: Socket LB Enabled, Coverage Full), the pod's socket is connected to the backend itself; on the per-packet path the choice is kept in conntrack and later packets follow it. A Loki push or a Prometheus remote_write on a kept-alive connection stays on one cluster | Cilium v1.20.2 `bpf/bpf_sock.c:123-127`, `:428`, `:460`; `bpf/lib/lb.h:2004-2015`, `:2321-2358`; `Documentation/network/clustermesh/global-services.rst:19-22` ("automatically perform load-balancing to pods in both clusters") |
+| Mirroring | None in the L4 load balancer: a search of `pkg/clustermesh`, `pkg/loadbalancer` and `bpf/lib/lb.h` for mirror, fan-out and duplicate finds only EndpointSlice mirroring. The one request mirror is the Gateway API `RequestMirror` filter, for HTTP routes through Cilium's Envoy | git grep at v1.20.2; `operator/pkg/model/translation/envoy_virtual_host.go:436-457` |
 | Two copies behind one name | Each would get part of the writes: affinity `none` pools both clusters' backends, `local` prefers the client's cluster | `pkg/clustermesh/selectbackends.go:60-91` |
 | A name with no local backend | Its clients get the remote backends; the remote cluster must keep the Service `shared` (the default) | `pkg/clustermesh/testdata/clusterservice-without-local-eps.txtar`; `operator/watchers/service_sync.go:290-292` |
 | Backends that go away | New connections go to the remaining ones. An existing connection to a deleted backend does not survive: with socket LB the socket stays connected to the gone pod (Cilium terminates such TCP sockets only with `lb-sock-terminate-all-protos`, off by default); on the per-packet path it is sent to another backend, which resets it. The writer reconnects. By default (`clustermesh.cacheTTL: 0s`) an unreachable cluster's backends are kept | `pkg/loadbalancer/reconciler/termination.go:212-219`; `bpf/lib/lb.h:2360-2391`; `global-services.rst:206-216` |
+
+```bash
+# A connection: socket LB in the lab
+cilium-dbg status
+```
 
 So a second copy cannot come from a global Service. It comes from the writers, which send every record to both copies.
 
@@ -112,7 +117,9 @@ scaled to 0; mesh0 frozen).
 ## Diagram sources
 
 The figures are drawn in `docs/diagrams/shared-services/source.html` and rendered with diagram-kit
-(https://github.com/ephico2real2/diagram-kit), MPL-2.0:
-`diagram-render docs/diagrams/shared-services/source.html docs/diagrams/shared-services shared,dr`. This document
-embeds the light pictures; the dark ones are kept beside them. A figure, its text twin here and its page change
-together.
+(https://github.com/ephico2real2/diagram-kit), MPL-2.0. This document embeds the light pictures; the dark ones are
+kept beside them. A figure, its text twin here and its page change together:
+
+```bash
+diagram-render docs/diagrams/shared-services/source.html docs/diagrams/shared-services shared,dr
+```

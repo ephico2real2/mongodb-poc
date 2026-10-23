@@ -24,7 +24,7 @@ The conventional shape does not give that:
   `envoy_config_builder.go` the one-element `ServerNames` in `buildFilterChain`; the controller's lines are quoted in
   the [README](../README.md#one-hostname-two-entry-paths)). Another SNI on port 27028, the MetalLB VIP path: Envoy
   closes the handshake and serves no certificate; on port 443, the router serves its default certificate and the
-  connection never reaches Envoy (measured with `openssl s_client`,
+  connection never reaches Envoy (measured with openssl s_client,
   [README](../README.md#what-a-wrong-sni-does-by-path)). This is server-name (SNI) matching during the TLS handshake,
   before any HTTP request: Envoy's filter chain on 27028, the router's passthrough map on 443. It is not CORS, an
   HTTP-header mechanism that browsers enforce ([MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS));
