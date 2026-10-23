@@ -87,8 +87,10 @@ certificate, which already carries the name as a SAN, and the gRPC streams are s
 
 A preflight Job runs before anything is created and refuses the install when a secret or the trust bundle is missing
 or lacks a key, when the server certificate does not name a server name (a SAN, or a one-label wildcard, as the
-prerequisites script matches), or when the mongot Service does not exist. It prints key names and the certificate's
-DNS names, never a key.
+prerequisites script matches), or when the mongot Service does not exist. It runs in the cluster, as the Job's own
+ServiceAccount, on Red Hat's public UBI 9 image: `curl` against the API server with the pod's token, `python3` for
+the API's JSON, `openssl` for the certificate; no `oc`, no pull secret. It prints key names and the certificate's
+DNS names, never a key or the token.
 
 ## What it changes, and what it does not
 

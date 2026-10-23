@@ -2,8 +2,10 @@
 The preflight: fails the install, before anything is created, when a secret Envoy mounts is missing or lacks a
 key, when the server certificate does not name a server name the chart would accept (a pod would start and every
 client would then fail certificate validation), or when the mongot Service the cluster dials does not exist.
-It reads four objects by name (the Role names them), prints key names and the certificate's DNS names, never a
-key, and refuses with a message naming what is missing. The main chart's 00-preflight.yaml pattern: a
+It runs in the cluster, so it needs no oc and no pull secret: Red Hat's public UBI 9 image, curl against the API
+server with the pod's ServiceAccount token, python3 for the API's JSON, openssl for the certificate's names. It
+reads four objects by name (the Role names them), prints key names and the certificate's DNS names, never a key
+or the token, and refuses with a message naming what is missing. The main chart's 00-preflight.yaml pattern: a
 pre-install/pre-upgrade hook, its RBAC hooks too, created first (weight -10) and removed once the hooks have
 succeeded; a failed Job is kept for its log. Argo CD: PreSync.
 */ -}}
@@ -104,11 +106,15 @@ spec:
       restartPolicy: Never
       securityContext:
         runAsNonRoot: true
+        {{- with .Values.jobs.runAsUser }}
+        runAsUser: {{ . }}
+        runAsGroup: {{ . }}
+        {{- end }}
         seccompProfile:
           type: RuntimeDefault
       containers:
         - name: preflight
-          image: "{{ .Values.jobs.image.repository }}:{{ .Values.jobs.image.tag }}"
+          image: {{ .Values.jobs.image | quote }}
           resources:
             {{- toYaml .Values.jobs.resources | nindent 12 }}
           securityContext:
@@ -129,7 +135,7 @@ spec:
             - name: SERVER_NAMES
               value: {{ include "vanity.serverNames" . | fromJsonArray | join " " | quote }}
             - name: JOB_IMAGE
-              value: "{{ .Values.jobs.image.repository }}:{{ .Values.jobs.image.tag }}"
+              value: {{ .Values.jobs.image | quote }}
           command: ["/bin/bash", "-c"]
           args:
             - |
@@ -138,17 +144,44 @@ spec:
               log() { printf '[preflight %s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
               PROBLEMS=0
               bad() { printf '[preflight] MISSING: %s\n' "$*" >&2; PROBLEMS=$((PROBLEMS + 1)); }
+              refuse() { printf '[preflight] REFUSED: %s Nothing was changed.\n' "$*" >&2; exit 1; }
 
-              # keys_of <kind> <name>: the key names of .data, one per line; the values never leave the API call.
-              # stderr is kept, so a Forbidden reads as one and not as "not found".
-              keys_of() { oc get "$1" "$2" -n "$NAMESPACE" -o go-template='{{`{{range $k, $v := .data}}{{$k}}{{"\n"}}{{end}}`}}'; }
+              # The image: curl for the API server, python3 for its JSON, openssl for the certificate. An override
+              # image without one of them is refused, never worked around.
+              for t in curl python3 openssl; do
+                command -v "$t" >/dev/null 2>&1 || refuse "the Job image ${JOB_IMAGE} has no ${t}: jobs.image needs curl, python3 and openssl."
+              done
+              # The pod's ServiceAccount: its token and the API server's CA, mounted by Kubernetes.
+              SA="${SA_DIR:-/var/run/secrets/kubernetes.io/serviceaccount}"
+              [ -r "${SA}/token" ] && [ -r "${SA}/ca.crt" ] || refuse "no ServiceAccount token under ${SA}: the preflight reads the API server as its ServiceAccount, from inside the cluster."
+              API="${API_SERVER:-https://kubernetes.default.svc}"
+              work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
+              # The token goes to curl in a header file, on no command line.
+              printf 'Authorization: Bearer %s\n' "$(cat "${SA}/token")" > "${work}/auth"
+
+              # get <kind-plural> <name>: GET the object; its JSON is left in ${work}/<kind>.<name>.json on 200, and
+              # otherwise the API's reason and message (NotFound, Forbidden) or curl's error are printed, with 1.
+              get() {
+                local body="${work}/$1.$2.json" code
+                if ! code="$(curl -sS --cacert "${SA}/ca.crt" -H "@${work}/auth" -o "$body" -w '%{http_code}' "${API}/api/v1/namespaces/${NAMESPACE}/$1/$2" 2>"${work}/curl.err")"; then
+                  printf 'the API server did not answer: %s\n' "$(tail -1 "${work}/curl.err")"; return 1
+                fi
+                [ "$code" = 200 ] && return 0
+                python3 -c 'import json, sys
+              d = json.load(open(sys.argv[1])); print(d.get("reason") or sys.argv[2], d.get("message") or "")' "$body" "HTTP ${code}" 2>/dev/null || printf 'HTTP %s\n' "$code"
+                return 1
+              }
+              # keys_of <kind-plural> <name>: the key names of .data, one per line; the values stay in the file.
+              keys_of() { python3 -c 'import json, sys
+              print("\n".join(sorted((json.load(open(sys.argv[1])).get("data") or {}).keys())))' "${work}/$1.$2.json"; }
               # need_keys <kind> <name> <key>...: reports the object when absent, else each key it lacks. Returns 1 when absent.
               need_keys() {
-                local kind="$1" name="$2" keys k; shift 2
-                if ! keys="$(keys_of "$kind" "$name" 2>&1)"; then
-                  bad "${kind} ${name}: $(printf '%s' "$keys" | tail -1)"
+                local kind="$1" name="$2" why keys k; shift 2
+                if ! why="$(get "${kind}s" "$name")"; then
+                  bad "${kind} ${name}: ${why}"
                   return 1
                 fi
+                keys="$(keys_of "${kind}s" "$name")"
                 for k in "$@"; do
                   grep -qxF "$k" <<<"$keys" || bad "${kind} ${name}: no key ${k} (it has: $(printf '%s' "$keys" | tr '\n' ' '))"
                 done
@@ -158,23 +191,20 @@ spec:
               log "checking what Envoy for ${SERVER_NAMES} mounts and dials in ${NAMESPACE}"
               need_keys secret "$CLIENT_SECRET" tls.crt tls.key
               need_keys configmap "$TRUST_CM" ca.crt
-              if oc get service "$MONGOT_SERVICE" -n "$NAMESPACE" >/dev/null 2>&1; then
+              if why="$(get services "$MONGOT_SERVICE")"; then
                 log "ok: service ${MONGOT_SERVICE} (the mongot pods Envoy dials)"
               else
-                bad "service ${MONGOT_SERVICE}: the mongot Service the main chart's operator makes; is search.name right, and the MongoDBSearch installed in ${NAMESPACE}?"
+                bad "service ${MONGOT_SERVICE}: ${why}; it is the mongot Service the main chart's operator makes: is search.name right, and the MongoDBSearch installed in ${NAMESPACE}?"
               fi
 
               # The server certificate must name every server name Envoy accepts: a SAN equal to it, or a one-label
               # wildcard (*.example.com covers a.example.com, not a.b.example.com), as TLS has it. Only the public
-              # certificate is read; the key stays in the API.
+              # certificate is decoded; the key stays in the file, which goes with the Job. The SAN line as
+              # `openssl x509 -text` prints it (the line after its heading), read as the main chart's prerequisites
+              # script reads it.
               if need_keys secret "$SERVER_SECRET" tls.crt tls.key; then
-                if ! command -v openssl >/dev/null; then
-                  printf '[preflight] REFUSED: the Job image %s has no openssl, so the server certificate cannot be checked for %s: set jobs.image to an image with oc and openssl. Nothing was changed.\n' "$JOB_IMAGE" "$SERVER_NAMES" >&2
-                  exit 1
-                fi
-                # The SAN line as `openssl x509 -text` prints it (the line after its heading), read as the main
-                # chart's prerequisites script reads it, so any openssl serves.
-                if ! sans="$(oc get secret "$SERVER_SECRET" -n "$NAMESPACE" -o jsonpath='{.data.tls\.crt}' | base64 -d \
+                if ! sans="$(python3 -c 'import base64, json, sys
+              sys.stdout.write(base64.b64decode(json.load(open(sys.argv[1]))["data"]["tls.crt"]).decode())' "${work}/secrets.${SERVER_SECRET}.json" \
                      | openssl x509 -noout -text 2>/dev/null | awk 'index($0, "X509v3 Subject Alternative Name") {getline; print; exit}' \
                      | tr ',' '\n' | sed -n 's/^ *DNS://p' | tr '[:upper:]' '[:lower:]')"; then
                   sans=""

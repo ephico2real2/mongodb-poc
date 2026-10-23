@@ -89,7 +89,8 @@ objects are all namespaced; there is no ClusterRole.
 | `expose.annotations`, `.labels` | `{}` | Added to the Route or Ingress. The termination, balance and sync-wave annotations are the chart's own and are not overridable here: `expose.balance` sets the balance |
 | `preflight.enabled` | `true` | |
 | `monitoring.serviceMonitor.enabled`, `.interval`, `.labels` | `false`, `15s`, `{}` | Per-pod scraping of Envoy's `/stats/prometheus`, with the main chart's `_total` relabelling; needs user workload monitoring |
-| `jobs.image.repository`, `.tag` | `registry.redhat.io/openshift4/ose-cli`, `latest` | The preflight's image: a shell, `oc` and `openssl` (the certificate check). The main chart's default |
+| `jobs.image` | `registry.access.redhat.com/ubi9/ubi:9.8-1791888712@sha256:16e9e43d…` | The preflight's image: a shell, `curl` (it reads the API server from inside the cluster, as its ServiceAccount), `python3` (the API's JSON) and `openssl` (the certificate's names). Red Hat's public UBI 9 by digest: no `oc`, no pull secret. An override needs the three tools, and the preflight refuses an image without one; `ubi9-minimal` has no `openssl`; OKD's `origin-cli` 4.17 has all three (measured; `ose-cli` not measured) |
+| `jobs.runAsUser` | empty | The uid and gid the Job runs as. Empty on OpenShift, which assigns one; `1001` where nothing does, as on kind: the image's own user is root |
 | `jobs.resources`, `.ttlSecondsAfterFinished` | see `values.yaml` | |
 
 `values.schema.json` refuses an unknown key, an IP or a one-label name as hostname, a timeout that is not an Envoy
@@ -156,11 +157,14 @@ release's and stay.
 
 | Where | Message | Meaning |
 | --- | --- | --- |
-| preflight log | `MISSING: secret <name>: Error from server (NotFound)` | The secret is not in the namespace: a wrong `search.name`, `tls.certsSecretPrefix` or `namespace`, or the main chart's prerequisites not made |
+| preflight log | `MISSING: secret <name>: NotFound secrets "<name>" not found` | The secret is not in the namespace: a wrong `search.name`, `tls.certsSecretPrefix` or `namespace`, or the main chart's prerequisites not made |
+| preflight log | `MISSING: secret <name>: Forbidden secrets "<name>" is forbidden …` | The Job's ServiceAccount may not read it: the hook's Role names the derived names, so a policy of the cluster is in the way |
+| preflight log | `MISSING: … the API server did not answer: curl: (7) …` | The Job cannot reach `kubernetes.default.svc`: a network policy without egress to the API server |
 | preflight log | `MISSING: secret <name>: no key tls.key` | The secret exists with other keys: it is not a `kubernetes.io/tls` secret of the prerequisites script |
 | preflight log | `MISSING: secret <name>: its certificate does not name <host> (SANs: ...)` | The server certificate has no SAN for the hostname: issue one with it, or set `publicHostname` to a name it has |
 | preflight log | `MISSING: service <name>-search-0-svc` | The operator has not made the mongot Service here: the MongoDBSearch is not installed, or `search.name` is wrong |
-| preflight log | `REFUSED: the Job image ... has no openssl` | `jobs.image` names an image without `openssl`, so the certificate cannot be checked; it is never skipped |
+| preflight log | `REFUSED: the Job image … has no curl` (or `python3`, `openssl`) | `jobs.image` names an image without one of the three tools; nothing is skipped |
+| preflight pod | `CreateContainerConfigError`: `container has runAsNonRoot and image will run as root` | A cluster that assigns no uid (not OpenShift): set `jobs.runAsUser=1001` |
 | Envoy pod | `ContainerCreating`, event `FailedMount`: `secret "..." not found` | A secret (or the trust bundle) was deleted after the preflight passed |
 | Envoy pod | `CreateContainerConfigError`: `container has runAsNonRoot and image will run as root` | A cluster that assigns no uid (not OpenShift): set `envoy.runAsUser=101` |
 | Envoy log | `Failed to load private key from /etc/envoy/tls/server/tls.key, Cause: ...KEY_VALUES_MISMATCH` | A rotated secret with a key that does not match its certificate; restart after the fix |

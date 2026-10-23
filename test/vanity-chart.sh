@@ -263,8 +263,8 @@ else
 fi
 
 # ------------------------------------------------------------------------------------------------ the preflight script
-# Taken out of the render and run here against a stand-in oc and a throwaway certificate: what it accepts, what it
-# refuses, and how it ends. Then bash -n and shellcheck.
+# Taken out of the render and run here against a stand-in curl (the API server, in files), a stand-in ServiceAccount
+# directory and a throwaway certificate: what it accepts, what it refuses, and how it ends. Then bash -n and shellcheck.
 render -s templates/00-preflight.yaml | python3 -c '
 import re, sys
 doc = sys.stdin.read()
@@ -277,66 +277,105 @@ if command -v shellcheck >/dev/null; then
 else
   printf 'skip  shellcheck (not installed)\n'
 fi
-# The stand-in oc: a small cluster in files. `oc get <kind> <name>` answers from ${CLUSTER}/<kind>.<name>, whose
-# lines are its .data keys; secret.<name>.crt is its tls.crt. Absent file: NotFound on stderr, exit 1.
-mkdir -p "${tmp}/bin" "${tmp}/cluster"
-cat > "${tmp}/bin/oc" <<'OC'
+# The stand-in curl: GET <api>/api/v1/namespaces/<ns>/<kind>/<name> answers 200 with ${CLUSTER}/<kind>.<name>.json,
+# 403 with a Forbidden Status when ${CLUSTER}/<kind>.<name>.forbidden exists, else 404 with a NotFound Status, as
+# the API server does; with ${CLUSTER}/down it fails as curl does when nothing answers. -o, -w, -H and --cacert are
+# read as curl reads them. The stand-in ServiceAccount directory holds a token the output must never show.
+mkdir -p "${tmp}/bin" "${tmp}/cluster" "${tmp}/sa"
+printf 'stand-in-token\n' > "${tmp}/sa/token"; printf 'stand-in-ca\n' > "${tmp}/sa/ca.crt"
+cat > "${tmp}/bin/curl" <<'CURL'
 #!/usr/bin/env bash
-[ "$1" = get ] || { echo "stand-in oc: $*" >&2; exit 2; }
-kind="$2"; name="$3"; f="${CLUSTER}/${kind}.${name}"
-[ -e "$f" ] || { echo "Error from server (NotFound): ${kind} \"${name}\" not found" >&2; exit 1; }
-case "$*" in
-  *go-template*) cat "$f" ;;
-  *"jsonpath={.data.tls\\.crt}"*) base64 < "${f}.crt" | tr -d '\n' ;;
-  *) echo "$name" ;;
-esac
-OC
-chmod +x "${tmp}/bin/oc"
-# A certificate with the vanity name and a one-label wildcard, as the prerequisites script would check it.
+out=""; url=""
+while [ $# -gt 0 ]; do
+  case "$1" in -o) out="$2"; shift ;; -w|-H|--cacert) shift ;; http*) url="$1" ;; esac
+  shift
+done
+[ -e "${CLUSTER}/down" ] && { echo "curl: (7) Failed to connect to kubernetes.default.svc port 443: Connection refused" >&2; exit 7; }
+rest="${url#*/api/v1/namespaces/*/}"; kind="${rest%%/*}"; name="${rest#*/}"
+if [ -e "${CLUSTER}/${kind}.${name}.forbidden" ]; then
+  printf '{"kind":"Status","status":"Failure","message":"%s \\"%s\\" is forbidden: User \\"system:serviceaccount:ns:sa\\" cannot get resource \\"%s\\" in API group \\"\\" in the namespace \\"ns\\"","reason":"Forbidden","code":403}' "$kind" "$name" "$kind" > "$out"; printf 403
+elif [ -e "${CLUSTER}/${kind}.${name}.json" ]; then
+  cp "${CLUSTER}/${kind}.${name}.json" "$out"; printf 200
+else
+  printf '{"kind":"Status","status":"Failure","message":"%s \\"%s\\" not found","reason":"NotFound","code":404}' "$kind" "$name" > "$out"; printf 404
+fi
+CURL
+chmod +x "${tmp}/bin/curl"
+# A certificate with the vanity name and a one-label wildcard, as the prerequisites script would check it; and one
+# with the hostname as its CN only, no SAN.
 openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=mongot" -addext "subjectAltName=DNS:${HOST},DNS:*.apps.example.com,DNS:mongot-search-0-svc" \
   -keyout "${tmp}/server.key" -out "${tmp}/server.crt" >/dev/null 2>&1
+openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=${HOST}" -keyout "${tmp}/cn.key" -out "${tmp}/cn.crt" >/dev/null 2>&1
+# object <kind-plural> <name> [key=file...]: ${CLUSTER}/<kind>.<name>.json, its .data base64-encoded as the API has it.
+object() {
+  local kind="$1" name="$2"; shift 2
+  python3 - "${tmp}/cluster/${kind}.${name}.json" "$name" "$@" <<'PY'
+import base64, json, sys
+out, name, *pairs = sys.argv[1:]
+data = {k: base64.b64encode(open(f, "rb").read()).decode() for k, f in (p.split("=", 1) for p in pairs)}
+json.dump({"metadata": {"name": name}, "data": data}, open(out, "w"))
+PY
+}
 seed() {  # a cluster with everything the preflight needs
   rm -rf "${tmp}/cluster"; mkdir -p "${tmp}/cluster"
-  printf 'tls.crt\ntls.key\n' > "${tmp}/cluster/secret.ent-mongot-search-lb-0-cert"; cp "${tmp}/server.crt" "${tmp}/cluster/secret.ent-mongot-search-lb-0-cert.crt"
-  printf 'tls.crt\ntls.key\n' > "${tmp}/cluster/secret.ent-mongot-search-lb-0-client-cert"
-  printf 'ca.crt\n' > "${tmp}/cluster/configmap.ent-trust-bundle"
-  : > "${tmp}/cluster/service.mongot-search-0-svc"
+  object secrets ent-mongot-search-lb-0-cert tls.crt="${tmp}/server.crt" tls.key="${tmp}/server.key"
+  object secrets ent-mongot-search-lb-0-client-cert tls.crt="${tmp}/server.crt" tls.key="${tmp}/server.key"
+  object configmaps ent-trust-bundle ca.crt="${tmp}/server.crt"
+  object services mongot-search-0-svc
 }
 seed
+PF_ENV=(CLUSTER="${tmp}/cluster" SA_DIR="${tmp}/sa" NAMESPACE=mongodb-poc SERVER_SECRET=ent-mongot-search-lb-0-cert CLIENT_SECRET=ent-mongot-search-lb-0-client-cert
+        TRUST_CM=ent-trust-bundle MONGOT_SERVICE=mongot-search-0-svc SERVER_NAMES="${HOST}" JOB_IMAGE=example/ubi:1)
 preflight() {  # [NAME=value...]: runs the script; prints its exit code; its output in ${tmp}/preflight.out
-  env -i PATH="${tmp}/bin:${PATH}" CLUSTER="${tmp}/cluster" NAMESPACE=mongodb-poc SERVER_SECRET=ent-mongot-search-lb-0-cert CLIENT_SECRET=ent-mongot-search-lb-0-client-cert \
-    TRUST_CM=ent-trust-bundle MONGOT_SERVICE=mongot-search-0-svc SERVER_NAMES="${HOST}" JOB_IMAGE=example/oc:1 "$@" bash "${tmp}/preflight.sh" > "${tmp}/preflight.out" 2>&1; echo $?
+  env -i PATH="${tmp}/bin:${PATH}" "${PF_ENV[@]}" "$@" bash "${tmp}/preflight.sh" > "${tmp}/preflight.out" 2>&1; echo $?
 }
 [[ "$(preflight)" == 0 ]] && grep -q "ok: ${HOST} is a name of the certificate" "${tmp}/preflight.out" && grep -q 'ok: service mongot-search-0-svc' "${tmp}/preflight.out" \
   && ok "preflight: everything present and the certificate naming the hostname passes" || bad "preflight with everything present: $(tail -2 "${tmp}/preflight.out" | tr '\n' ' ')"
-grep -q 'BEGIN CERTIFICATE\|PRIVATE' "${tmp}/preflight.out" && bad "the preflight printed a certificate or a key" || ok "the preflight prints names and keys' names, never a certificate or a key"
+grep -q 'BEGIN CERTIFICATE\|PRIVATE\|stand-in-token' "${tmp}/preflight.out" && bad "the preflight printed a certificate, a key or the token" || ok "the preflight prints names and keys' names, never a certificate, a key or the token"
 [[ "$(preflight SERVER_NAMES="${HOST} x.apps.example.com")" == 0 ]] && ok "preflight: a one-label wildcard SAN covers x.apps.example.com" || bad "preflight: wildcard match: $(grep MISSING "${tmp}/preflight.out" | tr '\n' ' ')"
 [[ "$(preflight SERVER_NAMES="a.b.apps.example.com")" == 1 ]] && grep -q 'does not name a.b.apps.example.com' "${tmp}/preflight.out" \
   && ok "preflight: a wildcard covers one label only; a.b.apps.example.com is refused" || bad "preflight: a.b.apps.example.com: $(tail -1 "${tmp}/preflight.out")"
 [[ "$(preflight SERVER_NAMES="other.example.com")" == 1 ]] && grep -q "MISSING: secret ent-mongot-search-lb-0-cert: its certificate does not name other.example.com (SANs: ${HOST} \*.apps.example.com mongot-search-0-svc)" "${tmp}/preflight.out" && grep -q 'FAILED: 1 problem' "${tmp}/preflight.out" \
   && ok "preflight: a certificate without the name is refused, the message naming the SANs it has" || bad "preflight: name not on the certificate: $(grep 'MISSING\|FAILED' "${tmp}/preflight.out" | tr '\n' ' ')"
-rm "${tmp}/cluster/secret.ent-mongot-search-lb-0-cert"
-[[ "$(preflight)" == 1 ]] && grep -q 'MISSING: secret ent-mongot-search-lb-0-cert: Error from server (NotFound)' "${tmp}/preflight.out" && ! grep -q 'does not name' "${tmp}/preflight.out" \
-  && ok "preflight: a missing server secret is refused by name, and its certificate is not then checked" || bad "preflight: missing server secret: $(grep 'MISSING\|FAILED' "${tmp}/preflight.out" | tr '\n' ' ')"
-seed; rm "${tmp}/cluster/secret.ent-mongot-search-lb-0-client-cert" "${tmp}/cluster/configmap.ent-trust-bundle" "${tmp}/cluster/service.mongot-search-0-svc"
+rm "${tmp}/cluster/secrets.ent-mongot-search-lb-0-cert.json"
+[[ "$(preflight)" == 1 ]] && grep -q 'MISSING: secret ent-mongot-search-lb-0-cert: NotFound secrets "ent-mongot-search-lb-0-cert" not found' "${tmp}/preflight.out" && ! grep -q 'does not name' "${tmp}/preflight.out" \
+  && ok "preflight: a missing server secret is refused by name with the API's reason, and its certificate is not then checked" || bad "preflight: missing server secret: $(grep 'MISSING\|FAILED' "${tmp}/preflight.out" | tr '\n' ' ')"
+seed; rm "${tmp}/cluster/secrets.ent-mongot-search-lb-0-client-cert.json" "${tmp}/cluster/configmaps.ent-trust-bundle.json" "${tmp}/cluster/services.mongot-search-0-svc.json"
 [[ "$(preflight)" == 1 ]] && [[ "$(grep -c MISSING "${tmp}/preflight.out")" == 3 ]] && grep -q 'FAILED: 3 problem' "${tmp}/preflight.out" \
   && ok "preflight: a missing client secret, trust bundle and mongot Service are each named, and counted" || bad "preflight: three missing: $(grep 'MISSING\|FAILED' "${tmp}/preflight.out" | tr '\n' ' ')"
-seed; printf 'tls.crt\n' > "${tmp}/cluster/secret.ent-mongot-search-lb-0-client-cert"
+seed; touch "${tmp}/cluster/secrets.ent-mongot-search-lb-0-client-cert.forbidden"
+[[ "$(preflight)" == 1 ]] && grep -q 'MISSING: secret ent-mongot-search-lb-0-client-cert: Forbidden secrets "ent-mongot-search-lb-0-client-cert" is forbidden' "${tmp}/preflight.out" \
+  && ok "preflight: a Forbidden reads as one, not as missing" || bad "preflight: Forbidden: $(grep MISSING "${tmp}/preflight.out" | tr '\n' ' ')"
+seed; touch "${tmp}/cluster/down"
+[[ "$(preflight)" == 1 ]] && grep -q 'the API server did not answer: curl: (7)' "${tmp}/preflight.out" && grep -q 'FAILED: 4 problem' "${tmp}/preflight.out" \
+  && ok "preflight: an API server that does not answer is reported with curl's error, for each object" || bad "preflight: API down: $(grep 'MISSING\|FAILED' "${tmp}/preflight.out" | tr '\n' ' ')"
+seed; object secrets ent-mongot-search-lb-0-client-cert tls.crt="${tmp}/server.crt"
 [[ "$(preflight)" == 1 ]] && grep -q 'secret ent-mongot-search-lb-0-client-cert: no key tls.key' "${tmp}/preflight.out" \
   && ok "preflight: a secret without tls.key is refused" || bad "preflight: missing key: $(grep MISSING "${tmp}/preflight.out" | tr '\n' ' ')"
 # A CN is not a name: a certificate whose subject is the hostname, with no SAN, is refused.
-seed; openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=${HOST}" -keyout "${tmp}/cn.key" -out "${tmp}/cluster/secret.ent-mongot-search-lb-0-cert.crt" >/dev/null 2>&1
+seed; object secrets ent-mongot-search-lb-0-cert tls.crt="${tmp}/cn.crt" tls.key="${tmp}/cn.key"
 [[ "$(preflight)" == 1 ]] && grep -q "does not name ${HOST} (SANs: )" "${tmp}/preflight.out" && ok "preflight: a certificate with the hostname as CN and no SAN is refused" || bad "preflight: CN-only certificate: $(grep 'MISSING\|FAILED' "${tmp}/preflight.out" | tr '\n' ' ')"
-seed; printf 'tls.key\n' > "${tmp}/cluster/secret.ent-mongot-search-lb-0-client-cert"
+seed; object secrets ent-mongot-search-lb-0-client-cert tls.key="${tmp}/server.key"
 [[ "$(preflight)" == 1 ]] && grep -q 'client-cert: no key tls.crt' "${tmp}/preflight.out" && ok "preflight: a client secret without tls.crt is refused" || bad "preflight: client secret without tls.crt accepted"
-seed; : > "${tmp}/cluster/configmap.ent-trust-bundle"
+seed; object configmaps ent-trust-bundle
 [[ "$(preflight)" == 1 ]] && grep -q 'ent-trust-bundle: no key ca.crt' "${tmp}/preflight.out" && ok "preflight: a trust bundle without ca.crt is refused" || bad "preflight: trust bundle without ca.crt accepted"
-seed; printf 'tls.crt\n' > "${tmp}/cluster/secret.ent-mongot-search-lb-0-cert"
+seed; object secrets ent-mongot-search-lb-0-cert tls.crt="${tmp}/server.crt"
 [[ "$(preflight)" == 1 ]] && grep -q 'lb-0-cert: no key tls.key' "${tmp}/preflight.out" && ok "preflight: a server secret without tls.key is refused" || bad "preflight: server secret without tls.key accepted"
-# No openssl in the image: refused, naming the image, never skipped.
-seed; mkdir -p "${tmp}/noopenssl"; for t in bash base64 tr sed awk grep date cat tail cut printf env; do p="$(command -v "$t" 2>/dev/null)"; [ -n "$p" ] && ln -sf "$p" "${tmp}/noopenssl/$t"; done
-[[ "$(env -i PATH="${tmp}/bin:${tmp}/noopenssl" CLUSTER="${tmp}/cluster" NAMESPACE=mongodb-poc SERVER_SECRET=ent-mongot-search-lb-0-cert CLIENT_SECRET=ent-mongot-search-lb-0-client-cert TRUST_CM=ent-trust-bundle MONGOT_SERVICE=mongot-search-0-svc SERVER_NAMES="${HOST}" JOB_IMAGE=example/oc:1 bash "${tmp}/preflight.sh" > "${tmp}/preflight.out" 2>&1; echo $?)" == 1 ]] \
-  && grep -q 'REFUSED: the Job image example/oc:1 has no openssl' "${tmp}/preflight.out" && ok "preflight: an image without openssl is refused, by name" || bad "preflight without openssl: $(tail -1 "${tmp}/preflight.out")"
+# An image without curl, python3 or openssl: refused, naming the image and the tool, never skipped. A PATH of the
+# other tools only, the stand-in curl among them.
+seed
+for missing in curl python3 openssl; do
+  d="${tmp}/no-${missing}"; rm -rf "$d"; mkdir -p "$d"
+  for t in bash base64 tr sed awk grep date cat tail cut printf env mktemp rm curl python3 openssl; do
+    [ "$t" = "$missing" ] && continue
+    if [ "$t" = curl ]; then ln -s "${tmp}/bin/curl" "$d/curl"; else p="$(command -v "$t" 2>/dev/null)"; [ -n "$p" ] && ln -s "$p" "$d/$t"; fi
+  done
+  [[ "$(env -i PATH="$d" "${PF_ENV[@]}" bash "${tmp}/preflight.sh" > "${tmp}/preflight.out" 2>&1; echo $?)" == 1 ]] \
+    && grep -q "REFUSED: the Job image example/ubi:1 has no ${missing}: jobs.image needs curl, python3 and openssl" "${tmp}/preflight.out" \
+    && ok "preflight: an image without ${missing} is refused, naming the image and the tool" || bad "preflight without ${missing}: $(tail -1 "${tmp}/preflight.out")"
+done
+[[ "$(preflight SA_DIR="${tmp}/no-such-dir")" == 1 ]] && grep -q 'REFUSED: no ServiceAccount token' "${tmp}/preflight.out" \
+  && ok "preflight: without a ServiceAccount token it refuses, never guesses" || bad "preflight without a token: $(tail -1 "${tmp}/preflight.out")"
 
 # ------------------------------------------------------------------------------------------------ the documents
 grep -q 'rollout restart deploy/' "${CHART}/templates/NOTES.txt" && grep -q 'rollout restart' "${CHART}/README.md" \

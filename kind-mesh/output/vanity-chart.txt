@@ -64,18 +64,23 @@ ok    envoy --mode validate refuses a broken bootstrap
 ok    bash -n preflight
 ok    shellcheck preflight
 ok    preflight: everything present and the certificate naming the hostname passes
-ok    the preflight prints names and keys' names, never a certificate or a key
+ok    the preflight prints names and keys' names, never a certificate, a key or the token
 ok    preflight: a one-label wildcard SAN covers x.apps.example.com
 ok    preflight: a wildcard covers one label only; a.b.apps.example.com is refused
 ok    preflight: a certificate without the name is refused, the message naming the SANs it has
-ok    preflight: a missing server secret is refused by name, and its certificate is not then checked
+ok    preflight: a missing server secret is refused by name with the API's reason, and its certificate is not then checked
 ok    preflight: a missing client secret, trust bundle and mongot Service are each named, and counted
+ok    preflight: a Forbidden reads as one, not as missing
+ok    preflight: an API server that does not answer is reported with curl's error, for each object
 ok    preflight: a secret without tls.key is refused
 ok    preflight: a certificate with the hostname as CN and no SAN is refused
 ok    preflight: a client secret without tls.crt is refused
 ok    preflight: a trust bundle without ca.crt is refused
 ok    preflight: a server secret without tls.key is refused
-ok    preflight: an image without openssl is refused, by name
+ok    preflight: an image without curl is refused, naming the image and the tool
+ok    preflight: an image without python3 is refused, naming the image and the tool
+ok    preflight: an image without openssl is refused, naming the image and the tool
+ok    preflight: without a ServiceAccount token it refuses, never guesses
 ok    NOTES and the README say to restart the pods after a certificate rotation
 ok    the main README and the main chart's README link the chart and its document
 all vanity chart tests passed

@@ -169,15 +169,8 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "image": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["repository", "tag"],
-          "properties": {
-            "repository": {"type": "string", "minLength": 1},
-            "tag": {"type": "string", "minLength": 1}
-          }
-        },
+        "image": {"type": "string", "minLength": 1, "description": "A full image reference (name:tag, name@digest or name:tag@digest) with curl, python3 and openssl"},
+        "runAsUser": {"type": ["integer", "null"], "minimum": 1, "description": "The uid and gid the Job runs as; empty on OpenShift, which assigns one; 1001 where nothing assigns one, as kind"},
         "resources": {"$ref": "#/definitions/resources"},
         "ttlSecondsAfterFinished": {"type": "integer", "minimum": 0}
       }

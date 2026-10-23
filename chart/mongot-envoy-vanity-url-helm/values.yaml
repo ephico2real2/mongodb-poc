@@ -122,11 +122,17 @@ monitoring:
     interval: 15s
     labels: {}
 
-# The image of the preflight Job: a shell, oc and openssl (the SAN check). The main chart's default.
+# The preflight Job's image: a shell, curl (it reads the API server from inside the cluster, as its own
+# ServiceAccount), python3 (the API's JSON) and openssl (the certificate's names). Red Hat's public UBI 9, pinned by
+# digest: no oc, and no pull secret. Measured on 2026-10-22: OpenSSL 3.5.8, curl 7.76.1, python3 3.9.25. An
+# override needs the three tools, and the preflight refuses an image without one (ubi9-minimal has no openssl;
+# OKD's origin-cli 4.17 has all three).
 jobs:
-  image:
-    repository: registry.redhat.io/openshift4/ose-cli
-    tag: latest
+  image: registry.access.redhat.com/ubi9/ubi:9.8-1791888712@sha256:16e9e43d99e181463513cc84a514859b1abb9460f1c4d9e208da4b4e51cd5cc3
+  # The uid (and gid) the Job runs as. The image's own user is root, and the Job runs with runAsNonRoot, so it needs
+  # a number from the cluster. Empty: OpenShift's restricted-v2 assigns one from the namespace's range. 1001 where
+  # nothing assigns one, as on kind; never on OpenShift, which refuses a uid outside the range.
+  runAsUser: null
   resources:
     requests: {cpu: 100m, memory: 256Mi}
     limits: {cpu: 500m, memory: 1024Mi}

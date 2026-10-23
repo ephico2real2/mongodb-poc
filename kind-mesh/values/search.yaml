@@ -43,8 +43,7 @@ source:
 jobs:
   image:
     repository: localhost/kind-mesh/oc
-    # -1: the same oc with openssl added, for the vanity chart's preflight (#198); a new tag makes search-up.sh build it.
-    tag: "4.20.42-1"
+    tag: "4.20.42"
 
 # OpenShift's parts, and the monitoring that needs the Prometheus operator, off on kind.
 route:
