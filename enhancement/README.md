@@ -169,8 +169,10 @@ persistentvolumeclaim/resize-me patched
 
 ```bash
 sleep 30
-oc get pvc resize-me -n sc-expansion-test \
-  -o jsonpath='request={.spec.resources.requests.storage} capacity={.status.capacity.storage} conditions={.status.conditions[*].type}{"\n"}'
+format='request={.spec.resources.requests.storage}'
+format+=' capacity={.status.capacity.storage}'
+format+=' conditions={.status.conditions[*].type}{"\n"}'
+oc get pvc resize-me -n sc-expansion-test -o jsonpath="$format"
 ```
 
 ```text
@@ -438,8 +440,9 @@ deployment "nfs-server" successfully rolled out
 ### Step B4 — is it serving?
 
 ```bash
-oc get pods -n nfs-server \
-  -o 'custom-columns=NAME:.metadata.name,READY:.status.containerStatuses[0].ready,SCC:.metadata.annotations.openshift\.io/scc'
+columns='NAME:.metadata.name,READY:.status.containerStatuses[0].ready,'
+columns+='SCC:.metadata.annotations.openshift\.io/scc'
+oc get pods -n nfs-server -o custom-columns="$columns"
 ```
 
 ```text
@@ -522,8 +525,9 @@ deployment "writer" successfully rolled out
 ```
 
 ```bash
-oc get pvc shared-nfs-pvc -n nfs-test \
-  -o 'custom-columns=NAME:.metadata.name,STATUS:.status.phase,ACCESS:.spec.accessModes[0],CAPACITY:.status.capacity.storage,CLASS:.spec.storageClassName'
+columns='NAME:.metadata.name,STATUS:.status.phase,ACCESS:.spec.accessModes[0],'
+columns+='CAPACITY:.status.capacity.storage,CLASS:.spec.storageClassName'
+oc get pvc shared-nfs-pvc -n nfs-test -o custom-columns="$columns"
 ```
 
 ```text

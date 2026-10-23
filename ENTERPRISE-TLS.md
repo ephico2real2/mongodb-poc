@@ -27,12 +27,6 @@ Pick **77** when TLS to the cluster edge is enough and you want the fewest certi
 > Every number below comes from these runs; statements taken from reading the operator
 > source or the router template, rather than from a run, say so.
 
-The commands on this page use the lab's namespace:
-
-```bash
-NS=mongodb-poc
-```
-
 ---
 
 ## 1. Why there are only these two
@@ -110,6 +104,8 @@ IngressController; the default certificate stays `no-alpn`.
 ### Deploy
 
 ```bash
+NS=mongodb-poc
+
 # 1. HTTP/2 on the default router (cluster-wide)
 oc annotate ingresscontroller default -n openshift-ingress-operator \
   ingress.operator.openshift.io/default-enable-http2=true
@@ -387,6 +383,8 @@ that operator-owned CRD here, and is outside Red Hat support.
 ### Deploy
 
 ```bash
+NS=mongodb-poc
+
 # 1. the internal CA and the two internal certificates
 oc apply -f manifests/88-internal-ca.yaml
 oc wait certificate/internal-root-ca -n $NS --for=condition=Ready --timeout=120s
@@ -464,11 +462,16 @@ The two options share the Route name and host (`mongot-grpc`,
 | 77 → 88 | the 88 deploy steps above; applying `manifests/80-route-passthrough.yaml` removes the edge-only fields |
 | 88 → 77 | the 77 deploy steps, including the explicit patch that removes `/spec/security` |
 
+Run only the block for the chosen direction, as part of its complete deploy steps above.
+
 ```bash
 # 77 → 88: the passthrough Route, without the edge-only fields
 oc apply -f manifests/80-route-passthrough.yaml
+```
 
+```bash
 # 88 → 77: remove spec.security explicitly
+NS=mongodb-poc
 oc patch mongodbsearch mongot -n $NS --type=json -p '[{"op":"remove","path":"/spec/security"}]'
 ```
 

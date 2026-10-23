@@ -157,7 +157,8 @@ It may not delete another pod, or a claim, and it holds no right outside the nam
 server for the Job's service account, with chart 0.3.26, one check per object:
 
 ```bash
-oc auth can-i delete ... --as=<the account>
+# Replace both placeholders for each object and the Job's service account.
+oc auth can-i delete '<resource/name>' --as='<the account>'
 ```
 
 ```text

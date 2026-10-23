@@ -185,7 +185,7 @@ The MCK Envoy restricts its admin listener to four paths, so `/clusters` and `/c
 return 403. `/stats` is the one that matters:
 
 ```bash
-# P: the Envoy pod, set in "Getting the config out of the pod"
+P=$(oc get pods -n mongodb-poc -l app=mongot-search-lb-0 -o jsonpath='{.items[0].metadata.name}')
 IP=$(oc get pod -n mongodb-poc "$P" -o jsonpath='{.status.podIP}')
 TB=$(oc get pods -n mongodb-poc -l app=mongot-toolbox -o jsonpath='{.items[0].metadata.name}')
 oc exec -n mongodb-poc "$TB" -- curl -s http://$IP:9901/stats \
