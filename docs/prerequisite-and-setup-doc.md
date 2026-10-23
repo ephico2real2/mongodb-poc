@@ -42,24 +42,43 @@ Every step has two forms. `--dry-run` writes the YAML file and contacts no clust
 
 ### Step 1: Name the namespace and make its folder
 
-The namespace is never assumed. Name it once for the session, or pass `--target-namespace <namespace>` on each command; with neither, every command refuses.
+The namespace is never assumed. Name it in one of three ways, shown after the setup below; with none, every command refuses, and two that differ are refused.
 
 ```bash
-export TargetNamespace=dvh-gp6-rnd
-NS=$TargetNamespace                       # Part 2 uses $NS
+NS=dvh-gp6-rnd                            # Part 2 uses $NS
 
 # The script is a file of the chart. From a checkout of this repository, at its root:
 PREREQ=chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
 # From the published chart, with no clone (chart 0.3.3 and later):
-#   helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.34/mongodb-search-helm-0.3.34.tgz --untar
+#   helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.35/mongodb-search-helm-0.3.35.tgz --untar
 #   PREREQ=mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
 
-mkdir -m 700 $TargetNamespace             # the script never creates it
-bash $PREREQ --check \
-  --mongot <mongot PEM> --envoy <Envoy client PEM> --route <public hostname PEM>
-# If the Envoy client cert also allows server authentication, or has no EKU, add
-# --route-reference <public hostname PEM> (Step 3)
+mkdir -m 700 $NS                          # the script never creates it
+cp /path/to/mongot.pem /path/to/envoy.pem /path/to/public.pem "$NS/"   # or leave them in the current directory
+bash $PREREQ --check $NS
 ```
+
+The three ways to name the namespace:
+
+```bash
+bash $PREREQ --check dvh-gp6-rnd                              # a plain word on each command
+bash $PREREQ --check --target-namespace dvh-gp6-rnd           # the option on each command
+export TargetNamespace=dvh-gp6-rnd                            # once for the session
+```
+
+The script finds each PEM that is not named, and prints the file chosen with its leaf's subject and names before any passphrase is asked:
+
+1. A path named on the command line (`--mongot <pem>`, `--envoy <pem>`, `--route <pem>`), or in the environment (`MONGOT_PEM`, `ENVOY_PEM`, `ROUTE_PEM`).
+2. The certificate's common name, as the company names its PEM files (the [runbook](mongot-envoy-mtls-fresh-install-runbook.md), Step 1), in `./$NS/` (if it holds no PEM, in the current directory): `mongot-search-0-svc.dvh-gp6-rnd.svc.cluster.local.pem`, `mongot-search-0-proxy-svc.dvh-gp6-rnd.svc.cluster.local.pem`, and `<fqdn>.pem` for the public certificate when `--hostname <fqdn>` is given. For other names set `MONGOT_PEM_NAME`, `ENVOY_PEM_NAME` or `ROUTE_PEM_NAME`, with the tokens `{search}`, `{ns}` and `{hostname}`. A file found by its name must still fit its step.
+3. Otherwise the one `*.pem` in `./$NS/` (if it holds none, in the current directory) whose certificate fits the step: mongot's names mongot's service and allows server and client authentication; Envoy's allows client authentication; the public one allows server authentication and names one public hostname. No PEM, or two, for a step is refused; a PEM that fits two steps is given to neither. Name the PEM to settle it.
+
+Discovery follows a PEM that is a symbolic link, and prints the path it chose. A public certificate, or a client
+certificate with no name, cannot show which namespace it was issued for: keep only this installation's PEMs where the
+script looks, or name the PEMs and give `--hostname`. A plain word that is an existing file is taken as a file, not a
+namespace: name the namespace with `--target-namespace` then. A PEM path that begins with `-` is written `./-…`, so
+that it is not read as an option.
+
+Every command below takes the PEMs this way, and each still takes a PEM by its path, as `--check --mongot <mongot PEM> --envoy <Envoy client PEM> --route <public hostname PEM> $NS`.
 
 Run it with `bash`: helm stores a chart's files without the executable bit. Run it from a directory outside the chart: helm packages every file under a chart's directory and keeps it in each release, so the script refuses to write there.
 
@@ -67,16 +86,26 @@ The files the script writes go into that folder, in the directory you run it fro
 
 The script refuses to write a file that git would track: this repository ignores `*.secret.yaml`, `*.configmap.yaml`, `*.pem`, `*.key` and `*.pass`.
 
-### Step 2: Create the trust bundle
-
-From the CA certificates in the mongot PEM. No passphrase is asked: a CA certificate is not encrypted.
+Steps 2 to 4 in one command, each step as it runs alone, stopping at the first one refused. What the steps before it made stays; a step that fails while applying also leaves its own file:
 
 ```bash
-bash $PREREQ --trustca <mongot PEM> --dry-run
-bash $PREREQ --trustca <mongot PEM> --apply
+bash $PREREQ --all --dry-run --username mongotuser $NS
+bash $PREREQ --all --apply --username mongotuser $NS     # the namespace typed for each object, the three passphrases, the password twice
 ```
 
-If the public hostname certificate, or the source mongod, has another CA, add its PEM with a second `--trustca`. `--check-source <host:port>` also proves that the source mongod presents a certificate the bundle trusts (runbook Step 4).
+With `--passin-file`, the one file must open all three keys; when their passphrases differ, run the three commands of Step 3 one by one, each with its own file.
+
+### Step 2: Create the trust bundle
+
+From the CA certificates in the three PEMs, found as in Step 1, or in the PEMs you name. No passphrase is asked: a CA certificate is not encrypted.
+
+```bash
+bash $PREREQ --trustca --dry-run $NS                  # the CA certificates of the three PEMs found
+bash $PREREQ --trustca --apply $NS
+# or from the PEMs you name: bash $PREREQ --trustca <mongot PEM> [<other PEM>...] --dry-run $NS
+```
+
+If the source mongod has another CA, name every PEM, since none is found once one is named: `--trustca <mongot PEM> <Envoy client PEM> <public hostname PEM> <source CA PEM>`. `--check-source <host:port>` also proves that the source mongod presents a certificate the bundle trusts (runbook Step 4).
 
 ### Step 3: Create the three TLS secrets
 
@@ -84,24 +113,22 @@ Each command asks for the passphrase of the key in its PEM.
 
 ```bash
 # mongot: server and client auth
-bash $PREREQ --mongot <mongot PEM> --dry-run
-bash $PREREQ --mongot <mongot PEM> --apply
+bash $PREREQ --mongot --dry-run $NS                   # or --mongot <mongot PEM>
+bash $PREREQ --mongot --apply $NS
 
 # Envoy: the client cert it presents to mongot
-bash $PREREQ --envoy <Envoy client PEM> --dry-run
-# If the client certificate also allows server authentication, or has no EKU:
-# bash $PREREQ --envoy <Envoy client PEM> --route-reference <public PEM> --dry-run
-bash $PREREQ --envoy <Envoy client PEM> --apply
+bash $PREREQ --envoy --dry-run $NS                    # or --envoy <Envoy client PEM>
+bash $PREREQ --envoy --apply $NS
 
 # Envoy: the server cert for the public hostname. It is mounted in the Envoy pods; the Route is passthrough and
 # holds no certificate, and the chart creates it.
-bash $PREREQ --route <public hostname PEM> --dry-run
-bash $PREREQ --route <public hostname PEM> --apply
+bash $PREREQ --route --dry-run $NS                    # or --route <public hostname PEM>, or --hostname <fqdn>
+bash $PREREQ --route --apply $NS
 ```
 
-`--route` prints the hostname for the values file (`loadBalancer.externalHostname`). When the certificate names several, say which with `--hostname <fqdn>`.
+`--route` prints the hostname for the values file (`loadBalancer.externalHostname`). When the certificate names several, say which with `--hostname <fqdn>`; the script then also looks for the file `<fqdn>.pem`.
 
-If the Envoy client certificate also allows server authentication, or has no EKU, add `--route-reference <public PEM>` on each `--envoy` run, including `--apply` and `--check --envoy`; the reference must identify a distinct public certificate with a valid chain.
+If the Envoy client certificate also allows server authentication, or has no EKU, it is told from the public certificate by the route PEM found, which stands for `--route-reference`. When none is found, add `--route-reference <public PEM>` on each `--envoy` run, including `--apply` and `--check --envoy`; the reference must identify a distinct public certificate with a valid chain.
 
 What `--apply` does, each time:
 
@@ -115,14 +142,14 @@ What `--apply` does, each time:
 It asks for the password twice, without showing it. The secret holds the key `password` only; the user name goes in the values file as `source.username`.
 
 ```bash
-bash $PREREQ --dbcred --username mongotuser --dry-run
-bash $PREREQ --dbcred --username mongotuser --apply
+bash $PREREQ --dbcred --username mongotuser --dry-run $NS
+bash $PREREQ --dbcred --username mongotuser --apply $NS
 ```
 
 ### Step 5: Check all five, then remove the key files
 
 ```bash
-bash $PREREQ --check
+bash $PREREQ --check $NS
 ```
 
 Expected under `cluster`: `tls.crt`, `tls.key` and `ca.crt` on the three TLS secrets, `password` on the password secret, `ca.crt` on the ConfigMap. The chart checks the same five objects before it installs; of a TLS secret it asks for `tls.crt` and `tls.key` only. `--check` also prints the lines for the values file of Step 6.
@@ -130,7 +157,7 @@ Expected under `cluster`: `tls.crt`, `tls.key` and `ca.crt` on the three TLS sec
 The `*.secret.yaml` files hold keys with no password. Once the objects are in the cluster, remove them:
 
 ```bash
-bash $PREREQ --clean
+bash $PREREQ --clean $NS
 ```
 
 It removes a file only when its secret is in the cluster. The files are unlinked, not overwritten: on current macOS `rm -P` does nothing, and no tool can overwrite a file in place on a solid-state or copy-on-write disk. Keep the folder on an encrypted disk.
@@ -174,7 +201,7 @@ From the published package, with no clone of the repository:
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.34/mongodb-search-helm-0.3.34.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.35/mongodb-search-helm-0.3.35.tgz \
   -n $NS -f my-values.yaml --timeout 20m
 ```
 
@@ -265,7 +292,7 @@ oc delete operatorgroup/<operatorgroup name> -n $NS    # or keep it and set oper
 What the script does, as `oc` commands. First split and verify the PEMs as in Steps 1 to 3 of the [fresh install runbook](mongot-envoy-mtls-fresh-install-runbook.md): for each of `mongot`, `envoy-client` and `lb` you then have `<name>.crt` (leaf, then chain), `<name>.key` (no password) and `<name>-ca.crt`, and `trust-bundle.pem` from its Step 4.
 
 ```bash
-NS=$TargetNamespace
+NS=dvh-gp6-rnd                            # as in Step 1
 
 oc create configmap ent-trust-bundle --from-file=ca.crt=trust-bundle.pem -n $NS
 
@@ -287,15 +314,28 @@ Then delete the decrypted key files (runbook Step 7d).
 
 ## Troubleshooting
 
+The messages are quoted in part: `<…>` and `...` stand for what the script prints there.
+
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| The script says `no namespace` | `TargetNamespace` is not exported and `--target-namespace` was not given | Step 1; there is no default |
+| The script says `no namespace` | No namespace was named: no plain word, no `--target-namespace`, and `TargetNamespace` is not exported | Step 1; there is no default |
+| The script says `which one?` | Two of the plain word, `--target-namespace` and `TargetNamespace` name different namespaces | Name it one way, or unset `TargetNamespace` |
+| The script says `which role is <file>?` | A PEM was given with no option before it | Put `--mongot`, `--envoy`, `--route` or `--trustca` before it |
+| The script says `is not a namespace name (lower-case letters, digits and '-'), nor a file here` | A word that is not a file is read as the namespace: most likely a PEM path mistyped | Check the path; a PEM goes after its option, as `--mongot <pem>` |
+| The script says `two namespaces were given: <first> and <second>` | Two words that are not files, each read as the namespace (a PEM path mistyped, or a second namespace), or two `--target-namespace` that differ | Check the paths; name one namespace |
+| The script says `an empty argument (an unset variable?)` | A word was empty, as `"$x"` is when `x` is not set | Set the variable, or leave the word out |
+| The script says `no PEM for the <step> role` | No PEM was named, no file has the step's name, and there is no `*.pem` in the folder or in the current directory | Step 1: put the PEMs in the folder, or name each with `--<step> <pem>` |
+| The script says `no PEM fits the <step> role in <folder> (...)` | No PEM in the folder (or, when the folder holds none, in the current directory) fits that step; the message says why for each file | Put the step's PEM there, or name it with `--<step> <pem>` |
+| The script says `two PEMs fit the <step> role` | Two PEMs could serve that step: the script does not choose | Name one with `--<step> <pem>`, or name the files by their common name (Step 1) |
+| The script says `it fits mongot and envoy, and is given to neither` | One certificate could serve two steps | Name it with the option of its step |
+| The script says `found by its name (MONGOT_PEM_NAME), is not the mongot certificate for <namespace>` (or Envoy's, the route's) | A file has the name the script looks for, but its certificate does not fit that step | Rename the file, or name the right PEM with `--<step> <pem>` |
+| The script says `--all stopped at --<step> (step N of 5)` | That step refused, for the reason that follows, or a command it ran failed (`(exit status N)`, after that command's own message); the steps before it were made, the ones after were not; a step that failed while applying also leaves its own file | Fix what it says and run `--all` again (with `--apply`, add `--replace` for the objects already created) |
 | The script says `is not the mongot certificate for <namespace>` | The PEM was issued for another namespace, or it is another step's PEM | Give each step its own PEM; ask the signer for one issued for this namespace |
-| The script says `a certificate allowing both server and client authentication, or with no EKU, cannot be distinguished from the public certificate` | The Envoy candidate also permits server authentication; names alone cannot establish its role | Add `--route-reference <public PEM>` to `--envoy` (also with `--check`). The reference must have one public leaf, a valid chain, and a different fingerprint. Use `--hostname` if it has several public names. An existing generated route Secret does not replace this explicit choice |
+| The script says `a certificate allowing both server and client authentication, or with no EKU, cannot be distinguished from the public certificate` | The Envoy candidate also permits server authentication, names alone cannot establish its role, and no public PEM was found to tell it from (none, or two) | Put the one public PEM in the folder, where it is found and taken as the reference, or add `--route-reference <public PEM>` to `--envoy` (also with `--check`). The reference must have one public leaf, a valid chain, and a different fingerprint. Use `--hostname` if it has several public names. A generated route Secret is never taken as the reference. A public PEM found in the folder standing for `--route-reference` is new with chart 0.3.35 (#196) and replaces #61's rule that the public PEM be named on the run |
 | The script says `this is the public certificate named by --route-reference` | The Envoy candidate and the explicit public reference have the same leaf fingerprint | Give `--envoy` its own client PEM; keep the public PEM as the reference |
 | The script says `its basic constraints do not say CA:TRUE` | The root is version 3 and its basic constraints say `CA:FALSE`, or it has no basic constraints and neither a Certificate Sign key usage nor a Netscape CA type. OpenSSL 3 refuses such a root as `invalid CA certificate` (error 79), and LibreSSL accepts most of them; the script refuses them on every build. Roots with `CA:TRUE`, with no basic constraints but Certificate Sign key usage, or of version 1 are accepted | Ask the CA owner for a root with `basicConstraints = critical, CA:TRUE` and replace the rejected root in the PEM |
 | The script says `wrong passphrase` | The passphrase typed is not the key's | Run the step again |
-| The script says `this openssl ... cannot read the key` | The key's encryption is one this openssl build does not have | Set `OPENSSL` to another build, for example `OPENSSL=/opt/homebrew/bin/openssl` |
+| The script says `this openssl (<version>) cannot read the key in <file>: <reason>` | The key's encryption is one this openssl build does not have | Set `OPENSSL` to another build, for example `OPENSSL=/opt/homebrew/bin/openssl` |
 | The script says `git would track` | The folder is inside a repository that does not ignore it | Add the line it prints to `.gitignore` |
 | The script says `inside the Helm chart` | It was run from the chart's directory, or below it | Run it from another directory, for example the repository's root |
 | Install stops at once; `preflight` log says `MISSING: secret …` | A prerequisite is absent, misnamed or lacks a key | Part 1; compare the names with the Overview table |
@@ -360,7 +400,7 @@ Oct 8, 2026, namespace `dvh-vectordb-qa` created for this on the same lab, OpenS
 
 mongot was not installed there: the lab node was at 90% memory.
 
-The script's own tests ([`test/prerequisites.sh`](../test/prerequisites.sh), 135 checks, no cluster) pass with OpenSSL 3.6.4, OpenSSL 4.0.3 and LibreSSL 3.3.6, under bash 5.3.20 and under bash 3.2.57, in all six pairings (Oct 22, 2026).
+The script's own tests ([`test/prerequisites.sh`](../test/prerequisites.sh), 183 checks, no cluster) pass with OpenSSL 3.6.4, OpenSSL 4.0.3 and LibreSSL 3.3.6, under bash 5.3.20 and under bash 3.2.57, in all six pairings (Oct 22, 2026, chart 0.3.35).
 
 Not tested:
 
