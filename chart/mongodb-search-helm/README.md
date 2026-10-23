@@ -36,32 +36,53 @@ objects from the company's password-protected PEM files: the key's password remo
 this namespace and this use, one YAML file per object.
 
 ```bash
-export TargetNamespace=dvh-gp6-rnd        # there is no default: without it, or --target-namespace, it refuses
-mkdir -m 700 $TargetNamespace             # the script never creates the folder; the files go there
+mkdir -m 700 dvh-gp6-rnd                  # the script never creates the folder; the files go there
+cp <the three PEMs> dvh-gp6-rnd/          # or leave them in the current directory
 P=chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh      # from the repository's root
 
-bash $P --check --mongot <mongot PEM> --envoy <Envoy client PEM> --route <public hostname PEM>
-bash $P --trustca <mongot PEM>          --dry-run     # then the same with --apply
-bash $P --mongot  <mongot PEM>          --dry-run
-bash $P --envoy   <Envoy client PEM>    --dry-run
-bash $P --route   <public hostname PEM> --dry-run
-bash $P --dbcred  --username mongotuser --dry-run
-bash $P --check                                       # the five objects, and the lines for the values file
-bash $P --clean                                       # removes the key files once the objects are in the cluster
+bash $P --check dvh-gp6-rnd                         # finds and checks the three PEMs; no passphrase, writes nothing
+bash $P --all --dry-run --username mongotuser dvh-gp6-rnd     # the five files; then the same with --apply
+bash $P --check dvh-gp6-rnd                         # the five objects, and the lines for the values file
+bash $P --clean dvh-gp6-rnd                         # removes the key files once the objects are in the cluster
 ```
+
+The namespace has no default: a plain word as above, `--target-namespace <namespace>`, or `export
+TargetNamespace=<namespace>` once; two that differ are refused. Each step also runs on its own, and any PEM may be
+named, as before:
+
+```bash
+bash $P --trustca [<pem>...]        --dry-run dvh-gp6-rnd    # no PEM: the CA certificates of the three
+bash $P --mongot  [<mongot PEM>]    --dry-run dvh-gp6-rnd
+bash $P --envoy   [<Envoy client PEM>] [--route-reference <public PEM>] --dry-run dvh-gp6-rnd
+bash $P --route   [<public PEM>] [--hostname <fqdn>] --dry-run dvh-gp6-rnd
+bash $P --dbcred  --username mongotuser --dry-run dvh-gp6-rnd
+bash $P --check --mongot <mongot PEM> --envoy <Envoy client PEM> --route <public PEM> dvh-gp6-rnd
+```
+
+A PEM that is not named is found, and printed with its leaf's subject and names before any passphrase is asked:
+
+| Order | Where it comes from |
+| --- | --- |
+| 1 | The path after `--mongot`, `--envoy`, `--route` (or `MONGOT_PEM`, `ENVOY_PEM`, `ROUTE_PEM` in the environment) |
+| 2 | The certificate's common name, as the enterprise names its files, in `./<namespace>/` and then the current directory: `mongot-search-0-svc.dvh-gp6-rnd.svc.cluster.local.pem`, `mongot-search-0-proxy-svc.dvh-gp6-rnd.svc.cluster.local.pem`, and `<fqdn>.pem` for the route when `--hostname <fqdn>` is given. Other names: `MONGOT_PEM_NAME`, `ENVOY_PEM_NAME`, `ROUTE_PEM_NAME`, with `{search}`, `{ns}` and `{hostname}` |
+| 3 | The one `*.pem` in `./<namespace>/` (if it holds none, in the current directory) whose certificate fits the role. No PEM, or two, is refused; a PEM that fits two roles is given to neither |
+
+A file found by its name must still fit its role. `--envoy` tells its PEM from the public one by the route PEM found,
+as `--route-reference` does. `--all` runs `--trustca`, `--mongot`, `--envoy`, `--route` and `--dbcred` in turn, each
+as it runs alone, and stops at the first step refused.
 
 | | |
 | --- | --- |
 | `--dry-run` | Writes the file; contacts no cluster |
 | `--apply` | Writes the file, names the cluster and asks for the namespace to be typed (`--yes` skips that), then `oc create`. An object already there needs `--replace` |
-| Prompts | The key's passphrase for `--mongot`, `--envoy` and `--route`; the password, twice, for `--dbcred`. For automation: `--passin-file`, `--password-file` |
+| Prompts | The key's passphrase for `--mongot`, `--envoy` and `--route`; the password, twice, for `--dbcred`; all four for `--all`. For automation: `--passin-file`, `--password-file` |
 | Run with `bash` | helm stores a chart's files without the executable bit |
 | Run outside the chart | helm packages every file under this directory and keeps it in each release; the script refuses to write here, and `.helmignore` keeps keys and certificates out as a second guard |
 
 From the package alone, with no clone:
 
 ```bash
-helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.34/mongodb-search-helm-0.3.34.tgz --untar
+helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.35/mongodb-search-helm-0.3.35.tgz --untar
 bash mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --help
 ```
 
@@ -69,7 +90,7 @@ In short, once the prerequisites exist in the namespace, install the published p
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.34/mongodb-search-helm-0.3.34.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.35/mongodb-search-helm-0.3.35.tgz \
   -n dvh-gp6-rnd -f my-values.yaml --timeout 20m
 ```
 
