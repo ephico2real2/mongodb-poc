@@ -46,9 +46,15 @@ bash $P --check dvh-gp6-rnd                         # the five objects, and the 
 bash $P --clean dvh-gp6-rnd                         # removes the key files once the objects are in the cluster
 ```
 
-The namespace has no default: a plain word as above, `--target-namespace <namespace>`, or `export
-TargetNamespace=<namespace>` once; two that differ are refused. Each step also runs on its own, and any PEM may be
-named, as before:
+The namespace has no default. Name it in one of three ways; two that differ are refused:
+
+```bash
+bash $P --check dvh-gp6-rnd                         # a plain word on each command
+bash $P --check --target-namespace dvh-gp6-rnd      # the option on each command
+export TargetNamespace=dvh-gp6-rnd                  # once for the session
+```
+
+Each step also runs on its own, and any PEM may be named, as before:
 
 ```bash
 bash $P --trustca [<pem>...]        --dry-run dvh-gp6-rnd    # no PEM: the CA certificates of the three
