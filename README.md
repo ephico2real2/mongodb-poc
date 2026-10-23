@@ -956,8 +956,8 @@ done
 # Envoy's view, from the in-cluster toolbox - no port-forward needed
 # (MCK restricts the admin listener to /stats, /ready, /logging,
 #  /drain_listeners - /clusters returns 403)
-oc exec -n <ns> $TB -- curl -s http://mongot-envoy-stats:9901/stats \\
-  | grep -E "mongot_rs_cluster\\.(upstream_rq_total|upstream_cx_active)"
+oc exec -n <ns> $TB -- curl -s http://mongot-envoy-stats:9901/stats \
+  | grep -E "mongot_rs_cluster\.(upstream_rq_total|upstream_cx_active)"
 ```
 
 ## Certificates
