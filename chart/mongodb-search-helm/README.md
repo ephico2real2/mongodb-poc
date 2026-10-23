@@ -37,7 +37,7 @@ this namespace and this use, one YAML file per object.
 
 ```bash
 mkdir -m 700 dvh-gp6-rnd                  # the script never creates the folder; the files go there
-cp <the three PEMs> dvh-gp6-rnd/          # or leave them in the current directory
+cp /path/to/mongot.pem /path/to/envoy.pem /path/to/public.pem dvh-gp6-rnd/   # or leave them in the current directory
 P=chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh      # from the repository's root
 
 bash $P --check dvh-gp6-rnd                         # finds and checks the three PEMs; no passphrase, writes nothing
@@ -64,18 +64,25 @@ A PEM that is not named is found, and printed with its leaf's subject and names 
 | Order | Where it comes from |
 | --- | --- |
 | 1 | The path after `--mongot`, `--envoy`, `--route` (or `MONGOT_PEM`, `ENVOY_PEM`, `ROUTE_PEM` in the environment) |
-| 2 | The certificate's common name, as the enterprise names its files, in `./<namespace>/` and then the current directory: `mongot-search-0-svc.dvh-gp6-rnd.svc.cluster.local.pem`, `mongot-search-0-proxy-svc.dvh-gp6-rnd.svc.cluster.local.pem`, and `<fqdn>.pem` for the route when `--hostname <fqdn>` is given. Other names: `MONGOT_PEM_NAME`, `ENVOY_PEM_NAME`, `ROUTE_PEM_NAME`, with `{search}`, `{ns}` and `{hostname}` |
+| 2 | The certificate's common name, as the enterprise names its files, in `./<namespace>/` (if it holds no PEM, in the current directory): `mongot-search-0-svc.dvh-gp6-rnd.svc.cluster.local.pem`, `mongot-search-0-proxy-svc.dvh-gp6-rnd.svc.cluster.local.pem`, and `<fqdn>.pem` for the route when `--hostname <fqdn>` is given. Other names: `MONGOT_PEM_NAME`, `ENVOY_PEM_NAME`, `ROUTE_PEM_NAME`, with `{search}`, `{ns}` and `{hostname}` |
 | 3 | The one `*.pem` in `./<namespace>/` (if it holds none, in the current directory) whose certificate fits the role. No PEM, or two, is refused; a PEM that fits two roles is given to neither |
+
+Discovery follows a PEM that is a symbolic link, and prints the path it chose. A public certificate, or a client
+certificate with no name, cannot show which namespace it was issued for: keep only this installation's PEMs where the
+script looks, or name the PEMs and give `--hostname`. A plain word that is an existing file is taken as a file, not a
+namespace: name the namespace with `--target-namespace` then. A PEM path that begins with `-` is written `./-…`, so
+that it is not read as an option.
 
 A file found by its name must still fit its role. `--envoy` tells its PEM from the public one by the route PEM found,
 as `--route-reference` does. `--all` runs `--trustca`, `--mongot`, `--envoy`, `--route` and `--dbcred` in turn, each
-as it runs alone, and stops at the first step refused.
+as it runs alone, and stops at the first step refused. What the steps before it made stays; a step that fails while
+applying also leaves its own file.
 
 | | |
 | --- | --- |
 | `--dry-run` | Writes the file; contacts no cluster |
 | `--apply` | Writes the file, names the cluster and asks for the namespace to be typed (`--yes` skips that), then `oc create`. An object already there needs `--replace` |
-| Prompts | The key's passphrase for `--mongot`, `--envoy` and `--route`; the password, twice, for `--dbcred`; all four for `--all`. For automation: `--passin-file`, `--password-file` |
+| Prompts | The key's passphrase for `--mongot`, `--envoy` and `--route`; the password, twice, for `--dbcred`; all four for `--all`. For automation: `--passin-file`, `--password-file`; under `--all` the one `--passin-file` opens all three keys |
 | Run with `bash` | helm stores a chart's files without the executable bit |
 | Run outside the chart | helm packages every file under this directory and keeps it in each release; the script refuses to write here, and `.helmignore` keeps keys and certificates out as a second guard |
 
