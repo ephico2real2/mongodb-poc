@@ -23,7 +23,7 @@ case "$MODE" in
   baseline)
     LIST=test/markdownlint-baseline.txt; LISTED="$(grep -vE '^(#|$)' "$LIST")"; PAGES=(); RC=0
     for f in "${FILES[@]}"; do printf '%s\n' "$LISTED" | grep -qxF -- "$f" || PAGES+=("$f"); done
-    markdownlint-cli2 "${PAGES[@]}" || RC=1
+    [ "${#PAGES[@]}" -eq 0 ] || markdownlint-cli2 "${PAGES[@]}" || RC=1   # bash 3.2: an empty array is unbound
     while IFS= read -r f; do
       [ -n "$f" ] && markdownlint-cli2 "$f" >/dev/null 2>&1 && { echo "mdfmt: $f passes now: remove it from $LIST" >&2; RC=1; }
     done <<< "$LISTED"

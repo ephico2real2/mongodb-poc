@@ -12,11 +12,11 @@ TMP="$(mktemp -d)" || exit 2
 trap 'rm -rf "${TMP:?}"' EXIT
 REPO="${TMP}/repo"
 mkdir "${REPO}"
-git ls-files -z | tar --null -T - -cf - | tar -xf - -C "${REPO}"
-git -C "${REPO}" init -q
-git -C "${REPO}" add -A
-git -C "${REPO}" -c user.name=test -c user.email=test@example.invalid -c commit.gpgsign=false \
-  commit -q --no-verify -m base
+git ls-files -z | tar --null -T - -cf - | tar -xf - -C "${REPO}" || exit 2
+# Without its own .git, every git -C "${REPO}" below (reset --hard, clean) would act on a repository above mktemp's.
+git -C "${REPO}" init -q && git -C "${REPO}" add -A \
+  && git -C "${REPO}" -c user.name=test -c user.email=test@example.invalid -c commit.gpgsign=false \
+       commit -q --no-verify -m base || exit 2
 
 PASSED=0
 FAILED=0
@@ -62,6 +62,17 @@ oc get pods -A
 EOF
 check
 expect "names, flags, a script path, a comment and a fenced block pass" 0 "violations, all in the baseline"
+reset
+
+printf '\n> ```bash\n> oc get pods -A\n> ```\n' >> "${REPO}/README.md"
+check
+expect "a fenced block in a blockquote is a block, not inline" 0 "violations, all in the baseline"
+reset
+
+printf '\nRun `for c in a b; do oc get pods; done`, `mkdir -m 700 x`, `test/doc-structure.py --prune` and `SKIP_X=1 ./test/run.sh`.\n' \
+  >> "${REPO}/README.md"
+check
+expect "a loop, a mkdir, a .py script and a VAR= script run inline fail" 1 "FAIL: 4 new, 0 fixed but listed"
 reset
 
 # --- the baseline only says what is left ---
@@ -156,6 +167,9 @@ check --kind guide fx/guide-bad.md
 expect "a guide step without a Result: line fails" 1 "guide: step 2 has no 'Result:' line"
 expect "a guide step title out of number fails" 1 "step title must be '2. <Imperative...>', found '3. restart the pods'"
 expect "a guide H2 outside the template fails" 1 "H2 order must be ['What you get'"
+sed 's/^~~~bash$/~~~text/' "${REPO}/fx/guide.md" > "${REPO}/fx/guide-text.md"
+check --kind guide fx/guide-text.md
+expect "a guide step whose only block is not bash fails" 1 "guide: step 2 has no \`\`\`bash command block"
 
 cat > "${REPO}/fx/record.md" <<'EOF'
 # Testing: one thing
@@ -219,6 +233,11 @@ check --kind record fx/record-bad.md
 expect "a recorded step without a text block fails" 1 \
   "recorded step 'T1. The lab is healthy' needs a \`\`\`bash command block and a \`\`\`text output block"
 
+{ sed '/^## Clean up$/,$d' "${REPO}/fx/record.md"; printf '## Summary\n\n- x\n\n'; sed -n '/^## Clean up$/,$p' "${REPO}/fx/record.md"; } \
+  > "${REPO}/fx/record-order.md"
+check --kind record fx/record-order.md
+expect "an optional H2 out of its place fails" 1 "record: H2 order must be ['Summary', 'Files'"
+
 printf '# Title\n## First\ntext\n' > "${REPO}/fx/reference.md"
 check fx/reference.md
 expect "a reference without an intro fails" 1 "reference: no intro between the H1 and the first H2"
@@ -241,6 +260,17 @@ expect "a line added to the markdownlint baseline fails the guard" 1 \
 expect "the guard says which baseline grew" 1 "GREW, fix the page instead"
 reset
 
+swap="$(grep "$(printf '\tinline\t')" "${REPO}/test/doc-structure-baseline.txt" | head -1)"
+grep -vxF -- "${swap}" "${REPO}/test/doc-structure-baseline.txt" > "${TMP}/swapped"
+printf 'README.md\tinline\toc delete namespace mongodb-poc\n' >> "${TMP}/swapped"
+cp "${TMP}/swapped" "${REPO}/test/doc-structure-baseline.txt"
+check --guard HEAD
+expect "a fixed violation traded for a new one fails the guard" 1 "NEW, fix the page instead: ['inline\toc delete namespace mongodb-poc']"
+reset
+
+check --guard no-such-ref
+expect "a base that is not in the clone is an error, not a pass" 2 "no-such-ref is not a commit in this clone"
+
 sed -i.orig "s|^${fixed}"$'\t'"|docs/renamed-page.md"$'\t'"|" "${REPO}/test/doc-structure-baseline.txt"
 rm "${REPO}/test/doc-structure-baseline.txt.orig"
 check --guard HEAD
@@ -250,6 +280,9 @@ reset
 # --- mdfmt baseline: every page not listed passes; a listed page still fails ---
 run bash scripts/mdfmt baseline
 expect "mdfmt baseline passes on the tree as committed" 0 "listed in test/markdownlint-baseline.txt"
+
+run "${BASH_UNDER_TEST:-bash}" scripts/mdfmt baseline README.md
+expect "mdfmt baseline on listed pages only checks none and passes" 0 "mdfmt baseline: 0 pages not listed and checked"
 
 printf '# New page\n\n\n\nText.\n' > "${REPO}/docs/new-page.md"
 git -C "${REPO}" add docs/new-page.md

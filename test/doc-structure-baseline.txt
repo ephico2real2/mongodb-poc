@@ -12,7 +12,6 @@ DEPLOYMENT.md	inline	mongodb/vm.sh address
 DEPLOYMENT.md	inline	oc get node crc -o jsonpath='{.metadata.labels}' | grep exclude-from-external
 DEPLOYMENT.md	inline	oc get nodes
 DEPLOYMENT.md	inline	oc get packagemanifest mongodb-kubernetes -n openshift-marketplace
-ENTERPRISE-TLS.md	inline	bash > oc patch mongodbsearch mongot -n $NS --type=json -p '[{"op":"remove","path":"/spec/security"}]' >
 ENTERPRISE-TLS.md	inline	cat company-root internal-root > ca.crt
 ENTERPRISE-TLS.md	inline	cat company-root.crt internal-root.crt
 ENTERPRISE-TLS.md	inline	kubectl patch
@@ -38,6 +37,7 @@ REQUEST-PATH.md	inline	ss -tn
 REQUEST-PATH.md	inline	ss -tn state established
 SYNC.md	inline	./app/sync-probe.sh -r
 TESTING.md	inline	./test/run.sh entry
+TESTING.md	inline	SKIP_DISTRIBUTION=1 ./test/run.sh
 TESTING.md	inline	oc adm top pods
 TESTING.md	inline	oc delete pod mongot-search-0-1 -n mongodb-poc
 TESTING.md	inline	oc logs mongot-search-0-0 -n mongodb-poc | grep -i auth
@@ -130,6 +130,7 @@ docs/building-the-kind-mesh-lab.md	inline	colima list
 docs/building-the-kind-mesh-lab.md	inline	colima list
 docs/building-the-kind-mesh-lab.md	inline	docker rmi
 docs/building-the-kind-mesh-lab.md	inline	export KUBECONFIG=~/.kube/mongodb-mesh.config
+docs/building-the-kind-mesh-lab.md	inline	for c in mesh0 mesh1 mesh2; do kubectl --context kind-$c apply -f kind-mesh-cilium/manifests/60-mongot-ingress.yaml; done
 docs/building-the-kind-mesh-lab.md	inline	helm upgrade --reuse-values
 docs/building-the-kind-mesh-lab.md	inline	hubble list nodes
 docs/building-the-kind-mesh-lab.md	inline	kind-mesh-cilium/drills.sh mongot mesh2 both
@@ -198,6 +199,7 @@ docs/prerequisite-and-setup-doc.md	inline	helm upgrade
 docs/prerequisite-and-setup-doc.md	inline	helm upgrade
 docs/prerequisite-and-setup-doc.md	inline	helm upgrade
 docs/prerequisite-and-setup-doc.md	inline	helm upgrade --set search.replicas=3
+docs/prerequisite-and-setup-doc.md	inline	mkdir -m 700 search-qa
 docs/prerequisite-and-setup-doc.md	inline	oc apply
 docs/prerequisite-and-setup-doc.md	inline	oc apply
 docs/prerequisite-and-setup-doc.md	inline	oc create
@@ -273,6 +275,7 @@ docs/testing-kind-mesh.md	inline	kind-mesh/drills.sh mongot mesh2 one
 docs/testing-kind-mesh.md	inline	kind-mesh/scripts/colima-up.sh && kind-mesh/scripts/up.sh
 docs/testing-kind-mesh.md	inline	kubectl --context kind-mesh0 -n observability port-forward svc/grafana 3000:80
 docs/testing-kind-mesh.md	inline	kubectl --context kind-mesh0 -n search port-forward svc/mongot-gui 8080:80
+docs/testing-kind-mesh.md	inline	limactl disk resize
 docs/testing-kind-mesh.md	shape	record
 enhancement/README.md	inline	cd enhancement
 enhancement/README.md	inline	crc config --help

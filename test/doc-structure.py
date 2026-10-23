@@ -43,21 +43,26 @@ KIND_BY_PATH = [
     ("record", "chart/mongodb-search-helm/docs/testing-*.md"),
 ]
 
-# kind: (required H2s in order, optional H2s, the H2 whose H3s are the steps)
+# kind: (every H2 in its order, the optional ones among them, the H2 whose H3s are the steps)
 KINDS = {
-    "guide": (["What you get", "Architecture", "Prerequisites", "Steps", "Verify", "Reference", "Clean up",
-               "What's next"], {"Troubleshooting"}, "Steps"),
-    "record": (["Files", "Run it", "What was recorded", "Checks", "What is deliberately not here", "Clean up"],
+    "guide": (["What you get", "Architecture", "Prerequisites", "Steps", "Verify", "Reference", "Troubleshooting",
+               "Clean up", "What's next"], {"Troubleshooting"}, "Steps"),
+    "record": (["Summary", "Files", "Run it", "What was recorded", "Checks", "What is deliberately not here",
+                "Runs that did not go to plan", "Open", "Clean up"],
                {"Summary", "Runs that did not go to plan", "Open"}, "What was recorded"),
     "reference": (None, set(), None),
 }
 
 COMMAND = re.compile(r"""
     ^(?:\$\s+)?(?:\./)?                         # a prompt, ./
-    (?:[A-Z_][A-Z0-9_]*=\S*\s+)*                # VAR=value prefixes
-    (?:kubectl|helm|oc|bash|curl|docker|kind|colima|openssl|git|gh|cilium|cilium-dbg|hubble|mongosh|sudo|export
-       |make|python3|crc|cd|cat|ss|jq|yq|npm|grpcurl|crictl|go\s+run|\S*\.sh)
-    \s+\S                                       # and an argument: the word or script alone is a name
+    (?:
+      (?:[A-Z_][A-Z0-9_]*=\S*\s+)+(?:\./)?(?:\S*\.(?:sh|py)|scripts/mdfmt)\b   # VAR=value before a script runs it
+    | (?:[A-Z_][A-Z0-9_]*=\S*\s+)*              # VAR=value prefixes
+      (?:kubectl|helm|oc|bash|curl|docker|kind|colima|openssl|git|gh|cilium|cilium-dbg|hubble|mongosh|sudo|export
+         |make|python3|crc|cd|cat|ss|jq|yq|npm|npx|grpcurl|crictl|go\s+run|for|env|watch|mkdir|ssh|scp|podman
+         |limactl|\S*\.(?:sh|py)|scripts/mdfmt)
+      \s+\S                                     # and an argument: the word or script alone is a name
+    )
 """, re.X)
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
 SPAN = re.compile(r"(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)", re.S)
@@ -90,12 +95,13 @@ def parse(text):
     text = re.sub(r"<!--.*?-->", lambda m: re.sub(r"[^\n]", " ", m.group(0)), text, flags=re.S)
     outside, fences, fence = [], [], None
     for i, line in enumerate(text.split("\n")):
+        body = re.sub(r"^\s*(?:>\s?)+", "", line)  # a fence may sit in a blockquote
         if fence:
-            if re.match(rf"^\s*{re.escape(fence[0])}{{{len(fence)},}}\s*$", line):
+            if re.match(rf"^\s*{re.escape(fence[0])}{{{len(fence)},}}\s*$", body):
                 fence = None
             outside.append("")
             continue
-        m = FENCE.match(line)
+        m = FENCE.match(body)
         if m and not (m.group(1)[0] == "`" and "`" in m.group(2)):
             fence = m.group(1)
             fences.append((i, (m.group(2).split() or [""])[0]))
@@ -143,12 +149,12 @@ def shape(outside, fences, kind):
     h1_line = next((i for i, n, _ in heads if n == 1), -1)
     if not any(l.strip() for l in outside[h1_line + 1:first_h2]):
         errors.append("no intro between the H1 and the first H2")
-    required, optional, steps_h2 = KINDS[kind]
-    if required is None:
+    order, optional, steps_h2 = KINDS[kind]
+    if order is None:
         return errors
     titles = [t for _, t in h2]
-    if [t for t in titles if t not in optional] != required:
-        errors.append(f"H2 order must be {required} (+ optional {sorted(optional)}); found {titles}")
+    if titles != [t for t in order if t in titles] or not set(order) - optional <= set(titles):
+        errors.append(f"H2 order must be {order} (optional {sorted(optional)}); found {titles}")
     section = next(((i, (h2 + [(len(outside), "")])[k + 1][0]) for k, (i, t) in enumerate(h2) if t == steps_h2), None)
     if not section:
         return errors + [f"no '{steps_h2}' section"]
@@ -161,8 +167,8 @@ def shape(outside, fences, kind):
         if kind == "guide":
             if not re.match(rf"{n}\. [A-Z]", title):
                 errors.append(f"step title must be '{n}. <Imperative...>', found '{title}'")
-            if not step_fences:
-                errors.append(f"step {n} has no command block")
+            if "bash" not in step_fences:
+                errors.append(f"step {n} has no ```bash command block")
             if not any(re.match(r"^Result:", l) for l in outside[a:b]):
                 errors.append(f"step {n} has no 'Result:' line")
             if re.search(r"(?i)\b(first|second|third|fourth) (apply|run)\b", "\n".join(outside[a:b])):
@@ -195,22 +201,35 @@ def read_baseline():
 
 
 def guard(ref):
-    """Neither baseline has more entries than at ref. A baseline that is not at ref yet has nothing to compare."""
-    def count(text):
-        return sum(1 for l in text.splitlines() if l.strip() and not l.startswith("#"))
+    """Neither baseline gains an entry against ref. The structure baseline is compared without the pages' paths, so a
+    renamed page passes and a fixed violation cannot be traded for a new one; the markdownlint baseline, which is
+    paths only, by count. A baseline that is not at ref yet has nothing to compare; a ref that is not here is an
+    error, never a pass."""
+    if subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"], cwd=ROOT,
+                      capture_output=True).returncode:
+        print(f"--guard: {ref} is not a commit in this clone; fetch it first", file=sys.stderr)
+        return 2
+
+    def entries(text):
+        return [l for l in text.splitlines() if l.strip() and not l.startswith("#")]
 
     failed = False
     for path in (BASELINE, LINT_BASELINE):
         rel = path.relative_to(ROOT).as_posix()
-        now = count(path.read_text(encoding="utf-8"))
+        now = entries(path.read_text(encoding="utf-8"))
         shown = subprocess.run(["git", "show", f"{ref}:{rel}"], cwd=ROOT, capture_output=True, text=True)
         if shown.returncode:
-            print(f"{rel}: {now} entries; not at {ref}, nothing to compare")
+            print(f"{rel}: {len(now)} entries; not at {ref}, nothing to compare")
             continue
-        then = count(shown.stdout)
-        grew = now > then
-        print(f"{rel}: {now} entries, {then} at {ref}: {'GREW, fix the page instead' if grew else 'ok'}")
-        failed |= grew
+        then = entries(shown.stdout)
+        added = []
+        if path == BASELINE:
+            unpathed = [collections.Counter(l.split("\t", 1)[-1] for l in ls) for ls in (now, then)]
+            added = sorted((unpathed[0] - unpathed[1]).elements())
+        verdict = ("GREW, fix the page instead" if len(now) > len(then)
+                   else f"NEW, fix the page instead: {added}" if added else "ok")
+        print(f"{rel}: {len(now)} entries, {len(then)} at {ref}: {verdict}")
+        failed |= verdict != "ok"
     return 1 if failed else 0
 
 

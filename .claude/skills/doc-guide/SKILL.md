@@ -133,8 +133,9 @@ One H1, an intro of two to four sentences before the first H2, then the page's o
    paragraphs"*; this repository's, 2026-10-22, the same). Inline backticks are for names only: a file, an object, an
    address, a flag, a value. A span that starts with a command (`kubectl`, `oc`, `helm`, `curl`, `docker`, `kind`,
    `colima`, `openssl`, `git`, `gh`, `cilium`, `cilium-dbg`, `hubble`, `mongosh`, `sudo`, `export`, `make`,
-   `python3`, `bash`, `crc`, `cd`, `cat`, `ss`, `jq`, `yq`, `npm`, `grpcurl`, `crictl`, `go run`) or a script and
-   goes on with an argument is wrong — move it into a block and keep the sentence about what it does; "the upgrade" names the
+   `python3`, `bash`, `crc`, `cd`, `cat`, `ss`, `jq`, `yq`, `npm`, `npx`, `grpcurl`, `crictl`, `go run`, `for`, `env`,
+   `watch`, `mkdir`, `ssh`, `scp`, `podman`, `limactl`) or a script (`*.sh`, `*.py`, `scripts/mdfmt`) and goes on
+   with an argument is wrong, and so is a script after a `VAR=value` — move it into a block and keep the sentence about what it does; "the upgrade" names the
    operation, a two-word command does not. A script's path alone is a name. The same for *Verify*, *Prerequisites*
    and *Clean up*.
 4. **Every number comes from a recorded output** — `kind-mesh/output/`, `kind-mesh-cilium/output/`, the record pages
@@ -153,8 +154,9 @@ One H1, an intro of two to four sentences before the first H2, then the page's o
 10. **Headings are fixed** for a guide and a record. No H2 outside the template; the optional ones may be omitted;
     nothing else may.
 11. **The checks pass after writing**: `scripts/mdfmt` fixes what it can and reports the rest, and
-    `test/doc-structure.py` passes (heading order, one H3 per step, a command block and a `Result:` line in every
-    guide step, a `bash` and a `text` block in every recorded step, no command inline). The commands are under
+    `test/doc-structure.py` passes (heading order, the optional H2s in their place too; one H3 per step; a `bash`
+    block, a `Result:` line at the start of a line and no "first apply" or "second run" in every guide step; a
+    `bash` and a `text` block in every recorded step; no command inline). The commands are under
     "The checks and their baseline".
 
 ## Figures
@@ -185,8 +187,9 @@ The documents written before #199 do not meet the shape yet. `test/doc-structure
 violations as they were (one line per inline command, one per page whose headings do not fit its kind), and
 `test/markdownlint-baseline.txt` the pages markdownlint does not pass yet. CI fails on a violation that is not
 listed, and on a listed one that is gone: after rewriting a page, prune the first list and remove the page from
-the second. On a pull request, CI also fails when either list has more entries than at the base. A new violation is
-fixed in the page, never added to a list. Vendored, generated and recorded files (`ignores` in `.markdownlint-cli2.yaml`) are skipped
+the second. On a pull request, CI also fails when either list gains an entry against the base: the first list is
+compared without the pages' paths, so a renamed page passes and a fixed violation cannot be traded for a new one; the
+second by count. A new violation is fixed in the page, never added to a list. Vendored, generated and recorded files (`ignores` in `.markdownlint-cli2.yaml`) are skipped
 by both tools.
 
 ## The process

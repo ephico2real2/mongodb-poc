@@ -87,16 +87,15 @@ jobs:
       # Rule 3 (no command inline) on every tracked page, and each guide's and record's headings and steps.
       - name: Document structure, against test/doc-structure-baseline.txt
         run: python3 test/doc-structure.py
-      # Neither baseline may have more entries than the pull request's base: counts, so a renamed page passes. The
-      # base is fetched on its own (the checkout is one commit deep). Not on a push to main: that is the base.
+      # Neither baseline may gain an entry against the pull request's base. The checkout is the merge commit, one
+      # commit deep; its first parent is the base it was merged onto, whatever main has become since, so a re-run
+      # compares with the same base. Not on a push to main: that is the base.
       - name: The baselines did not grow
         if: ${{ !cancelled() && github.event_name == 'pull_request' }}
-        env:
-          BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
-          git fetch --no-tags --depth=1 origin "${BASE_REF}"
-          python3 test/doc-structure.py --guard FETCH_HEAD
+          git fetch --no-tags --depth=2 origin "${GITHUB_SHA}"
+          python3 test/doc-structure.py --guard "${GITHUB_SHA}^1"
       # The two checks' own tests, on a copy of the tree under mktemp.
       - name: The document checks' tests
         if: ${{ !cancelled() }}
@@ -110,7 +109,7 @@ jobs:
         run: git status --porcelain && git diff --exit-code
   # Publishes the chart when its version is new: the package of this commit, as the release
   # mongodb-search-helm-<version>. A version that is already released is left alone. Only on main, and only after
-  # the other jobs passed. To release: change `version` in chart/mongodb-search-helm/Chart.yaml and merge.
+  # the chart, prerequisites and diagrams jobs passed (the docs job does not hold a release back). To release: change `version` in chart/mongodb-search-helm/Chart.yaml and merge.
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [chart, prerequisites, diagrams]
