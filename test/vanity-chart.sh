@@ -289,7 +289,8 @@ fi
 # with ${CLUSTER}/down it fails as curl does when nothing answers, and with ${CLUSTER}/badca as
 # curl 7.76.1 (UBI 9's) does when the CA does not verify the server, its paragraph included. It answers only the
 # call the API server would: the ServiceAccount's CA as --cacert (never -k), the token from a header file and on no
-# command line, and both time limits (the Job's deadline is 180 s; curl's own connect timeout is 300 s).
+# command line, and both time limits, each once (the Job's deadline is 180 s; curl's own connect timeout is 300 s);
+# with CURL_LOG set it appends each call's "<connect-timeout> <max-time>" there.
 # The stand-in ServiceAccount directory holds a token the output must never show.
 mkdir -p "${tmp}/bin" "${tmp}/cluster" "${tmp}/sa"
 printf 'stand-in-token\n' > "${tmp}/sa/token"; printf 'stand-in-ca\n' > "${tmp}/sa/ca.crt"
@@ -297,14 +298,15 @@ cat > "${tmp}/bin/curl" <<'CURL'
 #!/usr/bin/env bash
 token="$(cat "${SA_DIR}/token")"
 [[ "$*" == *"${token}"* ]] && { echo "stand-in curl: the token is on the command line" >&2; exit 2; }
-out=""; url=""; cacert=""; header=""; limits=0
+out=""; url=""; cacert=""; header=""; connect=""; maxtime=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -o) out="$2"; shift ;;
     -w) shift ;;
     -H) header="$2"; shift ;;
     --cacert) cacert="$2"; shift ;;
-    --connect-timeout|--max-time) limits=$((limits + 1)); shift ;;
+    --connect-timeout) [ -z "${connect}" ] || { echo "stand-in curl: --connect-timeout twice" >&2; exit 2; }; connect="$2"; shift ;;
+    --max-time) [ -z "${maxtime}" ] || { echo "stand-in curl: --max-time twice" >&2; exit 2; }; maxtime="$2"; shift ;;
     -k|--insecure) echo "stand-in curl: -k, the API server unverified" >&2; exit 2 ;;
     http*) url="$1" ;;
   esac
@@ -313,7 +315,9 @@ done
 [ "${cacert}" = "${SA_DIR}/ca.crt" ] || { echo "stand-in curl: --cacert ${cacert:-unset}, not the ServiceAccount's ca.crt" >&2; exit 2; }
 [ "${header#@}" != "${header}" ] && [ "$(cat "${header#@}")" = "Authorization: Bearer ${token}" ] \
   || { echo "stand-in curl: the token is not sent from a header file" >&2; exit 2; }
-[ "${limits}" = 2 ] || { echo "stand-in curl: no --connect-timeout and --max-time" >&2; exit 2; }
+[ -n "${connect}" ] && [ -n "${maxtime}" ] || { echo "stand-in curl: no --connect-timeout and --max-time" >&2; exit 2; }
+[ "${connect}" = 10 ] && [ "${maxtime}" = 30 ] || { echo "stand-in curl: expected --connect-timeout 10 and --max-time 30, got ${connect} and ${maxtime}" >&2; exit 2; }
+printf '%s %s\n' "${connect}" "${maxtime}" >> "${CURL_LOG:-/dev/null}"
 [ -e "${CLUSTER}/server-error" ] && { printf '<html>Unavailable</html>' > "$out"; printf 500; exit 0; }
 [ -e "${CLUSTER}/down" ] && { echo "curl: (7) Failed to connect to kubernetes.default.svc port 443: Connection refused" >&2; exit 7; }
 if [ -e "${CLUSTER}/badca" ]; then
@@ -363,6 +367,13 @@ preflight() {  # [NAME=value...]: runs the script; prints its exit code; its out
 [[ "$(preflight)" == 0 ]] && grep -q "ok: ${HOST} is a name of the certificate" "${tmp}/preflight.out" && grep -q 'ok: service mongot-search-0-svc' "${tmp}/preflight.out" \
   && ok "preflight: everything present and the certificate naming the hostname passes" || bad "preflight with everything present: $(tail -2 "${tmp}/preflight.out" | tr '\n' ' ')"
 grep -q 'BEGIN CERTIFICATE\|PRIVATE\|stand-in-token' "${tmp}/preflight.out" && bad "the preflight printed a certificate, a key or the token" || ok "the preflight prints names and keys' names, never a certificate, a key or the token"
+# The time limits the Job's deadline rests on: every GET with a connect timeout inside its --max-time, and the GETs of
+# one run, each at its --max-time, inside activeDeadlineSeconds.
+deadline="$(render -s templates/00-preflight.yaml | yq -N 'select(.kind == "Job") | .spec.activeDeadlineSeconds')"
+: > "${tmp}/curl.log"; preflight CURL_LOG="${tmp}/curl.log" >/dev/null
+limits="$(awk -v d="${deadline}" '$1 + 0 > 0 && $1 + 0 <= $2 + 0 { n++; t += $2 } END { print n + 0, t + 0, (n > 0 && n == NR && t < d + 0) ? "inside" : "outside" }' "${tmp}/curl.log")"
+[[ "${limits}" == "4 "*" inside" ]] && ok "preflight: its 4 GETs each bounded, the connect timeout within --max-time, together inside the Job's ${deadline} s deadline" \
+  || bad "preflight: the GETs' time limits (count, sum of --max-time, against ${deadline} s): ${limits}; calls: $(tr '\n' ';' < "${tmp}/curl.log")"
 [[ "$(preflight SERVER_NAMES="${HOST} x.apps.example.com")" == 0 ]] && ok "preflight: a one-label wildcard SAN covers x.apps.example.com" || bad "preflight: wildcard match: $(grep MISSING "${tmp}/preflight.out" | tr '\n' ' ')"
 [[ "$(preflight SERVER_NAMES="a.b.apps.example.com")" == 1 ]] && grep -q 'does not name a.b.apps.example.com' "${tmp}/preflight.out" \
   && ok "preflight: a wildcard covers one label only; a.b.apps.example.com is refused" || bad "preflight: a.b.apps.example.com: $(tail -1 "${tmp}/preflight.out")"
@@ -381,7 +392,7 @@ seed; touch "${tmp}/cluster/down"
 [[ "$(preflight)" == 1 ]] && grep -q 'the API server did not answer: curl: (7)' "${tmp}/preflight.out" && grep -q 'FAILED: 4 problem' "${tmp}/preflight.out" \
   && ok "preflight: an API server that does not answer is reported with curl's error, for each object" || bad "preflight: API down: $(grep 'MISSING\|FAILED' "${tmp}/preflight.out" | tr '\n' ' ')"
 seed; touch "${tmp}/cluster/badca"
-[[ "$(preflight)" == 1 ]] && grep -q 'the API server did not answer: curl: (60) SSL certificate problem: unable to get local issuer certificate$' "${tmp}/preflight.out" && grep -q 'FAILED: 4 problem' "${tmp}/preflight.out" \
+[[ "$(preflight)" == 1 ]] && grep -q 'the API server did not answer: curl: (60) SSL certificate problem: unable to get local issuer certificate$' "${tmp}/preflight.out" && ! grep -q 'curl failed to verify' "${tmp}/preflight.out" && grep -q 'FAILED: 4 problem' "${tmp}/preflight.out" \
   && ok "preflight: an API server its CA does not verify is refused with curl's first line, the error's name" || bad "preflight: CA not verifying: $(grep 'MISSING\|FAILED' "${tmp}/preflight.out" | tr '\n' ' ')"
 seed; object secrets ent-mongot-search-lb-0-client-cert tls.crt="${tmp}/server.crt"
 [[ "$(preflight)" == 1 ]] && grep -q 'secret ent-mongot-search-lb-0-client-cert: no key tls.key' "${tmp}/preflight.out" \
@@ -416,7 +427,7 @@ seed; mv "${tmp}/sa/ca.crt" "${tmp}/sa/ca.saved"
 mv "${tmp}/sa/ca.saved" "${tmp}/sa/ca.crt"
 # An HTTP error without a JSON Status (a proxy's HTML page): the status code is reported, never a traceback.
 seed; touch "${tmp}/cluster/server-error"
-[[ "$(preflight)" == 1 ]] && grep -q 'MISSING: secret ent-mongot-search-lb-0-client-cert: HTTP 500' "${tmp}/preflight.out" && grep -q 'FAILED: 4 problem' "${tmp}/preflight.out" && ! grep -q 'Traceback' "${tmp}/preflight.out" \
+[[ "$(preflight)" == 1 ]] && grep -q 'MISSING: secret ent-mongot-search-lb-0-client-cert: HTTP 500' "${tmp}/preflight.out" && grep -q 'FAILED: 4 problem' "${tmp}/preflight.out" && [[ "$(grep -c ': HTTP 500' "${tmp}/preflight.out")" == 4 ]] && ! grep -q 'Traceback\|<html>Unavailable</html>' "${tmp}/preflight.out" \
   && ok "preflight: an HTTP 500 with a non-JSON body is reported as HTTP 500, for each object, with no traceback" || bad "preflight: HTTP 500: $(grep 'MISSING\|FAILED\|Traceback' "${tmp}/preflight.out" | head -3 | tr '\n' ' ')"
 
 # ------------------------------------------------------------------------------------------------ the documents

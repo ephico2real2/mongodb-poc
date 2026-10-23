@@ -10,7 +10,7 @@ command and pass condition are written so that the run fills the result and noth
 
 | Where | Tests | State |
 | --- | --- | --- |
-| CI, offline (`test/vanity-chart.sh`) | 89 assertions: lint, the renders, the schema's refusals, the bootstrap against the operator's capture, Envoy's validation of both renders, the preflight's script against a stand-in API | **89 passed, 0 failed** on 2026-10-22 (macOS, helm v4.3.0, Envoy 1.37.6 from the chart's image, digest `sha256:ea33a83e…`): `kind-mesh/output/vanity-chart.txt` |
+| CI, offline (`test/vanity-chart.sh`) | 90 assertions: lint, the renders, the schema's refusals, the bootstrap against the operator's capture, Envoy's validation of both renders, the preflight's script against a stand-in API | **90 passed, 0 failed** on 2026-10-22 (macOS, helm v4.3.0, Envoy 1.37.6 from the chart's image, digest `sha256:ea33a83e…`): `kind-mesh/output/vanity-chart.txt` |
 | The preflight's script in its image | the rendered script, run as uid 1001 in `registry.access.redhat.com/ubi9/ubi@sha256:16e9e43d…` against the same stand-in API | exit 0 with every name found; exit 1 with `MISSING … does not name other.example.com` for a name the certificate lacks (2026-10-22, docker; a container run, no cluster) |
 | CI, the main chart (`test/chart.sh`) | 233 assertions, unchanged by this story | 233 passed, 0 failed on the same day |
 | CI, the lab chart (`kind-mesh-cilium/chart/test.sh`) | 19 assertions, one added: the hooks' image is the one `search-up.sh` loads | 19 passed, 0 failed on the same day |
@@ -36,7 +36,7 @@ CI, offline, one row per assertion group; the commands are under "Run it" and th
 | C10b | `envoy.runAsUser` (review) | no `runAsUser` by default (OpenShift assigns one); with `envoy.runAsUser=101`, `runAsNonRoot: true`, `runAsUser` and `runAsGroup` 101 (the image's own user is root; its entrypoint drops to `envoy`) | Passed |
 | C11 | The schema's refusals | an IP, a one-label name, an uppercase name and a trailing dot as `vanityHostname` and in `serverNames`; an unknown key at the top, under `envoy` and under `expose`; an IP in `serverNames`; a name twice; 0 replicas; `maxUnavailable: 0`; `envoy.timeouts.route=300`; a 44-character `search.name`; port 70000; an invalid namespace; resources without limits; `512MB`; `expose.type=loadbalancer`; `expose.balance=sticky`; `expose.ingressPath=/search` | Passed, 22 refusals |
 | C12 | The monitoring objects | nothing by default; with `monitoring.serviceMonitor.enabled=true` a ClusterIP Service on 9901 selecting this Deployment's pods, without the main chart's `mongodb.com/search-name` label, and a ServiceMonitor on `/stats/prometheus` with the `_total` relabel; never a Route | Passed |
-| C13 | The preflight's script, against a stand-in `curl` | the Job's script taken out of the render; `curl` answers `GET /api/v1/namespaces/<ns>/<kind>/<name>` from JSON files as the API server would (200, 404 NotFound, 403 Forbidden, 500 with an HTML body, curl's exit 7, or its exit 60 with the paragraph after the first line); it answers only a call with the ServiceAccount's CA (never `-k`), the token from a header file and on no command line, and `--connect-timeout` and `--max-time`; a stand-in ServiceAccount directory with a token; a throwaway certificate with `DNS:mongot-public.example.com, DNS:*.apps.example.com`. Everything present: exit 0 naming the hostname and the Service; `x.apps.example.com` accepted by the wildcard; `a.b.apps.example.com` refused (one label only); `other.example.com` refused with the SANs listed and `FAILED: 1 problem`; a certificate with the hostname as CN and no SAN refused; a missing server secret named with the API's reason (`NotFound secrets "…" not found`) and the certificate then not checked; a missing client secret, trust bundle and Service counted as 3; a Forbidden reported as one; an API server that does not answer reported with curl's error, one its CA does not verify with curl's first line, and an HTTP 500 without a JSON Status as `HTTP 500` with no traceback; a secret without `tls.key`, a client secret without `tls.crt`, a trust bundle without `ca.crt` each refused; an image without `curl`, `python3` or `openssl` refused naming the image and the tool; no token file, and no CA file, refused; no certificate, key or token printed | Passed, 21 assertions |
+| C13 | The preflight's script, against a stand-in `curl` | the Job's script taken out of the render; `curl` answers `GET /api/v1/namespaces/<ns>/<kind>/<name>` from JSON files as the API server would (200, 404 NotFound, 403 Forbidden, 500 with an HTML body, curl's exit 7, or its exit 60 with the paragraph after the first line); it answers only a call with the ServiceAccount's CA (never `-k`), the token from a header file and on no command line, and `--connect-timeout` and `--max-time`, each once; a stand-in ServiceAccount directory with a token; a throwaway certificate with `DNS:mongot-public.example.com, DNS:*.apps.example.com`. Everything present: exit 0 naming the hostname and the Service; `x.apps.example.com` accepted by the wildcard; `a.b.apps.example.com` refused (one label only); `other.example.com` refused with the SANs listed and `FAILED: 1 problem`; a certificate with the hostname as CN and no SAN refused; a missing server secret named with the API's reason (`NotFound secrets "…" not found`) and the certificate then not checked; a missing client secret, trust bundle and Service counted as 3; a Forbidden reported as one; an API server that does not answer reported with curl's error, one its CA does not verify with curl's first line, and an HTTP 500 without a JSON Status as `HTTP 500` with no traceback; a secret without `tls.key`, a client secret without `tls.crt`, a trust bundle without `ca.crt` each refused; an image without `curl`, `python3` or `openssl` refused naming the image and the tool; no token file, and no CA file, refused; no certificate, key or token printed; the 4 GETs each with a connect timeout within its `--max-time`, their sum inside the Job's 180 s deadline | Passed, 22 assertions |
 | C14 | The preflight script's lint | its syntax and shellcheck at warning level, both clean | Passed |
 | C15 | The documents | NOTES and the README say to restart the pods after a rotation; the main README and the main chart's README link the chart and `docs/mongot-envoy-vanity-url.md` | Passed |
 | P1 | The preflight's script in its image | the rendered script, as uid 1001 in the UBI 9 image by digest, against the stand-in API: exit 0 naming every server name; with a name the certificate lacks, `MISSING … does not name other.example.com (SANs: …)`, `FAILED: 1 problem`, exit 1 | Passed |
@@ -52,7 +52,7 @@ on kind. `VANITY=mongot-public.lab.example`; `INGRESS` is the Ingress's address;
 | # | What | Passes when | Result |
 | --- | --- | --- | --- |
 | K1 | The chart installs beside the main chart, through Cilium's Ingress | the preflight Job succeeds (its log ends with `the certificate names every server name`); 2 pods `1/1 Running` with `app=mongot-public-lb`; Ingress `mongot-public` of class `cilium` with an address; the operator's `mongot-search-lb-0` pods untouched (same age) | *(run pending)* — `vanity-install.txt` |
-| K2 | A gRPC health check by the vanity name through Cilium's Ingress | with `$VANITY` as SNI at `$INGRESS:443`: TLSv1.3, ALPN h2, our server certificate's SANs holding `$VANITY`, and `grpc-status: 0` with a `SERVING` body from mongot; one access-log line in `deploy/mongot-public-lb` with an `upstream_host` that is a mongot pod (its downstream address is Cilium's Envoy, as Cilium's docs say) | *(run pending)* — `vanity-reach.txt` |
+| K2 | A gRPC health check by the vanity name through Cilium's Ingress | with `$VANITY` as SNI at `$INGRESS:443`: TLSv1.3, ALPN h2, our server certificate's SANs holding `$VANITY`, and `grpc-status: 0` with the 7-byte body `00 00 00 00 02 08 01` (a gRPC frame holding HealthCheckResponse status 1, SERVING; curl prints the bytes, not the word); one access-log line in our pods with an `upstream_host` that is a mongot pod (its downstream address is Cilium's Envoy, as Cilium's docs say) | *(run pending)* — `vanity-reach.txt` |
 | K3 | A wrong SNI refused | through the Ingress, `wrong.lab.example` gets no certificate and the handshake fails before our Envoy (its `downstream_cx_total` unchanged, no access-log line: Cilium's passthrough has no rule for the name); straight at our Service through a port-forward, the handshake closes with no certificate and our listener's `no_filter_chain_match` goes up by one | *(run pending)* — `vanity-wrong-sni.txt` |
 | K4 | The spread over the mongot pods | `membership_healthy: 2` (the lab's two mongot); 30 requests through the Ingress reach both pods, the counts recorded (round robin per Envoy pod gives about half each; retries and a pod change move it) | *(run pending)* — `vanity-spread.txt`; screenshot `vanity-envoy-stats.png` |
 | K5 | The preflight refuses a missing secret | helm fails on the hook; the log says `MISSING: secret no-such-secret: NotFound secrets "no-such-secret" not found` and `FAILED: 1 problem`; the Deployment is unchanged | *(run pending)* — `vanity-preflight-missing.txt` |
@@ -121,8 +121,17 @@ is enabled (its Helm value `ingressController.enabled=true` in the lab's Cilium 
 change), the operator's Envoy restarted to read it. This chart's preflight needs no `oc` image (it runs Red Hat's
 public UBI 9, by digest, and reads the API server with `curl`); the lab's own `oc` image stays as it is:
 
+K1, K7 and K10 need the main chart with the operator's Envoy (`loadBalancer.managed`). Measured on 2026-10-22, mesh0
+runs the lab chart instead: release `mongot-search` of `mongodb-search-cilium-0.1.0`, `loadBalancer.unmanaged` with
+endpoint `mongot-global.search.svc.cluster.local:27028`, no Deployment `mongot-search-lb-0`, and neither `-lb-0`
+secret. The first three commands below show which one is installed; the run starts only when they show the main
+chart, `managed` and the Deployment:
+
 ```bash
 export KUBECONFIG=~/.kube/mongodb-mesh.config VANITY=mongot-public.lab.example
+helm --kube-context kind-mesh0 -n search list
+kubectl --context kind-mesh0 -n search get mongodbsearch mongot -o jsonpath='{.spec.clusters[0].loadBalancer}{"\n"}'
+kubectl --context kind-mesh0 -n search get deploy mongot-search-lb-0
 kubectl --context kind-mesh0 get ingressclass
 kubectl --context kind-mesh0 -n search apply -f kind-mesh/manifests/20-search-certificates.yaml
 kubectl --context kind-mesh0 -n search rollout restart deploy/mongot-search-lb-0
@@ -142,12 +151,11 @@ kubectl --context kind-mesh0 -n search get ingress mongot-public | tee -a kind-m
 INGRESS=$(kubectl --context kind-mesh0 -n search get ingress mongot-public -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 ```
 
-If the lab gives Cilium's Ingress no address of its own, the same checks go through a port-forward to Cilium's
-Ingress Service, with `INGRESS=127.0.0.1` and port `8443` in place of `443` in every `--resolve` below:
-
-```bash
-kubectl --context kind-mesh0 -n kube-system port-forward svc/cilium-ingress 8443:443 &
-```
+The address comes from the lab's LoadBalancer block (`172.18.255.0/24`, pool `mesh-pool`); the Mac reaches it through
+the route `up.sh` prints once per VM start (`kind-mesh/scripts/lib.sh`, "for the Mac to reach the clusters'
+LoadBalancer addresses"). There is no port-forward fallback: Cilium's shared Ingress Service `cilium-ingress` has no
+selector (its EndpointSlice is a placeholder, `192.192.192.192`), and kubectl refuses a port-forward to a Service
+without one (`error: cannot attach to *v1.Service: invalid service '…': Service is defined without a selector`).
 
 K2, the health check by the vanity name through Cilium's Ingress, from the host, with the lab root as `ca.crt`, the
 client certificate and key of `ent-mongot-search-lb-0-client-cert` written to `client.crt` and `client.key` (never
@@ -155,8 +163,9 @@ printed), and the empty gRPC frame:
 
 ```bash
 printf '\000\000\000\000\000' > empty-frame
-curl -sv --http2 --cacert ca.crt --cert client.crt --key client.key --resolve $VANITY:443:$INGRESS \
-  https://$VANITY:443/grpc.health.v1.Health/Check -H 'content-type: application/grpc' --data-binary @empty-frame 2>&1 | tee kind-mesh/output/vanity-reach.txt
+curl -sv --http2 --cacert ca.crt --cert client.crt --key client.key --resolve $VANITY:443:$INGRESS -o health.bin \
+  https://$VANITY:443/grpc.health.v1.Health/Check -H 'content-type: application/grpc' -H 'te: trailers' --data-binary @empty-frame 2>&1 | tee kind-mesh/output/vanity-reach.txt
+od -An -tx1 health.bin | tee -a kind-mesh/output/vanity-reach.txt
 ```
 
 K3, a wrong SNI: through the Ingress, and straight at our Service through a port-forward:
@@ -175,9 +184,9 @@ K4, 30 health checks as K2, then the stats of each of our pods through the API s
 ```bash
 for i in $(seq 30); do curl -s --http2 --cacert ca.crt --cert client.crt --key client.key --resolve $VANITY:443:$INGRESS https://$VANITY:443/grpc.health.v1.Health/Check -H 'content-type: application/grpc' --data-binary @empty-frame -o /dev/null; done
 for P in $(kubectl --context kind-mesh0 -n search get pods -l app=mongot-public-lb -o name); do
-  kubectl --context kind-mesh0 -n search get --raw "/api/v1/namespaces/search/${P#pod/}:9901/proxy/stats" | grep -E '^(listener\.0\.0\.0\.0_27028\.(downstream_cx_total|no_filter_chain_match)|cluster\.mongot_rs_cluster\.(membership_healthy|upstream_rq_total|upstream_cx_total))'
+  kubectl --context kind-mesh0 -n search get --raw "/api/v1/namespaces/search/pods/${P#pod/}:9901/proxy/stats" | grep -E '^(listener\.0\.0\.0\.0_27028\.(downstream_cx_total|no_filter_chain_match)|cluster\.mongot_rs_cluster\.(membership_healthy|upstream_rq_total|upstream_cx_total))'
 done | tee kind-mesh/output/vanity-spread.txt
-kubectl --context kind-mesh0 -n search logs deploy/mongot-public-lb | grep -o '"upstream_host":"[^"]*"' | sort | uniq -c | tee -a kind-mesh/output/vanity-spread.txt
+kubectl --context kind-mesh0 -n search logs -l app=mongot-public-lb --tail=-1 | grep -o '"upstream_host":"[^"]*"' | sort | uniq -c | tee -a kind-mesh/output/vanity-spread.txt
 ```
 
 K5 and K6, the preflight's refusals:
@@ -194,7 +203,7 @@ K7, the operator reconciling its own Envoy and not ours:
 ```bash
 kubectl --context kind-mesh0 -n search get deploy mongot-public-lb -o jsonpath='{.metadata.generation} {.metadata.ownerReferences}{"\n"}' | tee kind-mesh/output/vanity-reconcile.txt
 kubectl --context kind-mesh0 -n search annotate deploy/mongot-search-lb-0 test=x
-kubectl --context kind-mesh0 -n search patch mongodbsearch mongot --type merge -p '{"spec":{"clusters":[{"loadBalancer":{"managed":{"replicas":1}}}]}}'
+kubectl --context kind-mesh0 -n search patch mongodbsearch mongot --type json -p '[{"op":"add","path":"/spec/clusters/0/loadBalancer/managed/replicas","value":1}]'
 kubectl --context kind-mesh0 -n search get deploy mongot-public-lb -o jsonpath='{.metadata.generation} {.metadata.ownerReferences}{"\n"}' | tee -a kind-mesh/output/vanity-reconcile.txt
 ```
 
@@ -391,6 +400,7 @@ ok    bash -n preflight
 ok    shellcheck preflight
 ok    preflight: everything present and the certificate naming the hostname passes
 ok    the preflight prints names and keys' names, never a certificate, a key or the token
+ok    preflight: its 4 GETs each bounded, the connect timeout within --max-time, together inside the Job's 180 s deadline
 ok    preflight: a one-label wildcard SAN covers x.apps.example.com
 ok    preflight: a wildcard covers one label only; a.b.apps.example.com is refused
 ok    preflight: a certificate without the name is refused, the message naming the SANs it has
@@ -462,7 +472,7 @@ The suite's last line and the counts on 2026-10-22, from `kind-mesh/output/vanit
 ```text
 all vanity chart tests passed
 exit=0
-ok lines: 89
+ok lines: 90
 ```
 
 The main chart's suite: `all chart tests passed`, 233 ok, exit 0. The lab chart's suite: `== 0 failed`, 19 PASS,

@@ -68,6 +68,7 @@ ok    bash -n preflight
 ok    shellcheck preflight
 ok    preflight: everything present and the certificate naming the hostname passes
 ok    the preflight prints names and keys' names, never a certificate, a key or the token
+ok    preflight: its 4 GETs each bounded, the connect timeout within --max-time, together inside the Job's 180 s deadline
 ok    preflight: a one-label wildcard SAN covers x.apps.example.com
 ok    preflight: a wildcard covers one label only; a.b.apps.example.com is refused
 ok    preflight: a certificate without the name is refused, the message naming the SANs it has

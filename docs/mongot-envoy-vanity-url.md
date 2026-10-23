@@ -166,7 +166,7 @@ The Envoy image has no `curl`; the admin port is read through the API server's p
 
 ```bash
 for P in $(oc get pods -n $NS -l app=${NAME}-public-lb -o name); do
-  oc get --raw "/api/v1/namespaces/$NS/${P#pod/}:9901/proxy/stats" | grep -E '^cluster\.mongot_rs_cluster\.(membership_healthy|upstream_rq_total)'
+  oc get --raw "/api/v1/namespaces/$NS/pods/${P#pod/}:9901/proxy/stats" | grep -E '^cluster\.mongot_rs_cluster\.(membership_healthy|upstream_rq_total)'
 done
 ```
 
