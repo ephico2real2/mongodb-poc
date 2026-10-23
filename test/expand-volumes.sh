@@ -8,7 +8,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 SCRIPT="${PWD}/chart/mongodb-search-helm/expand-mongot-volumes.sh"
 SH="${BASH_UNDER_TEST:-bash}"
-NS=vectordb-test
+NS=search-test
 fails=0
 ok()  { printf 'ok    %s\n' "$1"; }
 bad() { printf 'FAIL  %s\n' "$1"; fails=$((fails + 1)); }

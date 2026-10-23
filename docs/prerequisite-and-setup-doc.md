@@ -50,7 +50,7 @@ NS=dvh-gp6-rnd                            # Part 2 uses $NS
 # The script is a file of the chart. From a checkout of this repository, at its root:
 PREREQ=chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
 # From the published chart, with no clone (chart 0.3.3 and later):
-#   helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.35/mongodb-search-helm-0.3.35.tgz --untar
+#   helm pull https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.36/mongodb-search-helm-0.3.36.tgz --untar
 #   PREREQ=mongodb-search-helm/generate-mongodbsearch-prerequisites.sh
 
 mkdir -m 700 $NS                          # the script never creates it
@@ -201,7 +201,7 @@ From the published package, with no clone of the repository:
 
 ```bash
 helm install mongot \
-  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.35/mongodb-search-helm-0.3.35.tgz \
+  https://github.com/ephico2real2/mongodb-poc/releases/download/mongodb-search-helm-0.3.36/mongodb-search-helm-0.3.36.tgz \
   -n $NS -f my-values.yaml --timeout 20m
 ```
 
@@ -382,12 +382,12 @@ Monitoring (the ServiceMonitors and the alerts are on by default; both need user
 
 ### Part 1, by the script
 
-Oct 8, 2026, namespace `dvh-vectordb-qa` created for this on the same lab, OpenSSL 3.6.4 and bash 5.3.20. The PEMs were made for the test: a throwaway root and issuing CA, three leaf certificates for that namespace, each key encrypted (PKCS#8, AES-256) with a passphrase, in the company's layout.
+Oct 8, 2026, namespace `search-qa` (renamed in this record, #201) created for this on the same lab, OpenSSL 3.6.4 and bash 5.3.20. The PEMs were made for the test: a throwaway root and issuing CA, three leaf certificates for that namespace, each key encrypted (PKCS#8, AES-256) with a passphrase, in the company's layout.
 
 | Run | Result |
 | --- | --- |
 | Any command with no namespace named | Refused: `no namespace: export TargetNamespace=<namespace>, or pass --target-namespace <namespace>` |
-| `--check` before the folder exists | `1 problem(s)`: it says `mkdir -m 700 dvh-vectordb-qa`, and creates nothing |
+| `--check` before the folder exists | `1 problem(s)`: it says `mkdir -m 700 search-qa`, and creates nothing |
 | `--check` with the three PEMs | Each `fits` its step; `0 problem(s)`; no passphrase asked |
 | The five steps with `--dry-run`, the passphrase and the password typed at the prompts | Five files, mode 600, in a folder of mode 700; nothing typed was shown; no object in the cluster |
 | The five steps with `--apply`, the namespace typed back for two of them | Five objects created with `oc create` |
@@ -395,7 +395,7 @@ Oct 8, 2026, namespace `dvh-vectordb-qa` created for this on the same lab, OpenS
 | The objects in the cluster | The three secrets hold `ca.crt tls.crt tls.key`, type `kubernetes.io/tls`; each leaf is the PEM's; each key starts `-----BEGIN PRIVATE KEY-----` and is its leaf's; each leaf verifies against the secret's `ca.crt` and against the ConfigMap; the password is the 18 bytes given |
 | The key in an annotation | None: the objects carry only the script's own notes (when it was made, the leaf's subject, expiry and fingerprint). A probe secret made with `oc apply` did carry its value in `last-applied-configuration` |
 | The chart's own preflight script, run against the namespace | `all hand-made objects are present` |
-| `helm install --dry-run=server` with `namespace: dvh-vectordb-qa` | Accepted; no release was created |
+| `helm install --dry-run=server` with `namespace: search-qa` | Accepted; no release was created |
 | `--clean` | Removed the four secret files; kept the ConfigMap file |
 
 mongot was not installed there: the lab node was at 90% memory.
