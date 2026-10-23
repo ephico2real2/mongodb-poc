@@ -8,7 +8,7 @@ installs, MongoDB Controllers for Kubernetes 1.13.0, and was measured on the lab
 
 - **Deleting or restarting a pod keeps its volume.** The pod comes back on it and goes on from where it was.
 - **Lowering the number of mongot pods deletes the volume of every pod that goes**, at once. So does deleting the
-  StatefulSet, deleting the MongoDBSearch, and `helm uninstall`.
+  StatefulSet, deleting the MongoDBSearch, and helm uninstall.
 - **A pod without its volume builds every index again from the collection.** The owner's figures for a QA cluster:
   about 180 to 190 GB of indexes a pod, and 4 to 5 hours for one pod to build them (2026-10-08, VMware, `thin-csi`).
 - **Nothing in the MongoDBSearch resource turns this off** in operator 1.13.0. The chart refuses the upgrade that
@@ -18,15 +18,15 @@ installs, MongoDB Controllers for Kubernetes 1.13.0, and was measured on the lab
 
 | Action | The pod's volume claim | Seen on the lab |
 | --- | --- | --- |
-| A pod is deleted or restarted (`oc delete pod`, a rolling restart, an eviction) | Kept | The pod came back on the same claim (the same uid), Ready 24 s after it started, with nothing to build |
+| A pod is deleted or restarted (oc delete pod, a rolling restart, an eviction) | Kept | The pod came back on the same claim (the same uid), Ready 24 s after it started, with nothing to build |
 | The node of a pod fails | Kept | Not run. Kubernetes: "if a Pod associated with a StatefulSet fails due to node failure, and the control plane creates a replacement Pod, the StatefulSet retains the existing PVC" |
 | `search.replicas` lowered (the resource's `spec.clusters[].replicas`) | **Deleted**, for each pod that goes | 3 to 2: the claim of the third pod was gone within 10 s. Back to 3: a new claim, and its 8 indexes built again |
-| The StatefulSet scaled by hand (`oc scale statefulset`) | **Deleted**, although the operator undoes the scaling | The operator set 3 again within 5 s; the pod was already going and its claim was deleted 8 s after the command. The pod was away 7 min 11 s, then came back on a new volume |
+| The StatefulSet scaled by hand (oc scale statefulset) | **Deleted**, although the operator undoes the scaling | The operator set 3 again within 5 s; the pod was already going and its claim was deleted 8 s after the command. The pod was away 7 min 11 s, then came back on a new volume |
 | `search.replicas` set to 0 | **Deleted**, every one | Not run. MongoDB: at 0 "the Kubernetes Operator scales the StatefulSet to zero pods" |
 | The StatefulSet deleted, without `--cascade=orphan` | **Deleted**, every one | Not run |
 | The StatefulSet deleted **with** `--cascade=orphan` | Kept | The operator made the StatefulSet again within a second; the three pods were adopted without a restart and the three claims kept their uids |
-| The MongoDBSearch deleted, or `helm uninstall` with the chart's default | **Deleted**, every one | 2026-10-10. `oc delete mongodbsearch`: the StatefulSet gone after 1 s, the three mongot pods and their three claims after 12 s. `helm uninstall` with the default: the same after 11 s. The volumes read `Released`, the lab's class then (a hostpath provisioner, `Retain`) retaining them; a search through mongod then ended in a 504 |
-| `helm uninstall` with `search.keepOnUninstall: true` | Kept | 2026-10-10: Helm answered "These resources were kept due to the resource policy: [MongoDBSearch] mongot". The resource, the StatefulSet, the three mongot pods, the two Envoy pods and the three claims kept their uids, with no restart. `helm install` under the same name then adopted the resource in 42 s, without `--take-ownership`; the same pods and claims |
+| The MongoDBSearch deleted, or helm uninstall with the chart's default | **Deleted**, every one | 2026-10-10. oc delete mongodbsearch: the StatefulSet gone after 1 s, the three mongot pods and their three claims after 12 s. helm uninstall with the default: the same after 11 s. The volumes read `Released`, the lab's class then (a hostpath provisioner, `Retain`) retaining them; a search through mongod then ended in a 504 |
+| helm uninstall with `search.keepOnUninstall: true` | Kept | 2026-10-10: Helm answered "These resources were kept due to the resource policy: [MongoDBSearch] mongot". The resource, the StatefulSet, the three mongot pods, the two Envoy pods and the three claims kept their uids, with no restart. helm install under the same name then adopted the resource in 42 s, without `--take-ownership`; the same pods and claims |
 
 ## Why
 
@@ -41,10 +41,10 @@ persistentVolumeClaimRetentionPolicy:
   whenScaled: Delete
 ```
 
-It does so on purpose; since operator 1.9.0, by MongoDB's account in its pull request 1621. Its source, `controllers/searchcontroller/search_construction.go` at
-tag 1.13.0: "The index is rebuildable, so freeing the storage immediately is safe — a later scale-up reindexes from
-mongod." The pull request that added it calls it a product decision: "immediate PVC reclaim on scale-down. This
-deviates from the Kubernetes default (`Retain`)"
+It does so on purpose; since operator 1.9.0, by MongoDB's account in its pull request 1621. Its source,
+`controllers/searchcontroller/search_construction.go` at tag 1.13.0: "The index is rebuildable, so freeing the storage
+immediately is safe — a later scale-up reindexes from mongod." The pull request that added it calls it a product
+decision: "immediate PVC reclaim on scale-down. This deviates from the Kubernetes default (`Retain`)"
 ([mongodb/mongodb-kubernetes #1273](https://github.com/mongodb/mongodb-kubernetes/pull/1273)).
 
 Kubernetes applies the policy only "when Pods are being removed due to the StatefulSet being deleted or scaled
@@ -89,32 +89,34 @@ So this chart has no value that keeps a volume through a scale-down: there is no
    To do it knowingly, set `search.allowVolumeLoss: true` for that one upgrade, and take it out again after.
 2. **Never scale the StatefulSet by hand**, and never delete it without `--cascade=orphan`. It is the operator's:
    see [scaling.md](scaling.md) for how mongot is scaled.
-3. **`search.keepOnUninstall: true`** if an uninstall must not take the indexes with it. `helm uninstall` then
-   leaves the MongoDBSearch, its pods and its volumes, and removes the rest of the release: the Route, the
-   OperatorGroup and the Subscription, the monitoring objects. On the lab (2026-10-10, chart 0.3.14) searches
-   through the lab's GUI went on being answered by the mongot pods, each time it was tried up to 2 min 41 s after
-   the uninstall, while a new TLS connection to the Route's host got no answer and the router held the old HAProxy
-   process beside the new one. mongod points its `mongotHost` at the Route, so what answered was most likely the
-   connection mongod already had open, through the old process; the connection itself was not observed, and how
-   long it lasts was not measured. The operator's pod kept running, and its ClusterServiceVersion, still
-   `Succeeded` 20 s after the uninstall, read `Failed` with `NoOperatorGroup` 2 min after it. `helm install`
-   under the same release name adopted the resource in 42 s, without `--take-ownership`: the same pods and
-   claims, no restart, the Route made again and the operator replaced. Under
-   Argo CD the value also sets `Prune=false`
-   and `Delete=false` in the resource's sync options, since Argo CD takes Helm's annotation as `Delete=false` only
-   ("Supported as equivalent to `argocd.argoproj.io/sync-options: Delete=false`",
+3. **`search.keepOnUninstall: true`** if an uninstall must not take the indexes with it. helm uninstall then leaves the
+   MongoDBSearch, its pods and its volumes, and removes the rest of the release: the Route, the OperatorGroup and the
+   Subscription, the monitoring objects. On the lab (2026-10-10, chart 0.3.14) searches through the lab's GUI went on
+   being answered by the mongot pods, each time it was tried up to 2 min 41 s after the uninstall, while a new TLS
+   connection to the Route's host got no answer and the router held the old HAProxy process beside the new one. mongod
+   points its `mongotHost` at the Route, so what answered was most likely the connection mongod already had open,
+   through the old process; the connection itself was not observed, and how long it lasts was not measured. The
+   operator's pod kept running, and its ClusterServiceVersion, still `Succeeded` 20 s after the uninstall, read `Failed`
+   with `NoOperatorGroup` 2 min after it. helm install under the same release name adopted the resource in 42 s, without
+   `--take-ownership`: the same pods and claims, no restart, the Route made again and the operator replaced. Under Argo
+   CD the value also sets `Prune=false` and `Delete=false` in the resource's sync options, since Argo CD takes Helm's
+   annotation as `Delete=false` only ("Supported as equivalent to `argocd.argoproj.io/sync-options: Delete=false`",
    [Argo CD, Helm](https://argo-cd.readthedocs.io/en/stable/user-guide/helm/)): the resource is then kept when the
    Application is deleted and when a sync would prune it
-   ([Sync Options](https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/)). While the resource is
-   live and no longer in the manifests, the Application stays OutOfSync and a sync with prune reports it as
-   "ignored (no prune)". The two options on the resource override the Application's own `Prune` and `Delete`
-   options. It does not stop `oc delete mongodbsearch`, nor a sync with `Force`: Argo CD then deletes the resource
-   and creates it again when its apply is refused, and always when `Replace=true` is set as well ("the 'kubectl
-   delete/create' command"). On the lab with Argo CD 3.5.3 (2026-10-10) a sync with prune skipped the resource,
-   "ignored (no prune)", by hand and automated, and a delete of the Application with its resources finalizer left
-   the resource, its pods and its claims: [argocd.md](argocd.md) has the runs. What is said here of `Force` and `Replace` is from Argo
-   CD's documentation and source only. When the search is meant to go:
-   `oc delete mongodbsearch <search.name> -n <namespace>`.
+   ([Sync Options](https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/)). While the resource is live and
+   no longer in the manifests, the Application stays OutOfSync and a sync with prune reports it as "ignored (no prune)".
+   The two options on the resource override the Application's own `Prune` and `Delete` options. It does not stop oc
+   delete mongodbsearch, nor a sync with `Force`: Argo CD then deletes the resource and creates it again when its apply
+   is refused, and always when `Replace=true` is set as well ("the 'kubectl delete/create' command"). On the lab with
+   Argo CD 3.5.3 (2026-10-10) a sync with prune skipped the resource, "ignored (no prune)", by hand and automated, and a
+   delete of the Application with its resources finalizer left the resource, its pods and its claims:
+   [argocd.md](argocd.md) has the runs. What is said here of `Force` and `Replace` is from Argo CD's documentation and
+   source only. When the search is meant to go:
+
+   ```bash
+   oc delete mongodbsearch <search.name> -n <namespace>
+   ```
+
 4. **Change the resource through the values only.** A field of the MongoDBSearch that was patched by hand stays
    owned by that patch: on the lab, Helm 4 then refused the next upgrade that changed it ("conflict with
    \"kubectl-patch\"") until it was run with `--force-conflicts`.

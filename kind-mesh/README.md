@@ -9,8 +9,8 @@ installed by this repository's chart. The design, why it is built this way and h
 ## What runs where
 
 Everything is in one Colima VM, `mongodb-mesh` (8 CPUs, 24 GiB, 100 GiB disk): the docker network `kind`, and in it six
-node containers, one control plane and one worker for each of `mesh0`, `mesh1` and `mesh2`. The clusters' contexts
-are in `~/.kube/mongodb-mesh.config`; the default docker context and `~/.kube/config` are not touched.
+node containers, one control plane and one worker for each of `mesh0`, `mesh1` and `mesh2`. The clusters' contexts are
+in `~/.kube/mongodb-mesh.config`; the default docker context and `~/.kube/config` are not touched.
 
 | In each cluster | |
 | --- | --- |
@@ -25,7 +25,7 @@ are in `~/.kube/mongodb-mesh.config`; the default docker context and `~/.kube/co
 
 From the repository's root. Each script is idempotent and prints what it did; `output/` keeps the recorded runs.
 
-| Step | Command | Time on the lab |
+| Step | Script | Time on the lab |
 | --- | --- | --- |
 | 1. The VM | `kind-mesh/scripts/colima-up.sh` | under a minute |
 | 2. The platform: clusters, Cilium, cert-manager, the mesh, OLM | `kind-mesh/scripts/up.sh` | about 11 min 54 s (12 min 16 s with the VM) |
@@ -33,29 +33,59 @@ From the repository's root. Each script is idempotent and prints what it did; `o
 | 4. Search in every cluster: certificates, the chart, `mongot-global` | `kind-mesh/scripts/search-up.sh` | about 4 min: 84, 75 and 75 s a cluster |
 | 5. Sample data and two search indexes | `kind-mesh/scripts/data-load.sh` | indexes queryable after 18 s |
 | 6. The proofs | `kind-mesh/check.sh` | 19 PASS, 0 FAIL (`output/check.txt`) |
-| 7. The drills | `kind-mesh/drills.sh envoy mesh2`, `mongot mesh2 one`, `mongot mesh2 both`, `cluster` | 2 to 2.5 min each |
+| 7. The drills: `envoy mesh2`, `mongot mesh2 one`, `mongot mesh2 both`, `cluster` | `kind-mesh/drills.sh` | 2 to 2.5 min each |
 | 8. The search GUI | `kind-mesh/scripts/gui-up.sh` | under a minute; at `http://172.18.255.200/` |
 | 9. Hubble flows in Grafana | `kind-mesh/scripts/observability-up.sh` | about 2 min; at `http://172.18.255.201/d/hubble-observer-23862` (user admin, password in Secret `observability/grafana-admin`) |
+
+The commands, in the table's order:
+
+```bash
+kind-mesh/scripts/colima-up.sh
+
+kind-mesh/scripts/up.sh
+
+kind-mesh/scripts/mongo-up.sh
+
+kind-mesh/scripts/search-up.sh
+
+kind-mesh/scripts/data-load.sh
+
+kind-mesh/check.sh
+
+kind-mesh/drills.sh envoy mesh2
+kind-mesh/drills.sh mongot mesh2 one
+kind-mesh/drills.sh mongot mesh2 both
+kind-mesh/drills.sh cluster
+
+kind-mesh/scripts/gui-up.sh
+
+kind-mesh/scripts/observability-up.sh
+```
 
 To reach the clusters' LoadBalancer addresses from the Mac, `up.sh` prints the route to add, once per VM start (your
 sudo; never run by the scripts).
 
-**One command, from nothing to the lab as it is today:** `kind-mesh/scripts/rebuild.sh --yes` deletes the three
-clusters (`down.sh`), then runs steps 2 to 5 and 8 to 9 above and `kind-mesh-cilium/`'s steps 1, 4, 6 and 9 (the swap,
-step 2, the lab's chart, the network policy), then `check.sh`: each phase timed and logged under
-`output/rebuild-<date>/`, stopping at the first failure. Without `--yes` it only prints what is lost (the replica
-set's data and indexes, mongot's indexes, Loki's flows, Grafana's state, every password) and kept (the VM, the kind
-network, the images in the VM's docker, the recorded runs). `--reclaim-docker` requires `--yes` and after the rebuild frees the VM docker's build cache
-and unused images, never `localhost/kind-mesh/oc`, our Cilium images or kind's node image. What each step sets and
-why: [docs/building-the-kind-mesh-lab.md](../docs/building-the-kind-mesh-lab.md).
+**One command, from nothing to the lab as it is today:**
+
+It deletes the three clusters (`down.sh`), then runs steps 2 to 5 and 8 to 9 above and `kind-mesh-cilium/`'s steps 1, 4,
+6 and 9 (the swap, step 2, the lab's chart, the network policy), then `check.sh`: each phase timed and logged under
+`output/rebuild-<date>/`, stopping at the first failure. Without `--yes` it only prints what is lost (the replica set's
+data and indexes, mongot's indexes, Loki's flows, Grafana's state, every password) and kept (the VM, the kind network,
+the images in the VM's docker, the recorded runs). `--reclaim-docker` requires `--yes` and after the rebuild frees the
+VM docker's build cache and unused images, never `localhost/kind-mesh/oc`, our Cilium images or kind's node image. What
+each step sets and why: [docs/building-the-kind-mesh-lab.md](../docs/building-the-kind-mesh-lab.md).
+
+```bash
+kind-mesh/scripts/rebuild.sh --yes
+```
 
 **Which script owns which Cilium values.** `up.sh` installs each cluster's release from `cilium/values.yaml`,
 `cilium/values-<cluster>.yaml` and, at the mesh step, `cilium/values-mesh.yaml`, with the images `versions.env` pins
-(`lib.sh`, `cilium_image_args`). `kind-mesh-cilium/scripts/cleartext-l7.sh` adds `kind-mesh-cilium/cilium/values-step2.yaml`
-(WireGuard, the L7 backend) on top, with `--reuse-values`; `kind-mesh-cilium/scripts/cilium-build.sh` changes the
-images and nothing else (`--reset-then-reuse-values`). A re-run of `up.sh` on a lab after step 2 would render the
-release without step 2's values, so it refuses before platform changes, naming #166: after step 2, the platform's scripts
-are `colima-up.sh` and `rebuild.sh` only.
+(`lib.sh`, `cilium_image_args`). `kind-mesh-cilium/scripts/cleartext-l7.sh` adds
+`kind-mesh-cilium/cilium/values-step2.yaml` (WireGuard, the L7 backend) on top, with `--reuse-values`;
+`kind-mesh-cilium/scripts/cilium-build.sh` changes the images and nothing else (`--reset-then-reuse-values`). A re-run
+of `up.sh` on a lab after step 2 would render the release without step 2's values, so it refuses before platform
+changes, naming #166: after step 2, the platform's scripts are `colima-up.sh` and `rebuild.sh` only.
 
 ## The search GUI
 
@@ -89,8 +119,11 @@ Each search's path was confirmed by the Envoys' counters: each cluster's search 
 | `cluster`: mesh0, the primary's cluster, freezes for 60 s | mesh1 elected about 11 s after the freeze; 223 writes and 223 searches, 0 failed; one write waited 36.7 s with mongosh's defaults, 10.0 s with 5 s client timeouts (then 2 writes failed); one write rolled back on mesh0, none lost or duplicated; mesh0 primary again once back (story #131) |
 
 The drill first checks that the cluster's mongod is on its own Envoy: after a failover it stays on another cluster's
-until it reconnects, and the drill would test nothing. `kubectl --context kind-<cluster> -n mongodb delete pod
-mongo-0` restarts it.
+until it reconnects, and the drill would test nothing. This restarts it:
+
+```bash
+kubectl --context kind-<cluster> -n mongodb delete pod mongo-0
+```
 
 ## Files
 
@@ -114,6 +147,19 @@ The scripts are adapted from cilium-implementation-poc (`scripts/lab-up.sh`, `po
 | | |
 | --- | --- |
 | Delete the clusters, keep the VM | `kind-mesh/scripts/down.sh` |
-| Delete the clusters and rebuild the lab to its current state, keep the VM | `kind-mesh/scripts/rebuild.sh --yes` (above); `--reclaim-docker` for the VM docker's build cache and unused images |
+| Delete the clusters and rebuild the lab to its current state, keep the VM | `kind-mesh/scripts/rebuild.sh` (above); `--reclaim-docker` for the VM docker's build cache and unused images |
 | Stop the VM, keep everything | `kind-mesh/scripts/colima-down.sh` records each node's address in `~/.kube/mongodb-mesh.node-ips`, stops the nodes with their restart policy off, then the VM; `kind-mesh/scripts/colima-up.sh` starts the VM at the size in `versions.env`, each node pinned to its address, and waits for the API servers, Cilium and the mesh. Measured 2026-10-22, 16 to 24 GiB: down 35 s, up 73 s, all six nodes back on their addresses with `on-failure:1`, the mesh connected; mongot Ready about 47 s after `colima-up.sh` returned, then `check.sh` 0 failed and a search drill 0 of 237 (`output/restart-2026-10-22/`). The Mac's route to the LoadBalancer block is printed, not run (your sudo) |
-| Delete the VM and its disk | `colima delete --profile mongodb-mesh --data`. Without `--data`, Colima keeps the docker disk, and a new VM of the same name picks up the old one, clusters and all |
+| Delete the VM and its disk | Colima's delete, with `--data`. Without `--data`, Colima keeps the docker disk, and a new VM of the same name picks up the old one, clusters and all |
+
+The commands, in the table's order:
+
+```bash
+kind-mesh/scripts/down.sh
+
+kind-mesh/scripts/rebuild.sh --yes
+
+kind-mesh/scripts/colima-down.sh
+kind-mesh/scripts/colima-up.sh
+
+colima delete --profile mongodb-mesh --data
+```

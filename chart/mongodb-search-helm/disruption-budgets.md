@@ -72,15 +72,15 @@ repository.*
    1 of 3 mongot pods is left to answer       2 of 3 mongot pods answer throughout
 ```
 
-Why step 2 happens whenever one of the other nodes has room for the pod: a drain makes its node unschedulable first, so the pod that is evicted has two nodes to
-go to, and each already holds a mongot pod. The anti-affinity is a preference, so the pod is placed on one of
-them. When the drained node returns it is empty, and Kubernetes does not move running pods back by itself. If
-neither has room, the pod waits, `Pending`, and is placed on node 1 when it is schedulable again; then no node
-holds two.
+Why step 2 happens whenever one of the other nodes has room for the pod: a drain makes its node unschedulable first, so
+the pod that is evicted has two nodes to go to, and each already holds a mongot pod. The anti-affinity is a preference,
+so the pod is placed on one of them. When the drained node returns it is empty, and Kubernetes does not move running
+pods back by itself. If neither has room, the pod waits, `Pending`, and is placed on node 1 when it is schedulable
+again; then no node holds two.
 
-The two Envoy pods have a free node to go to on three nodes, which the scheduler prefers, so they are likely to
-stay apart there. On two nodes, or when a
-third cannot take the pod, they share a node in the same way, and a drain of that node takes both.
+The two Envoy pods have a free node to go to on three nodes, which the scheduler prefers, so they are likely to stay
+apart there. On two nodes, or when a third cannot take the pod, they share a node in the same way, and a drain of that
+node takes both.
 
 A pool that updates more than one node at a time, two drains started by hand, and a cluster autoscaler that
 removes nodes all reach the same point sooner.
@@ -88,7 +88,7 @@ removes nodes all reach the same point sooner.
 ## The same evictions, measured
 
 The lab has one node, so no node was drained. The evictions of a drain were made instead: for each pod of a kind,
-the request `oc adm drain` sends to the API, and on a refusal a wait of 5 s and the request again. A search
+the request oc adm drain sends to the API, and on a refusal a wait of 5 s and the request again. A search
 through mongod was tried every second.
 
 <!-- markdownlint-disable MD033 -->
@@ -96,8 +96,8 @@ through mongod was tried every second.
 <!-- markdownlint-enable MD033 -->
 
 *Measured on the lab on 2026-10-10 by asking the API to evict the pods as a drain does. Without a budget the three
-mongot pods went at once, and 37 of 195 searches failed over 37 seconds. With a budget of 1 they went one at a time, each waiting for the one before to be Ready,
-and all 191 searches were answered.*
+mongot pods went at once, and 37 of 195 searches failed over 37 seconds. With a budget of 1 they went one at a time,
+each waiting for the one before to be Ready, and all 191 searches were answered.*
 
 ```text
 WITHOUT A BUDGET   0 s   three evictions accepted at once
@@ -155,7 +155,7 @@ deployments or pods bypasses Pod Disruption Budgets."
 | --- | --- |
 | A node drain, a node update, the cluster autoscaler removing a node | Yes |
 | A rolling restart of mongot or of Envoy (a changed value, a new image) | No. The StatefulSet and the Deployment restart one pod at a time by themselves |
-| `oc delete pod` | No |
+| oc delete pod | No |
 | Fewer pods (`search.replicas` lowered), an uninstall | No. [volumes.md](volumes.md) |
 | A node that fails | No. Nothing asks first |
 
@@ -167,8 +167,14 @@ What to expect from one:
   other two are what answers.
 - **A pod that is not Ready can itself be evicted at any time** (`AlwaysAllow`), so the node it is on is not
   held.
-- **`oc get pdb`** shows it: `ALLOWED DISRUPTIONS` is 1 when every pod is Ready and 0 while one is away. A drain
-  that waits prints the refusal above and tries again.
+- **The budget's status shows it**:
+
+  ```bash
+  oc get pdb
+  ```
+
+  `ALLOWED DISRUPTIONS` is 1 when every pod is Ready and 0 while one is away. A drain that waits prints the refusal
+  above and tries again.
 - **The volume runbook is not affected.** Its StatefulSet step deletes the StatefulSet and leaves the pods, which
   are without an owner for a moment. On the lab, with the budgets in place, the mongot budget read 1 allowed and 3
   of 3 healthy at each of 253 readings taken through that step, about 0.3 s apart, and the sync passed.

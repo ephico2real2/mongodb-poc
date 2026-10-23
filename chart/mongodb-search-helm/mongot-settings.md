@@ -116,7 +116,7 @@ spec:
 
 1. **Wait until every index is `STEADY`** on every pod. A restart interrupts every build in progress; mongot resumes
    one from the progress it last committed, when it committed any.
-2. **Sync the Application** (or `helm upgrade` with the release's values file). The pods restart one at a time,
+2. **Sync the Application** (or helm upgrade with the release's values file). The pods restart one at a time,
    each on its volume.
 3. **Read mongot's log on each pod.** `Ignoring unrecognized field(s) in mongot config file` names a key mongot did
    not take; it started without it. `numConcurrentInitialSyncs`, `numConcurrentChangeStreams` and

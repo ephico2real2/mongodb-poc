@@ -5,6 +5,8 @@ A small web page that runs `$search` / `$vectorSearch` **through MongoDB** and s
 over gRPC to `mongot`. The attribution comes from reading each `mongot`'s Prometheus
 counter just before and just after the query.
 
+## Files
+
 | File | What it is |
 |---|---|
 | `server.py` | the whole app — python3 stdlib + `mongosh`, no dependencies |
@@ -73,7 +75,7 @@ oc rollout restart deploy/mongot-gui -n $NS
 ```
 
 `deploy.sh` replaces step 5 with a hash of `server.py`, the settings and the URI Secret's
-`resourceVersion` on the pod template, applied in the same `oc apply`. The Secret's
+`resourceVersion` on the pod template, applied in the same oc apply. The Secret's
 content is never hashed, so the annotation reveals nothing about the password.
 Measured on this lab: an unchanged rerun keeps the same pod; a settings change rolls it
 once; a changed connection string rolls it once; reverting goes back to the existing
@@ -127,9 +129,10 @@ percent-encoded inside the command, never typed or printed:
 
 ```bash
 PW=$(oc get secret search-sync-source-password -n $NS -o jsonpath='{.data.password}' | base64 -d \
-     | python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(), safe=""))')
+  | python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(), safe=""))')
 
-export MONGO_URI="mongodb://mongotuser:${PW}@<mongod-host>:<port>/admin?replicaSet=<rsName>&tls=true&tlsCAFile=/etc/mongo-ca/ca.crt"
+MONGO_URI="mongodb://mongotuser:${PW}@<mongod-host>:<port>/admin?replicaSet=<rsName>"
+export MONGO_URI="${MONGO_URI}&tls=true&tlsCAFile=/etc/mongo-ca/ca.crt"
 unset PW
 ```
 
@@ -153,7 +156,7 @@ oc set volume deploy/mongot-gui -n $NS --add --name=mongo-ca \
 ```
 
 This rolls the pod with `/etc/mongo-ca/ca.crt` in place. Later `deploy.sh` runs keep it:
-client-side `oc apply` only removes fields it recorded itself.
+client-side oc apply only removes fields it recorded itself.
 
 **5. Find the names not known yet** — inside the GUI pod, which already has `mongosh` and
 the connection string, so nothing sensitive is shown:
@@ -177,7 +180,11 @@ Then rerun step 3 with the right `replicaSet`, `DB`, `COLL` and `TEXT_INDEX`.
 **6. Verify**
 
 ```bash
-curl -sk "https://$(oc get route mongot-gui -n $NS -o jsonpath='{.spec.host}')/healthz"   # ok
+curl -sk "https://$(oc get route mongot-gui -n $NS -o jsonpath='{.spec.host}')/healthz"
+```
+
+```text
+ok
 ```
 
 Open the Route and run a text search; the "which mongot answered" panel should rotate
@@ -248,8 +255,16 @@ The page runs one search at a time; others wait their turn, up to 20 s, and afte
 ## Verify and remove
 
 ```bash
-curl -sk "https://$(oc get route mongot-gui -n $NS -o jsonpath='{.spec.host}')/healthz"   # ok
+curl -sk "https://$(oc get route mongot-gui -n $NS -o jsonpath='{.spec.host}')/healthz"
+```
 
+```text
+ok
+```
+
+Remove it:
+
+```bash
 oc delete -n $NS -f app/gui/mongot-gui.yaml
 oc delete configmap mongot-gui-src mongot-gui-config -n $NS
 oc delete secret mongot-gui-mongo-uri -n $NS

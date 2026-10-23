@@ -11,7 +11,7 @@ Manual approval, approved by a hook), the MongoDBSearch without the operator's E
 first clears a CSV that would stop the Subscription from resolving (`templates/00-csv-reclaim.yaml`). Run in every
 cluster, from the repository's root:
 
-```sh
+```bash
 kind-mesh-cilium/chart/test.sh          # render tests, no cluster needed
 kind-mesh-cilium/scripts/chart-up.sh    # helm upgrade --install mongot-search in mesh0, mesh1, mesh2
 ```
@@ -32,23 +32,91 @@ Not tested: installing the chart on a cluster that never ran steps 1 and 2 (no a
 ## How the lab was built: steps 1 and 2
 
 On a lab built and passing with `kind-mesh/` (its README). These steps applied the design by hand, before the
-chart existed; they are how the results in the testing record were produced. `kind-mesh/scripts/rebuild.sh --yes`
-replays them (steps 1, 4, 6 and 9's policy) after `kind-mesh/`'s bring-up, on freshly deleted clusters; what each
-one sets and why is in [docs/building-the-kind-mesh-lab.md](../docs/building-the-kind-mesh-lab.md). Step 4 assumes
-the Cilium release `kind-mesh/scripts/up.sh` made and adds to it: after it, `up.sh` refuses to run again (#166).
+chart existed; they are how the results in the testing record were produced. This command replays them (steps 1, 4, 6
+and 9's policy) after `kind-mesh/`'s bring-up, on freshly deleted clusters:
 
-| Step | Command |
+```bash
+kind-mesh/scripts/rebuild.sh --yes
+```
+
+What each one sets and why is in [docs/building-the-kind-mesh-lab.md](../docs/building-the-kind-mesh-lab.md). Step 4
+assumes the Cilium release `kind-mesh/scripts/up.sh` made and adds to it: after it, `up.sh` refuses to run again (#166).
+
+| Step | Scripts |
 | --- | --- |
 | 1. Swap each cluster's search (in place: mongot and their volumes stay) | `kind-mesh-cilium/scripts/swap-search.sh` |
 | 2. Check | `kind-mesh/check.sh` |
-| 3. Drills (step 1) | `kind-mesh-cilium/drills.sh mongot mesh2 both`, `mongot mesh2 one`, `failback mesh2` |
+| 3. Drills (step 1) | `kind-mesh-cilium/drills.sh` |
 | 4. Step 2: WireGuard, Cilium's L7 load balancer, the search hop in cleartext | `kind-mesh-cilium/scripts/cleartext-l7.sh` |
-| 5. Check, drills (step 2), the wire | `kind-mesh/check.sh`; `drills.sh mongot mesh2 both`, `mongot mesh2 one`, `spread mesh2`; `scripts/wire-check.sh` |
+| 5. Check, drills (step 2), the wire | `kind-mesh/check.sh`; `drills.sh`; `scripts/wire-check.sh` |
 | 6. The search side onto the chart | `kind-mesh-cilium/scripts/chart-up.sh` |
-| 7. Story #131: the primary's cluster lost, under four client settings | `kind-mesh-cilium/scripts/primary-matrix.sh` (or one run: `CLIENT_OPTS='…' drills.sh primary freeze\|kill\|partition`) |
+| 7. Story #131: the primary's cluster lost, under four client settings | `kind-mesh-cilium/scripts/primary-matrix.sh` (or one run of `drills.sh`) |
 | 8. Election tuning: the same drills under six replica set profiles; then how long a link outage each election timeout rides out | `kind-mesh-cilium/scripts/election-tuning.sh`; `kind-mesh-cilium/scripts/blip-test.sh` |
-| 9. Who may connect to mongot: reach test, the policy in every cluster, reach test again, check and drills | `kind-mesh-cilium/scripts/mongot-reach.sh open`; `kubectl --context kind-meshN apply -f kind-mesh-cilium/manifests/60-mongot-ingress.yaml`; `mongot-reach.sh policy`; `kind-mesh/check.sh`; `DRILL_TAG=policy drills.sh mongot mesh2 one`, `mongot mesh2 both`, `spread mesh2`; `scripts/drill-capture.sh <tag> mongot mesh2 both` with and without the policy |
-| 10. Our Cilium build in every cluster, under load, measured before and after (story #145) | `kind-mesh-cilium/scripts/cilium-build.sh measure before`, `upgrade`, `measure after`, `drill`; `kind-mesh/check.sh` |
+| 9. Who may connect to mongot: reach test, the policy in every cluster, reach test again, check and drills | `kind-mesh-cilium/scripts/mongot-reach.sh`; `kind-mesh-cilium/manifests/60-mongot-ingress.yaml`; `kind-mesh/check.sh`; `drills.sh`; `scripts/drill-capture.sh` with and without the policy |
+| 10. Our Cilium build in every cluster, under load, measured before and after (story #145) | `kind-mesh-cilium/scripts/cilium-build.sh`; `kind-mesh/check.sh` |
+
+The commands, in the table's order, from the repository's root:
+
+```bash
+# 1. Swap each cluster's search
+kind-mesh-cilium/scripts/swap-search.sh
+
+# 2. Check
+kind-mesh/check.sh
+
+# 3. Drills (step 1)
+kind-mesh-cilium/drills.sh mongot mesh2 both
+kind-mesh-cilium/drills.sh mongot mesh2 one
+kind-mesh-cilium/drills.sh failback mesh2
+
+# 4. Step 2: WireGuard, Cilium's L7 load balancer, the search hop in cleartext
+kind-mesh-cilium/scripts/cleartext-l7.sh
+
+# 5. Check, drills (step 2), the wire
+kind-mesh/check.sh
+kind-mesh-cilium/drills.sh mongot mesh2 both
+kind-mesh-cilium/drills.sh mongot mesh2 one
+kind-mesh-cilium/drills.sh spread mesh2
+kind-mesh-cilium/scripts/wire-check.sh
+
+# 6. The search side onto the chart
+kind-mesh-cilium/scripts/chart-up.sh
+
+# 7. Story #131: the drill matrix
+kind-mesh-cilium/scripts/primary-matrix.sh
+```
+
+Or run one drill instead of the matrix. Replace `…` with the client options; choose `freeze`, `kill` or `partition`:
+
+```bash
+CLIENT_OPTS='…' kind-mesh-cilium/drills.sh primary freeze
+```
+
+Continue with the remaining steps:
+
+```bash
+# 8. Election tuning, then the link outage test
+kind-mesh-cilium/scripts/election-tuning.sh
+kind-mesh-cilium/scripts/blip-test.sh
+
+# 9. Reach test, the policy in every cluster (kind-meshN, once for each), reach test again, check and drills
+kind-mesh-cilium/scripts/mongot-reach.sh open
+kubectl --context kind-meshN apply -f kind-mesh-cilium/manifests/60-mongot-ingress.yaml
+kind-mesh-cilium/scripts/mongot-reach.sh policy
+kind-mesh/check.sh
+DRILL_TAG=policy kind-mesh-cilium/drills.sh mongot mesh2 one
+DRILL_TAG=policy kind-mesh-cilium/drills.sh mongot mesh2 both
+DRILL_TAG=policy kind-mesh-cilium/drills.sh spread mesh2
+# with and without the policy
+kind-mesh-cilium/scripts/drill-capture.sh <tag> mongot mesh2 both
+
+# 10. Our Cilium build: measured before, the upgrade, measured after, the drill
+kind-mesh-cilium/scripts/cilium-build.sh measure before
+kind-mesh-cilium/scripts/cilium-build.sh upgrade
+kind-mesh-cilium/scripts/cilium-build.sh measure after
+kind-mesh-cilium/scripts/cilium-build.sh drill
+kind-mesh/check.sh
+```
 
 ## Files
 
