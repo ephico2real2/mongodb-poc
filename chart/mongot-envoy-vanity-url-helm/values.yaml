@@ -95,8 +95,7 @@ expose:
   # true, always, in use. false is a troubleshooting and DR-test switch, not a way to run the chart: it removes the
   # Route (or Ingress) and leaves the Deployment and its ClusterIP Service, so that a mongod using the vanity
   # hostname stops reaching search; set it back and the Route returns. That proves the vanity path carries the
-  # traffic (docs/mongot-envoy-vanity-url.md, "Prove which path the traffic takes"). On a cluster without the
-  # OpenShift router (kind) it is the only way to install, with a port-forward to the Service.
+  # traffic (docs/mongot-envoy-vanity-url.md, "Prove which path the traffic takes").
   enabled: true
   # route: a passthrough Route with host vanityHostname. ingress: an Ingress of class ingressClassName with the
   # passthrough annotation, from which OpenShift makes the Route (named <ingress>-<suffix>, deleted with it).
@@ -107,8 +106,16 @@ expose:
   # every connection on one Envoy pod (docs/mongot-route-balance-rationale.md). On an Ingress the annotation is
   # copied to the generated Route.
   balance: roundrobin
-  # The class of the Ingress (expose.type ingress): OpenShift's own router.
+  # The class of the Ingress (expose.type ingress): OpenShift's own router. cilium for Cilium's Ingress controller
+  # (the kind lab), with ingressPath "/" and the annotation ingress.cilium.io/tls-passthrough: enabled below.
   ingressClassName: openshift-default
+  # The Ingress rule's path. "": path '' with pathType ImplementationSpecific, what OpenShift needs to make a
+  # passthrough Route from an Ingress (Red Hat, "Creating a route through an Ingress object"; a passthrough Route
+  # carries no path). "/": path / with pathType Prefix, for a controller such as Cilium's, which ignores a rule
+  # whose path is not / (Cilium docs, Ingress, TLS passthrough). Nothing else is accepted.
+  ingressPath: ""
+  # Added to the Route or Ingress. The two OpenShift annotations the chart sets on an Ingress are inert on another
+  # controller; Cilium's passthrough is asked for here: ingress.cilium.io/tls-passthrough: enabled.
   annotations: {}
   labels: {}
 

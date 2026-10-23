@@ -4,7 +4,9 @@ Route from it, named <ingress>-<suffix> and deleted with it, and copies the Ingr
 (docs/mongot-route-balance-rationale.md, Sources): the termination annotation makes it passthrough (without it
 OpenShift makes an edge Route, which has no HTTP/2 to Envoy and cuts a stream at the router's 30 s), and the
 balance annotation reaches it. The path is '' with pathType ImplementationSpecific, as Red Hat's "Creating a route
-through an Ingress object" writes a passthrough one; no spec.tls: the router terminates nothing.
+through an Ingress object" writes a passthrough one, or / with Prefix (expose.ingressPath) for a controller such as
+Cilium's, which ignores any other path; no spec.tls: the router terminates nothing. The two OpenShift annotations
+are inert on another controller.
 */ -}}
 {{- if and .Values.expose.enabled (eq .Values.expose.type "ingress") }}
 apiVersion: networking.k8s.io/v1
@@ -30,8 +32,8 @@ spec:
     - host: {{ .Values.vanityHostname }}
       http:
         paths:
-          - path: ''
-            pathType: ImplementationSpecific
+          - path: {{ .Values.expose.ingressPath | quote }}
+            pathType: {{ ternary "Prefix" "ImplementationSpecific" (eq .Values.expose.ingressPath "/") }}
             backend:
               service:
                 name: {{ include "vanity.deployment" . }}

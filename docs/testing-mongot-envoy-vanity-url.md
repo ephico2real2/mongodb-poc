@@ -10,7 +10,7 @@ command and pass condition are written so that the run fills the result and noth
 
 | Where | Tests | State |
 | --- | --- | --- |
-| CI, offline (`test/vanity-chart.sh`) | 86 assertions: lint, the renders, the schema's refusals, the bootstrap against the operator's capture, Envoy's validation of both renders, the preflight's script against a stand-in API | **86 passed, 0 failed** on 2026-10-22 (macOS, helm v4.3.0, Envoy 1.37.6 from the chart's image, digest `sha256:ea33a83e…`): `kind-mesh/output/vanity-chart.txt` |
+| CI, offline (`test/vanity-chart.sh`) | 89 assertions: lint, the renders, the schema's refusals, the bootstrap against the operator's capture, Envoy's validation of both renders, the preflight's script against a stand-in API | **89 passed, 0 failed** on 2026-10-22 (macOS, helm v4.3.0, Envoy 1.37.6 from the chart's image, digest `sha256:ea33a83e…`): `kind-mesh/output/vanity-chart.txt` |
 | The preflight's script in its image | the rendered script, run as uid 1001 in `registry.access.redhat.com/ubi9/ubi@sha256:16e9e43d…` against the same stand-in API | exit 0 with every name found; exit 1 with `MISSING … does not name other.example.com` for a name the certificate lacks (2026-10-22, docker; a container run, no cluster) |
 | CI, the main chart (`test/chart.sh`) | 233 assertions, unchanged by this story | 233 passed, 0 failed on the same day |
 | CI, the lab chart (`kind-mesh-cilium/chart/test.sh`) | 19 assertions, one added: the hooks' image is the one `search-up.sh` loads | 19 passed, 0 failed on the same day |
@@ -25,7 +25,7 @@ CI, offline, one row per assertion group; the commands are under "Run it" and th
 | C2 | The objects by default | ConfigMap `mongot-public-envoy`, Deployment, Service and PodDisruptionBudget `mongot-public-lb`, Route `mongot-public`, the preflight Job with its ServiceAccount, Role and RoleBinding; nothing else | Passed: the nine objects, every name from `search.name` |
 | C3 | Names | with `search.name=srch` and `expose.name=vanity`, every object renamed `srch-public…` and the Route named `vanity` | Passed |
 | C4 | The Route by default | `host` = `vanityHostname`, `tls.termination: passthrough`, `wildcardPolicy: None`, `haproxy.router.openshift.io/balance: roundrobin`, to Service `mongot-public-lb` port `mongot-grpc` | Passed |
-| C5 | The Ingress | with `expose.type=ingress`: an Ingress and no Route; `ingressClassName: openshift-default`, annotations `route.openshift.io/termination: passthrough` and the balance, `path: ''`, `pathType: ImplementationSpecific`, no `spec.tls` | Passed |
+| C5 | The Ingress | with `expose.type=ingress`: an Ingress and no Route; `ingressClassName: openshift-default`, annotations `route.openshift.io/termination: passthrough` and the balance, `path: ''`, `pathType: ImplementationSpecific`, no `spec.tls`; with `expose.ingressPath=/`, class `cilium` and the annotation `ingress.cilium.io/tls-passthrough: enabled`: `path: /`, `pathType: Prefix`, the annotation passing and the host kept; an `ingressPath` other than `""` or `/` refused by the schema | Passed |
 | C5b | Reserved annotations (review) | with `expose.annotations` naming the termination (`edge`), the balance (`source`), the sync-wave (`9`) and `kept=yes`: the Ingress stays `passthrough`, `roundrobin`, wave `2`, and `kept` passes; on the Route the balance key is rendered once, `roundrobin` | Passed |
 | C5c | `serverNames` must hold `vanityHostname` (review) | a list without it fails the render with `serverNames must hold vanityHostname …` (the Route's clients send it; the preflight checks `serverNames` only); a name twice is refused by the schema (`uniqueItems`: Envoy refuses overlapping filter chains) | Passed |
 | C6 | Derived secret names and overrides | `ent-mongot-search-lb-0-cert`, `…-client-cert`, `ent-trust-bundle` mounted at `/etc/envoy/tls/{server,client,ca}`; `tls.certsSecretPrefix=lab` and `search.name=srch` change them; a set name wins, in the Deployment and in the preflight's Role | Passed |
@@ -34,7 +34,7 @@ CI, offline, one row per assertion group; the commands are under "Run it" and th
 | C9 | Envoy's own validation | both rendered bootstraps, with throwaway certificate files, unpacked into the chart's image (`quay.io/ephico2real/envoy:v1.37-latest`) and validated as the image's `envoy` user: exit 0 and `configuration '/etc/envoy/bootstrap.yaml' OK` for both; a copy with an unknown filter type refused; with `CONTAINER_ENGINE` set and no engine, a `FAIL`, never a skip | Passed: `loading 1 cluster(s)`, `loading 1 listener(s)`, `configuration '/etc/envoy/bootstrap.yaml' OK`; `CONTAINER_ENGINE=nosuchengine` gives `1 failed` |
 | C10 | Requests and limits on every container | every Job and Deployment container of a render with the monitor on has `requests.cpu`, `requests.memory`, `limits.cpu`, `limits.memory` | Passed: 2 containers (Envoy, the preflight), 4 of 4 each |
 | C10b | `envoy.runAsUser` (review) | no `runAsUser` by default (OpenShift assigns one); with `envoy.runAsUser=101`, `runAsNonRoot: true`, `runAsUser` and `runAsGroup` 101 (the image's own user is root; its entrypoint drops to `envoy`) | Passed |
-| C11 | The schema's refusals | an IP, a one-label name, an uppercase name and a trailing dot as `vanityHostname` and in `serverNames`; an unknown key at the top, under `envoy` and under `expose`; an IP in `serverNames`; a name twice; 0 replicas; `maxUnavailable: 0`; `envoy.timeouts.route=300`; a 44-character `search.name`; port 70000; an invalid namespace; resources without limits; `512MB`; `expose.type=loadbalancer`; `expose.balance=sticky` | Passed, 21 refusals |
+| C11 | The schema's refusals | an IP, a one-label name, an uppercase name and a trailing dot as `vanityHostname` and in `serverNames`; an unknown key at the top, under `envoy` and under `expose`; an IP in `serverNames`; a name twice; 0 replicas; `maxUnavailable: 0`; `envoy.timeouts.route=300`; a 44-character `search.name`; port 70000; an invalid namespace; resources without limits; `512MB`; `expose.type=loadbalancer`; `expose.balance=sticky`; `expose.ingressPath=/search` | Passed, 22 refusals |
 | C12 | The monitoring objects | nothing by default; with `monitoring.serviceMonitor.enabled=true` a ClusterIP Service on 9901 selecting this Deployment's pods, without the main chart's `mongodb.com/search-name` label, and a ServiceMonitor on `/stats/prometheus` with the `_total` relabel; never a Route | Passed |
 | C13 | The preflight's script, against a stand-in `curl` | the Job's script taken out of the render; `curl` answers `GET /api/v1/namespaces/<ns>/<kind>/<name>` from JSON files as the API server would (200, 404 NotFound, 403 Forbidden, 500 with an HTML body, curl's exit 7, or its exit 60 with the paragraph after the first line); it answers only a call with the ServiceAccount's CA (never `-k`), the token from a header file and on no command line, and `--connect-timeout` and `--max-time`; a stand-in ServiceAccount directory with a token; a throwaway certificate with `DNS:mongot-public.example.com, DNS:*.apps.example.com`. Everything present: exit 0 naming the hostname and the Service; `x.apps.example.com` accepted by the wildcard; `a.b.apps.example.com` refused (one label only); `other.example.com` refused with the SANs listed and `FAILED: 1 problem`; a certificate with the hostname as CN and no SAN refused; a missing server secret named with the API's reason (`NotFound secrets "…" not found`) and the certificate then not checked; a missing client secret, trust bundle and Service counted as 3; a Forbidden reported as one; an API server that does not answer reported with curl's error, one its CA does not verify with curl's first line, and an HTTP 500 without a JSON Status as `HTTP 500` with no traceback; a secret without `tls.key`, a client secret without `tls.crt`, a trust bundle without `ca.crt` each refused; an image without `curl`, `python3` or `openssl` refused naming the image and the tool; no token file, and no CA file, refused; no certificate, key or token printed | Passed, 21 assertions |
 | C14 | The preflight script's lint | its syntax and shellcheck at warning level, both clean | Passed |
@@ -42,21 +42,25 @@ CI, offline, one row per assertion group; the commands are under "Run it" and th
 | P1 | The preflight's script in its image | the rendered script, as uid 1001 in the UBI 9 image by digest, against the stand-in API: exit 0 naming every server name; with a name the certificate lacks, `MISSING … does not name other.example.com (SANs: …)`, `FAILED: 1 problem`, exit 1 | Passed |
 
 Kind lab, on `kind-mesh/` (one cluster is enough, `mesh0`): the main chart installed by `kind-mesh/scripts/search-up.sh`
-in namespace `search` with mutual TLS from the lab's cert-manager root (`kind-mesh/manifests/20-search-certificates.yaml`),
-Route off (kind has no router), `VANITY=mongot-public.lab.example`; the commands are under "Run it":
+in namespace `search` with mutual TLS from the lab's cert-manager root (`kind-mesh/manifests/20-search-certificates.yaml`);
+this chart with `expose.type=ingress` through Cilium's own Ingress controller (class `cilium`, `expose.ingressPath=/`,
+the annotation `ingress.cilium.io/tls-passthrough: enabled`), which the lab step enables (Cilium's Helm value
+`ingressController.enabled=true`; measured on 2026-10-22: mesh0 to mesh2 have no IngressClass, and `cilium-config`
+has `kube-proxy-replacement=true`, `enable-l7-proxy=true` and no `enable-ingress-controller`). No OpenShift Route
+on kind. `VANITY=mongot-public.lab.example`; `INGRESS` is the Ingress's address; the commands are under "Run it":
 
 | # | What | Passes when | Result |
 | --- | --- | --- | --- |
-| K1 | The chart installs beside the main chart | the preflight Job succeeds (its log ends with `the certificate names every server name`); 2 pods `1/1 Running` with `app=mongot-public-lb`; the operator's `mongot-search-lb-0` pods untouched (same age) | *(run pending)* — `vanity-install.txt` |
-| K2 | A gRPC health check through our Envoy with the vanity SNI | TLSv1.3, ALPN h2, the server certificate's SANs holding `$VANITY`, and `grpc-status: 0` with a `SERVING` body from mongot; one access-log line in `deploy/mongot-public-lb` with an `upstream_host` that is a mongot pod | *(run pending)* — `vanity-reach.txt` |
-| K3 | A wrong SNI refused | the handshake closes with no certificate (`unexpected eof` / `SSL_ERROR_SYSCALL`); no access-log line; `no_filter_chain_match` up by one | *(run pending)* — `vanity-wrong-sni.txt` |
-| K4 | The spread over the mongot pods | `membership_healthy: 2` (the lab's two mongot); 30 requests reach both pods, the counts recorded (round robin per Envoy pod gives about half each; retries and a pod change move it) | *(run pending)* — `vanity-spread.txt`; screenshot `vanity-envoy-stats.png` |
+| K1 | The chart installs beside the main chart, through Cilium's Ingress | the preflight Job succeeds (its log ends with `the certificate names every server name`); 2 pods `1/1 Running` with `app=mongot-public-lb`; Ingress `mongot-public` of class `cilium` with an address; the operator's `mongot-search-lb-0` pods untouched (same age) | *(run pending)* — `vanity-install.txt` |
+| K2 | A gRPC health check by the vanity name through Cilium's Ingress | with `$VANITY` as SNI at `$INGRESS:443`: TLSv1.3, ALPN h2, our server certificate's SANs holding `$VANITY`, and `grpc-status: 0` with a `SERVING` body from mongot; one access-log line in `deploy/mongot-public-lb` with an `upstream_host` that is a mongot pod (its downstream address is Cilium's Envoy, as Cilium's docs say) | *(run pending)* — `vanity-reach.txt` |
+| K3 | A wrong SNI refused | through the Ingress, `wrong.lab.example` gets no certificate and the handshake fails before our Envoy (its `downstream_cx_total` unchanged, no access-log line: Cilium's passthrough has no rule for the name); straight at our Service through a port-forward, the handshake closes with no certificate and our listener's `no_filter_chain_match` goes up by one | *(run pending)* — `vanity-wrong-sni.txt` |
+| K4 | The spread over the mongot pods | `membership_healthy: 2` (the lab's two mongot); 30 requests through the Ingress reach both pods, the counts recorded (round robin per Envoy pod gives about half each; retries and a pod change move it) | *(run pending)* — `vanity-spread.txt`; screenshot `vanity-envoy-stats.png` |
 | K5 | The preflight refuses a missing secret | helm fails on the hook; the log says `MISSING: secret no-such-secret: NotFound secrets "no-such-secret" not found` and `FAILED: 1 problem`; the Deployment is unchanged | *(run pending)* — `vanity-preflight-missing.txt` |
 | K6 | The preflight refuses a certificate without the name | the log says `its certificate does not name other.lab.example (SANs: …)`; nothing changed | *(run pending)* — `vanity-preflight-name.txt` |
 | K7 | The operator reconciles its own Envoy and not ours | our Deployment's generation unchanged and no ownerReference after a no-op reconcile of the MongoDBSearch; the operator's Deployment still its own | *(run pending)* — `vanity-reconcile.txt` |
 | K8 | The ServiceMonitor with #191's Prometheus (if up) | the two Envoy pods scraped; `envoy_cluster_upstream_rq_total{envoy_cluster_name="mongot_rs_cluster"}` per pod | *(run pending, optional)* — screenshots `vanity-grafana-envoy.light.png`, `.dark.png` |
-| K9 | DR toggle: traffic through the vanity hostname | with `expose.enabled=false` the Service stays and nothing outside the cluster reaches it: a health check through the port-forward still answers (the Deployment is up), the counters of K4 do not move for a client that dials the Route's path, and setting it back restores it. On kind, which has no router, the toggle is seen on the objects: no Route or Ingress rendered either way; the OpenShift run (O7) is where the traffic stops and returns | *(run pending)* — `vanity-dr-toggle.txt` |
-| K10 | Uninstall leaves the main chart's objects | everything named `mongot-public…` gone; `mongot-search-lb-0`, `mongot-search-0-svc`, the three secrets, `ent-trust-bundle` and the MongoDBSearch as before; a search through the operator's Envoy still answers | *(run pending)* — `vanity-uninstall.txt` |
+| K9 | DR toggle: traffic through the vanity hostname | with `expose.enabled=false` the Ingress `mongot-public` is gone and the K2 check at `$INGRESS` fails (the connection refused, or the handshake closed with no certificate); with `true` the Ingress returns with its address and the K2 check answers `SERVING` again | *(run pending)* — `vanity-dr-toggle.txt` |
+| K10 | Uninstall leaves the main chart's objects | everything named `mongot-public…` gone, the Ingress included; `mongot-search-lb-0`, `mongot-search-0-svc`, the three secrets, `ent-trust-bundle` and the MongoDBSearch as before; a search through the operator's Envoy still answers | *(run pending)* — `vanity-uninstall.txt` |
 
 OpenShift, by the owner: the steps of [the guide](mongot-envoy-vanity-url.md#steps), recorded with the owner's output,
 company names scrubbed; screenshots in `docs/screenshots/`, light and dark where the console has both:
@@ -110,52 +114,68 @@ tar -cf - . | docker run --rm -i --user 1001 -e CLUSTER=/tmp/work/cluster -e SA_
   bash -c 'mkdir -p /tmp/work && cd /tmp/work && tar -xf - && PATH=/tmp/work/bin:$PATH bash preflight.sh; echo "exit=$?"'
 ```
 
-The kind lab, in order. Before K1, the lab's server certificate is reissued with `VANITY` added to the `dnsNames` of
+The kind lab, in order. Before K1, two things the lab step does (not this page's commands): Cilium's Ingress controller
+is enabled (its Helm value `ingressController.enabled=true` in the lab's Cilium values, which creates the IngressClass
+`cilium`), and the lab's server certificate is reissued with `VANITY` added to the `dnsNames` of
 `ent-mongot-search-lb-0-cert` in `kind-mesh/manifests/20-search-certificates.yaml` (cert-manager reissues on the
-change), and the operator's Envoy is restarted to read it; this chart's preflight needs no `oc` image (it runs
-Red Hat's public UBI 9, by digest, and reads the API server with `curl`), so the lab's own `oc` image stays as it is:
+change), the operator's Envoy restarted to read it. This chart's preflight needs no `oc` image (it runs Red Hat's
+public UBI 9, by digest, and reads the API server with `curl`); the lab's own `oc` image stays as it is:
 
 ```bash
 export KUBECONFIG=~/.kube/mongodb-mesh.config VANITY=mongot-public.lab.example
+kubectl --context kind-mesh0 get ingressclass
 kubectl --context kind-mesh0 -n search apply -f kind-mesh/manifests/20-search-certificates.yaml
 kubectl --context kind-mesh0 -n search rollout restart deploy/mongot-search-lb-0
 ```
 
-K1, the install (kind assigns no uid, and both images' own user is root, so both `runAsUser` values are set; the UBI 9
-image is pulled from Red Hat's public registry):
+K1, the install through Cilium's Ingress (kind assigns no uid, and both images' own user is root, so both `runAsUser`
+values are set; the UBI 9 image is pulled from Red Hat's public registry), then the Ingress's address:
 
 ```bash
 helm install mongot-public chart/mongot-envoy-vanity-url-helm -n search --kube-context kind-mesh0 \
-  --set vanityHostname=$VANITY --set expose.enabled=false --set envoy.runAsUser=101 --set jobs.runAsUser=1001 \
+  --set vanityHostname=$VANITY --set expose.type=ingress --set expose.ingressClassName=cilium --set expose.ingressPath=/ \
+  --set 'expose.annotations.ingress\.cilium\.io/tls-passthrough=enabled' --set envoy.runAsUser=101 --set jobs.runAsUser=1001 \
   | tee kind-mesh/output/vanity-install.txt
 kubectl --context kind-mesh0 -n search logs job/mongot-public-preflight | tee -a kind-mesh/output/vanity-install.txt
-kubectl --context kind-mesh0 -n search get pods -l app=mongot-public-lb -l app=mongot-search-lb-0 | tee -a kind-mesh/output/vanity-install.txt
+kubectl --context kind-mesh0 -n search get pods -l 'app in (mongot-public-lb, mongot-search-lb-0)' | tee -a kind-mesh/output/vanity-install.txt
+kubectl --context kind-mesh0 -n search get ingress mongot-public | tee -a kind-mesh/output/vanity-install.txt
+INGRESS=$(kubectl --context kind-mesh0 -n search get ingress mongot-public -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 ```
 
-K2, the health check through our Envoy with the vanity SNI, from the host (127.0.0.1 is the port-forward), with the
-lab root as `ca.crt`, the client certificate and key of `ent-mongot-search-lb-0-client-cert` written to `client.crt`
-and `client.key` (never printed), and the empty gRPC frame:
+If the lab gives Cilium's Ingress no address of its own, the same checks go through a port-forward to Cilium's
+Ingress Service, with `INGRESS=127.0.0.1` and port `8443` in place of `443` in every `--resolve` below:
 
 ```bash
-kubectl --context kind-mesh0 -n search port-forward svc/mongot-public-lb 27028:27028 &
+kubectl --context kind-mesh0 -n kube-system port-forward svc/cilium-ingress 8443:443 &
+```
+
+K2, the health check by the vanity name through Cilium's Ingress, from the host, with the lab root as `ca.crt`, the
+client certificate and key of `ent-mongot-search-lb-0-client-cert` written to `client.crt` and `client.key` (never
+printed), and the empty gRPC frame:
+
+```bash
 printf '\000\000\000\000\000' > empty-frame
-curl -sv --http2-prior-knowledge --cacert ca.crt --cert client.crt --key client.key --resolve $VANITY:27028:127.0.0.1 \
-  https://$VANITY:27028/grpc.health.v1.Health/Check -H 'content-type: application/grpc' --data-binary @empty-frame 2>&1 | tee kind-mesh/output/vanity-reach.txt
+curl -sv --http2 --cacert ca.crt --cert client.crt --key client.key --resolve $VANITY:443:$INGRESS \
+  https://$VANITY:443/grpc.health.v1.Health/Check -H 'content-type: application/grpc' --data-binary @empty-frame 2>&1 | tee kind-mesh/output/vanity-reach.txt
 ```
 
-K3, a wrong SNI:
+K3, a wrong SNI: through the Ingress, and straight at our Service through a port-forward:
 
 ```bash
+curl -sv --http2 --cacert ca.crt --cert client.crt --key client.key --resolve wrong.lab.example:443:$INGRESS \
+  https://wrong.lab.example:443/grpc.health.v1.Health/Check -H 'content-type: application/grpc' --data-binary @empty-frame 2>&1 | tee kind-mesh/output/vanity-wrong-sni.txt
+kubectl --context kind-mesh0 -n search port-forward svc/mongot-public-lb 27028:27028 &
 curl -sv --http2-prior-knowledge --cacert ca.crt --cert client.crt --key client.key --resolve wrong.lab.example:27028:127.0.0.1 \
-  https://wrong.lab.example:27028/grpc.health.v1.Health/Check -H 'content-type: application/grpc' --data-binary @empty-frame 2>&1 | tee kind-mesh/output/vanity-wrong-sni.txt
+  https://wrong.lab.example:27028/grpc.health.v1.Health/Check -H 'content-type: application/grpc' --data-binary @empty-frame 2>&1 | tee -a kind-mesh/output/vanity-wrong-sni.txt
 ```
 
 K4, 30 health checks as K2, then the stats of each of our pods through the API server's pod proxy (the image has no
 `curl`) and the access log's `upstream_host` counted:
 
 ```bash
+for i in $(seq 30); do curl -s --http2 --cacert ca.crt --cert client.crt --key client.key --resolve $VANITY:443:$INGRESS https://$VANITY:443/grpc.health.v1.Health/Check -H 'content-type: application/grpc' --data-binary @empty-frame -o /dev/null; done
 for P in $(kubectl --context kind-mesh0 -n search get pods -l app=mongot-public-lb -o name); do
-  kubectl --context kind-mesh0 -n search get --raw "/api/v1/namespaces/search/${P#pod/}:9901/proxy/stats" | grep -E '^cluster\.mongot_rs_cluster\.(membership_healthy|upstream_rq_total|upstream_cx_total)'
+  kubectl --context kind-mesh0 -n search get --raw "/api/v1/namespaces/search/${P#pod/}:9901/proxy/stats" | grep -E '^(listener\.0\.0\.0\.0_27028\.(downstream_cx_total|no_filter_chain_match)|cluster\.mongot_rs_cluster\.(membership_healthy|upstream_rq_total|upstream_cx_total))'
 done | tee kind-mesh/output/vanity-spread.txt
 kubectl --context kind-mesh0 -n search logs deploy/mongot-public-lb | grep -o '"upstream_host":"[^"]*"' | sort | uniq -c | tee -a kind-mesh/output/vanity-spread.txt
 ```
@@ -184,19 +204,22 @@ K8, optional, with #191's Prometheus:
 helm upgrade mongot-public chart/mongot-envoy-vanity-url-helm -n search --kube-context kind-mesh0 --reuse-values --set monitoring.serviceMonitor.enabled=true
 ```
 
-K9, the DR toggle, on kind seen on the objects (no router: no Route or Ingress either way) and on the Service:
+K9, the DR toggle: the Ingress removed, the K2 check failing, the Ingress back, the K2 check answering:
 
 ```bash
 helm upgrade mongot-public chart/mongot-envoy-vanity-url-helm -n search --kube-context kind-mesh0 --reuse-values --set expose.enabled=false 2>&1 | tee kind-mesh/output/vanity-dr-toggle.txt
-kubectl --context kind-mesh0 -n search get route,ingress,svc -l app.kubernetes.io/instance=mongot-public 2>&1 | tee -a kind-mesh/output/vanity-dr-toggle.txt
+kubectl --context kind-mesh0 -n search get ingress 2>&1 | tee -a kind-mesh/output/vanity-dr-toggle.txt
+curl -sv --http2 --cacert ca.crt --cert client.crt --key client.key --resolve $VANITY:443:$INGRESS https://$VANITY:443/grpc.health.v1.Health/Check -H 'content-type: application/grpc' --data-binary @empty-frame 2>&1 | tee -a kind-mesh/output/vanity-dr-toggle.txt
 helm upgrade mongot-public chart/mongot-envoy-vanity-url-helm -n search --kube-context kind-mesh0 --reuse-values --set expose.enabled=true 2>&1 | tee -a kind-mesh/output/vanity-dr-toggle.txt
+kubectl --context kind-mesh0 -n search get ingress mongot-public 2>&1 | tee -a kind-mesh/output/vanity-dr-toggle.txt
+curl -sv --http2 --cacert ca.crt --cert client.crt --key client.key --resolve $VANITY:443:$INGRESS https://$VANITY:443/grpc.health.v1.Health/Check -H 'content-type: application/grpc' --data-binary @empty-frame 2>&1 | tee -a kind-mesh/output/vanity-dr-toggle.txt
 ```
 
 K10, the uninstall:
 
 ```bash
 helm uninstall mongot-public -n search --kube-context kind-mesh0 | tee kind-mesh/output/vanity-uninstall.txt
-kubectl --context kind-mesh0 -n search get deploy,svc,secret,configmap,mongodbsearch | tee -a kind-mesh/output/vanity-uninstall.txt
+kubectl --context kind-mesh0 -n search get deploy,svc,ingress,secret,configmap,mongodbsearch | tee -a kind-mesh/output/vanity-uninstall.txt
 ```
 
 OpenShift: the guide's steps as written, O7 being its "Prove which path the traffic takes".
@@ -251,6 +274,9 @@ ok    expose.balance, annotations and labels reach the Route
 ok    expose.type=ingress: an Ingress and no Route
 ok    the Ingress: class openshift-default, the passthrough and balance annotations, path '' with ImplementationSpecific, no spec.tls
 ok    expose.name and expose.ingressClassName reach the Ingress
+ok    expose.ingressPath=/ renders path / with pathType Prefix (Cilium), the Cilium annotation passing, the host kept
+ok    expose.ingressPath empty keeps path '' with ImplementationSpecific
+ok    the schema refuses an expose.ingressPath other than '' or /
 ok    the schema refuses an expose.type that is neither route nor ingress
 ok    the schema refuses a balance the router does not know
 ok    expose.annotations cannot replace the Ingress's termination, balance or sync-wave; other keys pass
@@ -436,7 +462,7 @@ The suite's last line and the counts on 2026-10-22, from `kind-mesh/output/vanit
 ```text
 all vanity chart tests passed
 exit=0
-ok lines: 86
+ok lines: 89
 ```
 
 The main chart's suite: `all chart tests passed`, 233 ok, exit 0. The lab chart's suite: `== 0 failed`, 19 PASS,

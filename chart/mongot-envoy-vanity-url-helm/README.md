@@ -141,11 +141,12 @@ objects are all namespaced; there is no ClusterRole.
 | `envoy.retryPolicy.numRetries`, `.perTryTimeout` | `2`, `60s` | The operator's: a failed stream is retried on another mongot pod |
 | `envoy.timeouts.route`, `.streamIdle`, `.request`, `.upstreamIdle` | `300s` each | The operator's |
 | `envoy.podDisruptionBudget.enabled`, `.maxUnavailable` | `true`, `1` | The main chart's pattern for its Envoy pods |
-| `expose.enabled` | `true` | `false` is the troubleshooting and DR-test switch, not a way to run the chart: the Route (or Ingress) goes, the Deployment and its ClusterIP Service stay, and a mongod on the vanity hostname stops reaching search until it is set back. On a cluster without the OpenShift router (kind) it is the only way to install |
+| `expose.enabled` | `true` | `false` is the troubleshooting and DR-test switch, not a way to run the chart: the Route (or Ingress) goes, the Deployment and its ClusterIP Service stay, and a mongod on the vanity hostname stops reaching search until it is set back |
 | `expose.type` | `route` | `route` or `ingress`: see below |
 | `expose.name` | empty: `<search.name>-public` | The Route's or Ingress's name |
 | `expose.balance` | `roundrobin` | The router's balance annotation; its passthrough default `source` sent every connection to one Envoy pod ([rationale](../../docs/mongot-route-balance-rationale.md)) |
-| `expose.ingressClassName` | `openshift-default` | The Ingress's class: OpenShift's own router |
+| `expose.ingressClassName` | `openshift-default` | The Ingress's class: OpenShift's own router; `cilium` for Cilium's Ingress controller (the kind lab), with `expose.ingressPath=/` and the annotation `ingress.cilium.io/tls-passthrough: enabled` in `expose.annotations` |
+| `expose.ingressPath` | `""` | The Ingress rule's path: `""` (path `''`, `pathType: ImplementationSpecific`, what OpenShift needs to make a passthrough Route from an Ingress) or `/` (path `/`, `pathType: Prefix`, for a controller such as Cilium's, which ignores a rule whose path is not `/`). Nothing else is accepted |
 | `expose.annotations`, `.labels` | `{}` | Added to the Route or Ingress. The termination, balance and sync-wave annotations are the chart's own and are not overridable here: `expose.balance` sets the balance |
 | `preflight.enabled` | `true` | |
 | `monitoring.serviceMonitor.enabled`, `.interval`, `.labels` | `false`, `15s`, `{}` | Per-pod scraping of Envoy's `/stats/prometheus`, with the main chart's `_total` relabelling; needs user workload monitoring |
@@ -154,7 +155,8 @@ objects are all namespaced; there is no ClusterRole.
 | `jobs.resources`, `.ttlSecondsAfterFinished` | see `values.yaml` | |
 
 `values.schema.json` refuses an unknown key, an IP or a one-label name as hostname, a timeout that is not an Envoy
-duration, resources without limits, and an `expose.type` other than `route` or `ingress`.
+duration, resources without limits, an `expose.type` other than `route` or `ingress`, and an `expose.ingressPath`
+other than `""` or `/`.
 
 ## Route or Ingress
 
@@ -172,6 +174,10 @@ certificate itself, and mutual TLS 1.3 with ALPN `h2` ends at Envoy.
   the balance ([the route controller's `newRouteForIngress`](../../docs/mongot-route-balance-rationale.md#sources)).
   Without the termination annotation OpenShift makes an edge Route: no HTTP/2 to Envoy, and the router's 30 s
   `timeout server` cuts a search cursor.
+- **Another Ingress controller** (Cilium's on the kind lab): `expose.ingressClassName=cilium`, `expose.ingressPath=/`
+  (Cilium ignores a rule whose path is not `/`) and its own passthrough annotation through `expose.annotations`,
+  `ingress.cilium.io/tls-passthrough: enabled`, which needs the rule's `host`. The two OpenShift annotations the chart
+  sets are inert there. Backends then see Cilium's Envoy as the connection's source.
 
 No router timeout annotation is set: a passthrough Route's `timeout tunnel` default (1 h) covers the 300 s streams.
 Whether a router timeout annotation on an Ingress reaches the generated Route is not documented by Red Hat.

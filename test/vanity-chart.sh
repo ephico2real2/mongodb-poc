@@ -66,6 +66,12 @@ ingress="$(yq -o=json -I=0 'select(.kind == "Ingress") | {"name": .metadata.name
   && ok "the Ingress: class openshift-default, the passthrough and balance annotations, path '' with ImplementationSpecific, no spec.tls" || bad "the Ingress: ${ingress}"
 [[ "$(render --set expose.type=ingress --set expose.ingressClassName=nginx --set expose.name=alias | yq -N 'select(.kind == "Ingress") | .metadata.name + " " + .spec.ingressClassName')" == "alias nginx" ]] \
   && ok "expose.name and expose.ingressClassName reach the Ingress" || bad "expose.name/ingressClassName on the Ingress"
+# expose.ingressPath "/" (Prefix) for a controller such as Cilium's, which ignores a rule whose path is not /; its
+# passthrough annotation passes through expose.annotations, and the two OpenShift annotations stay (inert there).
+cil="$(render --set expose.type=ingress --set expose.ingressClassName=cilium --set expose.ingressPath=/ --set 'expose.annotations.ingress\.cilium\.io/tls-passthrough=enabled' | yq -N 'select(.kind == "Ingress") | [.spec.ingressClassName, .spec.rules[0].http.paths[0].path, .spec.rules[0].http.paths[0].pathType, .metadata.annotations["ingress.cilium.io/tls-passthrough"], .metadata.annotations["route.openshift.io/termination"], .spec.rules[0].host] | join(" ")' | grep .)"
+[[ "${cil}" == "cilium / Prefix enabled passthrough ${HOST}" ]] && ok "expose.ingressPath=/ renders path / with pathType Prefix (Cilium), the Cilium annotation passing, the host kept" || bad "the Cilium Ingress: ${cil}"
+[[ "$(render --set expose.type=ingress --set expose.ingressPath= | yq -N 'select(.kind == "Ingress") | .spec.rules[0].http.paths[0].pathType' | grep .)" == "ImplementationSpecific" ]] && ok "expose.ingressPath empty keeps path '' with ImplementationSpecific" || bad "ingressPath empty"
+refused "an expose.ingressPath other than '' or /" --set expose.type=ingress --set expose.ingressPath=/search
 refused "an expose.type that is neither route nor ingress" --set expose.type=loadbalancer
 refused "a balance the router does not know" --set expose.balance=sticky
 # The termination, balance and sync-wave annotations are the chart's: an expose.annotations entry of the same key

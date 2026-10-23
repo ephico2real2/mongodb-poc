@@ -141,6 +141,7 @@
         "name": {"$ref": "#/definitions/objectName"},
         "balance": {"type": "string", "enum": ["roundrobin", "leastconn", "source", "random"]},
         "ingressClassName": {"type": "string", "minLength": 1},
+        "ingressPath": {"type": "string", "enum": ["", "/"], "description": "'' (path '', ImplementationSpecific: OpenShift) or / (path /, Prefix: Cilium and the like)"},
         "annotations": {"type": "object"},
         "labels": {"type": "object"}
       }

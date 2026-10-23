@@ -15,6 +15,9 @@ ok    expose.balance, annotations and labels reach the Route
 ok    expose.type=ingress: an Ingress and no Route
 ok    the Ingress: class openshift-default, the passthrough and balance annotations, path '' with ImplementationSpecific, no spec.tls
 ok    expose.name and expose.ingressClassName reach the Ingress
+ok    expose.ingressPath=/ renders path / with pathType Prefix (Cilium), the Cilium annotation passing, the host kept
+ok    expose.ingressPath empty keeps path '' with ImplementationSpecific
+ok    the schema refuses an expose.ingressPath other than '' or /
 ok    the schema refuses an expose.type that is neither route nor ingress
 ok    the schema refuses a balance the router does not know
 ok    expose.annotations cannot replace the Ingress's termination, balance or sync-wave; other keys pass
