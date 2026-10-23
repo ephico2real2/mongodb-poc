@@ -119,7 +119,7 @@ Prose between blocks is one or two sentences; an explanation longer than that li
 
 ## The reference
 
-One H1, an intro of two to four sentences before the first H2, then the page's own H2s. Rules 3, 4, 6–8 and 11 apply.
+One H1, an intro of two to four sentences before the first H2, then the page's own H2s. Rules 3, 4, 6–8, 11 and 12 apply.
 
 ## The rules
 
@@ -156,8 +156,41 @@ One H1, an intro of two to four sentences before the first H2, then the page's o
 11. **The checks pass after writing**: `scripts/mdfmt` fixes what it can and reports the rest, and
     `test/doc-structure.py` passes (heading order, the optional H2s in their place too; one H3 per step; a `bash`
     block, a `Result:` line at the start of a line and no "first apply" or "second run" in every guide step; a
-    `bash` and a `text` block in every recorded step; no command inline). The commands are under
-    "The checks and their baseline".
+    `bash` and a `text` block in every recorded step; no command inline; the mechanical checks listed under rule
+    12). The commands are under "The checks and their baseline".
+12. **Inside a `bash` block, commands are laid out for the reader** (the owner, 2026-10-22: *"the bash commands well
+    formatted now and no bloat"*, *"Proper spacing and inline comment placed right"*; comments precede the command,
+    [Google Shell Style Guide](https://google.github.io/styleguide/shellguide.html); lines kept short,
+    [Google code samples](https://developers.google.com/style/code-samples)). Applies to `sh` and `shell` blocks too.
+    - a. No prompt (`$`, or `#` as a root prompt). One command per line. Output goes in a `text` block after it,
+      never in the same block.
+    - b. A comment that explains a command sits on its own line directly above it.
+    - c. A trailing comment only when short: all of a block's trailing comments start on one column, two spaces or
+      more after the longest commented command, and no line passes 120 characters. Otherwise it moves above.
+    - d. A command longer than 120 characters is wrapped, each wrapped line ending in a space and `\`, its
+      continuation lines indented two spaces.
+    - e. One blank line between groups of related commands; none inside a group, at the start or end of a block,
+      and never two in a row.
+    - f. No bloat: only what the reader runs. No echo banners, no commented-out commands (a comment that starts with
+      a command word and an argument reads as one, and fails as a prompt); a page's variables are set once, in
+      *Prerequisites* or its first step.
+
+    The checker enforces prompt detection using its command-word list (including `for`), trailing-comment spacing
+    and alignment, physical line length, continuation spacing and indentation outside quoted data, and leading,
+    trailing or consecutive blank lines outside quoted data and heredoc bodies. Command/output separation,
+    related-command grouping, comment placement, banners and variable reuse require review.
+
+    ```bash
+    # The namespace every later step uses
+    NS=mongodb-poc
+
+    oc get pods -n "${NS}"  # the search pods
+    oc get pvc -n "${NS}"   # their claims
+
+    # The new size, from my-values.yaml
+    helm upgrade <release> <chart> -n "${NS}" -f my-values.yaml \
+      --timeout 20m
+    ```
 
 ## Figures
 
@@ -184,13 +217,15 @@ bash test/doc-structure-test.sh                       # the checks' own tests (C
 ```
 
 The documents written before #199 do not meet the shape yet. `test/doc-structure-baseline.txt` lists their
-violations as they were (one line per inline command, one per page whose headings do not fit its kind), and
-`test/markdownlint-baseline.txt` the pages markdownlint does not pass yet. CI fails on a violation that is not
-listed, and on a listed one that is gone: after rewriting a page, prune the first list and remove the page from
-the second. On a pull request, CI also fails when either list gains an entry against the base: the first list is
-compared without the pages' paths, so a renamed page passes and a fixed violation cannot be traded for a new one; the
-second by count. A new violation is fixed in the page, never added to a list. Vendored, generated and recorded files (`ignores` in `.markdownlint-cli2.yaml`) are skipped
-by both tools.
+violations as they were (one line per inline command, one per rule-12 problem in a `bash` block, one per page whose
+headings do not fit its kind), and `test/markdownlint-baseline.txt` the pages markdownlint does not pass yet. CI
+fails on a violation that is not listed, and on a listed one that is gone: after rewriting a page, prune the first
+list and remove the page from the second. On a pull request, CI also fails when either list gains an entry against
+the base: the first list is compared without the pages' paths, so a renamed page passes and a fixed violation cannot
+be traded for a new one; the second by count. Only the kinds of entry the base has (`inline`, `shape`, `block`) are
+compared, so the pull request that adds a check also adds its kind's entries, generated once with `--list`; from the
+next pull request on, that kind cannot grow either. A new violation is fixed in the page, never added to a list.
+Vendored, generated and recorded files (`ignores` in `.markdownlint-cli2.yaml`) are skipped by both tools.
 
 ## The process
 

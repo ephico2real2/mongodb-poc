@@ -7,17 +7,24 @@
   test/doc-structure.py --prune              remove the baseline's lines that no longer occur (never adds one)
   test/doc-structure.py --guard REF          neither baseline has more entries than at REF (CI, on a pull request)
 
-Two checks:
+Three checks:
   rule 3   no command inline in prose or in a table cell: a backticked span that starts with a command word
            (kubectl, helm, oc, bash, curl, ...) or a repository script path and goes on with an argument. A name, a
            flag or a script's path alone is fine.
+  rule 12  inside every ```bash, ```sh and ```shell block: no prompt ($, or # before a command); trailing comments
+           on one column, two spaces or more after their command; no line over 120 characters; a space before a
+           continuation backslash, and the continuation line indented two spaces from its command's first line; no
+           blank line at the start or end, nor two in a row. A # inside quotes, in ${#var} or after an escaped space
+           is not a comment, << inside $(( )) is a shift, a heredoc's body is not read, and quoted data spanning
+           lines is checked for length only.
   shape    the page's kind (guide, record or reference; decided by KIND_BY_PATH, or --kind) has its H2s in order,
            and for a guide each step is "### N. <Imperative...>" with a fenced block and a "Result:" line.
 
 The baseline lists the violations that were already there when the checks came in (#199), so CI passes while the
 documents are rewritten. A violation that is not in it fails; so does a line of it that no longer occurs, so the
 list always says what is left. --guard keeps it, and test/markdownlint-baseline.txt, from growing: it compares
-counts, not lines, so a renamed page does not trip it. Exit 0 = passes, 1 = fails, 2 = usage.
+counts, not lines, so a renamed page does not trip it, and only the kinds of entry the base has, so a new check
+comes in with its baseline. Exit 0 = passes, 1 = fails, 2 = usage.
 """
 import argparse
 import collections
@@ -65,6 +72,10 @@ COMMAND = re.compile(r"""
     )
 """, re.X)
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
+SHELL = {"bash", "sh", "shell"}  # the info words of the blocks rule 12 applies to
+WIDTH = 120
+HEREDOC = re.compile(r"(?<!<)<<(?!<)-?\s*\\?(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")  # <<EOF, <<-'EOF'; not <<<
+WORD_START = " \t;&|()<>"  # a # starts a comment only at the start of a word: after one of these, or the line's start
 SPAN = re.compile(r"(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)", re.S)
 
 
@@ -90,25 +101,35 @@ def kind_of(path):
 
 
 def parse(text):
-    """The page's lines with fenced blocks and HTML comments blanked (line numbers kept), and its fences as
-    (line index of the opener, info word)."""
+    """The page's lines with fenced blocks and HTML comments blanked (line numbers kept), its fences as
+    (line index of the opener, info word), and its shell blocks as [(line index, the line as the reader copies it)]:
+    without the blockquote markers and the indent of the fence (a fence in a list item is indented)."""
+    text = text.replace("\r\n", "\n")  # the CLI's read_text() does this; a caller with the bytes may not
+    raw = text.split("\n")
     text = re.sub(r"<!--.*?-->", lambda m: re.sub(r"[^\n]", " ", m.group(0)), text, flags=re.S)
-    outside, fences, fence = [], [], None
+    outside, fences, blocks, fence, block, indent, quoted = [], [], [], None, None, 0, False
     for i, line in enumerate(text.split("\n")):
         body = re.sub(r"^\s*(?:>\s?)+", "", line)  # a fence may sit in a blockquote
         if fence:
             if re.match(rf"^\s*{re.escape(fence[0])}{{{len(fence)},}}\s*$", body):
                 fence = None
+            elif block is not None:
+                content = re.sub(r"^\s*(?:>\s?)+", "", raw[i]) if quoted else raw[i]
+                block.append((i, re.sub(rf"^ {{0,{indent}}}", "", content)))
             outside.append("")
             continue
         m = FENCE.match(body)
         if m and not (m.group(1)[0] == "`" and "`" in m.group(2)):
             fence = m.group(1)
-            fences.append((i, (m.group(2).split() or [""])[0]))
+            info = (m.group(2).split() or [""])[0]
+            fences.append((i, info))
+            block, indent, quoted = ([] if info in SHELL else None), len(body) - len(body.lstrip()), body != line
+            if block is not None:
+                blocks.append(block)
             outside.append("")
             continue
         outside.append(line)
-    return outside, fences
+    return outside, fences, blocks
 
 
 def inline_commands(outside):
@@ -134,6 +155,106 @@ def inline_commands(outside):
             if COMMAND.match(code):
                 found.append((start + unit.count("\n", 0, m.start()) + 1, code))
     return sorted(found)
+
+
+def lex(line, quote):
+    """Read one line of shell, starting in the quote the line before left open: None, ', ", `, $', or for an
+    arithmetic $(( or (( one ) per parenthesis still open. Returns (the column of the # that starts a comment, or
+    None; whether a backslash at the end continues the line; the heredocs the line opens, as (delimiter, whether
+    <<- strips its tabs); the quote left open)."""
+    i, heredocs, word_start = 0, [], quote is None
+    while i < len(line):
+        c = line[i]
+        if quote and quote.startswith(")"):  # inside arithmetic: << is a shift, # is not a comment
+            if c == "(":
+                quote += ")"
+            elif c == ")":
+                quote = quote[:-1] or None
+        elif quote == "'":
+            quote = None if c == "'" else quote
+        elif quote:  # ", ` and $' take backslash escapes
+            if c == "\\":
+                if i == len(line) - 1 and quote in ('"', "`"):
+                    return None, True, heredocs, quote
+                i += 1
+            elif c == quote[-1]:
+                quote = None
+        elif c == "\\":
+            if i == len(line) - 1:
+                return None, True, heredocs, None
+            i += 1
+            word_start = False  # an escaped space or tab does not start a word
+        elif c == "#" and word_start:
+            return i, False, heredocs, None
+        elif line.startswith("$((", i) or (word_start and line.startswith("((", i)):
+            i += 2 if c == "$" else 1
+            quote, word_start = "))", False
+        elif c == "$" and line[i + 1:i + 2] == "'":
+            quote, i, word_start = "$'", i + 1, False
+        elif c in "'\"`":
+            quote, word_start = c, False
+        elif m := HEREDOC.match(line, i):
+            heredocs.append((m.group(2), line.startswith("<<-", i)))
+            i, word_start = m.end(), False
+            continue
+        else:
+            word_start = c in WORD_START
+        i += 1
+    return None, False, heredocs, quote
+
+
+def bash_block(block):
+    """(line index, normalised description, detail) for each rule-12 problem in one shell block, given as
+    [(line index, line)]. A heredoc's body is not read; a line that starts inside a quote is data, so it is not
+    checked for a prompt, a continuation's indent or as a blank line."""
+    found, trailing = [], []
+    quote, pending, heredoc, start, continued, blank = None, [], None, 0, False, False
+    for k, (i, line) in enumerate(block):
+        if heredoc:  # it ends on its delimiter alone; <<- strips leading tabs, nothing else
+            delimiter, strip_tabs = heredoc
+            if (line.lstrip("\t") if strip_tabs else line) == delimiter:
+                heredoc = pending.pop(0) if pending else None
+            blank = False
+            continue
+        if not line.strip() and quote is None:  # a blank line in quoted data is the data's
+            where = "start" if k == 0 else "end" if k == len(block) - 1 else None
+            if where:
+                found.append((i, f"a blank line at the {where} of the block", ""))
+            elif blank:
+                found.append((i, "two blank lines in a row", ""))
+            blank, continued = True, False
+            continue
+        blank = False
+        if len(line) > WIDTH:
+            found.append((i, f"a line over {WIDTH} characters", f" ({len(line)})"))
+        indent = len(line) - len(line.lstrip(" "))
+        if quote is None:
+            if continued and indent != start + 2:
+                found.append((i, "a continuation line not indented two spaces from the command's first line",
+                              f" ({indent - start})"))
+            if not continued:
+                start = indent
+                prompt = re.match(r"\s*(\$|#)\s+(.*)", line)
+                if prompt and prompt.group(1) == "$":
+                    found.append((i, "a prompt at the start of a line", " ($)"))
+                elif prompt and COMMAND.match(prompt.group(2)):  # rules 12a and 12f
+                    found.append((i, "a prompt at the start of a line", " (# before a command: a root prompt or a "
+                                  "commented-out command)"))
+        col, continued, opened, quote = lex(line, quote)
+        if continued and quote is None and not line.endswith(" \\"):
+            found.append((i, "no space before a continuation backslash", ""))
+        if col is not None and line[:col].strip():
+            trailing.append((i, col))
+            if not line[:col].endswith("  "):
+                found.append((i, "fewer than two spaces before a trailing comment", ""))
+        pending += opened
+        if pending and not continued and quote is None:
+            heredoc = pending.pop(0)
+    off = [(i, col) for i, col in trailing if col != trailing[0][1]]
+    if off:
+        found.append((off[0][0], "trailing comments not on one column",
+                      f" (columns {', '.join(str(c + 1) for c in sorted({c for _, c in trailing}))})"))
+    return found
 
 
 def shape(outside, fences, kind):
@@ -183,11 +304,14 @@ def shape(outside, fences, kind):
 
 def check(path, kind):
     """The page's violations, in the baseline's format, and the messages that explain them."""
-    outside, fences = parse((ROOT / path).read_text(encoding="utf-8"))
+    outside, fences, blocks = parse((ROOT / path).read_text(encoding="utf-8"))
     entries, messages = [], []
     for line, code in inline_commands(outside):
         entries.append(f"{path}\tinline\t{code}")
         messages.append(f"{path}:{line}: command inline (rule 3, move it to a ```bash block): `{code}`")
+    for i, what, detail in sorted(p for b in blocks for p in bash_block(b)):
+        entries.append(f"{path}\tblock\t{what}")
+        messages.append(f"{path}:{i + 1}: bash block (rule 12): {what}{detail}")
     errors = shape(outside, fences, kind)
     if errors:
         entries.append(f"{path}\tshape\t{kind}")
@@ -200,11 +324,17 @@ def read_baseline():
     return [l for l in lines if l and not l.startswith("#")], [l for l in lines if l.startswith("#")]
 
 
+def entry_kind(line):
+    """The kind of a structure-baseline entry: inline, shape or block."""
+    return (line.split("\t") + [""])[1]
+
+
 def guard(ref):
     """Neither baseline gains an entry against ref. The structure baseline is compared without the pages' paths, so a
     renamed page passes and a fixed violation cannot be traded for a new one; the markdownlint baseline, which is
-    paths only, by count. A baseline that is not at ref yet has nothing to compare; a ref that is not here is an
-    error, never a pass."""
+    paths only, by count. Only the structure baseline's entry kinds that are at ref are compared, so the pull request
+    that brings in a check also brings in its baseline; from the next one on, that kind is compared too. A baseline
+    that is not at ref yet has nothing to compare; a ref that is not here is an error, never a pass."""
     if subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"], cwd=ROOT,
                       capture_output=True).returncode:
         print(f"--guard: {ref} is not a commit in this clone; fetch it first", file=sys.stderr)
@@ -222,13 +352,18 @@ def guard(ref):
             print(f"{rel}: {len(now)} entries; not at {ref}, nothing to compare")
             continue
         then = entries(shown.stdout)
-        added = []
+        added, unknown = [], []
         if path == BASELINE:
+            kinds = {entry_kind(l) for l in then}
+            unknown = [l for l in now if entry_kind(l) not in kinds]
+            now = [l for l in now if entry_kind(l) in kinds]
             unpathed = [collections.Counter(l.split("\t", 1)[-1] for l in ls) for ls in (now, then)]
             added = sorted((unpathed[0] - unpathed[1]).elements())
         verdict = ("GREW, fix the page instead" if len(now) > len(then)
                    else f"NEW, fix the page instead: {added}" if added else "ok")
-        print(f"{rel}: {len(now)} entries, {len(then)} at {ref}: {verdict}")
+        new_kinds = sorted({entry_kind(l) for l in unknown})
+        print(f"{rel}: {len(now)} entries, {len(then)} at {ref}: {verdict}"
+              + (f"; {len(unknown)} of a kind not at {ref} {new_kinds}, not compared" if unknown else ""))
         failed |= verdict != "ok"
     return 1 if failed else 0
 
@@ -275,7 +410,8 @@ def main():
     for entry in sorted(new.elements()):
         path, what, detail = entry.split("\t")
         explain = [m for m in messages[path] if (what == "inline" and m.endswith(f"`{detail}`"))
-                   or (what == "shape" and m.startswith(f"{path}: {detail}:"))]
+                   or (what == "shape" and m.startswith(f"{path}: {detail}:"))
+                   or (what == "block" and re.search(rf"\(rule 12\): {re.escape(detail)}(?: \(|$)", m))]
         print("NEW:", *sorted(set(explain)) or [entry], sep="\n  ")
     for entry in sorted(gone.elements()):
         print(f"FIXED, still in {BASELINE.relative_to(ROOT)} (remove the line, or run --prune): {entry}")

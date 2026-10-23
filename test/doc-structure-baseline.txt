@@ -1,7 +1,12 @@
 # test/doc-structure.py's baseline: the violations that were in the documents when the checks came in (#199).
-# One per line: <file> TAB inline TAB <the command> (rule 3), or <file> TAB shape TAB <kind> (headings and steps).
+# One per line: <file> TAB inline TAB <the command> (rule 3), <file> TAB block TAB <the problem> (rule 12, once
+# per occurrence), or <file> TAB shape TAB <kind> (headings and steps).
 # Only ever remove lines: rewrite a document to the doc-guide skill, then run test/doc-structure.py --prune.
 # A new violation is never added here; it is fixed in the document.
+chart/mongodb-search-helm/README.md	block	a line over 120 characters
+chart/mongodb-search-helm/README.md	block	a line over 120 characters
+chart/mongodb-search-helm/README.md	block	a line over 120 characters
+chart/mongodb-search-helm/README.md	block	trailing comments not on one column
 chart/mongodb-search-helm/README.md	inline	helm install
 chart/mongodb-search-helm/README.md	inline	helm uninstall
 chart/mongodb-search-helm/README.md	inline	helm upgrade
@@ -9,6 +14,11 @@ chart/mongodb-search-helm/README.md	inline	oc adm policy add-role-to-user monito
 chart/mongodb-search-helm/README.md	inline	oc auth can-i get persesdashboards
 chart/mongodb-search-helm/README.md	inline	oc create
 chart/mongodb-search-helm/docs/testing-mongot-storage-resize.md	shape	record
+chart/mongodb-search-helm/volume-expansion-runbook.md	block	a line over 120 characters
+chart/mongodb-search-helm/volume-expansion-runbook.md	block	a line over 120 characters
+chart/mongodb-search-helm/volume-expansion-runbook.md	block	a line over 120 characters
+chart/mongot-envoy-vanity-url-helm/README.md	block	a line over 120 characters
+chart/mongot-envoy-vanity-url-helm/README.md	block	a line over 120 characters
 docs/building-the-kind-mesh-lab.md	inline	DOCKER_HOST=unix://$HOME/.colima/mongodb-mesh/docker.sock docker image inspect quay.io/cilium/cilium-dev:remote-workload-cm-9e5a34a5 quay.io/cilium/clustermesh-apiserver:remote-workload-cm-9e5a34a5 --format '{{.RepoTags}}'
 docs/building-the-kind-mesh-lab.md	inline	DOCKER_HOST=unix://$HOME/.colima/mongodb-mesh/docker.sock docker run --rm --entrypoint cilium-agent quay.io/cilium/cilium-dev:remote-workload-cm-9e5a34a5 --version
 docs/building-the-kind-mesh-lab.md	inline	cilium clustermesh status --context kind-mesh0
@@ -43,6 +53,35 @@ docs/building-the-kind-mesh-lab.md	inline	kubectl get ciliumendpoints -A -o json
 docs/building-the-kind-mesh-lab.md	inline	make dev-docker-image
 docs/building-the-kind-mesh-lab.md	inline	make docker-clustermesh-apiserver-image
 docs/building-the-kind-mesh-lab.md	shape	guide
+docs/index-names-exporter-design.md	block	a line over 120 characters
+docs/mongot-envoy-mtls-cert-runbook.md	block	a line over 120 characters
+docs/mongot-envoy-mtls-cert-runbook.md	block	a line over 120 characters
+docs/mongot-envoy-mtls-cert-runbook.md	block	a line over 120 characters
+docs/mongot-envoy-mtls-cert-runbook.md	block	trailing comments not on one column
+docs/mongot-envoy-mtls-fresh-install-runbook.md	block	a line over 120 characters
+docs/mongot-envoy-mtls-fresh-install-runbook.md	block	a line over 120 characters
+docs/mongot-envoy-mtls-fresh-install-runbook.md	block	a line over 120 characters
+docs/mongot-envoy-mtls-fresh-install-runbook.md	block	a line over 120 characters
+docs/mongot-envoy-mtls-fresh-install-runbook.md	block	a line over 120 characters
+docs/mongot-envoy-mtls-fresh-install-runbook.md	block	trailing comments not on one column
+docs/mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/prerequisite-and-setup-doc.md	block	a line over 120 characters
+docs/prerequisite-and-setup-doc.md	block	a line over 120 characters
+docs/prerequisite-and-setup-doc.md	block	a line over 120 characters
+docs/prerequisite-and-setup-doc.md	block	a line over 120 characters
+docs/prerequisite-and-setup-doc.md	block	a prompt at the start of a line
+docs/prerequisite-and-setup-doc.md	block	trailing comments not on one column
+docs/testing-kind-mesh-cilium.md	block	a line over 120 characters
+docs/testing-kind-mesh-cilium.md	block	a line over 120 characters
+docs/testing-kind-mesh-cilium.md	block	a line over 120 characters
+docs/testing-kind-mesh-cilium.md	block	trailing comments not on one column
 docs/testing-kind-mesh-cilium.md	inline	CLIENT_OPTS='<options>' kind-mesh-cilium/drills.sh primary freeze|kill|partition
 docs/testing-kind-mesh-cilium.md	inline	chart-up.sh mesh2
 docs/testing-kind-mesh-cilium.md	inline	cilium status
@@ -91,6 +130,7 @@ docs/testing-kind-mesh-cilium.md	inline	scripts/wan.sh cut
 docs/testing-kind-mesh-cilium.md	inline	wan.sh delay mesh0 50
 docs/testing-kind-mesh-cilium.md	inline	wan.sh off
 docs/testing-kind-mesh-cilium.md	shape	record
+docs/testing-kind-mesh.md	block	a continuation line not indented two spaces from the command's first line
 docs/testing-kind-mesh.md	inline	CLIENT_OPTS="connectTimeoutMS=5000&socketTimeoutMS=5000" kind-mesh/drills.sh cluster
 docs/testing-kind-mesh.md	inline	colima delete
 docs/testing-kind-mesh.md	inline	docker pause
@@ -106,3 +146,57 @@ docs/testing-kind-mesh.md	inline	kubectl --context kind-mesh0 -n observability p
 docs/testing-kind-mesh.md	inline	kubectl --context kind-mesh0 -n search port-forward svc/mongot-gui 8080:80
 docs/testing-kind-mesh.md	inline	limactl disk resize
 docs/testing-kind-mesh.md	shape	record
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
+docs/testing-mongot-envoy-vanity-url.md	block	a line over 120 characters
