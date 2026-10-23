@@ -303,6 +303,7 @@ All three clusters run in one VM: the links between them have no delay, and they
 this lab's, a floor rather than a forecast.
 
 What the primary drill records since this work (`kind-mesh-cilium/drills.sh primary`):
+
 - the two other members' replication log from the moment mesh0 is lost (`election_trace`);
 - when the new primary was elected, and when it **accepted writes**, both from its own log;
 - each write's own `_id`, so every acknowledged write is checked by id, and the failed ones that are in the database
@@ -481,7 +482,6 @@ docker run --rm --entrypoint cilium-agent quay.io/cilium/cilium-dev:remote-workl
 On 2026-10-22 the two builds took 97 s and 16 s (the builder's caches warm). The fork's change has its unit tests
 (`go test ./pkg/identity/ ./pkg/ipcache/ ./clustermesh-apiserver/clustermesh/ ./pkg/clustermesh/kvstoremesh/...`:
 all pass); its design was made twice, by two models, and reviewed by a third.
-
 
 - `kind-mesh/versions.env`: `CILIUM_IMAGE=quay.io/cilium/cilium-dev:remote-workload-cm-9e5a34a5`,
   `CILIUM_CLUSTERMESH_IMAGE=quay.io/cilium/clustermesh-apiserver:remote-workload-cm-9e5a34a5`, `CILIUM_IMAGES_LOCAL=1`

@@ -175,6 +175,7 @@ Measured on 2026-10-21 (`docs/testing-kind-mesh-cilium.md`). On the wire, during
 between nodes, and none of cleartext gRPC, mongod, VXLAN or the search text (`kind-mesh-cilium/output/wire-check.txt`).
 
 What this trades:
+
 - **MongoDB's own TLS on the search hop is replaced by WireGuard between nodes.** Inside a node, mongod and mongot speak
   cleartext gRPC. mongod's connections to the replica set keep TLS.
 - **Cilium's L7 load balancing is beta in 1.20.** Its generated configuration drops a backend after 2 connection failures

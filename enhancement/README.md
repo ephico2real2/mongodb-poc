@@ -451,10 +451,10 @@ shared data, **Released**. Switch it to `Delete` first only if you mean to lose 
 
 <!-- walkthrough: skip -->
 ```console
-$ oc delete sc nfs-csi
-$ oc delete -f manifests/11-privileged-scc.yaml
-$ oc delete -f manifests/10-nfs-server.yaml
-$ helm uninstall csi-driver-nfs --namespace kube-system
+oc delete sc nfs-csi
+oc delete -f manifests/11-privileged-scc.yaml
+oc delete -f manifests/10-nfs-server.yaml
+helm uninstall csi-driver-nfs --namespace kube-system
 ```
 
 The default class needs nothing: step A6 already put it back.

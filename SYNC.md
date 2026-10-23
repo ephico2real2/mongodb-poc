@@ -5,7 +5,7 @@ of what is happening inside it. Every number and every claim below was measured 
 running cluster; the commands are included so you can reproduce them. The replica set was
 then at 192.168.64.4; the address shown is the one it has since 2026-10-11, 192.168.64.9.
 
-### The figures
+## The figures
 
 Both diagrams in this document are in the repository and render inline below. To open them
 full size, or to read the SVG source:
@@ -73,7 +73,6 @@ So a search is:
 <!-- markdownlint-disable MD033 -->
 <img alt="An application runs a dollar-search against mongod. mongod rewrites it into internalSearchMongotRemote, which goes through Envoy to one mongot pod and returns matching ids and scores, then internalSearchIdLookup, which fetches the real documents by id from the collection inside mongod." src="docs/diagrams/search-and-sync/search-execution.light.png">
 <!-- markdownlint-enable MD033 -->
-
 
 | Stage | Where it runs | What it produces |
 |---|---|---|

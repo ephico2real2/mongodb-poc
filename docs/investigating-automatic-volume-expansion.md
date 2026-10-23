@@ -146,6 +146,7 @@ delete pod/mongot-search-0-2: yes                        delete persistentvolume
 delete pod/mongot-search-lb-0-778dd7bffc-27wks: no       delete statefulsets.apps: no
 delete statefulset.apps/mongot-search-0: yes
 ```
+
  Storage classes are read with what
 OpenShift gives every signed-in identity (the `basic-user` cluster role, bound to `system:authenticated`).
 

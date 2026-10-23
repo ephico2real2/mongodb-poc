@@ -318,7 +318,6 @@ and because `mongod` must send a hostname as SNI, **`mongotHost` cannot be an IP
 Manifest: `manifests/80-route-passthrough.yaml`. Verified serving `$search` and
 `$vectorSearch` with TLS, distributing **13 / 13 / 14** of 40 across three `mongot`.
 
-
 ## Behind a custom F5
 
 The lab reaches the Route through a gvproxy forwarder. In an enterprise the same Route sits
@@ -619,7 +618,6 @@ three IPs on the cert (`192.168.127.100` the VIP, `192.168.64.1` what the record
 from the mongod containers, `192.168.127.2` what `*.apps-crc.testing` resolves to in-cluster)
 are there so IP-based probes don't *additionally* fail certificate validation.
 
-
 ### Which one is actually in use?
 
 Both paths can exist at once and both terminate on the same Envoy pods, so the port number
@@ -700,7 +698,6 @@ the *next* connection lands. So:
 connections, since it counts what actually matters — open sessions per backend — rather than
 assigning them in turn.
 
-
 ---
 
 ## How this evolved: one mongot behind a Route, to three behind Envoy
@@ -769,7 +766,6 @@ open on both: no TLS on any leg, and no `$search` query has been executed.
 <!-- markdownlint-disable MD033 -->
 <img alt="Pointing the entry Service at the mongot headless Service instead of the Envoy pods still serves queries successfully, but sends every one of them to a single mongot while the others idle." src="docs/diagrams/mongot-openshift/l4-bypass.light.png">
 <!-- markdownlint-enable MD033 -->
-
 
 The entry point — VIP or Route — is **L4**. One TCP connection lands on exactly one
 backend pod. That is harmless here **only because Envoy sits behind it**:
@@ -909,7 +905,6 @@ a 90-second load measures 37.1 / 31.3 / 31.6 %. The figure and the numbers behin
 `/metrics` when the query returned. Per-request truth comes from the access log, which is
 what `app/trace-query.sh` reads.
 
-
 ### Envoy's access log is the best instrument
 
 Envoy emits **one access-log record per request**, each carrying `upstream_host`. That
@@ -998,7 +993,6 @@ address `mongot` by **name**, that name must equal `externalHostname`, and it mu
 SAN on Envoy's server certificate. All three, or nothing connects.
 
 ### The certificate map
-
 
 TLS in managed mode is **all-or-nothing**: setting `spec.security.tls` turns it on for
 *both* legs (client→Envoy and Envoy→`mongot`). It is not per-leg.
@@ -1163,4 +1157,3 @@ each in a fixed shape, and every command in a `bash` fenced block, never inline.
 | **TLS** | ✅ **verified** on both entry paths — see [TLS.md](TLS.md) |
 | **`$search` query** | ✅ **verified** — returns correct results with relevance scores |
 | **Stream distribution** | ✅ **measured** — 41 queries spread **13 / 14 / 14** across three `mongot` |
-

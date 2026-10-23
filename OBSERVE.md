@@ -46,7 +46,7 @@ vector_index   queryable=true   status=READY
 > `mongod` forwards it to `searchIndexManagementHostAndPort`, so the call traverses the
 > VIP (or Route) and Envoy exactly as a query does. Reaching `QUERYABLE` means the chain
 > works before you have run a single search.
-
+>
 > **Why two datasets.** The curated 24 are positioned so nearest-neighbour ordering is
 > assertable. The bulk 20,000 are generated from the *same five theme vectors*, so an
 > unscoped vector assertion would start failing once they are loaded — which is why the
@@ -181,7 +181,6 @@ That is fine for what this GUI is for — showing one request landing on one pod
 *ranking* in vector mode is only meaningful for those ten words. Real semantic search needs an
 embedding model; the hand-set vectors in `mongodb/data/incidents.json` are the same
 simplification, documented in [USECASE.md](USECASE.md).
-
 
 ### How it works, and why that matters
 
