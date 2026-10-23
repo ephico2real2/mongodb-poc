@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# mdfmt — format and lint this repository's Markdown, the same way every time, without rewriting what people wrote.
+#   mdfmt check [paths…]   report every problem; exit 1 if any
+#   mdfmt fix   [paths…]   fix in place what can be fixed mechanically, then report what remains
+# Defaults to every tracked *.md. The rules are in .markdownlint-cli2.yaml (recorded evidence, vendored and generated
+# files are never touched). The engine is markdownlint-cli2: blank lines around headings, lists and fences; trailing
+# spaces; consistent list markers and heading style; ordered-list numbering; no hard tabs — and nothing else.
+# Taken from cilium-implementation-poc's scripts/mdfmt.
+#
+# Why not prettier: measured on this repository (prettier 3.9.10, --prose-wrap preserve, 2026-10-22), it rewrote 185
+# of README.md's 1,159 lines: 133 table rows padded to the widest cell, so a one-line change to a cell rewrites the
+# whole table; *emphasis* rewritten as _emphasis_; and the comments inside YAML examples respaced. None of it is
+# formatting anyone asked for. If a reflow is ever wanted, run it on one file on purpose:
+# `prettier --prose-wrap preserve --print-width 120 <file>`.
+# Requires: markdownlint-cli2 (npm i -g markdownlint-cli2; CI pins the version in .github/workflows/ci.yml).
+set -uo pipefail; cd "$(dirname "$(readlink -f "$0")")/.." || exit 2
+MODE="${1:-check}"; shift || true
+if [ $# -gt 0 ]; then FILES=("$@"); else IFS=$'\n' read -r -d '' -a FILES < <(git ls-files '*.md' && printf '\0'); fi
+command -v markdownlint-cli2 >/dev/null || { echo "mdfmt: markdownlint-cli2 not installed (npm i -g markdownlint-cli2)" >&2; exit 2; }
+case "$MODE" in
+  check) markdownlint-cli2 "${FILES[@]}" ;;
+  fix)   markdownlint-cli2 --fix "${FILES[@]}"; echo "--- remaining (not auto-fixable) ---"; markdownlint-cli2 "${FILES[@]}" 2>&1 | tail -3 ;;
+  *)     echo "usage: mdfmt check|fix [paths…]" >&2; exit 2 ;;
+esac

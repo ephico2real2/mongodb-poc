@@ -1,0 +1,305 @@
+# test/doc-structure.py's baseline: the violations that were in the documents when the checks came in (#199).
+# One per line: <file> TAB inline TAB <the command> (rule 3), or <file> TAB shape TAB <kind> (headings and steps).
+# Only ever remove lines: rewrite a document to the doc-guide skill, then run test/doc-structure.py --prune.
+# A new violation is never added here; it is fixed in the document.
+DEMO.md	inline	./search-cli.sh -v -y 1990 space
+DEMO.md	inline	./search-cli.sh -v space -y 1990
+DEMO.md	inline	oc get pods -n mongodb-poc
+DEMO.md	inline	oc logs mongot-search-0-0 -n mongodb-poc \| grep -i auth
+DEMO.md	inline	oc rollout restart deploy/mongot-search-lb-0 -n mongodb-poc
+DEPLOYMENT.md	inline	crc version
+DEPLOYMENT.md	inline	mongodb/vm.sh address
+DEPLOYMENT.md	inline	oc get node crc -o jsonpath='{.metadata.labels}' | grep exclude-from-external
+DEPLOYMENT.md	inline	oc get nodes
+DEPLOYMENT.md	inline	oc get packagemanifest mongodb-kubernetes -n openshift-marketplace
+ENTERPRISE-TLS.md	inline	bash > oc patch mongodbsearch mongot -n $NS --type=json -p '[{"op":"remove","path":"/spec/security"}]' >
+ENTERPRISE-TLS.md	inline	cat company-root internal-root > ca.crt
+ENTERPRISE-TLS.md	inline	cat company-root.crt internal-root.crt
+ENTERPRISE-TLS.md	inline	kubectl patch
+ENTERPRISE-TLS.md	inline	oc apply
+ENTERPRISE-TLS.md	inline	oc apply -f manifests/80-route-passthrough.yaml
+ENTERPRISE-TLS.md	inline	oc patch … remove /spec/security
+ENTERPRISE-TLS.md	inline	oc rollout restart deploy/mongot-search-lb-0
+ENTERPRISE-TLS.md	inline	oc rollout restart deploy/mongot-search-lb-0 -n mongodb-poc
+ENVOY-FLOW.md	inline	./test/run.sh distribution
+ENVOY-FLOW.md	inline	./test/run.sh tls
+ENVOY-FLOW.md	inline	oc rollout restart deploy/mongot-search-lb-0
+OBSERVE.md	inline	./app/sync-probe.sh -n 3
+OBSERVE.md	inline	./app/trace-query.sh "term"
+OBSERVE.md	inline	./app/trace-query.sh -n 12 -q "pods"
+OBSERVE.md	inline	cd mongodb && ./scripts/verify-search.sh
+README.md	inline	./test/run.sh entry
+README.md	inline	./test/run.sh entry
+README.md	inline	openssl s_client
+REQUEST-PATH.md	inline	oc get route -n mongodb-poc
+REQUEST-PATH.md	inline	oc get svc mongot-grpc-lb
+REQUEST-PATH.md	inline	oc logs
+REQUEST-PATH.md	inline	ss -tn
+REQUEST-PATH.md	inline	ss -tn state established
+SYNC.md	inline	./app/sync-probe.sh -r
+TESTING.md	inline	./test/run.sh entry
+TESTING.md	inline	oc adm top pods
+TESTING.md	inline	oc delete pod mongot-search-0-1 -n mongodb-poc
+TESTING.md	inline	oc logs mongot-search-0-0 -n mongodb-poc | grep -i auth
+TESTING.md	inline	oc rollout restart deploy/mongot-search-lb-0 -n mongodb-poc
+TLS.md	inline	openssl x509
+TLS.md	inline	openssl x509 -req
+app/gui/README.md	inline	oc apply
+app/gui/README.md	inline	oc apply
+chart/mongodb-search-helm/README.md	inline	helm install
+chart/mongodb-search-helm/README.md	inline	helm uninstall
+chart/mongodb-search-helm/README.md	inline	helm upgrade
+chart/mongodb-search-helm/README.md	inline	oc adm policy add-role-to-user monitoring-rules-view <user> -n $NS
+chart/mongodb-search-helm/README.md	inline	oc auth can-i get persesdashboards
+chart/mongodb-search-helm/README.md	inline	oc create
+chart/mongodb-search-helm/argocd.md	inline	helm get values
+chart/mongodb-search-helm/argocd.md	inline	helm install
+chart/mongodb-search-helm/argocd.md	inline	helm install
+chart/mongodb-search-helm/argocd.md	inline	helm install --take-ownership
+chart/mongodb-search-helm/argocd.md	inline	helm uninstall
+chart/mongodb-search-helm/argocd.md	inline	helm uninstall
+chart/mongodb-search-helm/argocd.md	inline	helm uninstall
+chart/mongodb-search-helm/argocd.md	inline	helm uninstall
+chart/mongodb-search-helm/argocd.md	inline	helm upgrade
+chart/mongodb-search-helm/argocd.md	inline	helm upgrade
+chart/mongodb-search-helm/argocd.md	inline	oc delete csv
+chart/mongodb-search-helm/argocd.md	inline	oc delete csv mongodb-kubernetes.v<version> -n <namespace>
+chart/mongodb-search-helm/argocd.md	inline	oc delete mongodbsearch
+chart/mongodb-search-helm/argocd.md	inline	oc delete mongodbsearch
+chart/mongodb-search-helm/argocd.md	inline	oc delete mongodbsearch <search.name> -n <namespace>
+chart/mongodb-search-helm/argocd.md	inline	oc get application <name> -n <argo cd's namespace> -o jsonpath='{.status.operationState.phase}: {.status.operationState.message}'
+chart/mongodb-search-helm/argocd.md	inline	oc get mongodbsearch -n <namespace>
+chart/mongodb-search-helm/argocd.md	inline	oc logs -n <namespace> job/mongot-mongodb-search-helm-preflight
+chart/mongodb-search-helm/argocd.md	inline	oc logs -n <namespace> job/mongot-mongodb-search-helm-wait
+chart/mongodb-search-helm/argocd.md	inline	test/run.sh search
+chart/mongodb-search-helm/argocd.md	inline	test/run.sh search
+chart/mongodb-search-helm/disruption-budgets.md	inline	oc adm drain
+chart/mongodb-search-helm/disruption-budgets.md	inline	oc delete pod
+chart/mongodb-search-helm/disruption-budgets.md	inline	oc get pdb
+chart/mongodb-search-helm/docs/testing-mongot-storage-resize.md	shape	record
+chart/mongodb-search-helm/mongot-settings.md	inline	helm upgrade
+chart/mongodb-search-helm/production-settings.md	inline	helm uninstall
+chart/mongodb-search-helm/production-settings.md	inline	oc get storageclass thin-csi -o jsonpath='{.allowVolumeExpansion} {.reclaimPolicy}'
+chart/mongodb-search-helm/scaling.md	inline	helm upgrade
+chart/mongodb-search-helm/scaling.md	inline	helm upgrade
+chart/mongodb-search-helm/scaling.md	inline	oc scale statefulset mongot-search-0 --replicas=2
+chart/mongodb-search-helm/volume-auto-expansion.md	inline	expand-mongot-volumes.sh --expand
+chart/mongodb-search-helm/volume-auto-expansion.md	inline	helm upgrade
+chart/mongodb-search-helm/volume-auto-expansion.md	inline	oc logs job/<release>-mongodb-search-helm-expand-volumes -n <namespace>
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	bash $X --check --statefulset $STS
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	helm uninstall
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	helm upgrade
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	helm upgrade
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	helm upgrade
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	helm upgrade
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc delete
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc delete
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc delete statefulset --cascade=orphan
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc delete statefulset ...
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc delete statefulset <name> -n <namespace> --cascade=orphan --wait=false
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc describe pod
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc describe pvc
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc describe pvc
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc describe pvc <claim> -n $TargetNamespace
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc edit
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc get pods -n <the operator's namespace> \| grep mongodb-kubernetes-operator
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc get pvc,pv
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc patch
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc rollout restart statefulset ...
+chart/mongodb-search-helm/volume-expansion-runbook.md	inline	oc scale statefulset ...
+chart/mongodb-search-helm/volume-expansion-runbook.md	shape	guide
+chart/mongodb-search-helm/volumes.md	inline	helm install
+chart/mongodb-search-helm/volumes.md	inline	helm install
+chart/mongodb-search-helm/volumes.md	inline	helm uninstall
+chart/mongodb-search-helm/volumes.md	inline	helm uninstall
+chart/mongodb-search-helm/volumes.md	inline	helm uninstall
+chart/mongodb-search-helm/volumes.md	inline	helm uninstall
+chart/mongodb-search-helm/volumes.md	inline	helm uninstall
+chart/mongodb-search-helm/volumes.md	inline	oc delete mongodbsearch
+chart/mongodb-search-helm/volumes.md	inline	oc delete mongodbsearch
+chart/mongodb-search-helm/volumes.md	inline	oc delete mongodbsearch <search.name> -n <namespace>
+chart/mongodb-search-helm/volumes.md	inline	oc delete pod
+chart/mongodb-search-helm/volumes.md	inline	oc scale statefulset
+docs/building-the-kind-mesh-lab.md	inline	DOCKER_HOST=unix://$HOME/.colima/mongodb-mesh/docker.sock docker image inspect quay.io/cilium/cilium-dev:remote-workload-cm-9e5a34a5 quay.io/cilium/clustermesh-apiserver:remote-workload-cm-9e5a34a5 --format '{{.RepoTags}}'
+docs/building-the-kind-mesh-lab.md	inline	DOCKER_HOST=unix://$HOME/.colima/mongodb-mesh/docker.sock docker run --rm --entrypoint cilium-agent quay.io/cilium/cilium-dev:remote-workload-cm-9e5a34a5 --version
+docs/building-the-kind-mesh-lab.md	inline	cilium clustermesh status --context kind-mesh0
+docs/building-the-kind-mesh-lab.md	inline	cilium status
+docs/building-the-kind-mesh-lab.md	inline	cilium-build.sh upgrade
+docs/building-the-kind-mesh-lab.md	inline	cilium-dbg service list
+docs/building-the-kind-mesh-lab.md	inline	colima list
+docs/building-the-kind-mesh-lab.md	inline	colima list
+docs/building-the-kind-mesh-lab.md	inline	docker rmi
+docs/building-the-kind-mesh-lab.md	inline	export KUBECONFIG=~/.kube/mongodb-mesh.config
+docs/building-the-kind-mesh-lab.md	inline	helm upgrade --reuse-values
+docs/building-the-kind-mesh-lab.md	inline	hubble list nodes
+docs/building-the-kind-mesh-lab.md	inline	kind-mesh-cilium/drills.sh mongot mesh2 both
+docs/building-the-kind-mesh-lab.md	inline	kind-mesh-cilium/drills.sh mongot mesh2 both
+docs/building-the-kind-mesh-lab.md	inline	kind-mesh-cilium/drills.sh primary freeze
+docs/building-the-kind-mesh-lab.md	inline	kind-mesh-cilium/drills.sh spread mesh2
+docs/building-the-kind-mesh-lab.md	inline	kind-mesh-cilium/scripts/cilium-build.sh drill
+docs/building-the-kind-mesh-lab.md	inline	kind-mesh-cilium/scripts/cilium-build.sh drill
+docs/building-the-kind-mesh-lab.md	inline	kind-mesh-cilium/scripts/cilium-build.sh measure after
+docs/building-the-kind-mesh-lab.md	inline	kind-mesh-cilium/scripts/cilium-build.sh measure before
+docs/building-the-kind-mesh-lab.md	inline	kind-mesh-cilium/scripts/mongot-reach.sh open
+docs/building-the-kind-mesh-lab.md	inline	kind-mesh-cilium/scripts/mongot-reach.sh policy
+docs/building-the-kind-mesh-lab.md	inline	kind-mesh-cilium/scripts/mongot-reach.sh policy
+docs/building-the-kind-mesh-lab.md	inline	kind-mesh/scripts/rebuild.sh --yes
+docs/building-the-kind-mesh-lab.md	inline	kubectl --context kind-mesh0 -n kube-system exec ds/cilium -c cilium-agent -- cilium-agent --version
+docs/building-the-kind-mesh-lab.md	inline	kubectl -n search get subscription mongodb-kubernetes
+docs/building-the-kind-mesh-lab.md	inline	kubectl apply
+docs/building-the-kind-mesh-lab.md	inline	kubectl apply
+docs/building-the-kind-mesh-lab.md	inline	kubectl apply -f kind-mesh-cilium/manifests/60-mongot-ingress.yaml
+docs/building-the-kind-mesh-lab.md	inline	kubectl get ciliumendpoints -A -o jsonpath='{.items[*].status.workloads}'
+docs/building-the-kind-mesh-lab.md	inline	make dev-docker-image
+docs/building-the-kind-mesh-lab.md	inline	make docker-clustermesh-apiserver-image
+docs/building-the-kind-mesh-lab.md	shape	guide
+docs/business-case-search-on-cilium-cluster-mesh.md	inline	openssl s_client
+docs/grafana-to-perses-conversion.md	inline	helm template
+docs/grafana-to-perses-conversion.md	inline	helm uninstall
+docs/grafana-to-perses-conversion.md	inline	helm upgrade
+docs/grafana-to-perses-conversion.md	inline	helm upgrade
+docs/grafana-to-perses-conversion.md	inline	oc auth can-i get persesdashboards -n mongodb-poc --as developer
+docs/grafana-to-perses-conversion.md	inline	oc create rolebinding
+docs/grafana-to-perses-conversion.md	inline	oc delete rolebinding console-validate-view console-validate-persesdashboard-viewer-role console-validate-persesdatasource-viewer-role -n mongodb-poc
+docs/grafana-to-perses-conversion.md	inline	oc get persesdashboard,persesdatasource
+docs/grafana-to-perses-conversion.md	inline	python3 -m venv .venv && .venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.4"
+docs/investigating-automatic-volume-expansion.md	inline	oc auth can-i delete ... --as=<the account>
+docs/investigating-automatic-volume-expansion.md	inline	oc delete
+docs/investigating-automatic-volume-expansion.md	inline	oc delete
+docs/investigating-automatic-volume-expansion.md	inline	oc get --raw /metrics
+docs/mongot-envoy-mtls-cert-runbook.md	inline	oc apply
+docs/mongot-envoy-mtls-cert-runbook.md	inline	oc delete pod mongot-search-0-0 -n $NS
+docs/mongot-envoy-mtls-cert-runbook.md	inline	oc get pods -l app=mongot-search-lb-0 -n $NS
+docs/mongot-envoy-mtls-cert-runbook.md	inline	oc get sts/mongot-search-0 deploy/mongot-search-lb-0 -n $NS -o yaml | grep -B2 -A2 ent-trust-bundle
+docs/mongot-envoy-mtls-cert-runbook.md	inline	openssl pkey
+docs/mongot-envoy-mtls-cert-runbook.md	inline	openssl version
+docs/mongot-envoy-mtls-cert-runbook.md	inline	openssl x509
+docs/mongot-envoy-mtls-cert-runbook.md	inline	openssl x509 -in "$MONGOT_PEM"
+docs/mongot-envoy-mtls-cert-runbook.md	inline	openssl x509 -in file.pem -out file.crt
+docs/mongot-envoy-mtls-cert-runbook.md	inline	openssl x509 -noout -subject -text
+docs/mongot-envoy-mtls-cert-runbook.md	shape	guide
+docs/mongot-envoy-mtls-fresh-install-runbook.md	inline	helm install
+docs/mongot-envoy-mtls-fresh-install-runbook.md	inline	oc create secret tls
+docs/mongot-envoy-mtls-fresh-install-runbook.md	inline	oc describe pod
+docs/mongot-envoy-mtls-fresh-install-runbook.md	inline	oc get secret -n $NS \| grep ent-mongot-search
+docs/mongot-envoy-mtls-fresh-install-runbook.md	inline	openssl pkey
+docs/mongot-envoy-mtls-fresh-install-runbook.md	inline	openssl x509 -noout -subject -text
+docs/mongot-envoy-mtls-fresh-install-runbook.md	shape	guide
+docs/mongot-recommended-alerts-comparison.md	inline	kind-mesh-cilium/drills.sh primary kill
+docs/mongot-route-balance-rationale.md	inline	oc logs
+docs/prerequisite-and-setup-doc.md	inline	git would track
+docs/prerequisite-and-setup-doc.md	inline	helm install
+docs/prerequisite-and-setup-doc.md	inline	helm install
+docs/prerequisite-and-setup-doc.md	inline	helm install
+docs/prerequisite-and-setup-doc.md	inline	helm install
+docs/prerequisite-and-setup-doc.md	inline	helm install --dry-run=server
+docs/prerequisite-and-setup-doc.md	inline	helm uninstall
+docs/prerequisite-and-setup-doc.md	inline	helm upgrade
+docs/prerequisite-and-setup-doc.md	inline	helm upgrade
+docs/prerequisite-and-setup-doc.md	inline	helm upgrade
+docs/prerequisite-and-setup-doc.md	inline	helm upgrade --set search.replicas=3
+docs/prerequisite-and-setup-doc.md	inline	oc apply
+docs/prerequisite-and-setup-doc.md	inline	oc apply
+docs/prerequisite-and-setup-doc.md	inline	oc create
+docs/prerequisite-and-setup-doc.md	inline	oc create
+docs/prerequisite-and-setup-doc.md	inline	oc delete csv mongodb-kubernetes.v1.13.0 -n $NS
+docs/prerequisite-and-setup-doc.md	inline	oc delete pod <name>-search-0-0 -n $NS
+docs/prerequisite-and-setup-doc.md	inline	oc describe pod
+docs/prerequisite-and-setup-doc.md	inline	oc get pods -n $NS
+docs/prerequisite-and-setup-doc.md	shape	guide
+docs/reference-architecture-search-on-cluster-mesh.md	inline	kind-mesh-cilium/drills.sh primary
+docs/reference-architecture-search-on-cluster-mesh.md	inline	kind-mesh/drills.sh failback
+docs/reference-architecture-search-on-cluster-mesh.md	inline	kubectl top
+docs/shared-services-on-cluster-mesh.md	inline	cilium-dbg status
+docs/shared-services-on-cluster-mesh.md	inline	git grep
+docs/testing-kind-mesh-cilium.md	inline	CLIENT_OPTS='<options>' kind-mesh-cilium/drills.sh primary freeze|kill|partition
+docs/testing-kind-mesh-cilium.md	inline	chart-up.sh mesh2
+docs/testing-kind-mesh-cilium.md	inline	cilium status
+docs/testing-kind-mesh-cilium.md	inline	cilium-dbg bpf lb list
+docs/testing-kind-mesh-cilium.md	inline	cilium-dbg encrypt status \| grep -q
+docs/testing-kind-mesh-cilium.md	inline	docker pause
+docs/testing-kind-mesh-cilium.md	inline	docker system df
+docs/testing-kind-mesh-cilium.md	inline	drills.sh load-only <c> 10
+docs/testing-kind-mesh-cilium.md	inline	drills.sh mongot mesh2 both
+docs/testing-kind-mesh-cilium.md	inline	drills.sh mongot mesh2 one
+docs/testing-kind-mesh-cilium.md	inline	export KUBECONFIG=~/.kube/mongodb-mesh.config
+docs/testing-kind-mesh-cilium.md	inline	helm history
+docs/testing-kind-mesh-cilium.md	inline	helm rollback cilium <revision> -n kube-system --kube-context kind-<c> --wait
+docs/testing-kind-mesh-cilium.md	inline	helm upgrade --install
+docs/testing-kind-mesh-cilium.md	inline	kind load
+docs/testing-kind-mesh-cilium.md	inline	kind load docker-image
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/drills.sh failback mesh2
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/drills.sh mongot mesh2 both
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/drills.sh mongot mesh2 both
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/drills.sh mongot mesh2 both
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/drills.sh mongot mesh2 both
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/drills.sh mongot mesh2 one
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/drills.sh mongot mesh2 one
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/drills.sh primary
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/drills.sh spread mesh2
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/scripts/chart-up.sh mesh2
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/scripts/cilium-build.sh drill
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/scripts/cilium-build.sh drill
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/scripts/cilium-build.sh drill
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/scripts/cilium-build.sh measure after
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/scripts/cilium-build.sh measure after
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/scripts/cilium-build.sh measure before
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/scripts/cilium-build.sh measure before
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/scripts/cilium-build.sh upgrade
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/scripts/cilium-build.sh upgrade 2>&1 \| tee kind-mesh-cilium/output/cilium-build-190.log
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/scripts/drill-capture.sh <tag> mongot mesh2 both
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh-cilium/scripts/mongot-reach.sh open
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh/scripts/rebuild.sh --yes
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh/scripts/rebuild.sh --yes --reclaim-docker
+docs/testing-kind-mesh-cilium.md	inline	kind-mesh/scripts/rebuild.sh --yes 2>&1 \| tee kind-mesh/output/rebuild.log
+docs/testing-kind-mesh-cilium.md	inline	kubectl -n search delete subscription mongodb-kubernetes
+docs/testing-kind-mesh-cilium.md	inline	kubectl -n search get subscription mongodb-kubernetes
+docs/testing-kind-mesh-cilium.md	inline	kubectl delete pod mongo-0
+docs/testing-kind-mesh-cilium.md	inline	mongot-reach.sh policy
+docs/testing-kind-mesh-cilium.md	inline	scripts/wan.sh cut
+docs/testing-kind-mesh-cilium.md	inline	wan.sh delay mesh0 50
+docs/testing-kind-mesh-cilium.md	inline	wan.sh off
+docs/testing-kind-mesh-cilium.md	shape	record
+docs/testing-kind-mesh.md	inline	CLIENT_OPTS="connectTimeoutMS=5000&socketTimeoutMS=5000" kind-mesh/drills.sh cluster
+docs/testing-kind-mesh.md	inline	colima delete
+docs/testing-kind-mesh.md	inline	docker pause
+docs/testing-kind-mesh.md	inline	export KUBECONFIG=~/.kube/mongodb-mesh.config
+docs/testing-kind-mesh.md	inline	hubble list nodes
+docs/testing-kind-mesh.md	inline	kind-mesh/drills.sh cluster
+docs/testing-kind-mesh.md	inline	kind-mesh/drills.sh envoy mesh2
+docs/testing-kind-mesh.md	inline	kind-mesh/drills.sh failback mesh2
+docs/testing-kind-mesh.md	inline	kind-mesh/drills.sh mongot mesh2 both
+docs/testing-kind-mesh.md	inline	kind-mesh/drills.sh mongot mesh2 one
+docs/testing-kind-mesh.md	inline	kind-mesh/scripts/colima-up.sh && kind-mesh/scripts/up.sh
+docs/testing-kind-mesh.md	inline	kubectl --context kind-mesh0 -n observability port-forward svc/grafana 3000:80
+docs/testing-kind-mesh.md	inline	kubectl --context kind-mesh0 -n search port-forward svc/mongot-gui 8080:80
+docs/testing-kind-mesh.md	shape	record
+enhancement/README.md	inline	cd enhancement
+enhancement/README.md	inline	crc config --help
+enhancement/README.md	inline	crc start
+enhancement/README.md	inline	crc start
+enhancement/README.md	inline	crc stop
+enhancement/README.md	inline	helm version
+enhancement/README.md	inline	oc apply
+enhancement/README.md	inline	oc apply
+enhancement/README.md	inline	oc delete
+enhancement/README.md	inline	oc diff
+enhancement/README.md	inline	oc logs -n kube-system deploy/csi-nfs-controller -c nfs
+enhancement/README.md	inline	oc logs -n kube-system ds/csi-nfs-node -c nfs
+enhancement/README.md	inline	oc whoami
+enhancement/README.md	inline	sudo options/macbook-nfs/mac-nfs-server.sh
+kind-mesh-cilium/README.md	inline	CLIENT_OPTS='…' drills.sh primary freeze\|kill\|partition
+kind-mesh-cilium/README.md	inline	DRILL_TAG=policy drills.sh mongot mesh2 one
+kind-mesh-cilium/README.md	inline	drills.sh mongot mesh2 both
+kind-mesh-cilium/README.md	inline	kind-mesh-cilium/drills.sh mongot mesh2 both
+kind-mesh-cilium/README.md	inline	kind-mesh-cilium/scripts/cilium-build.sh measure before
+kind-mesh-cilium/README.md	inline	kind-mesh-cilium/scripts/mongot-reach.sh open
+kind-mesh-cilium/README.md	inline	kind-mesh/scripts/rebuild.sh --yes
+kind-mesh-cilium/README.md	inline	kubectl --context kind-meshN apply -f kind-mesh-cilium/manifests/60-mongot-ingress.yaml
+kind-mesh-cilium/README.md	inline	mongot-reach.sh policy
+kind-mesh-cilium/README.md	inline	scripts/drill-capture.sh <tag> mongot mesh2 both
+kind-mesh/README.md	inline	colima delete --profile mongodb-mesh --data
+kind-mesh/README.md	inline	kind-mesh/drills.sh envoy mesh2
+kind-mesh/README.md	inline	kind-mesh/scripts/rebuild.sh --yes
+kind-mesh/README.md	inline	kind-mesh/scripts/rebuild.sh --yes
+kind-mesh/README.md	inline	kubectl --context kind-<cluster> -n mongodb delete pod mongo-0

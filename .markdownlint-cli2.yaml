@@ -1,0 +1,23 @@
+# markdownlint-cli2: the rules this repository's pages follow, run by scripts/mdfmt (see why it is not prettier there)
+# and by CI. Taken from cilium-implementation-poc's file; rules that would force mass edits of recorded evidence or
+# of the repository's established style are off, with the reason. test/doc-structure.py reads the ignores below.
+config:
+  default: true
+  MD013: false        # line length: commands, tables and URLs are long on purpose
+  MD024: { siblings_only: true }   # "Build" and "Step 1" headings repeat across sections, not within one
+  MD033:              # inline HTML: figures embed the light PNG with a plain <img>; <details> folds long output
+    allowed_elements: [img, picture, source, br, details, summary]
+  MD040: false        # fenced code without a language: recorded-output blocks written before the guide format
+  MD041: false        # first line need not be a heading
+  MD036: false        # emphasis used as a heading: "**Expect:**"-style lead-ins are a deliberate style
+  MD034: false        # bare URLs appear inside recorded output
+  MD060: false        # table column style: tables are not padded (see scripts/mdfmt)
+ignores:
+  # vendored: the Hubble Observer chart, copied from upstream (UPSTREAM-COMMIT.txt)
+  - "kind-mesh/observability/chart/**"
+  # recorded evidence: the lab's outputs are kept exactly as they were written
+  - "kind-mesh/output/**"
+  - "kind-mesh-cilium/output/**"
+  # generated: the operator's CRDs, refreshed by scripts/refresh-mongodbsearch-crd.sh
+  - "chart/mongodb-search-helm/crds/**"
+  - "node_modules/**"
