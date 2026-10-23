@@ -13,7 +13,7 @@ ok()   { printf 'ok    %s\n' "$1"; }
 bad()  { printf 'FAIL  %s\n' "$1"; fails=$((fails + 1)); }
 # The namespace and search name of the capture (docs/envoy/cds.json names mongot-search-0-svc.mongodb-poc), so a
 # render with these values must equal it everywhere but server_names.
-render() { helm template mongot-public "${CHART}" -n mongodb-poc --set "publicHostname=${HOST}" "$@" 2>&1; }
+render() { helm template mongot-public "${CHART}" -n mongodb-poc --set "vanityHostname=${HOST}" "$@" 2>&1; }
 objects() { render "$@" | yq -N '.kind + "/" + .metadata.name' 2>/dev/null | grep -v '^null' | LC_ALL=C sort; }
 has()  { grep -qx "$2" <<<"$1"; }
 # Only the schema's own refusal counts: a render that fails for another reason is a failure, not a refusal.
@@ -23,9 +23,9 @@ tmp="$(mktemp -d)"; trap 'rm -rf "${tmp}"' EXIT
 for t in helm python3 yq openssl; do command -v "$t" >/dev/null || { echo "needs $t"; exit 1; }; done
 
 # ------------------------------------------------------------------------------------------------ lint, defaults
-helm lint "${CHART}" --set "publicHostname=${HOST}" >/dev/null 2>&1 && ok "helm lint" || bad "helm lint: $(helm lint "${CHART}" --set "publicHostname=${HOST}" 2>&1 | tail -3 | tr '\n' ' ')"
-helm template x "${CHART}" -n x >/dev/null 2>&1 && bad "the defaults alone are refused (no publicHostname)" || ok "the defaults alone are refused (no publicHostname)"
-out="$(render)"; [[ $? -eq 0 ]] && ok "renders with publicHostname alone" || bad "renders with publicHostname alone: ${out:0:300}"
+helm lint "${CHART}" --set "vanityHostname=${HOST}" >/dev/null 2>&1 && ok "helm lint" || bad "helm lint: $(helm lint "${CHART}" --set "vanityHostname=${HOST}" 2>&1 | tail -3 | tr '\n' ' ')"
+helm template x "${CHART}" -n x >/dev/null 2>&1 && bad "the defaults alone are refused (no vanityHostname)" || ok "the defaults alone are refused (no vanityHostname)"
+out="$(render)"; [[ $? -eq 0 ]] && ok "renders with vanityHostname alone" || bad "renders with vanityHostname alone: ${out:0:300}"
 # The package: no key, certificate or picture, whatever was left in the chart's directory (a copy is packaged).
 pkg="$(mktemp -d)"; cp -R "${CHART}" "${pkg}/chart"
 for f in left.pem left.key left.crt key.pass docs/left.png a.secret.yaml; do mkdir -p "$(dirname "${pkg}/chart/${f}")"; echo x > "${pkg}/chart/${f}"; done
@@ -49,14 +49,14 @@ o="$(objects --set envoy.podDisruptionBudget.enabled=false)"; ! grep -q 'PodDisr
 ! render | grep -q 'kind: ClusterRole' && ok "no ClusterRole or ClusterRoleBinding anywhere" || bad "the chart renders cluster-scoped RBAC"
 # The namespace: the value wins, and without it every object follows helm's -n; the cluster's FQDN follows it too.
 ns_of() { grep -E '^  namespace: ' | sort -u | tr -d ' ' | tr '\n' ' '; }
-[[ "$(helm template x "${CHART}" -n elsewhere --set "publicHostname=${HOST}" --set namespace=team-a | ns_of)" == "namespace:team-a " ]] \
-  && ok "the namespace value places every object, whatever -n says" || bad "namespace value: $(helm template x "${CHART}" -n elsewhere --set "publicHostname=${HOST}" --set namespace=team-a | ns_of)"
+[[ "$(helm template x "${CHART}" -n elsewhere --set "vanityHostname=${HOST}" --set namespace=team-a | ns_of)" == "namespace:team-a " ]] \
+  && ok "the namespace value places every object, whatever -n says" || bad "namespace value: $(helm template x "${CHART}" -n elsewhere --set "vanityHostname=${HOST}" --set namespace=team-a | ns_of)"
 [[ "$(render | ns_of)" == "namespace:mongodb-poc " ]] && ok "an empty namespace value falls back to -n" || bad "namespace fallback: $(render | ns_of)"
 
 # ------------------------------------------------------------------------------------------------ the Route, the Ingress
 route="$(render -s templates/20-route.yaml | yq -o=json -I=0 '{"host": .spec.host, "to": .spec.to.name, "port": .spec.port.targetPort, "tls": .spec.tls.termination, "wildcard": .spec.wildcardPolicy, "balance": .metadata.annotations["haproxy.router.openshift.io/balance"]}')"
 [[ "${route}" == "{\"host\":\"${HOST}\",\"to\":\"mongot-public-lb\",\"port\":\"mongot-grpc\",\"tls\":\"passthrough\",\"wildcard\":\"None\",\"balance\":\"roundrobin\"}" ]] \
-  && ok "the Route: host publicHostname, passthrough, no wildcard, balance roundrobin, to the chart's own Service" || bad "the Route: ${route}"
+  && ok "the Route: host vanityHostname, passthrough, no wildcard, balance roundrobin, to the chart's own Service" || bad "the Route: ${route}"
 [[ "$(render -s templates/20-route.yaml --set expose.balance=leastconn --set expose.annotations.a=b --set expose.labels.l=v | yq -o=json -I=0 '[.metadata.annotations["haproxy.router.openshift.io/balance"], .metadata.annotations.a, .metadata.labels.l]')" == '["leastconn","b","v"]' ]] \
   && ok "expose.balance, annotations and labels reach the Route" || bad "expose.balance/annotations/labels on the Route"
 ing="$(render --set expose.type=ingress)"
@@ -74,9 +74,9 @@ refused "a balance the router does not know" --set expose.balance=sticky
   && ok "expose.annotations cannot replace the Ingress's termination, balance or sync-wave; other keys pass" || bad "reserved annotations on the Ingress: $(render --set expose.type=ingress --set 'expose.annotations.route\.openshift\.io/termination=edge' | yq -N 'select(.kind == "Ingress") | .metadata.annotations' | tr '\n' ';')"
 [[ "$(render -s templates/20-route.yaml --set 'expose.annotations.haproxy\.router\.openshift\.io/balance=source' | grep -c 'haproxy.router.openshift.io/balance')" == 1 ]] && [[ "$(render -s templates/20-route.yaml --set 'expose.annotations.haproxy\.router\.openshift\.io/balance=source' | yq '.metadata.annotations["haproxy.router.openshift.io/balance"]')" == roundrobin ]] \
   && ok "expose.annotations cannot replace the Route's balance, and the key is rendered once" || bad "reserved annotations on the Route"
-refused "an uppercase publicHostname" --set publicHostname=MONGOT.example.com
-refused "a trailing dot in publicHostname" --set publicHostname=mongot.example.com.
-refused "an uppercase server name" --set "publicHostname=${HOST}" --set "serverNames[0]=${HOST}" --set 'serverNames[1]=ALIAS.example.com'
+refused "an uppercase vanityHostname" --set vanityHostname=MONGOT.example.com
+refused "a trailing dot in vanityHostname" --set vanityHostname=mongot.example.com.
+refused "an uppercase server name" --set "vanityHostname=${HOST}" --set "serverNames[0]=${HOST}" --set 'serverNames[1]=ALIAS.example.com'
 refused "a trailing dot in a server name" --set "serverNames[0]=${HOST}" --set 'serverNames[1]=alias.example.com.'
 
 # ------------------------------------------------------------------------------------------------ the secrets, the mounts, the Service
@@ -124,8 +124,8 @@ mon="$(render --set monitoring.serviceMonitor.enabled=true --set monitoring.serv
 ! grep -q 'kind: Route' <<<"$(render --set monitoring.serviceMonitor.enabled=true -s templates/30-monitoring.yaml)" && ok "never a Route to the admin port" || bad "a Route in the monitoring template"
 
 # ------------------------------------------------------------------------------------------------ the schema
-refused "an IP as publicHostname" --set publicHostname=10.0.0.1
-refused "a one-label publicHostname" --set publicHostname=mongot
+refused "an IP as vanityHostname" --set vanityHostname=10.0.0.1
+refused "a one-label vanityHostname" --set vanityHostname=mongot
 refused "an unknown top-level key" --set externalHostname=x.example.com
 refused "an unknown key under envoy" --set envoy.imagePullPolicy=Always
 refused "an unknown key under expose" --set expose.host=x.example.com
@@ -137,11 +137,11 @@ refused "a search.name of 44 characters" --set "search.name=$(printf 'n%.0s' {1.
 refused "a mongot.port above 65535" --set mongot.port=70000
 refused "an invalid namespace" --set namespace=Not_A_Namespace
 refused "a server name given twice (Envoy refuses overlapping filter chains)" --set "serverNames[0]=${HOST}" --set "serverNames[1]=${HOST}"
-# The Route sends clients with publicHostname as SNI: a serverNames list without it would pass the preflight (which
+# The Route sends clients with vanityHostname as SNI: a serverNames list without it would pass the preflight (which
 # checks serverNames) while Envoy refused every client of the Route.
 out="$(render --set 'serverNames[0]=a.example.com')"; rc=$?
-[[ ${rc} -ne 0 ]] && grep -q "serverNames must hold publicHostname" <<<"${out}" \
-  && ok "a serverNames list without publicHostname is refused, by name" || bad "serverNames without publicHostname: rc ${rc}, $(tail -1 <<<"${out}")"
+[[ ${rc} -ne 0 ]] && grep -q "serverNames must hold vanityHostname" <<<"${out}" \
+  && ok "a serverNames list without vanityHostname is refused, by name" || bad "serverNames without vanityHostname: rc ${rc}, $(tail -1 <<<"${out}")"
 
 # ------------------------------------------------------------------------------------------------ the Envoy config
 # The rendered bootstrap against the operator's captured configuration, field by field. What may differ, and
@@ -150,7 +150,7 @@ out="$(render --set 'serverNames[0]=a.example.com')"; rc=$?
 # release's namespace. With the capture's own namespace and search name even those two are equal.
 bootstrap() { render -s templates/10-envoy-config.yaml "$@" | yq -N '.data["bootstrap.yaml"]' | yq -o=json -I=0 .; }
 bootstrap > "${tmp}/bootstrap.json"
-bootstrap --set namespace=team-a --set search.name=srch --set publicHostname=a.example.com --set 'serverNames[0]=a.example.com' --set 'serverNames[1]=b.example.com' > "${tmp}/bootstrap-other.json"
+bootstrap --set namespace=team-a --set search.name=srch --set vanityHostname=a.example.com --set 'serverNames[0]=a.example.com' --set 'serverNames[1]=b.example.com' > "${tmp}/bootstrap-other.json"
 python3 - "${CAPTURE}" "${tmp}" "${HOST}" <<'PY' && ok "the bootstrap equals the operator's captured config except server_names (and, in another namespace, the endpoint and SNI)" || bad "the bootstrap differs from the capture beyond the allowed fields (above)"
 import json, sys
 capture, tmp, host = sys.argv[1:4]
@@ -215,7 +215,7 @@ if not (sn == ["a.example.com", "b.example.com"] and ep["address"] == sni == "sr
     print(f"other values: server_names {sn}, endpoint {ep}, sni {sni}"); ok = False
 first = load(f"{tmp}/bootstrap.json")
 if first["static_resources"]["listeners"][0]["filter_chains"][0]["filter_chain_match"]["server_names"] != [host]:
-    print("server_names is not [publicHostname] by default"); ok = False
+    print("server_names is not [vanityHostname] by default"); ok = False
 sys.exit(0 if ok else 1)
 PY
 [[ "$(bootstrap --set envoy.retryPolicy.numRetries=5 --set envoy.retryPolicy.perTryTimeout=15s --set envoy.timeouts.route=120s --set envoy.timeouts.streamIdle=121s --set envoy.timeouts.request=122s --set envoy.timeouts.upstreamIdle=123s --set mongot.port=27029 \
@@ -279,18 +279,43 @@ else
 fi
 # The stand-in curl: GET <api>/api/v1/namespaces/<ns>/<kind>/<name> answers 200 with ${CLUSTER}/<kind>.<name>.json,
 # 403 with a Forbidden Status when ${CLUSTER}/<kind>.<name>.forbidden exists, else 404 with a NotFound Status, as
-# the API server does; with ${CLUSTER}/down it fails as curl does when nothing answers. -o, -w, -H and --cacert are
-# read as curl reads them. The stand-in ServiceAccount directory holds a token the output must never show.
+# the API server does; with ${CLUSTER}/server-error it answers 500 with an HTML body, as a proxy in the way would;
+# with ${CLUSTER}/down it fails as curl does when nothing answers, and with ${CLUSTER}/badca as
+# curl 7.76.1 (UBI 9's) does when the CA does not verify the server, its paragraph included. It answers only the
+# call the API server would: the ServiceAccount's CA as --cacert (never -k), the token from a header file and on no
+# command line, and both time limits (the Job's deadline is 180 s; curl's own connect timeout is 300 s).
+# The stand-in ServiceAccount directory holds a token the output must never show.
 mkdir -p "${tmp}/bin" "${tmp}/cluster" "${tmp}/sa"
 printf 'stand-in-token\n' > "${tmp}/sa/token"; printf 'stand-in-ca\n' > "${tmp}/sa/ca.crt"
 cat > "${tmp}/bin/curl" <<'CURL'
 #!/usr/bin/env bash
-out=""; url=""
+token="$(cat "${SA_DIR}/token")"
+[[ "$*" == *"${token}"* ]] && { echo "stand-in curl: the token is on the command line" >&2; exit 2; }
+out=""; url=""; cacert=""; header=""; limits=0
 while [ $# -gt 0 ]; do
-  case "$1" in -o) out="$2"; shift ;; -w|-H|--cacert) shift ;; http*) url="$1" ;; esac
+  case "$1" in
+    -o) out="$2"; shift ;;
+    -w) shift ;;
+    -H) header="$2"; shift ;;
+    --cacert) cacert="$2"; shift ;;
+    --connect-timeout|--max-time) limits=$((limits + 1)); shift ;;
+    -k|--insecure) echo "stand-in curl: -k, the API server unverified" >&2; exit 2 ;;
+    http*) url="$1" ;;
+  esac
   shift
 done
+[ "${cacert}" = "${SA_DIR}/ca.crt" ] || { echo "stand-in curl: --cacert ${cacert:-unset}, not the ServiceAccount's ca.crt" >&2; exit 2; }
+[ "${header#@}" != "${header}" ] && [ "$(cat "${header#@}")" = "Authorization: Bearer ${token}" ] \
+  || { echo "stand-in curl: the token is not sent from a header file" >&2; exit 2; }
+[ "${limits}" = 2 ] || { echo "stand-in curl: no --connect-timeout and --max-time" >&2; exit 2; }
+[ -e "${CLUSTER}/server-error" ] && { printf '<html>Unavailable</html>' > "$out"; printf 500; exit 0; }
 [ -e "${CLUSTER}/down" ] && { echo "curl: (7) Failed to connect to kubernetes.default.svc port 443: Connection refused" >&2; exit 7; }
+if [ -e "${CLUSTER}/badca" ]; then
+  printf '%s\n' 'curl: (60) SSL certificate problem: unable to get local issuer certificate' 'More details here: https://curl.se/docs/sslcerts.html' '' \
+    'curl failed to verify the legitimacy of the server and therefore could not' 'establish a secure connection to it. To learn more about this situation and' \
+    'how to fix it, please visit the web page mentioned above.' >&2
+  exit 60
+fi
 rest="${url#*/api/v1/namespaces/*/}"; kind="${rest%%/*}"; name="${rest#*/}"
 if [ -e "${CLUSTER}/${kind}.${name}.forbidden" ]; then
   printf '{"kind":"Status","status":"Failure","message":"%s \\"%s\\" is forbidden: User \\"system:serviceaccount:ns:sa\\" cannot get resource \\"%s\\" in API group \\"\\" in the namespace \\"ns\\"","reason":"Forbidden","code":403}' "$kind" "$name" "$kind" > "$out"; printf 403
@@ -349,6 +374,9 @@ seed; touch "${tmp}/cluster/secrets.ent-mongot-search-lb-0-client-cert.forbidden
 seed; touch "${tmp}/cluster/down"
 [[ "$(preflight)" == 1 ]] && grep -q 'the API server did not answer: curl: (7)' "${tmp}/preflight.out" && grep -q 'FAILED: 4 problem' "${tmp}/preflight.out" \
   && ok "preflight: an API server that does not answer is reported with curl's error, for each object" || bad "preflight: API down: $(grep 'MISSING\|FAILED' "${tmp}/preflight.out" | tr '\n' ' ')"
+seed; touch "${tmp}/cluster/badca"
+[[ "$(preflight)" == 1 ]] && grep -q 'the API server did not answer: curl: (60) SSL certificate problem: unable to get local issuer certificate$' "${tmp}/preflight.out" && grep -q 'FAILED: 4 problem' "${tmp}/preflight.out" \
+  && ok "preflight: an API server its CA does not verify is refused with curl's first line, the error's name" || bad "preflight: CA not verifying: $(grep 'MISSING\|FAILED' "${tmp}/preflight.out" | tr '\n' ' ')"
 seed; object secrets ent-mongot-search-lb-0-client-cert tls.crt="${tmp}/server.crt"
 [[ "$(preflight)" == 1 ]] && grep -q 'secret ent-mongot-search-lb-0-client-cert: no key tls.key' "${tmp}/preflight.out" \
   && ok "preflight: a secret without tls.key is refused" || bad "preflight: missing key: $(grep MISSING "${tmp}/preflight.out" | tr '\n' ' ')"
@@ -374,8 +402,16 @@ for missing in curl python3 openssl; do
     && grep -q "REFUSED: the Job image example/ubi:1 has no ${missing}: jobs.image needs curl, python3 and openssl" "${tmp}/preflight.out" \
     && ok "preflight: an image without ${missing} is refused, naming the image and the tool" || bad "preflight without ${missing}: $(tail -1 "${tmp}/preflight.out")"
 done
-[[ "$(preflight SA_DIR="${tmp}/no-such-dir")" == 1 ]] && grep -q 'REFUSED: no ServiceAccount token' "${tmp}/preflight.out" \
+[[ "$(preflight SA_DIR="${tmp}/no-such-dir")" == 1 ]] && grep -q 'REFUSED: no readable ServiceAccount token or CA' "${tmp}/preflight.out" \
   && ok "preflight: without a ServiceAccount token it refuses, never guesses" || bad "preflight without a token: $(tail -1 "${tmp}/preflight.out")"
+seed; mv "${tmp}/sa/ca.crt" "${tmp}/sa/ca.saved"
+[[ "$(preflight)" == 1 ]] && grep -q 'REFUSED: no readable ServiceAccount token or CA' "${tmp}/preflight.out" \
+  && ok "preflight: a ServiceAccount directory without the API server's CA is refused, by name" || bad "preflight without the SA CA: $(tail -1 "${tmp}/preflight.out")"
+mv "${tmp}/sa/ca.saved" "${tmp}/sa/ca.crt"
+# An HTTP error without a JSON Status (a proxy's HTML page): the status code is reported, never a traceback.
+seed; touch "${tmp}/cluster/server-error"
+[[ "$(preflight)" == 1 ]] && grep -q 'MISSING: secret ent-mongot-search-lb-0-client-cert: HTTP 500' "${tmp}/preflight.out" && grep -q 'FAILED: 4 problem' "${tmp}/preflight.out" && ! grep -q 'Traceback' "${tmp}/preflight.out" \
+  && ok "preflight: an HTTP 500 with a non-JSON body is reported as HTTP 500, for each object, with no traceback" || bad "preflight: HTTP 500: $(grep 'MISSING\|FAILED\|Traceback' "${tmp}/preflight.out" | head -3 | tr '\n' ' ')"
 
 # ------------------------------------------------------------------------------------------------ the documents
 grep -q 'rollout restart deploy/' "${CHART}/templates/NOTES.txt" && grep -q 'rollout restart' "${CHART}/README.md" \

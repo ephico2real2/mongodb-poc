@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "additionalProperties": false,
-  "required": ["search", "publicHostname", "tls", "mongot", "envoy", "expose"],
+  "required": ["search", "vanityHostname", "tls", "mongot", "envoy", "expose"],
   "definitions": {
     "dnsName": {
       "type": "string",
@@ -64,12 +64,12 @@
         }
       }
     },
-    "publicHostname": {"$ref": "#/definitions/dnsName"},
+    "vanityHostname": {"$ref": "#/definitions/dnsName"},
     "serverNames": {
       "type": "array",
       "items": {"$ref": "#/definitions/dnsName"},
       "uniqueItems": true,
-      "description": "Every TLS server name Envoy accepts, publicHostname among them; empty: [publicHostname]. A name twice is refused: Envoy refuses overlapping filter chains"
+      "description": "Every TLS server name Envoy accepts, vanityHostname among them; empty: [vanityHostname]. A name twice is refused: Envoy refuses overlapping filter chains"
     },
     "tls": {
       "type": "object",

@@ -53,14 +53,14 @@ the two charts read the same secrets; a value set by hand wins.
 {{- end -}}
 
 {{- /*
-The TLS server names Envoy accepts, as a JSON list: serverNames, or [publicHostname] when it is empty. The Route (or
-Ingress) sends every client with publicHostname as SNI, so a list without it is refused here: the preflight checks
+The TLS server names Envoy accepts, as a JSON list: serverNames, or [vanityHostname] when it is empty. The Route (or
+Ingress) sends every client with vanityHostname as SNI, so a list without it is refused here: the preflight checks
 the certificate against this list only, and would pass while Envoy closed every handshake of the Route.
 */ -}}
 {{- define "vanity.serverNames" -}}
-{{- $names := .Values.serverNames | default (list .Values.publicHostname) -}}
-{{- if not (has .Values.publicHostname $names) -}}
-{{- fail (printf "serverNames must hold publicHostname %s: the Route (or Ingress) sends its clients with that name, and Envoy would refuse every one. serverNames: %s" .Values.publicHostname (toJson $names)) -}}
+{{- $names := .Values.serverNames | default (list .Values.vanityHostname) -}}
+{{- if not (has .Values.vanityHostname $names) -}}
+{{- fail (printf "serverNames must hold vanityHostname %s: the Route (or Ingress) sends its clients with that name, and Envoy would refuse every one. serverNames: %s" .Values.vanityHostname (toJson $names)) -}}
 {{- end -}}
 {{ toJson $names }}
 {{- end -}}

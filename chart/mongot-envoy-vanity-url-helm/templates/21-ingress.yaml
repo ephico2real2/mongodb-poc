@@ -27,7 +27,7 @@ metadata:
 spec:
   ingressClassName: {{ .Values.expose.ingressClassName }}
   rules:
-    - host: {{ .Values.publicHostname }}
+    - host: {{ .Values.vanityHostname }}
       http:
         paths:
           - path: ''

@@ -1,190 +1,132 @@
-# A vanity hostname for MongoDB Search: a second Envoy beside the operator's
+# MongoDB Search reachable through a vanity hostname, with a second Envoy beside the operator's
 
-The operator's Envoy accepts one TLS server name. This document is why a second, vanity hostname needs an Envoy of
-our own, how `chart/mongot-envoy-vanity-url-helm` builds one from the operator's own configuration and the secrets
-that already exist, what it changes and does not, its limits, and the install on OpenShift step by step, through a
-Route and then through an Ingress. The chart's operating page (values, rotation, upgrade, troubleshooting) is its
-[README](../chart/mongot-envoy-vanity-url-helm/README.md); the tests are recorded in
-[testing-mongot-envoy-vanity-url.md](testing-mongot-envoy-vanity-url.md).
+This guide installs `chart/mongot-envoy-vanity-url-helm` on OpenShift beside `chart/mongodb-search-helm`: a second
+Envoy that accepts the vanity hostname (a name the company's DNS points at the OpenShift router) as its TLS server
+name, behind its own passthrough Route or Ingress, in front of the same mongot pods, with the same secrets. The
+operator's Envoy accepts exactly one TLS server name, `externalHostname`, and the operator reconciles it, so a second
+name needs an Envoy of our own. The steps install it through a Route, check each piece, switch mongod to the vanity
+name, then do the same through an Ingress; Verify proves which path the traffic takes.
+
+## What you get
+
+- The operator's Envoy accepts one TLS server name: `server_names: [externalHostname]` in its one filter chain
+  ([`envoy/lds.json`](envoy/lds.json), line 15; operator 1.13.0).
+- A second Envoy, Deployment `<search.name>-public-lb`, two pods, running the operator's configuration as static
+  resources: the render test finds one differing field, `server_names`
+  ([the record](testing-mongot-envoy-vanity-url.md), C7), and Envoy 1.37.6 accepts the bootstrap (C9).
+- The same secrets as the operator's Envoy, mounted at the operator's paths; nothing of the operator's is changed.
+- A passthrough Route `<search.name>-public` on the vanity hostname with `balance: roundrobin` (the passthrough
+  default `source` sent 26,605 connections to one Envoy pod and 0 to the other in the lab), or an Ingress of class
+  `openshift-default` that OpenShift turns into that Route.
+- A preflight that refuses the install when a secret or the trust bundle is missing, when the server certificate
+  does not name the vanity hostname, or when the mongot Service is absent; a public UBI 9 image, no `oc`, no pull
+  secret.
+- `expose.enabled=false` as the troubleshooting and DR-test switch: the Route goes, a mongod on the vanity name
+  stops reaching search, and setting it back restores it.
+
+## Architecture
 
 <!-- markdownlint-disable MD033 -->
 <img alt="mongod dials the vanity hostname; the OpenShift router picks the passthrough Route by SNI and forwards the TLS stream to the chart's Envoy, which accepts the vanity server name, presents the existing server certificate, and balances the gRPC streams over the mongot pods with the existing client certificate; the operator's Envoy stands beside it, accepting only the MongoDBSearch's externalHostname, in front of the same mongot pods." src="diagrams/vanity-url/vanity.light.png">
 <!-- markdownlint-enable MD033 -->
 
-## The problem, measured
+The router picks a passthrough Route by the SNI the client sends and forwards the TLS stream untouched; our Envoy's
+one filter chain matches the vanity name, presents the server certificate, requires the client's, and splits the gRPC
+streams over the mongot pods it resolves from the headless Service. mongot checks that a client certificate is signed
+by a trusted CA, not its name ([`TLS.md`](../TLS.md), "Limits worth designing around").
 
-The operator (MongoDB Kubernetes operator 1.13.0) builds its Envoy's listener with a single filter chain whose match
-is the MongoDBSearch's `externalHostname` and nothing else. Read from the running pod
-([`envoy/lds.json`](envoy/lds.json), lines 12 to 18):
+| Name | Address | What it is | Who answers |
+|---|---|---|---|
+| `<vanityHostname>:443` | the company's DNS, a CNAME to the router | the name mongod dials (`mongotHost`) | the router, by SNI, to the Route `<name>-public` |
+| Route `<name>-public` | host `<vanityHostname>`, passthrough | the chart's entry (or the Route OpenShift makes from the chart's Ingress) | Service `<name>-public-lb`, port `mongot-grpc` |
+| Deployment `<name>-public-lb` | 0.0.0.0:27028 in each pod | our Envoy, `server_names: [<vanityHostname>]` | mutual TLS 1.3, ALPN `h2`, then the mongot pods |
+| Service `<name>-search-0-svc` | headless, one A record per mongot pod | the operator's mongot Service, dialled by STRICT_DNS | each mongot pod on 27028, round robin per request |
+| Deployment `<name>-search-lb-0` | the operator's Envoy | `server_names: [externalHostname]`; untouched | the same mongot pods, for the main chart's Route |
+| Job `<name>-public-preflight` | a pre-install and pre-upgrade hook | reads the two secrets, the trust bundle and the mongot Service from the API server | refuses the install with a message, or lets it through |
 
-```json
-"filter_chains": [
-    {
-        "filter_chain_match": {
-            "server_names": [
-                "grpc-search.apps-crc.testing"
-            ]
-        },
+## Prerequisites
+
+- `oc` logged in with rights in the namespace; `helm` 4.3.0 (the version CI pins); `openssl`.
+- The main chart installed and serving in the namespace, with mutual TLS: its secrets are this chart's.
+- The three names of this guide in the shell:
+
+```bash
+export NS=<the MongoDBSearch's namespace> HOST=<the vanity hostname> NAME=mongot
 ```
 
-`tls_inspector` reads the SNI of every ClientHello before decryption and the chain is chosen by it; no SNI, or a
-different one, matches no chain and the connection is closed ([`ENVOY-FLOW.md`](../ENVOY-FLOW.md), steps 2 and 3).
-The route's `domains: ["*"]` matches any `:authority`, so the SNI is the only host gate.
-
-What a client dialling an alias sees was measured on the lab with `vip-grpc-search.apps-crc.testing`, a spare SAN of
-the certificate, as `mongotHost` (main [README, "What a wrong SNI does, by path"](../README.md#what-a-wrong-sni-does-by-path)):
-
-```text
-:27028  SNI vip-grpc-search...  -> Envoy closes the handshake, serves NO certificate
-                                   ("unexpected eof while reading")
-
-:443    SNI vip-grpc-search...  -> the router's DEFAULT certificate (CN=*.apps-crc.testing)
-                                   and NO ALPN. TLS "succeeds" and never reaches Envoy.
-```
-
-The second case is the one on OpenShift: a passthrough Route is only taken when the SNI is in the router's
-`os_sni_passthrough.map`; any other name falls to the terminating flow (`be_sni`), which binds the router's default
-certificate with `no-alpn`. A check that asserts "TLS connects" passes while no request reaches the search tier.
-
-Two more facts close the other ways out:
-
-- The operator reconciles its Envoy's ConfigMap and Deployment: an edit to `lds.json` is overwritten. The
-  MongoDBSearch has one `externalHostname`, so one name.
-- mongot checks that a client certificate is signed by a trusted CA and does not check its name
-  ([`TLS.md`](../TLS.md), "Limits worth designing around"). An Envoy of our own that presents the same client
-  certificate is, to mongot, the operator's Envoy.
-
-## The design
-
-A second Envoy, run by a chart of this repository, beside the operator's and in front of the same mongot pods:
-
-| | The operator's Envoy | Ours (`mongot-envoy-vanity-url-helm`) |
-| --- | --- | --- |
-| Owner | the operator, from the MongoDBSearch | the Helm release |
-| Deployment | `<name>-search-lb-0` | `<name>-public-lb` |
-| Accepted SNI | `externalHostname` | `publicHostname` (and more in `serverNames`) |
-| Configuration | `bootstrap.json` + `lds.json` + `cds.json` from the operator's ConfigMap, reloaded from a watched directory | the same three, as static resources in one `bootstrap.yaml` in the chart's ConfigMap |
-| Server certificate | `<prefix>-<name>-search-lb-0-cert` | the same secret |
-| Client certificate to mongot | `<prefix>-<name>-search-lb-0-client-cert` | the same secret |
-| Trust | `ent-trust-bundle` | the same ConfigMap |
-| Upstream | `<name>-search-0-svc.<ns>.svc.cluster.local:27028`, STRICT_DNS, one host per pod, round robin | the same |
-| Entry | the main chart's Route `mongot-search` on `externalHostname` | Route `<name>-public` on `publicHostname`, or an Ingress of class `openshift-default` |
-
-Everything the operator sets is kept, value for value: the listener on 0.0.0.0:27028 with `tls_inspector`; TLS 1.3
-only, ALPN `h2`, a client certificate required; the HTTP connection manager with the router filter, 1 MiB HTTP/2
-windows, keepalive 60 s/10 s, `stream_idle_timeout` and `request_timeout` 300 s, the JSON access log; the route
-`prefix: /, grpc: {}` with a 300 s timeout and the retry policy (`connect-failure,refused-stream,unavailable,reset,
-resource-exhausted`, 2 retries, 60 s per try, `previous_hosts`, 3 host selection attempts); the cluster with circuit
-breakers 1024/1024/1024/3, a 300 s upstream idle timeout, the same HTTP/2 options, the client certificate, the
-Service name as SNI and TCP keepalive 3/10/3; the admin port 9901 with the four allowed paths; and
-`global_downstream_max_connections: 50000`. The render test compares the chart's bootstrap with
-[`docs/envoy/`](envoy/) field by field and names the fields that may differ: `server_names`, and the cluster's
-endpoint and SNI, which follow the release's namespace.
-
-The one change is `server_names`. A client dialling the vanity name sends it as SNI; the router's map now holds it
-(the chart's Route), the router forwards the stream to our Envoy, our Envoy's chain matches it, presents the server
-certificate, which already carries the name as a SAN, and the gRPC streams are split over the mongot pods as before.
-
-A preflight Job runs before anything is created and refuses the install when a secret or the trust bundle is missing
-or lacks a key, when the server certificate does not name a server name (a SAN, or a one-label wildcard, as the
-prerequisites script matches), or when the mongot Service does not exist. It runs in the cluster, as the Job's own
-ServiceAccount, on Red Hat's public UBI 9 image: `curl` against the API server with the pod's token, `python3` for
-the API's JSON, `openssl` for the certificate; no `oc`, no pull secret. It prints key names and the certificate's
-DNS names, never a key or the token.
-
-## What it changes, and what it does not
-
-Changes: adds a Deployment of two Envoy pods, their Service, budget and ConfigMap, a Route or Ingress, and, when
-asked, a stats Service and a ServiceMonitor; all in the MongoDBSearch's namespace, all named `<name>-public…`.
-
-Does not change: the MongoDBSearch, the operator's Envoy and its Route, the mongot pods, the secrets and the trust
-bundle. Nothing of the operator's is read or written by the chart's objects; the preflight reads the two secrets,
-the trust bundle and the mongot Service by name (its Role names them) and nothing else. Uninstalling the release
-removes only what it made.
-
-## Limits
-
-- **A copied configuration.** An operator upgrade that changes its Envoy configuration is not followed. At each
-  operator upgrade, re-read the three files from the operator's running Envoy into `docs/envoy/`
-  ([`ENVOY-FLOW.md`](../ENVOY-FLOW.md), "Getting the config out of the pod"); `test/vanity-chart.sh` then names every
-  field where the chart differs, and the template is changed to match.
-- **Readiness follows Envoy, not mongot**, as the operator's Envoy: a pod is Ready when Envoy's admin answers
-  `/ready`. With no mongot pod up, searches fail with `UNAVAILABLE` while the pods read Ready.
-- **Certificates are read once.** After a rotation, `oc rollout restart deploy/<name>-public-lb` (the operator's Envoy
-  needs the same; [`ENVOY-FLOW.md`](../ENVOY-FLOW.md), "watched_directory matters").
-- **One mongod, one connection, one Envoy pod.** The second pod is a standby. The router's `balance: roundrobin`
-  spreads connections, not requests; requests are spread by Envoy over mongot.
-- **Router timeouts on an Ingress.** Whether a router timeout annotation on an Ingress reaches the generated Route
-  is not documented by Red Hat; none is set. A passthrough Route's `timeout tunnel` default (1 h) covers the 300 s
-  streams.
-- **No Cilium path.** On the cluster-mesh labs the operator's Envoy is not used
-  ([testing-kind-mesh-cilium.md](testing-kind-mesh-cilium.md)); this chart is for the OpenShift deployment with the
-  operator's Envoy.
-
-## Install on OpenShift, step by step
-
-The main chart installed and serving in the namespace with mutual TLS. `NS` is that namespace, `HOST` the vanity
-hostname, `NAME` the MongoDBSearch's name (`mongot` by default).
-
-### Step 1: the certificate names the hostname
-
-The server certificate Envoy presents must carry `HOST` as a SAN. Read it from the secret (the certificate is
-public; the key is not printed):
+- The server certificate names the vanity hostname: `DNS:<HOST>`, or `DNS:*.` and the rest of the name for a
+  one-label wildcard (the certificate is public; the key is not printed):
 
 ```bash
 oc get secret ent-${NAME}-search-lb-0-cert -n $NS -o jsonpath='{.data.tls\.crt}' \
   | base64 -d | openssl x509 -noout -ext subjectAltName
 ```
 
-**It worked when** the output lists `DNS:<HOST>` (or `DNS:*.` and the rest of the name, for a one-label wildcard).
-Otherwise ask the company CA for a certificate that carries both names and make the secret from it with the main
-chart's `generate-mongodbsearch-prerequisites.sh --route <pem> --hostname <externalHostname> --target-namespace $NS
---apply --replace` (the script names the secret `ent-mongot-search-lb-0-cert`: it hard-codes the prefix `ent` and
-the name `mongot`; for another prefix or name, replace the secret the way it was first made). Then restart the
-operator's Envoy, which reads it too: `oc rollout restart deploy/${NAME}-search-lb-0 -n $NS`.
-
-### Step 2: install the chart (Route)
+- Otherwise, a certificate from the company CA with both names, made into the secret by the main chart's script
+  (which hard-codes the prefix `ent` and the name `mongot`: for another prefix or name, replace the secret the way it
+  was first made), and the operator's Envoy restarted to read it:
 
 ```bash
-helm install ${NAME}-public chart/mongot-envoy-vanity-url-helm -n $NS --set search.name=$NAME --set publicHostname=$HOST
+bash chart/mongodb-search-helm/generate-mongodbsearch-prerequisites.sh --route <pem> --hostname <externalHostname> --target-namespace $NS --apply --replace
+oc rollout restart deploy/${NAME}-search-lb-0 -n $NS
 ```
 
-**It worked when** helm returns 0 and prints the release's notes. If it stops on the preflight:
+## Steps
+
+Install through a Route, check each piece, switch mongod, then the same through an Ingress:
+
+### 1. Install the chart
+
+```bash
+helm install ${NAME}-public chart/mongot-envoy-vanity-url-helm -n $NS --set search.name=$NAME --set vanityHostname=$HOST
+```
+
+Result: not yet recorded on OpenShift (O1 in [the record](testing-mongot-envoy-vanity-url.md)); it passes when helm
+returns 0 and prints the release's notes. The preflight ran first; when it refuses, nothing was installed.
+
+### 2. Read the preflight's verdict
 
 ```bash
 oc logs -n $NS job/${NAME}-public-preflight
 ```
 
-names what is missing (`MISSING: secret …`, `… does not name <HOST> (SANs: …)`, `MISSING: service …`), and nothing
-was installed.
+Result: on a pass the last line is `everything Envoy mounts and dials is present, and the certificate names every
+server name` (recorded in the chart's image, the record's P1); a refusal names what is missing, as the chart's
+[README](../chart/mongot-envoy-vanity-url-helm/README.md#troubleshooting-by-message) lists them.
 
-### Step 3: the pods
+### 3. Check the Envoy pods
 
 ```bash
 oc get pods -n $NS -l app=${NAME}-public-lb
 oc logs -n $NS deploy/${NAME}-public-lb | head -20
 ```
 
-**It worked when** two pods are `1/1 Running`, and the log shows `all clusters initialized` and `starting main
-dispatch loop` with no `Failed to load` line. Readiness is Envoy's `/ready`; the operator's pods
-(`-l app=${NAME}-search-lb-0`) are untouched.
+Result: two pods `1/1 Running`; the log shows `starting main dispatch loop` and `all clusters initialized` (Envoy
+1.37.6 on the rendered bootstrap, 2026-10-22) and no `Failed to load` line. The operator's pods,
+`-l app=${NAME}-search-lb-0`, are untouched.
 
-### Step 4: the Route
+### 4. Check the Route
 
 ```bash
 oc get route ${NAME}-public -n $NS
 oc get route ${NAME}-public -n $NS -o jsonpath='{.spec.tls.termination} {.metadata.annotations.haproxy\.router\.openshift\.io/balance} {.status.ingress[0].conditions[0].type}{"\n"}'
-oc get route ${NAME}-public -n $NS -o jsonpath='{.status.ingress[0].routerCanonicalHostname}{"\n"}'
 ```
 
-**It worked when** the TERMINATION column reads `passthrough`, the second line prints `passthrough roundrobin
-Admitted`, and the third prints the router's hostname: give it to the DNS owner for the CNAME of `HOST`. "Admitted"
-proves the router took the Route, not that traffic flows (main
+Result: not yet recorded (O2); it passes when the TERMINATION column reads `passthrough` and the second line prints
+`passthrough roundrobin Admitted`. "Admitted" proves the router took the Route, not that traffic flows (main
 [README, "The Route, and why Accepted proves nothing"](../README.md#the-route-and-why-accepted-proves-nothing)).
 
-### Step 5: the handshake, from outside
+### 5. Point DNS at the router
 
-Once DNS resolves `HOST` to the router:
+```bash
+oc get route ${NAME}-public -n $NS -o jsonpath='{.status.ingress[0].routerCanonicalHostname}{"\n"}'
+dig +short $HOST
+```
+
+Result: the first line is the router's hostname, the CNAME target the DNS owner sets for `HOST`; the second then
+resolves `HOST` to the router (not yet recorded; the owner's DNS).
+
+### 6. Check the handshake from outside
 
 ```bash
 openssl s_client -connect $HOST:443 -servername $HOST -alpn h2 </dev/null 2>/dev/null \
@@ -192,56 +134,48 @@ openssl s_client -connect $HOST:443 -servername $HOST -alpn h2 </dev/null 2>/dev
 openssl s_client -connect $HOST:443 -servername $HOST -alpn h2 </dev/null 2>&1 | grep -E 'ALPN|Protocol *:|TLSv1\.3'
 ```
 
-**It worked when** the subject and SANs are the company certificate's (with `HOST` among the SANs), the issuer the
-company CA, `ALPN protocol: h2` and `TLSv1.3`. The router's own certificate (`CN=*.apps…`) and no ALPN mean the SNI
-did not match a passthrough Route: the Route is not admitted, or DNS points at another router.
+Result: not yet recorded (O3); it passes when the subject and SANs are the company certificate's with `HOST` among the
+SANs, the issuer the company CA, `ALPN protocol: h2` and `TLSv1.3`.
 
-Then the refusal that proves the gate is still a gate, with a name no Route serves:
+### 7. Check that a wrong name is still refused
 
 ```bash
 openssl s_client -connect $HOST:443 -servername wrong.$HOST -alpn h2 </dev/null 2>&1 | grep -E 'subject=|ALPN'
 ```
 
-**It worked when** the answer is the router's default certificate and `No ALPN negotiated` (the Route path), never
-the company certificate.
+Result: not yet recorded (O4); it passes when the answer is the router's default certificate and `No ALPN
+negotiated`, never the company certificate (main
+[README, "What a wrong SNI does, by path"](../README.md#what-a-wrong-sni-does-by-path)).
 
-### Step 6: a search through the vanity name
+### 8. Switch mongod to the vanity name and search
 
-On a mongod host, or in a `mongosh` against one, with the company CA trusted:
-
-```text
---setParameter=mongotHost=<HOST>:443
---setParameter=searchTLSMode=requireTLS
-```
-
-```javascript
-db.movies.aggregate([{ $search: { text: { query: "space", path: "title" } } }, { $limit: 3 }])
-```
-
-**It worked when** results come back, and our Envoy's access log carries the stream:
+On each mongod host, with the company CA trusted, set the two parameters and restart mongod; then search through it:
 
 ```bash
+mongod --setParameter mongotHost=$HOST:443 --setParameter searchTLSMode=requireTLS <the host's other options>
+mongosh --eval 'db.movies.aggregate([{ $search: { text: { query: "space", path: "title" } } }, { $limit: 3 }])'
 oc logs -n $NS deploy/${NAME}-public-lb | grep '"logger":"access"' | tail -3
 ```
 
-each line with an `upstream_host` that is a mongot pod IP on 27028.
+Result: not yet recorded (O5); it passes when results come back and each access-log line carries an `upstream_host`
+that is a mongot pod IP on 27028.
 
-### Step 7: the spread over the mongot pods
+### 9. Read the spread over the mongot pods
 
-The Envoy image has no `curl` or `wget`; the admin port is read through the API server's pod proxy, as
-`kind-mesh/drills.sh` reads the operator's Envoy:
+The Envoy image has no `curl`; the admin port is read through the API server's pod proxy:
 
 ```bash
-P=$(oc get pods -n $NS -l app=${NAME}-public-lb -o jsonpath='{.items[0].metadata.name}')
-oc get --raw "/api/v1/namespaces/$NS/pods/$P:9901/proxy/stats" | grep -E '^cluster\.mongot_rs_cluster\.(membership_healthy|upstream_rq_total)'
+for P in $(oc get pods -n $NS -l app=${NAME}-public-lb -o name); do
+  oc get --raw "/api/v1/namespaces/$NS/${P#pod/}:9901/proxy/stats" | grep -E '^cluster\.mongot_rs_cluster\.(membership_healthy|upstream_rq_total)'
+done
 ```
 
-**It worked when** `membership_healthy` equals the number of mongot pods and `upstream_rq_total` climbs with the
-searches. With `monitoring.serviceMonitor.enabled=true` the same counters are scraped per pod under
-`job="${NAME}-public-envoy-stats"`; the main chart's dashboard panels select `job="${NAME}-envoy-stats"` (the
-operator's Envoy) and do not show them.
+Result: not yet recorded (O5); it passes when `membership_healthy` equals the number of mongot pods and
+`upstream_rq_total` climbs with the searches. With `monitoring.serviceMonitor.enabled=true` the same counters are
+scraped per pod under `job="<name>-public-envoy-stats"`; the main chart's dashboard selects `job="<name>-envoy-stats"`,
+the operator's Envoy, and does not show them.
 
-### Step 8: the same through an Ingress
+### 10. Switch to an Ingress
 
 ```bash
 helm upgrade ${NAME}-public chart/mongot-envoy-vanity-url-helm -n $NS --reuse-values --set expose.type=ingress
@@ -249,25 +183,118 @@ oc get ingress ${NAME}-public -n $NS
 oc get route -n $NS -o custom-columns='NAME:.metadata.name,HOST:.spec.host,TERM:.spec.tls.termination,BALANCE:.metadata.annotations.haproxy\.router\.openshift\.io/balance'
 ```
 
-**It worked when** the Route `${NAME}-public` of Step 4 is gone, the Ingress has class `openshift-default`, and
-OpenShift's generated Route `${NAME}-public-<suffix>` shows `HOST`, `passthrough` and `roundrobin`: the Ingress's
-annotations were copied onto it. Steps 5 to 7 then pass unchanged. Deleting the Ingress deletes the generated Route.
+Result: not yet recorded (O6); it passes when the Route of step 4 is gone, the Ingress has class `openshift-default`,
+and OpenShift's generated Route `${NAME}-public-<suffix>` shows `HOST`, `passthrough` and `roundrobin`. Steps 6 to 9
+then pass unchanged; deleting the Ingress deletes the generated Route.
 
-### Rotation, upgrade, uninstall
+## Verify
 
-- A rotated secret: `oc rollout restart deploy/${NAME}-public-lb -n $NS`.
-- `helm upgrade … --reuse-values --set …`: the preflight runs first; a changed bootstrap or image rolls the pods.
-- `helm uninstall ${NAME}-public -n $NS`: removes the chart's objects and nothing of the operator's.
+The certificate the vanity name serves, read as a client; the company certificate, with `HOST` among its SANs:
 
-## Sources
+```bash
+openssl s_client -connect $HOST:443 -servername $HOST -alpn h2 </dev/null 2>/dev/null | openssl x509 -noout -subject -ext subjectAltName
+```
 
-- [`docs/envoy/`](envoy/): the operator's Envoy configuration as read from its pod; [`ENVOY-FLOW.md`](../ENVOY-FLOW.md)
-- Main [README](../README.md): "What a wrong SNI does, by path"; "Passthrough routes do honour the balance annotation"
-- [mongot-route-balance-rationale.md](mongot-route-balance-rationale.md): the balance annotation, and the route
-  controller copying an Ingress's annotations to its Route
-- [mongot-envoy-mtls-fresh-install-runbook.md](mongot-envoy-mtls-fresh-install-runbook.md), Step 6d: the Route and the
-  Ingress with the passthrough annotation
-- Red Hat, OpenShift Container Platform, Networking, "Creating a route through an Ingress object": the
-  `route.openshift.io/termination` annotation; a passthrough Ingress uses `path: ''` and `pathType: ImplementationSpecific`
-- MongoDB, Known Limitations of MongoDB Search on Kubernetes: mongot does not validate the client certificate's name
-  ([`TLS.md`](../TLS.md))
+### Prove which path the traffic takes
+
+The stat names are the ones Envoy 1.37.6 exposes for this chart's listener and cluster (read from `/stats` of the
+rendered bootstrap on 2026-10-22). Our Envoy's counters, before and after a few searches through the vanity name:
+
+```bash
+P=$(oc get pods -n $NS -l app=${NAME}-public-lb -o jsonpath='{.items[0].metadata.name}')
+oc get --raw "/api/v1/namespaces/$NS/pods/$P:9901/proxy/stats" | grep -E '^(listener\.0\.0\.0\.0_27028\.(downstream_cx_total|ssl\.handshake|no_filter_chain_match)|http\.ingress_rs\.downstream_rq_total|cluster\.mongot_rs_cluster\.(upstream_rq_total|upstream_cx_total|membership_healthy)): '
+```
+
+The operator's Envoy's counters over the same searches, which do not move:
+
+```bash
+Q=$(oc get pods -n $NS -l app=${NAME}-search-lb-0 -o jsonpath='{.items[0].metadata.name}')
+oc get --raw "/api/v1/namespaces/$NS/pods/$Q:9901/proxy/stats" | grep -E '^(listener\.0\.0\.0\.0_27028\.downstream_cx_total|http\.ingress_rs\.downstream_rq_total|cluster\.mongot_rs_cluster\.upstream_rq_total): '
+```
+
+The same through a port-forward to the admin port of one of our pods:
+
+```bash
+oc port-forward -n $NS $P 9901:9901 &
+curl -s localhost:9901/stats | grep -E '^(listener\.0\.0\.0\.0_27028\.downstream_cx_total|http\.ingress_rs\.downstream_rq_total|cluster\.mongot_rs_cluster\.upstream_rq_total): '
+```
+
+Our Envoy's access log, one line per stream, with the mongot pod that answered:
+
+```bash
+oc logs -n $NS deploy/${NAME}-public-lb --since=5m | grep '"logger":"access"' | tail -5
+```
+
+The DR toggle, the one use of `expose.enabled=false` on OpenShift: the Route goes and a mongod on the vanity name
+stops reaching search (the router answers with its default certificate); back to true, the Route returns and the
+search answers. The lab row is K9, the OpenShift row O7, in [the record](testing-mongot-envoy-vanity-url.md):
+
+```bash
+helm upgrade ${NAME}-public chart/mongot-envoy-vanity-url-helm -n $NS --reuse-values --set expose.enabled=false
+oc get route,ingress -n $NS
+mongosh --eval 'db.movies.aggregate([{ $search: { text: { query: "space", path: "title" } } }, { $limit: 1 }])'
+```
+
+```bash
+helm upgrade ${NAME}-public chart/mongot-envoy-vanity-url-helm -n $NS --reuse-values --set expose.enabled=true
+oc get route ${NAME}-public -n $NS
+mongosh --eval 'db.movies.aggregate([{ $search: { text: { query: "space", path: "title" } } }, { $limit: 1 }])'
+```
+
+## Reference
+
+The two Envoys, side by side:
+
+| | The operator's Envoy | Ours (`mongot-envoy-vanity-url-helm`) |
+| --- | --- | --- |
+| Owner | the operator, from the MongoDBSearch | the Helm release |
+| Deployment | `<name>-search-lb-0` | `<name>-public-lb` |
+| Accepted SNI | `externalHostname` | `vanityHostname` (and more in `serverNames`) |
+| Configuration | `bootstrap.json` + `lds.json` + `cds.json` from the operator's ConfigMap, reloaded from a watched directory | the same three, as static resources in one `bootstrap.yaml` in the chart's ConfigMap |
+| Server certificate | `<prefix>-<name>-search-lb-0-cert` | the same secret |
+| Client certificate to mongot | `<prefix>-<name>-search-lb-0-client-cert` | the same secret |
+| Trust | `ent-trust-bundle` | the same ConfigMap |
+| Upstream | `<name>-search-0-svc.<ns>.svc.cluster.local:27028`, STRICT_DNS, one host per pod, round robin | the same |
+| Entry | the main chart's Route `mongot-search` on `externalHostname` | Route `<name>-public` on `vanityHostname`, or an Ingress of class `openshift-default` |
+
+The stat names of this chart's Envoy, as Envoy 1.37.6 prints them for the rendered bootstrap (2026-10-22):
+
+| Stat | What it counts |
+|---|---|
+| `listener.0.0.0.0_27028.downstream_cx_total` | connections accepted on 27028 |
+| `listener.0.0.0.0_27028.ssl.handshake` | TLS handshakes completed |
+| `listener.0.0.0.0_27028.no_filter_chain_match` | connections whose SNI matched no filter chain: a wrong name |
+| `http.ingress_rs.downstream_rq_total` | gRPC requests received |
+| `cluster.mongot_rs_cluster.upstream_rq_total` | requests sent to mongot |
+| `cluster.mongot_rs_cluster.upstream_cx_total` | connections opened to mongot pods |
+| `cluster.mongot_rs_cluster.membership_healthy` | mongot pods Envoy can choose between |
+
+What the configuration keeps and what may differ, the one-name limit as measured, the values, rotation, upgrade,
+uninstall and the messages: the chart's [README](../chart/mongot-envoy-vanity-url-helm/README.md).
+
+## Troubleshooting
+
+- The router's default certificate (`CN=*.apps…`) and no ALPN at step 6: the SNI matched no passthrough Route; the
+  Route is not admitted, or DNS points at another router. Step 4, then step 5.
+- `UNAVAILABLE` on every search with the pods Ready: readiness follows Envoy, not mongot; read the MongoDBSearch's
+  status and `membership_healthy` (step 9).
+- A refusal at step 2: the chart's [README, "Troubleshooting, by message"](../chart/mongot-envoy-vanity-url-helm/README.md#troubleshooting-by-message).
+
+## Clean up
+
+```bash
+helm uninstall ${NAME}-public -n $NS
+```
+
+The Route (or the Ingress and its generated Route), the Deployment, its Service, budget and config go; the secrets,
+the trust bundle, the MongoDBSearch and the operator's Envoy stay. mongod hosts go back to `externalHostname:443`.
+
+## What's next
+
+- The tests and their recorded outputs: [testing-mongot-envoy-vanity-url.md](testing-mongot-envoy-vanity-url.md).
+- The chart's page: [chart/mongot-envoy-vanity-url-helm/README.md](../chart/mongot-envoy-vanity-url-helm/README.md).
+- Why one name: the main [README, "What a wrong SNI does, by path"](../README.md#what-a-wrong-sni-does-by-path) and
+  [`ENVOY-FLOW.md`](../ENVOY-FLOW.md).
+- Per-pod scraping of our Envoy: `monitoring.serviceMonitor.enabled=true` with user workload monitoring.
+- At an operator upgrade: re-read `docs/envoy/` from the operator's pod and let the render test name the differences
+  (the chart's README, "Upgrade").

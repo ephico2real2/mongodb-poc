@@ -1,6 +1,6 @@
 ok    helm lint
-ok    the defaults alone are refused (no publicHostname)
-ok    renders with publicHostname alone
+ok    the defaults alone are refused (no vanityHostname)
+ok    renders with vanityHostname alone
 ok    .helmignore keeps keys, certificates and pictures out of the package; the README travels with it
 ok    by default: the config, the Deployment, its Service and budget, the Route and the preflight, every name from search.name
 ok    search.name renames everything; expose.name names the Route
@@ -10,7 +10,7 @@ ok    the budget can be turned off
 ok    no ClusterRole or ClusterRoleBinding anywhere
 ok    the namespace value places every object, whatever -n says
 ok    an empty namespace value falls back to -n
-ok    the Route: host publicHostname, passthrough, no wildcard, balance roundrobin, to the chart's own Service
+ok    the Route: host vanityHostname, passthrough, no wildcard, balance roundrobin, to the chart's own Service
 ok    expose.balance, annotations and labels reach the Route
 ok    expose.type=ingress: an Ingress and no Route
 ok    the Ingress: class openshift-default, the passthrough and balance annotations, path '' with ImplementationSpecific, no spec.tls
@@ -19,8 +19,8 @@ ok    the schema refuses an expose.type that is neither route nor ingress
 ok    the schema refuses a balance the router does not know
 ok    expose.annotations cannot replace the Ingress's termination, balance or sync-wave; other keys pass
 ok    expose.annotations cannot replace the Route's balance, and the key is rendered once
-ok    the schema refuses an uppercase publicHostname
-ok    the schema refuses a trailing dot in publicHostname
+ok    the schema refuses an uppercase vanityHostname
+ok    the schema refuses a trailing dot in vanityHostname
 ok    the schema refuses an uppercase server name
 ok    the schema refuses a trailing dot in a server name
 ok    the secrets derive as the main chart's helpers (<prefix>-<name>-search-lb-0-cert, -client-cert, ent-trust-bundle) and mount where the operator's Envoy mounts them
@@ -40,8 +40,8 @@ ok    the stats Service is ClusterIP 9901 on this Deployment's pods
 ok    the ServiceMonitor scrapes /stats/prometheus on admin with the main chart's _total relabel, and selects only this chart's stats Service
 ok    the stats Service does not carry mongodb.com/search-name, so the main chart's monitor does not adopt it
 ok    never a Route to the admin port
-ok    the schema refuses an IP as publicHostname
-ok    the schema refuses a one-label publicHostname
+ok    the schema refuses an IP as vanityHostname
+ok    the schema refuses a one-label vanityHostname
 ok    the schema refuses an unknown top-level key
 ok    the schema refuses an unknown key under envoy
 ok    the schema refuses an unknown key under expose
@@ -53,7 +53,7 @@ ok    the schema refuses a search.name of 44 characters
 ok    the schema refuses a mongot.port above 65535
 ok    the schema refuses an invalid namespace
 ok    the schema refuses a server name given twice (Envoy refuses overlapping filter chains)
-ok    a serverNames list without publicHostname is refused, by name
+ok    a serverNames list without vanityHostname is refused, by name
 bootstrap.json: 1 field(s) differ from the capture: ['.static_resources.listeners[0].filter_chains[0].filter_chain_match.server_names[0]']
 bootstrap-other.json: 3 field(s) differ from the capture: ['.static_resources.clusters[0].load_assignment.endpoints[0].lb_endpoints[0].endpoint.address.socket_address.address', '.static_resources.clusters[0].transport_socket.typed_config.sni', '.static_resources.listeners[0].filter_chains[0].filter_chain_match.server_names']
 ok    the bootstrap equals the operator's captured config except server_names (and, in another namespace, the endpoint and SNI)
@@ -72,6 +72,7 @@ ok    preflight: a missing server secret is refused by name with the API's reaso
 ok    preflight: a missing client secret, trust bundle and mongot Service are each named, and counted
 ok    preflight: a Forbidden reads as one, not as missing
 ok    preflight: an API server that does not answer is reported with curl's error, for each object
+ok    preflight: an API server its CA does not verify is refused with curl's first line, the error's name
 ok    preflight: a secret without tls.key is refused
 ok    preflight: a certificate with the hostname as CN and no SAN is refused
 ok    preflight: a client secret without tls.crt is refused
@@ -81,6 +82,8 @@ ok    preflight: an image without curl is refused, naming the image and the tool
 ok    preflight: an image without python3 is refused, naming the image and the tool
 ok    preflight: an image without openssl is refused, naming the image and the tool
 ok    preflight: without a ServiceAccount token it refuses, never guesses
+ok    preflight: a ServiceAccount directory without the API server's CA is refused, by name
+ok    preflight: an HTTP 500 with a non-JSON body is reported as HTTP 500, for each object, with no traceback
 ok    NOTES and the README say to restart the pods after a certificate rotation
 ok    the main README and the main chart's README link the chart and its document
 all vanity chart tests passed

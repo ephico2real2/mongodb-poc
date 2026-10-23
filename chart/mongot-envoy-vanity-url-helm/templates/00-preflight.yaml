@@ -153,7 +153,7 @@ spec:
               done
               # The pod's ServiceAccount: its token and the API server's CA, mounted by Kubernetes.
               SA="${SA_DIR:-/var/run/secrets/kubernetes.io/serviceaccount}"
-              [ -r "${SA}/token" ] && [ -r "${SA}/ca.crt" ] || refuse "no ServiceAccount token under ${SA}: the preflight reads the API server as its ServiceAccount, from inside the cluster."
+              [ -r "${SA}/token" ] && [ -r "${SA}/ca.crt" ] || refuse "no readable ServiceAccount token or CA under ${SA}: the preflight reads the API server as its ServiceAccount, from inside the cluster."
               API="${API_SERVER:-https://kubernetes.default.svc}"
               work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
               # The token goes to curl in a header file, on no command line.
@@ -161,10 +161,13 @@ spec:
 
               # get <kind-plural> <name>: GET the object; its JSON is left in ${work}/<kind>.<name>.json on 200, and
               # otherwise the API's reason and message (NotFound, Forbidden) or curl's error are printed, with 1.
+              # Each GET is bounded (4 of them stay inside the Job's 180 s deadline): curl's own connect timeout is
+              # 300 s, and a network policy that drops the packets would end the Job with no line at all. curl's
+              # first line names the error; a certificate error (60) adds a paragraph after it.
               get() {
                 local body="${work}/$1.$2.json" code
-                if ! code="$(curl -sS --cacert "${SA}/ca.crt" -H "@${work}/auth" -o "$body" -w '%{http_code}' "${API}/api/v1/namespaces/${NAMESPACE}/$1/$2" 2>"${work}/curl.err")"; then
-                  printf 'the API server did not answer: %s\n' "$(tail -1 "${work}/curl.err")"; return 1
+                if ! code="$(curl -sS --connect-timeout 10 --max-time 30 --cacert "${SA}/ca.crt" -H "@${work}/auth" -o "$body" -w '%{http_code}' "${API}/api/v1/namespaces/${NAMESPACE}/$1/$2" 2>"${work}/curl.err")"; then
+                  printf 'the API server did not answer: %s\n' "$(head -1 "${work}/curl.err")"; return 1
                 fi
                 [ "$code" = 200 ] && return 0
                 python3 -c 'import json, sys
@@ -220,7 +223,7 @@ spec:
                     esac
                   done <<<"$sans"
                   [ -n "$found" ] && log "ok: ${want} is a name of the certificate in ${SERVER_SECRET}" \
-                    || bad "secret ${SERVER_SECRET}: its certificate does not name ${want} (SANs: $(printf '%s' "$sans" | tr '\n' ' ')); every client would refuse it. Issue a certificate with that name, or set publicHostname to one it has"
+                    || bad "secret ${SERVER_SECRET}: its certificate does not name ${want} (SANs: $(printf '%s' "$sans" | tr '\n' ' ')); every client would refuse it. Issue a certificate with that name, or set vanityHostname to one it has"
                 done
               fi
 
