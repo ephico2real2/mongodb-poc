@@ -1,0 +1,23 @@
+{{- /*
+The ClusterIP Service the Route (or the Ingress) sends to: port mongot-grpc, selecting this Deployment's pods and
+no other (the operator's Envoy has its own, <name>-search-0-proxy-svc). The router balances the connections
+over its endpoints; Envoy then balances the requests over the mongot pods.
+*/ -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vanity.deployment" . }}
+  namespace: {{ include "vanity.namespace" . }}
+  labels:
+    {{- include "vanity.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ include "vanity.deployment" . }}
+  ports:
+    - name: mongot-grpc
+      port: {{ .Values.mongot.port }}
+      targetPort: mongot-grpc
+      protocol: TCP

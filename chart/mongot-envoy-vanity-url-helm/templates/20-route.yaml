@@ -1,0 +1,35 @@
+{{- /*
+The passthrough Route, the main chart's 20-route.yaml with this chart's names. The router forwards the TLS stream
+untouched: Envoy matches the SNI against serverNames and presents the server certificate itself, so the host is
+publicHostname and nothing else. The balance annotation is honoured on passthrough Routes; the default, source,
+put every connection on one Envoy pod in the lab (docs/mongot-route-balance-rationale.md).
+*/ -}}
+{{- if and .Values.expose.enabled (eq .Values.expose.type "route") }}
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "vanity.exposeName" . }}
+  namespace: {{ include "vanity.namespace" . }}
+  labels:
+    {{- include "vanity.labels" . | nindent 4 }}
+    {{- with .Values.expose.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    haproxy.router.openshift.io/balance: {{ .Values.expose.balance }}
+    {{- with .Values.expose.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  host: {{ .Values.publicHostname }}
+  to:
+    kind: Service
+    name: {{ include "vanity.deployment" . }}
+  port:
+    targetPort: mongot-grpc
+  tls:
+    termination: passthrough
+  # This exact host and no other: never a wildcard Route.
+  wildcardPolicy: None
+{{- end }}

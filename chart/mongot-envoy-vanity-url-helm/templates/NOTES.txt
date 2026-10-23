@@ -1,0 +1,14 @@
+Envoy x{{ .Values.envoy.replicas }} for {{ .Values.publicHostname }} in {{ include "vanity.namespace" . }}, in front of the mongot pods of MongoDB Search "{{ .Values.search.name }}" ({{ include "vanity.mongotFQDN" . }}:{{ .Values.mongot.port }}){{ if .Values.expose.enabled }}, reached through {{ if eq .Values.expose.type "route" }}Route{{ else }}Ingress{{ end }} {{ include "vanity.exposeName" . }} on {{ .Values.publicHostname }}:443{{ else }}; not exposed (expose.enabled=false): reach it through Service {{ include "vanity.deployment" . }}{{ end }}.
+TLS server names accepted: {{ include "vanity.serverNames" . }}
+
+  The preflight's verdict:  oc logs -n {{ include "vanity.namespace" . }} job/{{ include "vanity.preflight" . }}   (kept {{ .Values.jobs.ttlSecondsAfterFinished }} s)
+  The pods:                 oc get deploy,pods -n {{ include "vanity.namespace" . }} -l app={{ include "vanity.deployment" . }}
+{{- if .Values.expose.enabled }}
+  The entry:                oc get {{ .Values.expose.type }} {{ include "vanity.exposeName" . }} -n {{ include "vanity.namespace" . }}{{ if eq .Values.expose.type "ingress" }}   (and the Route OpenShift made from it: oc get route -n {{ include "vanity.namespace" . }}){{ end }}
+
+Still by hand: point DNS for {{ .Values.publicHostname }} at the router, and have the mongod hosts use
+{{ .Values.publicHostname }}:443 for search (mongotHost) with the company CA trusted.
+{{- end }}
+
+After a certificate rotation, restart the pods: Envoy reads the certificate files once, at start.
+  oc rollout restart deploy/{{ include "vanity.deployment" . }} -n {{ include "vanity.namespace" . }}

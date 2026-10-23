@@ -1,0 +1,23 @@
+{{- /*
+A PodDisruptionBudget for the Envoy pods, the main chart's pattern (its 11-poddisruptionbudgets.yaml): a node
+drain evicts through the API, which refuses an eviction that would leave more pods down than maxUnavailable, so
+with two pods one always stays. maxUnavailable, not minAvailable: no number of pods makes it refuse every
+eviction. unhealthyPodEvictionPolicy AlwaysAllow: a pod that runs and never becomes Ready does not hold a drain.
+*/ -}}
+{{- if .Values.envoy.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "vanity.deployment" . }}
+  namespace: {{ include "vanity.namespace" . }}
+  labels:
+    {{- include "vanity.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  maxUnavailable: {{ .Values.envoy.podDisruptionBudget.maxUnavailable }}
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      app: {{ include "vanity.deployment" . }}
+{{- end }}

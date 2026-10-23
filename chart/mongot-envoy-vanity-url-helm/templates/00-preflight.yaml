@@ -1,0 +1,202 @@
+{{- /*
+The preflight: fails the install, before anything is created, when a secret Envoy mounts is missing or lacks a
+key, when the server certificate does not name a server name the chart would accept (a pod would start and every
+client would then fail certificate validation), or when the mongot Service the cluster dials does not exist.
+It reads four objects by name (the Role names them), prints key names and the certificate's DNS names, never a
+key, and refuses with a message naming what is missing. The main chart's 00-preflight.yaml pattern: a
+pre-install/pre-upgrade hook, its RBAC hooks too, created first (weight -10) and removed once the hooks have
+succeeded; a failed Job is kept for its log. Argo CD: PreSync.
+*/ -}}
+{{- if .Values.preflight.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "vanity.preflight" . }}
+  namespace: {{ include "vanity.namespace" . }}
+  labels:
+    {{- include "vanity.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "vanity.preflight" . }}
+  namespace: {{ include "vanity.namespace" . }}
+  labels:
+    {{- include "vanity.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+rules:
+  # get, by name: the two secrets Envoy mounts, the trust bundle, the mongot Service, and nothing else.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames:
+      - {{ include "vanity.serverCertSecret" . | quote }}
+      - {{ include "vanity.clientCertSecret" . | quote }}
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: [{{ .Values.tls.trustBundleConfigMap | quote }}]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["services"]
+    resourceNames: [{{ include "vanity.mongotService" . | quote }}]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "vanity.preflight" . }}
+  namespace: {{ include "vanity.namespace" . }}
+  labels:
+    {{- include "vanity.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "vanity.preflight" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vanity.preflight" . }}
+    namespace: {{ include "vanity.namespace" . }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "vanity.preflight" . }}
+  namespace: {{ include "vanity.namespace" . }}
+  labels:
+    {{- include "vanity.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 180
+  ttlSecondsAfterFinished: {{ .Values.jobs.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "vanity.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "vanity.preflight" . }}
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: preflight
+          image: "{{ .Values.jobs.image.repository }}:{{ .Values.jobs.image.tag }}"
+          resources:
+            {{- toYaml .Values.jobs.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: NAMESPACE
+              value: {{ include "vanity.namespace" . | quote }}
+            - name: SERVER_SECRET
+              value: {{ include "vanity.serverCertSecret" . | quote }}
+            - name: CLIENT_SECRET
+              value: {{ include "vanity.clientCertSecret" . | quote }}
+            - name: TRUST_CM
+              value: {{ .Values.tls.trustBundleConfigMap | quote }}
+            - name: MONGOT_SERVICE
+              value: {{ include "vanity.mongotService" . | quote }}
+            - name: SERVER_NAMES
+              value: {{ include "vanity.serverNames" . | fromJsonArray | join " " | quote }}
+            - name: JOB_IMAGE
+              value: "{{ .Values.jobs.image.repository }}:{{ .Values.jobs.image.tag }}"
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -uo pipefail
+              : "${NAMESPACE:?}" "${SERVER_SECRET:?}" "${CLIENT_SECRET:?}" "${TRUST_CM:?}" "${MONGOT_SERVICE:?}" "${SERVER_NAMES:?}" "${JOB_IMAGE:?}"
+              log() { printf '[preflight %s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
+              PROBLEMS=0
+              bad() { printf '[preflight] MISSING: %s\n' "$*" >&2; PROBLEMS=$((PROBLEMS + 1)); }
+
+              # keys_of <kind> <name>: the key names of .data, one per line; the values never leave the API call.
+              # stderr is kept, so a Forbidden reads as one and not as "not found".
+              keys_of() { oc get "$1" "$2" -n "$NAMESPACE" -o go-template='{{`{{range $k, $v := .data}}{{$k}}{{"\n"}}{{end}}`}}'; }
+              # need_keys <kind> <name> <key>...: reports the object when absent, else each key it lacks. Returns 1 when absent.
+              need_keys() {
+                local kind="$1" name="$2" keys k; shift 2
+                if ! keys="$(keys_of "$kind" "$name" 2>&1)"; then
+                  bad "${kind} ${name}: $(printf '%s' "$keys" | tail -1)"
+                  return 1
+                fi
+                for k in "$@"; do
+                  grep -qxF "$k" <<<"$keys" || bad "${kind} ${name}: no key ${k} (it has: $(printf '%s' "$keys" | tr '\n' ' '))"
+                done
+                log "ok: ${kind} ${name} ($(printf '%s' "$keys" | tr '\n' ' '))"
+              }
+
+              log "checking what Envoy for ${SERVER_NAMES} mounts and dials in ${NAMESPACE}"
+              need_keys secret "$CLIENT_SECRET" tls.crt tls.key
+              need_keys configmap "$TRUST_CM" ca.crt
+              if oc get service "$MONGOT_SERVICE" -n "$NAMESPACE" >/dev/null 2>&1; then
+                log "ok: service ${MONGOT_SERVICE} (the mongot pods Envoy dials)"
+              else
+                bad "service ${MONGOT_SERVICE}: the mongot Service the main chart's operator makes; is search.name right, and the MongoDBSearch installed in ${NAMESPACE}?"
+              fi
+
+              # The server certificate must name every server name Envoy accepts: a SAN equal to it, or a one-label
+              # wildcard (*.example.com covers a.example.com, not a.b.example.com), as TLS has it. Only the public
+              # certificate is read; the key stays in the API.
+              if need_keys secret "$SERVER_SECRET" tls.crt tls.key; then
+                if ! command -v openssl >/dev/null; then
+                  printf '[preflight] REFUSED: the Job image %s has no openssl, so the server certificate cannot be checked for %s: set jobs.image to an image with oc and openssl. Nothing was changed.\n' "$JOB_IMAGE" "$SERVER_NAMES" >&2
+                  exit 1
+                fi
+                # The SAN line as `openssl x509 -text` prints it (the line after its heading), read as the main
+                # chart's prerequisites script reads it, so any openssl serves.
+                if ! sans="$(oc get secret "$SERVER_SECRET" -n "$NAMESPACE" -o jsonpath='{.data.tls\.crt}' | base64 -d \
+                     | openssl x509 -noout -text 2>/dev/null | awk 'index($0, "X509v3 Subject Alternative Name") {getline; print; exit}' \
+                     | tr ',' '\n' | sed -n 's/^ *DNS://p' | tr '[:upper:]' '[:lower:]')"; then
+                  sans=""
+                fi
+                log "secret ${SERVER_SECRET} names: $(printf '%s' "$sans" | tr '\n' ' ')"
+                for want in $SERVER_NAMES; do
+                  want="$(tr '[:upper:]' '[:lower:]' <<<"$want")"; found=""
+                  while IFS= read -r san; do
+                    [ -n "$san" ] || continue
+                    [ "$san" = "$want" ] && { found=1; break; }
+                    case "$san" in \*.*)
+                      case "$want" in *.*) [ -n "${want%%.*}" ] && [ "${want#*.}" = "${san#\*.}" ] && { found=1; break; } ;; esac ;;
+                    esac
+                  done <<<"$sans"
+                  [ -n "$found" ] && log "ok: ${want} is a name of the certificate in ${SERVER_SECRET}" \
+                    || bad "secret ${SERVER_SECRET}: its certificate does not name ${want} (SANs: $(printf '%s' "$sans" | tr '\n' ' ')); every client would refuse it. Issue a certificate with that name, or set publicHostname to one it has"
+                done
+              fi
+
+              if [ "$PROBLEMS" -gt 0 ]; then
+                printf '[preflight] FAILED: %s problem(s). The secrets and the trust bundle are the main chart'"'"'s (its generate-mongodbsearch-prerequisites.sh makes them); nothing was installed.\n' "$PROBLEMS" >&2
+                exit 1
+              fi
+              log "everything Envoy mounts and dials is present, and the certificate names every server name"
+{{- end }}

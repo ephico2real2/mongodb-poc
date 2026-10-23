@@ -1,0 +1,55 @@
+{{- /*
+Optional: per-pod scraping of our Envoy, the main chart's 30-monitoring.yaml for its Envoy. A ServiceMonitor
+scrapes endpoints, not the Service's address, so each pod is its own series. The Service carries this chart's
+labels and not the main chart's mongodb.com/search-name, so the main chart's monitor does not also adopt it.
+*/ -}}
+{{- if .Values.monitoring.serviceMonitor.enabled }}
+# Envoy's admin port, read-only: the bootstrap restricts it to /stats, /ready, /logging and /drain_listeners.
+# ClusterIP only; never give it a Route.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vanity.statsService" . }}
+  namespace: {{ include "vanity.namespace" . }}
+  labels:
+    {{- include "vanity.labels" . | nindent 4 }}
+    app.kubernetes.io/component: observability
+    app: {{ include "vanity.deployment" . }}
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ include "vanity.deployment" . }}
+  ports:
+    - name: admin
+      port: 9901
+      targetPort: admin
+      protocol: TCP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "vanity.public" . }}-envoy
+  namespace: {{ include "vanity.namespace" . }}
+  labels:
+    {{- include "vanity.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: observability
+      app: {{ include "vanity.deployment" . }}
+  endpoints:
+    - port: admin
+      # The admin allowlist matches on the prefix /stats.
+      path: /stats/prometheus
+      interval: {{ .Values.monitoring.serviceMonitor.interval }}
+      # Envoy names these two counters without the _total that Prometheus expects of a counter; they get the
+      # suffix at the scrape, as the main chart's dashboards and alerts read them.
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: (envoy_cluster_upstream_rq_(?:retry|xx))
+          targetLabel: __name__
+          replacement: ${1}_total
+{{- end }}

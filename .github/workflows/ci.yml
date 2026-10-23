@@ -25,6 +25,11 @@ jobs:
           helm version --short
       - name: Chart tests
         run: test/chart.sh
+      # test/vanity-chart.sh: the second chart: lint, the renders, the schema's refusals, its bootstrap against the
+      # operator's captured Envoy config, Envoy's own validation of it in the chart's image, and the preflight's
+      # script against a stand-in oc.
+      - name: Vanity chart tests
+        run: CONTAINER_ENGINE=docker test/vanity-chart.sh
       # The csv-reclaim hook's script, taken from the render and run against a stand-in oc: what it deletes, what
       # it never deletes, and where Argo CD runs it.
       - name: csv-reclaim hook tests
@@ -107,9 +112,10 @@ jobs:
       - name: The tests left the tree as it was
         if: ${{ !cancelled() }}
         run: git status --porcelain && git diff --exit-code
-  # Publishes the chart when its version is new: the package of this commit, as the release
-  # mongodb-search-helm-<version>. A version that is already released is left alone. Only on main, and only after
-  # the chart, prerequisites and diagrams jobs passed (the docs job does not hold a release back). To release: change `version` in chart/mongodb-search-helm/Chart.yaml and merge.
+  # Publishes each chart whose version is new: the package of this commit, as the release <chart>-<version>
+  # (mongodb-search-helm-0.3.34, mongot-envoy-vanity-url-helm-0.1.0). A version that is already released is left
+  # alone. Only on main, and only after the chart, prerequisites and diagrams jobs passed (the docs job does not hold a
+  # release back). To release: change `version` in the chart's Chart.yaml and merge.
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [chart, prerequisites, diagrams]
@@ -127,20 +133,23 @@ jobs:
           tar -xzf helm-v4.3.0-linux-amd64.tar.gz
           sudo install linux-amd64/helm /usr/local/bin/helm
           rm -rf linux-amd64 helm-v4.3.0-linux-amd64.tar.gz
-      - name: Publish the chart when its version is new
+      - name: Publish each chart whose version is new
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          version="$(sed -n 's/^version: *//p' chart/mongodb-search-helm/Chart.yaml)"
-          tag="mongodb-search-helm-${version}"
-          if gh release view "${tag}" >/dev/null 2>&1; then
-            echo "${tag} is already released: nothing to do"
-            exit 0
-          fi
-          helm package chart/mongodb-search-helm
-          gh release create "${tag}" "mongodb-search-helm-${version}.tgz" --target "${GITHUB_SHA}" \
-            --title "mongodb-search-helm ${version}" --generate-notes
+          for dir in chart/*/; do
+            name="$(sed -n 's/^name: *//p' "${dir}Chart.yaml")"
+            version="$(sed -n 's/^version: *//p' "${dir}Chart.yaml")"
+            tag="${name}-${version}"
+            if gh release view "${tag}" >/dev/null 2>&1; then
+              echo "${tag} is already released: nothing to do"
+              continue
+            fi
+            helm package "${dir}"
+            gh release create "${tag}" "${name}-${version}.tgz" --target "${GITHUB_SHA}" \
+              --title "${name} ${version}" --generate-notes
+          done
   # Every diagram page through diagram-kit's checks (a font that did not load, a label past its box, text under
   # 4.5:1 in either theme, a dashed arrow with no label, sideways scroll at 375 px). No PNG is written: the committed
   # ones are rendered and looked at by a person. The kit's tag is given twice; keep the two the same.

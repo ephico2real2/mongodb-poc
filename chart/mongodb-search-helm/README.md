@@ -6,6 +6,11 @@ The chart replaces Steps 6a, 6b and 6d of the
 [fresh install runbook](../../docs/mongot-envoy-mtls-fresh-install-runbook.md) and adds the operator install.
 Steps 1 to 5 of the runbook stay manual: the chart never creates a certificate, a secret or the trust bundle.
 
+The operator's Envoy accepts one TLS server name, `loadBalancer.externalHostname`. To serve a second, vanity
+hostname from the same mongot pods, install [mongot-envoy-vanity-url-helm](../mongot-envoy-vanity-url-helm/README.md)
+beside this chart: our own Envoy with the operator's configuration, the same secrets, and its own passthrough Route
+or Ingress ([docs/mongot-envoy-vanity-url.md](../../docs/mongot-envoy-vanity-url.md)).
+
 ## What it does
 
 | Order | Object | What for |

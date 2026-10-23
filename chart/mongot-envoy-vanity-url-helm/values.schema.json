@@ -1,0 +1,184 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["search", "publicHostname", "tls", "mongot", "envoy", "expose"],
+  "definitions": {
+    "dnsName": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*\\.[a-z]([-a-z0-9]*[a-z0-9])?$",
+      "description": "A DNS name with at least two labels, never an IP: Envoy selects by SNI"
+    },
+    "objectName": {
+      "type": "string",
+      "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+      "description": "A Kubernetes object name, or empty for the derived one"
+    },
+    "duration": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?(ms|s|m|h)$",
+      "description": "An Envoy duration: 300s, 1.5s, 10ms"
+    },
+    "quantity": {
+      "type": ["string", "integer", "number"],
+      "pattern": "^[+-]?([0-9]+(\\.[0-9]*)?|\\.[0-9]+)(([KMGTPE]i)|[numkMGTPE]|([eE][+-]?[0-9]+))?$"
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requests", "limits"],
+      "description": "A Kubernetes quantity each: 2, 500m, 8Gi. Every request and limit is set: a namespace whose ResourceQuota covers limits refuses a pod that leaves one out",
+      "properties": {
+        "requests": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cpu", "memory"],
+          "properties": {"cpu": {"$ref": "#/definitions/quantity"}, "memory": {"$ref": "#/definitions/quantity"}}
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cpu", "memory"],
+          "properties": {"cpu": {"$ref": "#/definitions/quantity"}, "memory": {"$ref": "#/definitions/quantity"}}
+        }
+      }
+    }
+  },
+  "properties": {
+    "namespace": {
+      "type": "string",
+      "pattern": "^$|^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$",
+      "description": "Where every object goes; empty: the release's namespace"
+    },
+    "search": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 43,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+          "description": "The MongoDBSearch's name, as the main chart limits it"
+        }
+      }
+    },
+    "publicHostname": {"$ref": "#/definitions/dnsName"},
+    "serverNames": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/dnsName"},
+      "description": "Every TLS server name Envoy accepts; empty: [publicHostname]"
+    },
+    "tls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["certsSecretPrefix", "trustBundleConfigMap"],
+      "properties": {
+        "certsSecretPrefix": {"type": "string", "minLength": 1},
+        "serverCertSecret": {"$ref": "#/definitions/objectName"},
+        "clientCertSecret": {"$ref": "#/definitions/objectName"},
+        "trustBundleConfigMap": {"type": "string", "minLength": 1, "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"}
+      }
+    },
+    "mongot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["port"],
+      "properties": {
+        "service": {"$ref": "#/definitions/objectName"},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535}
+      }
+    },
+    "envoy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image", "replicas", "resources", "retryPolicy", "timeouts", "podDisruptionBudget"],
+      "properties": {
+        "image": {"type": "string", "minLength": 1},
+        "replicas": {"type": "integer", "minimum": 1},
+        "resources": {"$ref": "#/definitions/resources"},
+        "retryPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["numRetries", "perTryTimeout"],
+          "properties": {
+            "numRetries": {"type": "integer", "minimum": 0},
+            "perTryTimeout": {"$ref": "#/definitions/duration"}
+          }
+        },
+        "timeouts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["route", "streamIdle", "request", "upstreamIdle"],
+          "properties": {
+            "route": {"$ref": "#/definitions/duration"},
+            "streamIdle": {"$ref": "#/definitions/duration"},
+            "request": {"$ref": "#/definitions/duration"},
+            "upstreamIdle": {"$ref": "#/definitions/duration"}
+          }
+        },
+        "podDisruptionBudget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "maxUnavailable"],
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "maxUnavailable": {"type": "integer", "minimum": 1, "description": "0 would refuse every eviction and block every node drain"}
+          }
+        }
+      }
+    },
+    "expose": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "type", "balance", "ingressClassName"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "type": {"type": "string", "enum": ["route", "ingress"]},
+        "name": {"$ref": "#/definitions/objectName"},
+        "balance": {"type": "string", "enum": ["roundrobin", "leastconn", "source", "random"]},
+        "ingressClassName": {"type": "string", "minLength": 1},
+        "annotations": {"type": "object"},
+        "labels": {"type": "object"}
+      }
+    },
+    "preflight": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"enabled": {"type": "boolean"}}
+    },
+    "monitoring": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "serviceMonitor": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "interval": {"type": "string", "minLength": 1},
+            "labels": {"type": "object"}
+          }
+        }
+      }
+    },
+    "jobs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repository", "tag"],
+          "properties": {
+            "repository": {"type": "string", "minLength": 1},
+            "tag": {"type": "string", "minLength": 1}
+          }
+        },
+        "resources": {"$ref": "#/definitions/resources"},
+        "ttlSecondsAfterFinished": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}
