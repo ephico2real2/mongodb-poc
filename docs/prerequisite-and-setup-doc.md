@@ -74,6 +74,12 @@ Result: `--check` asks for no passphrase. It reports the folder, the tools, the 
 
 Steps 2 to 4 can also run as one command: [Steps 2 to 4 in one command](#steps-2-to-4-in-one-command).
 
+Discovery follows a PEM that is a symbolic link, and prints the path it chose. A public certificate, or a client
+certificate with no name, cannot show which namespace it was issued for: keep only this installation's PEMs where the
+script looks, or name the PEMs and give `--hostname`. A plain word that is an existing file is taken as a file, not a
+namespace: name the namespace with `--target-namespace` then. A PEM path that begins with `-` is written `./-…`, so
+that it is not read as an option.
+
 ### 2. Create the trust bundle
 
 From the CA certificates in the three PEMs, found as in Step 1, or in the PEMs you name. No passphrase is asked: a CA certificate is not encrypted.
@@ -144,10 +150,11 @@ To make the five objects with `oc` alone, see [Part 1 by hand](#part-1-by-hand).
 
 ### 6. Write the values file
 
-`--check` prints the namespace, the hostname and the user name as the script found them. Set the namespace, and the two values that have no default: the public hostname and the source mongod. Everything else defaults to the runbook's values; the full list is in the [chart README](../chart/mongodb-search-helm/README.md#values).
+Use the Step 5 `--check` output for the namespace, the hostname and the user name as the script found them. Set the namespace, and the two values that have no default: the public hostname and the source mongod. Everything else defaults to the runbook's values; the full list is in the [chart README](../chart/mongodb-search-helm/README.md#values). Start from the example
+beside the script:
 
 ```bash
-bash $PREREQ --check $NS
+cp "$(dirname "$PREREQ")/examples/values-dvh-gp6-rnd.yaml" my-values.yaml   # then set the values below
 ```
 
 ```yaml
@@ -247,12 +254,6 @@ The script finds each PEM that is not named, and prints the file chosen with its
 1. A path named on the command line (`--mongot <pem>`, `--envoy <pem>`, `--route <pem>`), or in the environment (`MONGOT_PEM`, `ENVOY_PEM`, `ROUTE_PEM`).
 2. The certificate's common name, as the company names its PEM files (the [runbook](mongot-envoy-mtls-fresh-install-runbook.md), Step 1), in `./$NS/` (if it holds no PEM, in the current directory): `mongot-search-0-svc.dvh-gp6-rnd.svc.cluster.local.pem`, `mongot-search-0-proxy-svc.dvh-gp6-rnd.svc.cluster.local.pem`, and `<fqdn>.pem` for the public certificate when `--hostname <fqdn>` is given. For other names set `MONGOT_PEM_NAME`, `ENVOY_PEM_NAME` or `ROUTE_PEM_NAME`, with the tokens `{search}`, `{ns}` and `{hostname}`. A file found by its name must still fit its step.
 3. Otherwise the one `*.pem` in `./$NS/` (if it holds none, in the current directory) whose certificate fits the step: mongot's names mongot's service and allows server and client authentication; Envoy's allows client authentication; the public one allows server authentication and names one public hostname. No PEM, or two, for a step is refused; a PEM that fits two steps is given to neither. Name the PEM to settle it.
-
-Discovery follows a PEM that is a symbolic link, and prints the path it chose. A public certificate, or a client
-certificate with no name, cannot show which namespace it was issued for: keep only this installation's PEMs where the
-script looks, or name the PEMs and give `--hostname`. A plain word that is an existing file is taken as a file, not a
-namespace: name the namespace with `--target-namespace` then. A PEM path that begins with `-` is written `./-…`, so
-that it is not read as an option.
 
 Every command of Steps 1 to 5 takes the PEMs this way, and each still takes a PEM by its path, as `--check --mongot <mongot PEM> --envoy <Envoy client PEM> --route <public hostname PEM> $NS`.
 

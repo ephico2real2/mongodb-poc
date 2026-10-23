@@ -374,11 +374,6 @@ oc logs -n $NS -l app=mongot-search-lb-0  --all-containers --prefix --since=10m 
 
 No handshake or verify errors means mTLS is working. Confirm end to end by running a `$search` query against a collection with a search index.
 
-- [ ] Both pods Running and Ready
-- [ ] No TLS errors in mongot or Envoy logs
-- [ ] `$search` query returns results
-- [ ] Decrypted key files deleted
-
 ## Reference
 
 ### Operator source references
@@ -434,6 +429,11 @@ rm -f mongot.key envoy.key *.pass
 ```
 
 Keep the original PEM files and Step 4 backups somewhere access-controlled. Delete the backups once the change has been stable for an agreed period.
+
+- [ ] Both pods Running and Ready
+- [ ] No TLS errors in mongot or Envoy logs
+- [ ] `$search` query returns results
+- [ ] Decrypted key files deleted
 
 ## What's next
 

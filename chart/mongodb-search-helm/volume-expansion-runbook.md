@@ -113,13 +113,13 @@ search:
 ```
 
 Nothing else in the same change: not the replicas, not the resources, not the chart's version. The new size must be
-larger than what every claim has; `--check` prints it:
+larger than what every claim has now, which `--check` prints (it reads the cluster, not the values file):
 
 ```bash
-bash $X --check --statefulset $STS      # "has ..." on every claim
+bash $X --check --statefulset $STS      # "has ..." on every claim: the size now
 ```
 
-Result: the values ask for the new size, and every claim "has" less.
+Result: the size each claim has now; the size written in the values must be larger than every one of them.
 
 ### 2. Sync, or upgrade
 
@@ -155,7 +155,7 @@ five are spent the operation reads `Failed` and Argo CD does not sync that revis
 step 4 either: the Application reads `Synced`, so there is nothing for it to do. Step 5 is then a sync by hand.
 On a real cluster, where a disk takes time to grow, expect that.
 
-To back out here: [Clean up](#clean-up).
+To back out here, before step 3: [Clean up](#clean-up).
 
 **After the sync.** Steps 3 to 6 below.
 
@@ -531,15 +531,15 @@ not show is exactly what differs on vSphere.
 
 ## Clean up
 
-To back out after step 2: put the old size back in the values and sync, or upgrade with the same command as step 2.
+After step 3 there is no way back: a volume that has grown stays grown (step 3).
+
+Only to back out after step 2, before step 3: put the old size back in the values and sync, or upgrade with the same command as step 2.
 The resource returns to `Running` and the gate passes: on the lab, 32 seconds, with the StatefulSet and the pods
 untouched.
 
 ```bash
 helm upgrade <release> <chart> -n $TargetNamespace -f my-values.yaml --timeout 20m    # the old size back in my-values.yaml
 ```
-
-After step 3 there is no way back: a volume that has grown stays grown (step 3).
 
 With `search.persistence.autoExpand`, take the flag out after the growth: step 5 of
 [its table](#letting-the-chart-take-steps-3-to-5-searchpersistenceautoexpand).

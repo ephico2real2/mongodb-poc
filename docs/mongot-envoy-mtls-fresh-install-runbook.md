@@ -579,12 +579,6 @@ done
 
 Each mongod keeps one long-lived connection, and a connection stays on the Envoy pod it first landed on. With one mongod sending queries, one pod showing every request and the other showing 0 is expected. Once several mongod servers are connected, a pod that stays at 0 means the connections are not being spread: check the balance annotation from Step 6d.
 
-- [ ] mongot (3 pods) and Envoy (2 pods) Running and Ready
-- [ ] No TLS errors in mongot or Envoy logs
-- [ ] Public endpoint returns `Verify return code: 0 (ok)`
-- [ ] `$search` query returns results
-- [ ] Decrypted key files deleted
-
 ## Reference
 
 ### Operator source references
@@ -644,6 +638,12 @@ rm -f mongot.key envoy-client.key lb.key *.pass
 This unlinks the files; nothing overwrites them. On current macOS `rm -P` does nothing (its manual page says "This flag has no effect"), and on a solid-state or copy-on-write disk `shred` cannot overwrite a file in place either. Do this work in a directory on an encrypted disk.
 
 Keep the original PEM files somewhere access-controlled.
+
+- [ ] mongot (3 pods) and Envoy (2 pods) Running and Ready
+- [ ] No TLS errors in mongot or Envoy logs
+- [ ] Public endpoint returns `Verify return code: 0 (ok)`
+- [ ] `$search` query returns results
+- [ ] Decrypted key files deleted
 
 ## What's next
 
