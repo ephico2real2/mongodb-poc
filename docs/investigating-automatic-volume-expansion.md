@@ -24,7 +24,7 @@ flag is in the chart, in the runbook, under "Letting the chart take steps 3 to 5
   or an upgrade, mounts the runbook's script from the chart, and acts when the operator has refused the new
   size (and, since 0.3.26, to finish a growth that stopped before its end). On the lab it grew the volumes eight times, from 8Gi to 16Gi, with the size synced first and the flag set
   after, and with both in one change: the same pods and claims throughout, and 566 of 566 searches answered. Two defects showed
-  only there, and are corrected: the Job hung inside `oc delete`, and the flag alone did not start a sync. It is one template of 237 lines; in the script it changed one flag in 0.3.25, and 0.3.26 added the plan, the verification and the restart (`--plan`, `--verify`, `--restart-pending`, `--restart-later`: 281 lines). It needs no image and no cluster-wide
+  only there, and are corrected: the Job hung inside oc delete, and the flag alone did not start a sync. It is one template of 237 lines; in the script it changed one flag in 0.3.25, and 0.3.26 added the plan, the verification and the restart (`--plan`, `--verify`, `--restart-pending`, `--restart-later`: 281 lines). It needs no image and no cluster-wide
   install.
 - **A controller of our own would do the same three steps, at a much higher cost.** A custom resource is not
   needed at all (the size already has a place, the MongoDBSearch); what a controller adds is that it acts without
@@ -54,13 +54,18 @@ Run to the end four times on the lab on 2026-10-10 ([testing-mongot-storage-resi
 | Who | What it does about a StatefulSet's volume size | Source |
 | --- | --- | --- |
 | Kubernetes | Nothing: the claim template cannot be changed. The proposal "StatefulSet Support for Updating Volume Claim Template" is open, marked alpha, with 1.35 written as its target. Its design pull request and its code pull request are both closed, not merged. Its author, 2026-04-14: "To be honest. We currently don't have much time for this. Sorry." | kubernetes/enhancements issue 4650 and pull request 4651; kubernetes/kubernetes pull request 126530 |
-| Kubernetes 1.35.6 on the lab | The API server lists no feature gate for it | `oc get --raw /metrics`, the `kubernetes_feature_enabled` lines |
+| Kubernetes 1.35.6 on the lab | The API server lists no feature gate for it | the API server's metrics (below the table), the `kubernetes_feature_enabled` lines |
 | MongoDB's operator 1.13.0, database resources | Grows the claims, waits, deletes the StatefulSet with the orphan policy, makes it again: `HandlePVCResize`, called for a standalone, a replica set, a sharded cluster, a multi-cluster replica set and the application database | `controllers/operator/create/create.go`, line 119, at tag 1.13.0 |
 | MongoDB's operator 1.13.0, search | Writes the StatefulSet with a plain create-or-update, and so meets Kubernetes' refusal | `controllers/searchcontroller/mongodbsearch_reconcile_helper.go`, line 1258 |
 | MongoDB, on search | "Customers need to grow mongot index storage, and the Search controller has no native PVC resize. Changing `persistence.single.storage` on the MongoDBSearch CR hits the immutable `volumeClaimTemplates` error, and the CR goes `Failed`." The pull request adds a test of the steps by hand, and is open, not merged | mongodb/mongodb-kubernetes pull request 1621, "Search: e2e verifying manual mongot PVC resize workaround", read 2026-10-10 |
 | MongoDB's documentation | Describes the operator's "easy expansion" for its database resources: "The easy expansion mechanism requires the default RBAC included with the Kubernetes Operator. Specifically, it requires get, list, watch, patch and update permissions for persistantVolumeClaims." The page names neither MongoDBSearch nor mongot | "Increase Storage for Persistent Volumes" |
 | Elastic's operator | The same three steps, by itself: "ECK will update the existing PersistentVolumeClaims accordingly, and recreate the StatefulSet automatically." Where the driver cannot grow a file system in use: "Pods must be manually deleted after the resize" | Elastic, "Volume claim templates" |
 | VSHN's statefulset-resize-controller | Something else: for storage that cannot grow a volume, it scales the StatefulSet down, makes new claims and copies the data. Last release 2023 | its README |
+
+```bash
+# Kubernetes 1.35.6 on the lab: the kubernetes_feature_enabled lines
+oc get --raw /metrics
+```
 
 Two things follow.
 
@@ -72,10 +77,21 @@ Two things follow.
 
 On the lab the operator's own service account may already do what the steps need:
 
-```console
-$ oc auth can-i patch persistentvolumeclaims -n mongodb-poc --as=system:serviceaccount:mongodb-poc:mongodb-kubernetes-operator
+```bash
+oc auth can-i patch persistentvolumeclaims -n mongodb-poc \
+  --as=system:serviceaccount:mongodb-poc:mongodb-kubernetes-operator
+```
+
+```text
 yes
-$ oc auth can-i delete statefulsets.apps -n mongodb-poc --as=system:serviceaccount:mongodb-poc:mongodb-kubernetes-operator
+```
+
+```bash
+oc auth can-i delete statefulsets.apps -n mongodb-poc \
+  --as=system:serviceaccount:mongodb-poc:mongodb-kubernetes-operator
+```
+
+```text
 yes
 ```
 
@@ -138,7 +154,12 @@ Its role, in the release's namespace only:
 | Volume claims | read, list, ask for more | Kubernetes lets a claim's size only grow, and nothing else of a claim be changed |
 
 It may not delete another pod, or a claim, and it holds no right outside the namespace. Asked of the lab's API
-server for the Job's service account, with chart 0.3.26 (`oc auth can-i delete ... --as=<the account>`):
+server for the Job's service account, with chart 0.3.26, one check per object:
+
+```bash
+# Replace both placeholders for each object and the Job's service account.
+oc auth can-i delete '<resource/name>' --as='<the account>'
+```
 
 ```text
 delete pod/mongot-search-0-0: yes                        delete pods: no
@@ -147,7 +168,7 @@ delete pod/mongot-search-lb-0-778dd7bffc-27wks: no       delete statefulsets.app
 delete statefulset.apps/mongot-search-0: yes
 ```
 
- Storage classes are read with what
+Storage classes are read with what
 OpenShift gives every signed-in identity (the `basic-user` cluster role, bound to `system:authenticated`).
 
 The right that deserves thought is the delete of the StatefulSet: the script only ever sends it with the orphan
@@ -223,7 +244,7 @@ W1010 22:25:26 reflector.go:535] failed to list *unstructured.Unstructured: stat
   User "system:serviceaccount:mongodb-poc:mongot-mongodb-search-helm-expand-volumes" cannot list resource "statefulsets"
 ```
 
-**What went wrong.** `oc delete` waits for the object to be gone, and the script let it. It first reads the
+**What went wrong.** oc delete waits for the object to be gone, and the script let it. It first reads the
 object; if it is still there it then lists and watches that name and waits for a "deleted" event, for up to a week
 (`effectiveTimeout = 168 * time.Hour` in kubectl's `delete.go`; the wait is `IsDeleted` in `wait/delete.go`, at
 v1.35.0). The Job's role allowed a read and the delete of the StatefulSet, and neither a list nor a watch, so the

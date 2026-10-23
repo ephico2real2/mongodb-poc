@@ -229,7 +229,7 @@ openssl x509 -req -in envoy-server.csr \
   -extfile envoy-server.cnf -extensions v3_req     # <- or the SANs are dropped
 ```
 
-`-extfile`/`-extensions` are not optional: without them `openssl x509` silently discards
+`-extfile`/`-extensions` are not optional: without them openssl x509 silently discards
 the CSR's extensions and you get a certificate with no SANs, which fails verification in
 a way that looks like a trust problem.
 
@@ -453,20 +453,21 @@ separately. No FIPS. Cipher suites are not configurable.
 
 ```bash
 # 1. the cert volumes are actually mounted (the section-2 failure)
+#    expect: envoy-config, envoy-server-cert, envoy-client-cert, ca-cert
 oc get pod -n mongodb-poc -l app=mongot-search-lb-0 \
   -o jsonpath='{range .items[0].spec.containers[0].volumeMounts[*]}{.name}{"\n"}{end}'
-#   expect: envoy-config, envoy-server-cert, envoy-client-cert, ca-cert
 
 # 2. Envoy has SNI matching and a TLS transport socket
 oc get cm mongot-search-lb-0-config -n mongodb-poc -o jsonpath='{.data.lds\.json}' \
   | grep -o '"server_names":\[[^]]*\]'
 
 # 3. mongot is serving TLS on the same port
+#    expect: address: 0.0.0.0:27028  /  mode: TLS
 oc get cm mongot-search-0-config -n mongodb-poc -o jsonpath='{.data.config\.yml}' | grep -A4 'grpc:'
-#   expect: address: 0.0.0.0:27028  /  mode: TLS
 
 # 4. end to end
-cd mongodb && ./scripts/verify-search.sh
+cd mongodb \
+  && ./scripts/verify-search.sh
 ```
 
 ## 10. Troubleshooting
@@ -477,7 +478,7 @@ cd mongodb && ./scripts/verify-search.sh
 | `wrong version number` at the client | Envoy has no usable server cert, or you are speaking TLS to a plaintext listener |
 | `DPE` / 400 in Envoy's access log | TLS `ClientHello` arrived at a plaintext h2c listener |
 | Handshake fails, cert looks valid | `mongotHost` is an **IP** — TLS clients send no SNI for IP literals, so no filter chain matches |
-| Certificate has no SANs | `openssl x509 -req` run without `-extfile`/`-extensions` |
+| Certificate has no SANs | the signing in §6.2, openssl x509 -req, run without `-extfile`/`-extensions` |
 | `mongot` cannot sync after enabling TLS | the `mongod` certificate does not cover what `rs.conf()` advertises |
 | Operator ignores your Secret | the name does not match the derived `<prefix>-<name>-search-…` form |
 

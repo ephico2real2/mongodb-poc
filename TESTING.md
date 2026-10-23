@@ -65,11 +65,19 @@ so the suite degrades cleanly when an optional piece (the toolbox pod, Thanos) i
 
 ### Running it, briefly
 
-| Command | What it does |
+| Run | What it does |
 |---|---|
-| `./test/run.sh` | every suite; exit 0 if all pass, exit 1 lists the failures by name |
-| `./test/run.sh entry` | one suite — `platform`, `data`, `search`, `entry`, `attribution`, `alerts`, `distribution`, `tls` |
-| `SKIP_DISTRIBUTION=1 ./test/run.sh` | skip the suites that generate query load |
+| no argument | every suite; exit 0 if all pass, exit 1 lists the failures by name |
+| a suite's name, here `entry` | one suite — `platform`, `data`, `search`, `entry`, `attribution`, `alerts`, `distribution`, `tls` |
+| `SKIP_DISTRIBUTION=1` | skip the suites that generate query load |
+
+The commands, in the table's order:
+
+```bash
+./test/run.sh
+./test/run.sh entry
+SKIP_DISTRIBUTION=1 ./test/run.sh
+```
 
 Skips never fail a run, so the suite degrades cleanly when an optional piece is missing rather
 than reporting a false failure.
@@ -158,7 +166,8 @@ Two index definitions sit in `mongodb/data/indexes/`:
 ## Step 2 — load it
 
 ```bash
-cd mongodb && ./scripts/load-data.sh
+cd mongodb \
+  && ./scripts/load-data.sh
 ```
 
 ```text
@@ -175,8 +184,12 @@ So the call traverses VIP → Service → Envoy → `mongot` exactly as a query 
 `load-data.sh` reaches `QUERYABLE`, the control path works.
 
 If it stops at `TIMEOUT`, the indexes were accepted but never became queryable — that is
-a `mongot` → `mongod` **sync** problem, not a query-path problem. Check
-`oc logs mongot-search-0-0 -n mongodb-poc | grep -i auth`.
+a `mongot` → `mongod` **sync** problem, not a query-path problem. Check mongot's log for
+authentication errors:
+
+```bash
+oc logs mongot-search-0-0 -n mongodb-poc | grep -i auth
+```
 
 ---
 
@@ -333,9 +346,12 @@ The headless Service resolves to every pod, which is what lets Envoy fan out:
 
 ```bash
 oc exec -n mongodb-poc $TB -- getent hosts mongot-search-0-svc
-#   10.217.0.253
-#   10.217.1.6
-#   10.217.1.7
+```
+
+```text
+10.217.0.253
+10.217.1.6
+10.217.1.7
 ```
 
 ## What a healthy deployment looks like
@@ -355,7 +371,11 @@ Seven pods, all `Running 1/1`, **zero restarts**:
 
 ### Measured resource usage vs the defaults
 
-`oc adm top pods` on an idle-to-light load:
+Usage on an idle-to-light load:
+
+```bash
+oc adm top pods
+```
 
 ```text
 mongot-search-0-0                      14m   449Mi
@@ -381,12 +401,22 @@ severs every in-flight cursor.
 
 ## Step 6 — failure behaviour worth exercising
 
-| Test | Command | Expected |
+| Test | Action | Expected |
 |---|---|---|
-| `mongot` restart | `oc delete pod mongot-search-0-1 -n mongodb-poc` | new queries keep succeeding; in-flight streams on that pod fail |
+| `mongot` restart | delete the pod `mongot-search-0-1` | new queries keep succeeding; in-flight streams on that pod fail |
 | Distribution after restart | re-run `verify-search.sh` | load returns to all three once the pod is Ready |
-| Envoy restart | `oc rollout restart deploy/mongot-search-lb-0 -n mongodb-poc` | with `replicas: 2`, absorbed |
+| Envoy restart | restart the Deployment `mongot-search-lb-0` | with `replicas: 2`, absorbed |
 | Primary failover | stop the `mongod` holding PRIMARY | election, then queries resume |
+
+The two commands, in the table's order:
+
+```bash
+# mongot restart
+oc delete pod mongot-search-0-1 -n mongodb-poc
+
+# Envoy restart
+oc rollout restart deploy/mongot-search-lb-0 -n mongodb-poc
+```
 
 **The honest limit:** Envoy retries `RESOURCE_EXHAUSTED` **only when the gRPC status
 arrives in response headers**. Once `mongot` has begun streaming a response, a failure

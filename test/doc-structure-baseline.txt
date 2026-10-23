@@ -2,48 +2,6 @@
 # One per line: <file> TAB inline TAB <the command> (rule 3), or <file> TAB shape TAB <kind> (headings and steps).
 # Only ever remove lines: rewrite a document to the doc-guide skill, then run test/doc-structure.py --prune.
 # A new violation is never added here; it is fixed in the document.
-DEMO.md	inline	./search-cli.sh -v -y 1990 space
-DEMO.md	inline	./search-cli.sh -v space -y 1990
-DEMO.md	inline	oc get pods -n mongodb-poc
-DEMO.md	inline	oc logs mongot-search-0-0 -n mongodb-poc \| grep -i auth
-DEMO.md	inline	oc rollout restart deploy/mongot-search-lb-0 -n mongodb-poc
-DEPLOYMENT.md	inline	crc version
-DEPLOYMENT.md	inline	mongodb/vm.sh address
-DEPLOYMENT.md	inline	oc get node crc -o jsonpath='{.metadata.labels}' | grep exclude-from-external
-DEPLOYMENT.md	inline	oc get nodes
-DEPLOYMENT.md	inline	oc get packagemanifest mongodb-kubernetes -n openshift-marketplace
-ENTERPRISE-TLS.md	inline	cat company-root internal-root > ca.crt
-ENTERPRISE-TLS.md	inline	cat company-root.crt internal-root.crt
-ENTERPRISE-TLS.md	inline	kubectl patch
-ENTERPRISE-TLS.md	inline	oc apply
-ENTERPRISE-TLS.md	inline	oc apply -f manifests/80-route-passthrough.yaml
-ENTERPRISE-TLS.md	inline	oc patch … remove /spec/security
-ENTERPRISE-TLS.md	inline	oc rollout restart deploy/mongot-search-lb-0
-ENTERPRISE-TLS.md	inline	oc rollout restart deploy/mongot-search-lb-0 -n mongodb-poc
-ENVOY-FLOW.md	inline	./test/run.sh distribution
-ENVOY-FLOW.md	inline	./test/run.sh tls
-ENVOY-FLOW.md	inline	oc rollout restart deploy/mongot-search-lb-0
-OBSERVE.md	inline	./app/sync-probe.sh -n 3
-OBSERVE.md	inline	./app/trace-query.sh "term"
-OBSERVE.md	inline	./app/trace-query.sh -n 12 -q "pods"
-OBSERVE.md	inline	cd mongodb && ./scripts/verify-search.sh
-README.md	inline	./test/run.sh entry
-README.md	inline	./test/run.sh entry
-README.md	inline	openssl s_client
-REQUEST-PATH.md	inline	oc get route -n mongodb-poc
-REQUEST-PATH.md	inline	oc get svc mongot-grpc-lb
-REQUEST-PATH.md	inline	oc logs
-REQUEST-PATH.md	inline	ss -tn
-REQUEST-PATH.md	inline	ss -tn state established
-SYNC.md	inline	./app/sync-probe.sh -r
-TESTING.md	inline	./test/run.sh entry
-TESTING.md	inline	SKIP_DISTRIBUTION=1 ./test/run.sh
-TESTING.md	inline	oc adm top pods
-TESTING.md	inline	oc delete pod mongot-search-0-1 -n mongodb-poc
-TESTING.md	inline	oc logs mongot-search-0-0 -n mongodb-poc | grep -i auth
-TESTING.md	inline	oc rollout restart deploy/mongot-search-lb-0 -n mongodb-poc
-TLS.md	inline	openssl x509
-TLS.md	inline	openssl x509 -req
 chart/mongodb-search-helm/README.md	inline	helm install
 chart/mongodb-search-helm/README.md	inline	helm uninstall
 chart/mongodb-search-helm/README.md	inline	helm upgrade
@@ -85,27 +43,6 @@ docs/building-the-kind-mesh-lab.md	inline	kubectl get ciliumendpoints -A -o json
 docs/building-the-kind-mesh-lab.md	inline	make dev-docker-image
 docs/building-the-kind-mesh-lab.md	inline	make docker-clustermesh-apiserver-image
 docs/building-the-kind-mesh-lab.md	shape	guide
-docs/business-case-search-on-cilium-cluster-mesh.md	inline	openssl s_client
-docs/grafana-to-perses-conversion.md	inline	helm template
-docs/grafana-to-perses-conversion.md	inline	helm uninstall
-docs/grafana-to-perses-conversion.md	inline	helm upgrade
-docs/grafana-to-perses-conversion.md	inline	helm upgrade
-docs/grafana-to-perses-conversion.md	inline	oc auth can-i get persesdashboards -n mongodb-poc --as developer
-docs/grafana-to-perses-conversion.md	inline	oc create rolebinding
-docs/grafana-to-perses-conversion.md	inline	oc delete rolebinding console-validate-view console-validate-persesdashboard-viewer-role console-validate-persesdatasource-viewer-role -n mongodb-poc
-docs/grafana-to-perses-conversion.md	inline	oc get persesdashboard,persesdatasource
-docs/grafana-to-perses-conversion.md	inline	python3 -m venv .venv && .venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.4"
-docs/investigating-automatic-volume-expansion.md	inline	oc auth can-i delete ... --as=<the account>
-docs/investigating-automatic-volume-expansion.md	inline	oc delete
-docs/investigating-automatic-volume-expansion.md	inline	oc delete
-docs/investigating-automatic-volume-expansion.md	inline	oc get --raw /metrics
-docs/mongot-recommended-alerts-comparison.md	inline	kind-mesh-cilium/drills.sh primary kill
-docs/mongot-route-balance-rationale.md	inline	oc logs
-docs/reference-architecture-search-on-cluster-mesh.md	inline	kind-mesh-cilium/drills.sh primary
-docs/reference-architecture-search-on-cluster-mesh.md	inline	kind-mesh/drills.sh failback
-docs/reference-architecture-search-on-cluster-mesh.md	inline	kubectl top
-docs/shared-services-on-cluster-mesh.md	inline	cilium-dbg status
-docs/shared-services-on-cluster-mesh.md	inline	git grep
 docs/testing-kind-mesh-cilium.md	inline	CLIENT_OPTS='<options>' kind-mesh-cilium/drills.sh primary freeze|kill|partition
 docs/testing-kind-mesh-cilium.md	inline	chart-up.sh mesh2
 docs/testing-kind-mesh-cilium.md	inline	cilium status
@@ -169,17 +106,3 @@ docs/testing-kind-mesh.md	inline	kubectl --context kind-mesh0 -n observability p
 docs/testing-kind-mesh.md	inline	kubectl --context kind-mesh0 -n search port-forward svc/mongot-gui 8080:80
 docs/testing-kind-mesh.md	inline	limactl disk resize
 docs/testing-kind-mesh.md	shape	record
-enhancement/README.md	inline	cd enhancement
-enhancement/README.md	inline	crc config --help
-enhancement/README.md	inline	crc start
-enhancement/README.md	inline	crc start
-enhancement/README.md	inline	crc stop
-enhancement/README.md	inline	helm version
-enhancement/README.md	inline	oc apply
-enhancement/README.md	inline	oc apply
-enhancement/README.md	inline	oc delete
-enhancement/README.md	inline	oc diff
-enhancement/README.md	inline	oc logs -n kube-system deploy/csi-nfs-controller -c nfs
-enhancement/README.md	inline	oc logs -n kube-system ds/csi-nfs-node -c nfs
-enhancement/README.md	inline	oc whoami
-enhancement/README.md	inline	sudo options/macbook-nfs/mac-nfs-server.sh

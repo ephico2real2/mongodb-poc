@@ -11,16 +11,30 @@ Two questions this lab answers on the CRC cluster, step by step:
   a **second** storage class, `nfs-csi`: the default stays `crc-csi-hostpath-provisioner`.
 
 Every command below was run on CRC (OpenShift 4.22.7, arm64), and the output under each
-one is what it printed. Run them from this folder: `cd enhancement`.
+one is what it printed. Run them from this folder:
+
+```bash
+cd enhancement
+```
 
 What the MongoDB operator does with volume sizes and retained volumes is in
 [`mongodb-operator-storage.md`](mongodb-operator-storage.md).
 
 ## Before you start
 
-- A CRC cluster, logged in as `kubeadmin` (`oc whoami` prints `kube:admin`): Part A changes
-  a StorageClass, Part B installs a CSI driver and grants one `privileged` SCC.
-- `helm` v3 or later (`helm version`).
+- A CRC cluster, logged in as `kubeadmin`: Part A changes a StorageClass, Part B installs a
+  CSI driver and grants one `privileged` SCC. This prints `kube:admin`:
+
+  ```bash
+  oc whoami
+  ```
+
+- `helm` v3 or later:
+
+  ```bash
+  helm version
+  ```
+
 - About 25 GiB free on the CRC VM's disk — every volume here is a directory on it.
 
 ---
@@ -29,11 +43,22 @@ What the MongoDB operator does with volume sizes and retained volumes is in
 
 ### Step A1 — look at the default storage class
 
-```console
-$ oc get sc crc-csi-hostpath-provisioner -o 'custom-columns=NAME:.metadata.name,PROVISIONER:.provisioner,RECLAIM:.reclaimPolicy,EXPANSION:.allowVolumeExpansion'
+```bash
+oc get sc crc-csi-hostpath-provisioner -o \
+  'custom-columns=NAME:.metadata.name,PROVISIONER:.provisioner,RECLAIM:.reclaimPolicy,EXPANSION:.allowVolumeExpansion'
+```
+
+```text
 NAME                           PROVISIONER                        RECLAIM   EXPANSION
 crc-csi-hostpath-provisioner   kubevirt.io.hostpath-provisioner   Retain    <none>
-$ oc get pods -n hostpath-provisioner -o jsonpath='{range .items[*]}{.metadata.name}: {range .spec.containers[*]}{.name} {end}{"\n"}{end}'
+```
+
+```bash
+oc get pods -n hostpath-provisioner \
+  -o jsonpath='{range .items[*]}{.metadata.name}: {range .spec.containers[*]}{.name} {end}{"\n"}{end}'
+```
+
+```text
 csi-hostpathplugin-b7nb9: hostpath-provisioner node-driver-registrar liveness-probe csi-provisioner 
 ```
 
@@ -47,16 +72,20 @@ step A5.
 
 Save it exactly as the cluster has it, before changing anything:
 
-```console
-$ oc get sc crc-csi-hostpath-provisioner -o yaml > backup/my-crc-csi-hostpath-provisioner.yaml
-$ oc diff -f backup/storageclass-crc-csi-hostpath-provisioner.restore.yaml; echo "oc diff exit code $?"
+```bash
+oc get sc crc-csi-hostpath-provisioner -o yaml > backup/my-crc-csi-hostpath-provisioner.yaml
+oc diff -f backup/storageclass-crc-csi-hostpath-provisioner.restore.yaml
+echo "oc diff exit code $?"
+```
+
+```text
 oc diff exit code 0
 ```
 
 **What just happened:** `backup/my-crc-csi-hostpath-provisioner.yaml` is your own copy.
 [`backup/storageclass-crc-csi-hostpath-provisioner.restore.yaml`](backup/storageclass-crc-csi-hostpath-provisioner.restore.yaml)
 is the class as CRC creates it, stripped of server-set fields so it can be restored;
-`oc diff` exit code `0` means it matches your live class exactly — step A6 uses it to put
+exit code `0` from oc diff means it matches your live class exactly — step A6 uses it to put
 the class back.
 
 ### Step A3 — try to grow a volume
@@ -64,14 +93,30 @@ the class back.
 [`manifests/01-expansion-test.yaml`](manifests/01-expansion-test.yaml) makes a namespace, a
 1 GiB claim, and a pod that writes a marker file into it:
 
-```console
-$ oc apply -f manifests/01-expansion-test.yaml
+```bash
+oc apply -f manifests/01-expansion-test.yaml
+```
+
+```text
 namespace/sc-expansion-test created
 persistentvolumeclaim/resize-me created
 pod/user created
-$ oc wait -n sc-expansion-test pod/user --for=condition=Ready --timeout=180s
+```
+
+```bash
+oc wait -n sc-expansion-test pod/user --for=condition=Ready --timeout=180s
+```
+
+```text
 pod/user condition met
-$ oc get pvc resize-me -n sc-expansion-test -o jsonpath='request={.spec.resources.requests.storage} capacity={.status.capacity.storage}{"\n"}'
+```
+
+```bash
+oc get pvc resize-me -n sc-expansion-test \
+  -o jsonpath='request={.spec.resources.requests.storage} capacity={.status.capacity.storage}{"\n"}'
+```
+
+```text
 request=1Gi capacity=149Gi
 ```
 
@@ -80,8 +125,11 @@ directory on the VM's disk and reports the size of its storage pool (here a 150 
 see "Growing the storage behind NFS"). Now ask for 2Gi:
 
 <!-- walkthrough: expect-exit 1 -->
-```console
-$ oc patch pvc resize-me -n sc-expansion-test --type=merge -p '{"spec":{"resources":{"requests":{"storage":"2Gi"}}}}'
+```bash
+oc patch pvc resize-me -n sc-expansion-test --type=merge -p '{"spec":{"resources":{"requests":{"storage":"2Gi"}}}}'
+```
+
+```text
 Error from server (Forbidden): persistentvolumeclaims "resize-me" is forbidden: only dynamically provisioned pvc can be resized and the storageclass that provisions the pvc must support resize
 ```
 
@@ -91,33 +139,73 @@ Error from server (Forbidden): persistentvolumeclaims "resize-me" is forbidden: 
 
 `allowVolumeExpansion` is one of the few StorageClass fields that can be changed in place:
 
-```console
-$ oc patch sc crc-csi-hostpath-provisioner --type=merge -p '{"allowVolumeExpansion":true}'
+```bash
+oc patch sc crc-csi-hostpath-provisioner --type=merge -p '{"allowVolumeExpansion":true}'
+```
+
+```text
 storageclass.storage.k8s.io/crc-csi-hostpath-provisioner patched
-$ oc get sc crc-csi-hostpath-provisioner -o 'custom-columns=NAME:.metadata.name,RECLAIM:.reclaimPolicy,EXPANSION:.allowVolumeExpansion'
+```
+
+```bash
+oc get sc crc-csi-hostpath-provisioner \
+  -o 'custom-columns=NAME:.metadata.name,RECLAIM:.reclaimPolicy,EXPANSION:.allowVolumeExpansion'
+```
+
+```text
 NAME                           RECLAIM   EXPANSION
 crc-csi-hostpath-provisioner   Retain    true
 ```
 
 ### Step A5 — try again
 
-```console
-$ oc patch pvc resize-me -n sc-expansion-test --type=merge -p '{"spec":{"resources":{"requests":{"storage":"2Gi"}}}}'
+```bash
+oc patch pvc resize-me -n sc-expansion-test --type=merge -p '{"spec":{"resources":{"requests":{"storage":"2Gi"}}}}'
+```
+
+```text
 persistentvolumeclaim/resize-me patched
-$ sleep 30; oc get pvc resize-me -n sc-expansion-test -o jsonpath='request={.spec.resources.requests.storage} capacity={.status.capacity.storage} conditions={.status.conditions[*].type}{"\n"}'
+```
+
+```bash
+sleep 30
+format='request={.spec.resources.requests.storage}'
+format+=' capacity={.status.capacity.storage}'
+format+=' conditions={.status.conditions[*].type}{"\n"}'
+oc get pvc resize-me -n sc-expansion-test -o jsonpath="$format"
+```
+
+```text
 request=2Gi capacity=149Gi conditions=
 ```
 
 Accepted — and after 30 seconds nothing has changed: no condition, the same capacity. Ask
 for more than the 149Gi the volume reports:
 
-```console
-$ oc patch pvc resize-me -n sc-expansion-test --type=merge -p '{"spec":{"resources":{"requests":{"storage":"150Gi"}}}}'
+```bash
+oc patch pvc resize-me -n sc-expansion-test --type=merge -p '{"spec":{"resources":{"requests":{"storage":"150Gi"}}}}'
+```
+
+```text
 persistentvolumeclaim/resize-me patched
-$ sleep 30; oc get events -n sc-expansion-test --field-selector involvedObject.name=resize-me -o 'custom-columns=REASON:.reason,MESSAGE:.message' | grep -E 'REASON|Expand'
+```
+
+```bash
+sleep 30
+oc get events -n sc-expansion-test --field-selector involvedObject.name=resize-me \
+  -o 'custom-columns=REASON:.reason,MESSAGE:.message' | grep -E 'REASON|Expand'
+```
+
+```text
 REASON                  MESSAGE
 ExternalExpanding       waiting for an external controller to expand this PVC
-$ oc exec -n sc-expansion-test user -- sh -c 'cat /data/marker; df -h /data | tail -1'
+```
+
+```bash
+oc exec -n sc-expansion-test user -- sh -c 'cat /data/marker; df -h /data | tail -1'
+```
+
+```text
 written-before-resize
 /dev/vda4       150G  100G   50G  67% /data
 ```
@@ -137,8 +225,15 @@ Part B — the same change makes resizes happen.
 The class keeps volumes (`Retain`), so deleting the namespace would leave this test
 volume behind. Switch it to `Delete` first, so it goes with its claim:
 
-```console
-$ PV=$(oc get pvc resize-me -n sc-expansion-test -o jsonpath='{.spec.volumeName}'); oc patch pv "$PV" --type=merge -p '{"spec":{"persistentVolumeReclaimPolicy":"Delete"}}' && oc delete namespace sc-expansion-test --wait=true && sleep 5 && echo "volume $PV: $(oc get pv "$PV" -o name 2>&1)"
+```bash
+PV=$(oc get pvc resize-me -n sc-expansion-test -o jsonpath='{.spec.volumeName}')
+oc patch pv "$PV" --type=merge -p '{"spec":{"persistentVolumeReclaimPolicy":"Delete"}}' \
+  && oc delete namespace sc-expansion-test --wait=true \
+  && sleep 5 \
+  && echo "volume $PV: $(oc get pv "$PV" -o name 2>&1)"
+```
+
+```text
 persistentvolume/pvc-bce409c5-dbb2-4671-bce4-00b2424c33b4 patched
 namespace "sc-expansion-test" deleted
 volume pvc-bce409c5-dbb2-4671-bce4-00b2424c33b4: Error from server (NotFound): persistentvolumes "pvc-bce409c5-dbb2-4671-bce4-00b2424c33b4" not found
@@ -147,10 +242,20 @@ volume pvc-bce409c5-dbb2-4671-bce4-00b2424c33b4: Error from server (NotFound): p
 The volume is gone (`NotFound`). Now put the class back exactly as CRC made it — expansion
 was only turned on to see what it does:
 
-```console
-$ oc replace -f backup/storageclass-crc-csi-hostpath-provisioner.restore.yaml
+```bash
+oc replace -f backup/storageclass-crc-csi-hostpath-provisioner.restore.yaml
+```
+
+```text
 storageclass.storage.k8s.io/crc-csi-hostpath-provisioner replaced
-$ oc get sc crc-csi-hostpath-provisioner -o 'custom-columns=NAME:.metadata.name,RECLAIM:.reclaimPolicy,EXPANSION:.allowVolumeExpansion'
+```
+
+```bash
+oc get sc crc-csi-hostpath-provisioner \
+  -o 'custom-columns=NAME:.metadata.name,RECLAIM:.reclaimPolicy,EXPANSION:.allowVolumeExpansion'
+```
+
+```text
 NAME                           RECLAIM   EXPANSION
 crc-csi-hostpath-provisioner   Retain    <none>
 ```
@@ -182,25 +287,44 @@ We went with Option A for these reasons:
 | NFS version | v4.1 (and v3) — the kernel's `nfsd` | **v3 only**: macOS's `nfsd` implements version 3 (`man nfsd`) |
 | changes to the Mac | none | `sudo`: edits `/etc/exports`, and `/etc/nfs.conf` to accept mounts from non-reserved ports |
 | network path | pod to Service, inside the cluster | through gvproxy's NAT to the Mac's `127.0.0.1` — file locking (NLM) would not cross it, so `nolock` |
-| lifecycle | `oc apply` / `oc delete`, with the rest of the lab | a system service on the laptop, managed separately |
+| lifecycle | oc apply / oc delete, with the rest of the lab | a system service on the laptop, managed separately |
 | what it costs | one `privileged` grant to one ServiceAccount (step B3), and a Kubernetes test image | root on the Mac |
 
-To try Option B instead: run `sudo options/macbook-nfs/mac-nfs-server.sh` on the Mac, then
-apply [`options/macbook-nfs/storageclass-nfs-csi-macbook.yaml`](options/macbook-nfs/storageclass-nfs-csi-macbook.yaml)
+To try Option B instead, run this on the Mac, then apply
+[`options/macbook-nfs/storageclass-nfs-csi-macbook.yaml`](options/macbook-nfs/storageclass-nfs-csi-macbook.yaml)
 in place of steps B2 to B5. Both classes are named `nfs-csi`; use one or the other.
+
+```bash
+sudo options/macbook-nfs/mac-nfs-server.sh
+```
 
 ### Step B1 — install the NFS CSI driver
 
 The Kubernetes NFS CSI driver, from its own Helm repository, pinned to one version:
 
-```console
-$ helm repo add csi-driver-nfs https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/master/charts
+```bash
+helm repo add csi-driver-nfs https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/master/charts
+```
+
+```text
 "csi-driver-nfs" already exists with the same configuration, skipping
-$ helm repo update csi-driver-nfs
+```
+
+```bash
+helm repo update csi-driver-nfs
+```
+
+```text
 Hang tight while we grab the latest from your chart repositories...
 ...Successfully got an update from the "csi-driver-nfs" chart repository
 Update Complete. ⎈Happy Helming!⎈
-$ helm upgrade --install csi-driver-nfs csi-driver-nfs/csi-driver-nfs --version 4.13.4 --namespace kube-system
+```
+
+```bash
+helm upgrade --install csi-driver-nfs csi-driver-nfs/csi-driver-nfs --version 4.13.4 --namespace kube-system
+```
+
+```text
 Release "csi-driver-nfs" does not exist. Installing it now.
 NAME: csi-driver-nfs
 LAST DEPLOYED: Sat Sep 26 09:52:20 2026
@@ -215,12 +339,31 @@ The CSI NFS Driver is getting deployed to your cluster.
 To check CSI NFS Driver pods status, please run:
 
   kubectl --namespace=kube-system get pods --selector="app.kubernetes.io/instance=csi-driver-nfs" --watch
-$ oc rollout status deploy/csi-nfs-controller -n kube-system --timeout=300s
+```
+
+```bash
+oc rollout status deploy/csi-nfs-controller -n kube-system --timeout=300s
+```
+
+```text
 Waiting for deployment "csi-nfs-controller" rollout to finish: 0 of 1 updated replicas are available...
 deployment "csi-nfs-controller" successfully rolled out
-$ oc rollout status ds/csi-nfs-node -n kube-system --timeout=300s
+```
+
+```bash
+oc rollout status ds/csi-nfs-node -n kube-system --timeout=300s
+```
+
+```text
 daemon set "csi-nfs-node" successfully rolled out
-$ oc get deploy csi-nfs-controller -n kube-system -o jsonpath='{range .spec.template.spec.containers[*]}{.name} {end}{"\n"}'
+```
+
+```bash
+oc get deploy csi-nfs-controller -n kube-system \
+  -o jsonpath='{range .spec.template.spec.containers[*]}{.name} {end}{"\n"}'
+```
+
+```text
 csi-provisioner csi-resizer csi-snapshotter liveness-probe nfs 
 ```
 
@@ -237,8 +380,11 @@ the CRC VM's disk, so it never needs resizing; a Service on port 2049; and a one
 test NFS server (the kernel's `nfsd`, Fedora's `nfs-utils`), pinned by digest to a
 multi-arch image — this node is arm64:
 
-```console
-$ oc apply -f manifests/10-nfs-server.yaml
+```bash
+oc apply -f manifests/10-nfs-server.yaml
+```
+
+```text
 namespace/nfs-server created
 serviceaccount/nfs-server created
 persistentvolumeclaim/nfs-data created
@@ -247,7 +393,7 @@ Warning: would violate PodSecurity "restricted:latest": privileged (container "n
 deployment.apps/nfs-server created
 ```
 
-`oc apply` warns `would violate PodSecurity "restricted:latest"` for the Deployment: the pod
+oc apply warns `would violate PodSecurity "restricted:latest"` for the Deployment: the pod
 is privileged. It is a warning — the namespace does not enforce that profile — and whether
 the pod may run is decided by OpenShift's SCCs, the next step.
 
@@ -263,32 +409,61 @@ An NFS server has to start the kernel's `nfsd`, which only a **privileged** pod 
 ServiceAccount, `nfs-server/nfs-server`, use OpenShift's `privileged` SCC. **Read it before
 you apply it** — a privileged pod can do anything on its node:
 
-```console
-$ oc apply -f manifests/11-privileged-scc.yaml
+```bash
+oc apply -f manifests/11-privileged-scc.yaml
+```
+
+```text
 rolebinding.rbac.authorization.k8s.io/nfs-server-privileged-scc created
 ```
 
 Then restart the Deployment, so its pod is created now rather than after the ReplicaSet's
 back-off from the refusals before the grant:
 
-```console
-$ oc rollout restart deploy/nfs-server -n nfs-server
+```bash
+oc rollout restart deploy/nfs-server -n nfs-server
+```
+
+```text
 deployment.apps/nfs-server restarted
-$ oc rollout status deploy/nfs-server -n nfs-server --timeout=300s
+```
+
+```bash
+oc rollout status deploy/nfs-server -n nfs-server --timeout=300s
+```
+
+```text
 Waiting for deployment "nfs-server" rollout to finish: 0 of 1 updated replicas are available...
 deployment "nfs-server" successfully rolled out
 ```
 
 ### Step B4 — is it serving?
 
-```console
-$ oc get pods -n nfs-server -o 'custom-columns=NAME:.metadata.name,READY:.status.containerStatuses[0].ready,SCC:.metadata.annotations.openshift\.io/scc'
+```bash
+columns='NAME:.metadata.name,READY:.status.containerStatuses[0].ready,'
+columns+='SCC:.metadata.annotations.openshift\.io/scc'
+oc get pods -n nfs-server -o custom-columns="$columns"
+```
+
+```text
 NAME                          READY   SCC
 nfs-server-75d5c778dc-tzmg8   true    privileged
-$ oc logs -n nfs-server deploy/nfs-server | grep -E 'Serving|NFS started'
+```
+
+```bash
+oc logs -n nfs-server deploy/nfs-server | grep -E 'Serving|NFS started'
+```
+
+```text
 Serving /exports
 NFS started
-$ oc exec -n nfs-server deploy/nfs-server -- cat /proc/fs/nfsd/versions
+```
+
+```bash
+oc exec -n nfs-server deploy/nfs-server -- cat /proc/fs/nfsd/versions
+```
+
+```text
 +3 +4 +4.1 +4.2
 ```
 
@@ -301,10 +476,19 @@ claim, `nfs-data`), and the kernel serves the NFS versions listed — a `+` mean
 the driver at the server's Service, share `/` (the export's NFSv4 root), NFS 4.1. It keeps
 data on delete (`Retain`) like the default class, and allows expansion:
 
-```console
-$ oc apply -f manifests/20-storageclass-nfs-csi.yaml
+```bash
+oc apply -f manifests/20-storageclass-nfs-csi.yaml
+```
+
+```text
 storageclass.storage.k8s.io/nfs-csi created
-$ oc get sc
+```
+
+```bash
+oc get sc
+```
+
+```text
 NAME                                     PROVISIONER                        RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
 crc-csi-hostpath-provisioner (default)   kubevirt.io.hostpath-provisioner   Retain          WaitForFirstConsumer   false                  58d
 nfs-csi                                  nfs.csi.k8s.io                     Retain          Immediate              true                   0s
@@ -320,22 +504,51 @@ by asking for `storageClassName: nfs-csi`, as the next step's does.
 **`ReadWriteMany`** claim, and a Deployment of two pods that each append a line to the same
 file on it:
 
-```console
-$ oc apply -f manifests/30-shared-claim.yaml
+```bash
+oc apply -f manifests/30-shared-claim.yaml
+```
+
+```text
 namespace/nfs-test created
 persistentvolumeclaim/shared-nfs-pvc created
 deployment.apps/writer created
-$ oc rollout status deploy/writer -n nfs-test --timeout=300s
+```
+
+```bash
+oc rollout status deploy/writer -n nfs-test --timeout=300s
+```
+
+```text
 Waiting for deployment "writer" rollout to finish: 0 of 2 updated replicas are available...
 Waiting for deployment "writer" rollout to finish: 1 of 2 updated replicas are available...
 deployment "writer" successfully rolled out
-$ oc get pvc shared-nfs-pvc -n nfs-test -o 'custom-columns=NAME:.metadata.name,STATUS:.status.phase,ACCESS:.spec.accessModes[0],CAPACITY:.status.capacity.storage,CLASS:.spec.storageClassName'
+```
+
+```bash
+columns='NAME:.metadata.name,STATUS:.status.phase,ACCESS:.spec.accessModes[0],'
+columns+='CAPACITY:.status.capacity.storage,CLASS:.spec.storageClassName'
+oc get pvc shared-nfs-pvc -n nfs-test -o custom-columns="$columns"
+```
+
+```text
 NAME             STATUS   ACCESS          CAPACITY   CLASS
 shared-nfs-pvc   Bound    ReadWriteMany   5Gi        nfs-csi
-$ oc get pods -n nfs-test -l app=writer -o name
+```
+
+```bash
+oc get pods -n nfs-test -l app=writer -o name
+```
+
+```text
 pod/writer-5dc646876d-4hz79
 pod/writer-5dc646876d-hmzd5
-$ oc exec -n nfs-test deploy/writer -- cat /data/writers.log
+```
+
+```bash
+oc exec -n nfs-test deploy/writer -- cat /data/writers.log
+```
+
+```text
 writer-5dc646876d-4hz79 14:52:32
 writer-5dc646876d-hmzd5 14:52:33
 ```
@@ -345,12 +558,30 @@ line from each — something the default class cannot do (`ReadWriteOnce` only).
 
 ### Step B7 — grow it
 
-```console
-$ oc patch pvc shared-nfs-pvc -n nfs-test --type=merge -p '{"spec":{"resources":{"requests":{"storage":"10Gi"}}}}'
+```bash
+oc patch pvc shared-nfs-pvc -n nfs-test --type=merge -p '{"spec":{"resources":{"requests":{"storage":"10Gi"}}}}'
+```
+
+```text
 persistentvolumeclaim/shared-nfs-pvc patched
-$ sleep 15; oc get pvc shared-nfs-pvc -n nfs-test -o jsonpath='request={.spec.resources.requests.storage} capacity={.status.capacity.storage}{"\n"}'
+```
+
+```bash
+sleep 15
+oc get pvc shared-nfs-pvc -n nfs-test \
+  -o jsonpath='request={.spec.resources.requests.storage} capacity={.status.capacity.storage}{"\n"}'
+```
+
+```text
 request=10Gi capacity=10Gi
-$ oc get events -n nfs-test --field-selector involvedObject.name=shared-nfs-pvc -o 'custom-columns=REASON:.reason,MESSAGE:.message' | grep -E 'REASON|Resiz'
+```
+
+```bash
+oc get events -n nfs-test --field-selector involvedObject.name=shared-nfs-pvc \
+  -o 'custom-columns=REASON:.reason,MESSAGE:.message' | grep -E 'REASON|Resiz'
+```
+
+```text
 REASON                   MESSAGE
 Resizing                 External resizer is resizing volume pvc-03e7c357-7682-4b88-8401-396080b4d523
 VolumeResizeSuccessful   Resize volume succeeded
@@ -365,11 +596,20 @@ real limit is that disk; the next section shows how to grow it.
 
 ### Step B8 — where the data really is
 
-```console
-$ oc exec -n nfs-server deploy/nfs-server -- ls /exports
+```bash
+oc exec -n nfs-server deploy/nfs-server -- ls /exports
+```
+
+```text
 index.html
 pvc-03e7c357-7682-4b88-8401-396080b4d523
-$ oc exec -n nfs-server deploy/nfs-server -- sh -c 'cat /exports/pvc-*/writers.log'
+```
+
+```bash
+oc exec -n nfs-server deploy/nfs-server -- sh -c 'cat /exports/pvc-*/writers.log'
+```
+
+```text
 writer-5dc646876d-4hz79 14:52:32
 writer-5dc646876d-hmzd5 14:52:33
 ```
@@ -382,12 +622,25 @@ the server's export — and the two writers' lines are in it.
 Like Part A, switch the test volume to `Delete` so it goes with its claim — the driver then
 deletes its directory on the export:
 
-```console
-$ PV=$(oc get pvc shared-nfs-pvc -n nfs-test -o jsonpath='{.spec.volumeName}'); oc patch pv "$PV" --type=merge -p '{"spec":{"persistentVolumeReclaimPolicy":"Delete"}}' && oc delete namespace nfs-test --wait=true && sleep 5 && echo "volume $PV: $(oc get pv "$PV" -o name 2>&1)"
+```bash
+PV=$(oc get pvc shared-nfs-pvc -n nfs-test -o jsonpath='{.spec.volumeName}')
+oc patch pv "$PV" --type=merge -p '{"spec":{"persistentVolumeReclaimPolicy":"Delete"}}' \
+  && oc delete namespace nfs-test --wait=true \
+  && sleep 5 \
+  && echo "volume $PV: $(oc get pv "$PV" -o name 2>&1)"
+```
+
+```text
 persistentvolume/pvc-03e7c357-7682-4b88-8401-396080b4d523 patched
 namespace "nfs-test" deleted
 volume pvc-03e7c357-7682-4b88-8401-396080b4d523: Error from server (NotFound): persistentvolumes "pvc-03e7c357-7682-4b88-8401-396080b4d523" not found
-$ oc exec -n nfs-server deploy/nfs-server -- ls /exports
+```
+
+```bash
+oc exec -n nfs-server deploy/nfs-server -- ls /exports
+```
+
+```text
 index.html
 ```
 
@@ -400,10 +653,19 @@ The NFS server, its StorageClass and the driver stay — ready for real volumes.
 Everything NFS serves, and every volume of the default class, shares one pool: the CRC
 VM's disk. How big it is, and how full:
 
-```console
-$ crc config get disk-size
+```bash
+crc config get disk-size
+```
+
+```text
 disk-size : 150
-$ oc exec -n nfs-server deploy/nfs-server -- df -h /exports
+```
+
+```bash
+oc exec -n nfs-server deploy/nfs-server -- df -h /exports
+```
+
+```text
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/vda4       150G  100G   50G  67% /exports
 ```
@@ -411,32 +673,64 @@ Filesystem      Size  Used Avail Use% Mounted on
 **What just happened:** `disk-size` is the VM disk's size in GiB, and `df` on the NFS
 server's export shows that same disk — `/dev/vda4` — with the space every volume shares.
 When `Avail` runs low, grow the disk. It restarts the cluster, so do it only when needed.
-Pick a bigger number (`crc config --help`: "Total size in GiB of the disk", at least 31),
-set it, and restart CRC for it to apply. Run this lab's way, from 120 to 150 GiB:
+Pick a bigger number; the help gives `disk-size` as "Total size in GiB of the disk", at least 31:
+
+```bash
+crc config --help
+```
+
+Set it, and restart CRC for it to apply. Run this lab's way, from 120 to 150 GiB:
 
 <!-- walkthrough: skip -->
-```console
-$ crc config set disk-size 150
+```bash
+crc config set disk-size 150
+```
+
+```text
 Changes to configuration property 'disk-size' are only applied when the CRC instance is started.
 If you already have a running CRC instance, then for this configuration change to take effect, stop the CRC instance with 'crc stop' and restart it with 'crc start'.
-$ crc stop
+```
+
+```bash
+crc stop
+```
+
+```text
 level=info msg="Stopping the instance, this may take a few minutes..."
 Stopped the instance
-$ crc start
+```
+
+```bash
+crc start
+```
+
+```text
 …
 The server is accessible via web console at:
   https://console-openshift-console.apps-crc.testing
 …
-$ crc config get disk-size
+```
+
+```bash
+crc config get disk-size
+```
+
+```text
 disk-size : 150
-$ crc status | grep -E 'OpenShift|Disk'
+```
+
+```bash
+crc status | grep -E 'OpenShift|Disk'
+```
+
+```text
 OpenShift:       Running (v4.22.7)
 Disk Usage:      106.6GB of 160.5GB (Inside the CRC VM)
 ```
 
-(`crc start`'s output is shortened here: it ends with the cluster's login details.)
+(The start's output is shortened here: it ends with the cluster's login details.)
 
-**What just happened:** `crc stop` took 6 s and `crc start` 184 s. The VM disk went from
+**What just happened:** crc stop took 6 s and crc start 184 s. The VM disk went from
 120G with 21G free to **150G with 51G free** — measured on the node as `/dev/vda4 150G
 100G 51G 67%`, where it had been `120G 100G 21G 83%`. Nothing was lost: every volume, of
 either class, is a directory on that disk, so all of them — and the NFS server's export —
@@ -450,7 +744,7 @@ The server's own claim is `Retain` too: deleting the namespace leaves its volume
 shared data, **Released**. Switch it to `Delete` first only if you mean to lose that data.
 
 <!-- walkthrough: skip -->
-```console
+```bash
 oc delete sc nfs-csi
 oc delete -f manifests/11-privileged-scc.yaml
 oc delete -f manifests/10-nfs-server.yaml
@@ -466,10 +760,18 @@ The default class needs nothing: step A6 already put it back.
 | a resize `Forbidden … the storageclass that provisions the pvc must support resize` | `allowVolumeExpansion` is not set — the default class, as CRC makes it | use `nfs-csi` (Part B); step A4 shows what enabling it on the default class does |
 | a resize accepted, then `ExternalExpanding: waiting for an external controller` forever | the class's driver has no `csi-resizer` (the default class) | use a class whose driver has one — Part B |
 | the NFS server's pod never appears; `FailedCreate … unable to validate against any security context constraint` | the privileged grant is missing | step B3, then restart the Deployment |
-| a claim of `nfs-csi` stays `Pending` | the server is not ready, or the driver cannot reach it | step B4; `oc logs -n kube-system deploy/csi-nfs-controller -c nfs` |
-| a pod stuck `ContainerCreating` with a mount error | the node plugin could not mount the export | `oc logs -n kube-system ds/csi-nfs-node -c nfs` |
+| a claim of `nfs-csi` stays `Pending` | the server is not ready, or the driver cannot reach it | step B4; the controller's log (below the table) |
+| a pod stuck `ContainerCreating` with a mount error | the node plugin could not mount the export | the node plugin's log (below the table) |
 | a volume keeps using space after its claim is gone | the class is `Retain`, as designed | delete the Released volume if you mean to; steps A6 and B9 show how |
 | writes fail with `No space left on device` | the CRC VM's disk is full — every volume shares it, whatever their sizes say | grow it: "Growing the storage behind NFS" |
+
+```bash
+# A claim of nfs-csi stays Pending: the controller's log
+oc logs -n kube-system deploy/csi-nfs-controller -c nfs
+
+# A pod stuck ContainerCreating: the node plugin's log
+oc logs -n kube-system ds/csi-nfs-node -c nfs
+```
 
 ## References
 

@@ -396,8 +396,12 @@ Two things make this unambiguous. The subject must be your name, not a wildcard;
 handshake must negotiate **ALPN `h2`** — the router's terminating flow binds with `no-alpn`,
 so a missing ALPN means the connection never reached Envoy.
 
-`./test/run.sh entry` asserts both, plus that the served certificate is issued by the
-enterprise CA rather than the ingress default.
+The `entry` suite asserts both, plus that the served certificate is issued by the
+enterprise CA rather than the ingress default:
+
+```bash
+./test/run.sh entry
+```
 
 ---
 
@@ -450,7 +454,7 @@ blackholes traffic.
 **2. The external `mongod` configuration.** The Operator does not manage a `mongod` it
 did not create, so these are yours to set:
 
-```
+```yaml
 setParameter:
   mongotHost:                                      grpc-search.corp.example:27028
   searchIndexManagementHostAndPort:                grpc-search.corp.example:27028
@@ -535,11 +539,12 @@ port they dial:
 ```bash
 # Lab 1 - the MetalLB VIP
 MONGOT_ENDPOINT=grpc-search.apps-crc.testing:27028
+
 # Lab 2 - the OpenShift Route
 MONGOT_ENDPOINT=grpc-search.apps-crc.testing:443
 ```
 
-Verified with `openssl s_client`, both serving `CN=grpc-search.apps-crc.testing` and ALPN `h2`:
+Verified with openssl s_client, both serving `CN=grpc-search.apps-crc.testing` and ALPN `h2`:
 
 ```text
 :443    SNI grpc-search.apps-crc.testing   -> CN=grpc-search.apps-crc.testing  ALPN h2
@@ -611,8 +616,12 @@ connection passthrough.** Red Hat documents the sibling case in the same terms: 
 traffic received on port 443 is handled with TLS termination and a default certificate."*
 
 This failure is easy to miss: a check that only asserts "TLS connects" passes, while the
-request never reaches the search tier. `./test/run.sh entry` asserts the refusal against the
-**VIP** path, where Envoy answers directly and the refusal is unambiguous.
+request never reaches the search tier. The `entry` suite asserts the refusal against the
+**VIP** path, where Envoy answers directly and the refusal is unambiguous:
+
+```bash
+./test/run.sh entry
+```
 
 **IP SANs are for completeness, not function.** A client that dials an IP sends no SNI at all,
 so no filter chain matches and the connection closes before the certificate is examined. The
@@ -947,8 +956,8 @@ done
 # Envoy's view, from the in-cluster toolbox - no port-forward needed
 # (MCK restricts the admin listener to /stats, /ready, /logging,
 #  /drain_listeners - /clusters returns 403)
-oc exec -n <ns> $TB -- curl -s http://mongot-envoy-stats:9901/stats \\
-  | grep -E "mongot_rs_cluster\\.(upstream_rq_total|upstream_cx_active)"
+oc exec -n <ns> $TB -- curl -s http://mongot-envoy-stats:9901/stats \
+  | grep -E "mongot_rs_cluster\.(upstream_rq_total|upstream_cx_active)"
 ```
 
 ## Certificates

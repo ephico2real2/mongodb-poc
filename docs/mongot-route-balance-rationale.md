@@ -118,15 +118,17 @@ Connections accepted by each Envoy pod, from Envoy's admin port. This is the sta
 
 ```bash
 for p in $(oc get pods -n $NS -l app=mongot-search-lb-0 -o name); do
-  oc port-forward -n $NS $p 19901:9901 >/dev/null 2>&1 & PF=$!
+  oc port-forward -n $NS $p 19901:9901 >/dev/null 2>&1 &
+  PF=$!
   sleep 3
   echo "== $p"
   curl -s --max-time 5 localhost:19901/stats | grep -E '^listener\.0\.0\.0\.0_27028\.downstream_cx_(total|active)'
-  kill $PF; wait $PF 2>/dev/null
+  kill $PF
+  wait $PF 2>/dev/null
 done
 ```
 
-`downstream_cx_active` is the number of connections open now; `downstream_cx_total` counts every connection since the pod started. The runbook's Step 7c uses a simpler check, the number of requests each Envoy pod logged, which needs only `oc logs`.
+`downstream_cx_active` is the number of connections open now; `downstream_cx_total` counts every connection since the pod started. The runbook's Step 7c uses a simpler check, the number of requests each Envoy pod logged, which needs only oc logs.
 
 ## When to revisit
 

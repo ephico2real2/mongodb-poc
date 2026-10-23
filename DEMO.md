@@ -143,7 +143,8 @@ Envoy or Kubernetes.
 ### Full-text
 
 ```bash
-cd .. && ./app/search-cli.sh detective
+cd .. \
+  && ./app/search-cli.sh detective
 ```
 
 ```text
@@ -186,7 +187,8 @@ The important step. Everything so far would look identical if one pod were servi
 everything.
 
 ```bash
-cd mongodb && ./scripts/verify-search.sh
+cd mongodb \
+  && ./scripts/verify-search.sh
 ```
 
 ```text
@@ -290,13 +292,32 @@ Vector queries are heavier — try `-m vector` and expect higher latency.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `MongoServerError: ... gRPC channel before deadline` | `mongot`/Envoy restarting, or a cert mismatch | wait 60s; then `oc get pods -n mongodb-poc` |
+| `MongoServerError: ... gRPC channel before deadline` | `mongot`/Envoy restarting, or a cert mismatch | wait 60s; then list the pods (below the table) |
 | All queries on one pod (`40/0/0`) | entry Service selector points at `mongot`, not Envoy | selector must be `app=mongot-search-lb-0` |
-| `load-data.sh` hangs before `QUERYABLE` | `mongot` cannot sync from `mongod` | `oc logs mongot-search-0-0 -n mongodb-poc \| grep -i auth` |
-| `flags must come BEFORE the query` | `./search-cli.sh -v space -y 1990` | `./search-cli.sh -v -y 1990 space` |
+| `load-data.sh` hangs before `QUERYABLE` | `mongot` cannot sync from `mongod` | search mongot's log for auth errors (below the table) |
+| `flags must come BEFORE the query` | a flag after the query | every flag before the query (below the table) |
 | `upstream connect error`, phase still `Running` | TLS half-configured | see [TLS.md §2](TLS.md) |
-| Envoy serving an old certificate | Envoy does not reload certs | `oc rollout restart deploy/mongot-search-lb-0 -n mongodb-poc` |
+| Envoy serving an old certificate | Envoy does not reload certs | restart Envoy (below the table) |
 | `/clusters` returns 403 | expected — MCK restricts the admin listener | use `/stats` |
+
+The fixes' commands, in the table's order:
+
+```bash
+# mongot/Envoy restarting, or a cert mismatch: after 60 s
+oc get pods -n mongodb-poc
+
+# load-data.sh hangs before QUERYABLE
+oc logs mongot-search-0-0 -n mongodb-poc | grep -i auth
+
+# flags must come BEFORE the query: this one fails
+./search-cli.sh -v space -y 1990
+
+# and this one works
+./search-cli.sh -v -y 1990 space
+
+# Envoy serving an old certificate
+oc rollout restart deploy/mongot-search-lb-0 -n mongodb-poc
+```
 
 ### Useful one-liners
 
@@ -304,9 +325,11 @@ Vector queries are heavier — try `-m vector` and expect higher latency.
 # per-pod query counts, from inside the cluster
 TB=$(oc get pods -n mongodb-poc -l app=mongot-toolbox -o jsonpath='{.items[0].metadata.name}')
 oc exec -n mongodb-poc $TB -- sh -c '
-for i in 0 1 2; do printf "mongot-search-0-$i  "
+for i in 0 1 2; do
+  printf "mongot-search-0-$i  "
   curl -s http://mongot-search-0-$i.mongot-search-0-svc:9946/metrics \
-    | grep "^mongot_command_searchCommandTotalLatency_seconds_count"; done'
+    | grep "^mongot_command_searchCommandTotalLatency_seconds_count"
+done'
 
 # Envoy's own counters
 oc exec -n mongodb-poc $TB -- curl -s http://mongot-envoy-stats:9901/stats \
@@ -318,7 +341,10 @@ oc exec -n mongodb-poc $TB -- curl -s http://mongot-envoy-stats:9901/stats \
 ## 9. Resetting
 
 ```bash
-cd mongodb && ./scripts/load-data.sh && ./scripts/load-bulk.sh   # reload from scratch
+# reload from scratch
+cd mongodb \
+  && ./scripts/load-data.sh \
+  && ./scripts/load-bulk.sh
 ```
 
 Both scripts drop and recreate the collection, so they are safe to re-run.
@@ -327,18 +353,22 @@ To tear the cluster side down completely:
 
 ```bash
 NS=mongodb-poc
-oc delete mongodbsearch mongot -n $NS                      # mongot + Envoy + their PVCs? NO - see below
+
+# mongot + Envoy + their PVCs? NO - see below
+oc delete mongodbsearch mongot -n $NS
 oc delete svc mongot-grpc-lb mongot-envoy-stats mongod-external -n $NS
 oc delete route mongot-grpc -n $NS
 oc delete deploy mongot-toolbox -n $NS
 oc delete endpointslice mongod-external-v4 -n $NS
+
 # certificates and the CA - none of these are owned by the CR
 oc delete certificate --all -n $NS
 oc delete secret lab-mongot-search-cert lab-mongot-search-lb-0-cert \
-                 lab-mongot-search-lb-0-client-cert external-mongod-cert -n $NS
+  lab-mongot-search-lb-0-client-cert external-mongod-cert -n $NS
 oc delete configmap external-mongod-ca -n $NS
 oc delete clusterissuer enterprise-ca enterprise-selfsigned-bootstrap
 oc delete certificate enterprise-root-ca -n cert-manager
+
 # PVCs survive the StatefulSet by design - delete them explicitly to reclaim disk
 oc delete pvc -l app=mongot-search-0-svc -n $NS
 ```

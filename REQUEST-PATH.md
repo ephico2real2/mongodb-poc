@@ -116,19 +116,35 @@ C. a 90s load, 19,457 queries           0-0: 37.1%   0-1: 31.3%   0-2: 31.6%
 | Label | Read from |
 |---|---|
 | `mongotHost`, `searchTLSMode`, `useGrpcForSearch` | `db.adminCommand({getCmdLineOpts:1})` on all three members |
-| `grpc-search.apps-crc.testing` → `192.168.64.1` | `getent hosts` inside the `mongo1` container |
-| Route is `passthrough`, targetPort 27028 | `oc get route -n mongodb-poc` |
+| `grpc-search.apps-crc.testing` → `192.168.64.1` | getent hosts inside the `mongo1` container |
+| Route is `passthrough`, targetPort 27028 | the Routes of `mongodb-poc` |
 | `balance roundrobin`, 2 servers | `be_tcp:mongodb-poc:mongot-grpc` in the router's `haproxy.config` |
-| The router holds the connection | `ss -tn state established` in the router pod |
-| Every client arrives as one peer address | `ss -tn` on the router frontend: all peers are `192.168.127.1` |
+| The router holds the connection | the established sockets in the router pod |
+| Every client arrives as one peer address | the sockets on the router frontend: all peers are `192.168.127.1` |
 | Envoy listener: mTLS, TLS 1.3 exactly, ALPN h2, 300s | `lds.json` in ConfigMap `mongot-search-lb-0-config` |
 | `STRICT_DNS`, upstream mTLS, SNI = Service FQDN | `cds.json` in the same ConfigMap |
 | Round robin across `mongot` | `lb_policy` is **absent** from the cluster; `ROUND_ROBIN` is Envoy's default |
 | Retries, `previous_hosts`, 2 attempts, 60s per try | `retry_policy` in `lds.json` |
-| 26,605 vs 0 requests; one `client_id` | `oc logs` on both Envoy pods, counting `upstream_host` lines |
+| 26,605 vs 0 requests; one `client_id` | oc logs on both Envoy pods, counting `upstream_host` lines |
 | 5/5 connection split after the change | `listener.0.0.0.0_27028.downstream_cx_total` on each Envoy |
 | 10 / 10 / 10 and 37.1 / 31.3 / 31.6 % | `/metrics:9946` per pod; Thanos rule `mongot:search_share:pod` |
-| MetalLB VIP `192.168.127.100:27028` | `oc get svc mongot-grpc-lb` — present, carrying no traffic |
+| MetalLB VIP `192.168.127.100:27028` | the Service `mongot-grpc-lb` — present, carrying no traffic |
+
+The commands behind the rows that name one, in the table's order:
+
+```bash
+# Route is passthrough, targetPort 27028
+oc get route -n mongodb-poc
+
+# The router holds the connection: in the router pod
+ss -tn state established
+
+# Every client arrives as one peer address: on the router frontend
+ss -tn
+
+# MetalLB VIP 192.168.127.100:27028
+oc get svc mongot-grpc-lb
+```
 
 ---
 

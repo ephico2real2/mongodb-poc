@@ -17,7 +17,13 @@ Both files contain two tokens, `__NAMESPACE__` and `__SEARCH__`. The chart repla
 
 **Before you start**
 
-- [ ] [diagram-kit](https://github.com/ephico2real2/diagram-kit) 0.2.0 or later, for its `perses-dashboard` command: `python3 -m venv .venv && .venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.4"`
+- [ ] [diagram-kit](https://github.com/ephico2real2/diagram-kit) 0.2.0 or later, for its `perses-dashboard` command:
+
+  ```bash
+  python3 -m venv .venv \
+    && .venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.4"
+  ```
+
 - [ ] `podman` or `docker`, or `percli` 0.54.0 with its plugins unpacked
 - [ ] `python3`
 - [ ] For Way 3 only: `oc` logged in to a cluster that runs the Cluster Observability Operator
@@ -91,7 +97,8 @@ The Perses server that the Cluster Observability Operator runs has its own conve
 oc port-forward -n openshift-cluster-observability-operator svc/perses 18080:8080 &
 
 # Wrap the Grafana JSON in the request body the endpoint expects
-python3 -c 'import json; print(json.dumps({"input": {}, "grafanaDashboard": json.load(open("chart/mongodb-search-helm/files/mongodb-search.json"))}))' > /tmp/perses-work/body.json
+python3 -c 'import json; print(json.dumps({"input": {}, "grafanaDashboard":
+  json.load(open("chart/mongodb-search-helm/files/mongodb-search.json"))}))' > /tmp/perses-work/body.json
 
 # Convert (the server speaks HTTPS; -k accepts its service certificate)
 curl -sk -X POST -H 'Content-Type: application/json' --data @/tmp/perses-work/body.json \
@@ -119,7 +126,8 @@ import json, sys
 grafana = json.load(open(sys.argv[1]))
 spec = json.load(open(sys.argv[2]))["spec"]
 want = {p["title"]: [t["expr"] for t in p["targets"]] for p in grafana["panels"] if p["type"] != "row"}
-got = {p["spec"]["display"]["name"]: [q["spec"]["plugin"]["spec"]["query"] for q in p["spec"]["queries"]] for p in spec["panels"].values()}
+got = {p["spec"]["display"]["name"]: [q["spec"]["plugin"]["spec"]["query"] for q in p["spec"]["queries"]]
+       for p in spec["panels"].values()}
 assert got == want, "the converted panels or queries differ from the Grafana ones"
 for p in spec["panels"].values():
     for q in p["spec"]["queries"]:
@@ -134,7 +142,8 @@ PY
 ```bash
 test/chart.sh
 
-helm upgrade mongot chart/mongodb-search-helm -n $NS -f my-values.yaml --timeout 20m   # the Perses dashboard is on by default
+# the Perses dashboard is on by default
+helm upgrade mongot chart/mongodb-search-helm -n $NS -f my-values.yaml --timeout 20m
 
 oc get persesdatasource mongot-thanos -n $NS -o jsonpath='{.status.conditions[?(@.type=="Available")].status}{"\n"}'
 oc get persesdashboard mongot-search -n $NS -o jsonpath='{.status.conditions[?(@.type=="Available")].status}{"\n"}'
@@ -184,11 +193,16 @@ Oct 6, 2026, on the lab (namespace `mongodb-poc`), with searches sent through th
 
 | Check | How | Result |
 | --- | --- | --- |
-| The Perses objects are accepted | `oc get persesdashboard,persesdatasource` conditions | Both `Available=True` |
+| The Perses objects are accepted | the conditions of the `PersesDashboard` and the `PersesDatasource` (below the table) | Both `Available=True` |
 | The lab's Perses server holds the dashboard | `GET /api/v1/projects/mongodb-poc/dashboards/mongot-search` on the server, with a login | 16 panels, 4 sections |
 | Every panel gets data through the Perses datasource | Each panel's query sent as the Perses UI sends it: `POST /proxy/projects/mongodb-poc/datasources/mongot-thanos/api/v1/query`, with a viewer's login | 16 of 16 panels returned series |
 | The Perses dashboard draws | The chart's rendering loaded into a local Perses 0.54.0 with its web page, reading the lab's Prometheus | All 16 panels drawn, light and dark |
 | The Grafana dashboard draws | The chart's ConfigMap JSON loaded from a file by a local Grafana 13.2.3, reading the lab's Prometheus | All 16 panels drawn, light and dark |
+
+```bash
+# The Perses objects are accepted
+oc get persesdashboard,persesdatasource
+```
 
 Two defects were found by these checks and fixed in the Grafana source:
 
@@ -210,10 +224,15 @@ Later on Oct 6, 2026, the two checks that had been left open were run on the lab
 | Check | How | Result |
 | --- | --- | --- |
 | The dashboard inside the OpenShift console | [`scripts/capture-console-dashboard.py`](../scripts/capture-console-dashboard.py): a browser logs in to the lab's console as `developer` and opens **Observe → Dashboards (Perses)**, project `mongodb-poc` | 4 of 4 sections, 16 panels drawn; no "No data", no "NaN", no "Forbidden", no warning sign |
-| Who can open it | `oc auth can-i get persesdashboards -n mongodb-poc --as developer`, before and after binding `view`, `persesdashboard-viewer-role` and `persesdatasource-viewer-role` in the namespace | `no`, then `yes`; the data came with `cluster-monitoring-view`, which the lab gives every logged-in user |
+| Who can open it | the access check below the table, before and after binding `view`, `persesdashboard-viewer-role` and `persesdatasource-viewer-role` in the namespace | `no`, then `yes`; the data came with `cluster-monitoring-view`, which the lab gives every logged-in user |
 | Responses of 400 or above on that page, after the login | The script's list | Five `403` and one `500`, none of them the dashboard's: silences, `infrastructures/cluster`, `provisionings`, `groups`, Perses global datasources (the dashboard uses its namespace's own), and the console's package check |
-| A Grafana sidecar loads the chart's ConfigMap | The Grafana Helm chart 10.5.15 with `sidecar.dashboards` on the label `grafana_dashboard: "1"`, installed in `mongodb-poc` with [`test/grafana-sidecar/`](../test/grafana-sidecar/); then `helm upgrade` of the search release with `monitoring.grafanaDashboard=true` | Before: Grafana's search for the dashboard returned `[]`. 37 s after the upgrade started: the sidecar logged `Writing /tmp/dashboards/mongodb-search.json`, and Grafana listed *MongoDB Search*, 16 panels in 4 rows, no token left in it |
+| A Grafana sidecar loads the chart's ConfigMap | The Grafana Helm chart 10.5.15 with `sidecar.dashboards` on the label `grafana_dashboard: "1"`, installed in `mongodb-poc` with [`test/grafana-sidecar/`](../test/grafana-sidecar/); then helm upgrade of the search release with `monitoring.grafanaDashboard=true` | Before: Grafana's search for the dashboard returned `[]`. 37 s after the upgrade started: the sidecar logged `Writing /tmp/dashboards/mongodb-search.json`, and Grafana listed *MongoDB Search*, 16 panels in 4 rows, no token left in it |
 | Every panel gets data in that Grafana | Each panel's query sent through `POST /api/ds/query` to its Thanos Querier data source (port 9091, the pod's own token) | 16 of 16 answered `200` with rows and no notice; the page drew all 16 |
+
+```bash
+# Who can open it
+oc auth can-i get persesdashboards -n mongodb-poc --as developer
+```
 
 Everything added for these checks was removed afterwards: the Grafana, its Role, the three RoleBindings, and `monitoring.grafanaDashboard` on the lab release. The mongot and Envoy pods were not restarted.
 
@@ -225,7 +244,12 @@ Everything added for these checks was removed afterwards: the Grafana, its Role,
 | `console-validate-persesdashboard-viewer-role` | `persesdashboard-viewer-role` | User `developer` |
 | `console-validate-persesdatasource-viewer-role` | `persesdatasource-viewer-role` | User `developer` |
 
-They are lab objects, made with `oc create rolebinding`; the chart does not create them and a `helm upgrade` or `helm uninstall` leaves them alone. Without them `developer` cannot open the dashboard in the console, and [`scripts/capture-console-dashboard.py`](../scripts/capture-console-dashboard.py) fails at the project. To remove them: `oc delete rolebinding console-validate-view console-validate-persesdashboard-viewer-role console-validate-persesdatasource-viewer-role -n mongodb-poc`.
+They are lab objects, made with oc create rolebinding; the chart does not create them and a helm upgrade or helm uninstall leaves them alone. Without them `developer` cannot open the dashboard in the console, and [`scripts/capture-console-dashboard.py`](../scripts/capture-console-dashboard.py) fails at the project. To remove them:
+
+```bash
+oc delete rolebinding console-validate-view console-validate-persesdashboard-viewer-role \
+  console-validate-persesdatasource-viewer-role -n mongodb-poc
+```
 
 The method for the sidecar follows the one recorded by the `openshift-ipsec-nas` project (its evidence `kind/03`); the console there was captured through a console server run on a workstation, and here through the cluster's own console with a viewer's login.
 
@@ -284,7 +308,7 @@ Measured on the lab on Oct 6 and 7, 2026, with searches running through the sear
 | In a Grafana 12.3.1 through the sidecar | 29 panels and 97 queries listed, the two traffic panels stacked, the six colours only; 97 of 97 queries answered through its Thanos Querier data source, the same 26 with no series; the page drew every panel in light and dark, the table's pod cells in blue, red and yellow, and the state legend reading `STEADY` |
 | Ordering the Envoy pods | By Envoy's own uptime the first pod changed between steps (64 and 48 of 121); by `kube_pod_start_time`, the same pod at every step of nine range queries |
 
-Drawn again on Oct 7, 2026 for clusters the lab does not have. The chart's rendering (`helm template`) was loaded into a Grafana 12.3.1 and a Perses 0.54.0 container on a workstation, reading series shaped like the lab's from a local Prometheus 3.15.0, one namespace per case; the lab's own three pods were drawn in the same two through the lab's Thanos Querier. "Before" is the dashboard with each pod selected through its `up` series and the pie read over the whole range.
+Drawn again on Oct 7, 2026 for clusters the lab does not have. The chart's rendering (helm template) was loaded into a Grafana 12.3.1 and a Perses 0.54.0 container on a workstation, reading series shaped like the lab's from a local Prometheus 3.15.0, one namespace per case; the lab's own three pods were drawn in the same two through the lab's Thanos Querier. "Before" is the dashboard with each pod selected through its `up` series and the pie read over the whole range.
 
 | Case | Grafana 12.3.1 | Perses 0.54.0 |
 | --- | --- | --- |

@@ -131,8 +131,13 @@ What this means for operating it:
 - **Search failover is per connection, not per search.** mongod keeps its gRPC connections to mongot open, so a
   failover moves them once and nothing moves them back until mongod reconnects. After a cluster's Envoy returns, its
   mongod's searches still cross the mesh. Measured: after mesh2's Envoy returned, a search through mesh2's member
-  added nothing to mesh2's Envoy; after mesh2's mongod was restarted, it did (`kind-mesh/drills.sh failback`,
-  `kind-mesh/output/drill-failback-mesh2.txt`).
+  added nothing to mesh2's Envoy; after mesh2's mongod was restarted, it did
+  (`kind-mesh/output/drill-failback-mesh2.txt`), by this drill:
+
+  ```bash
+  kind-mesh/drills.sh failback
+  ```
+
 - **A cluster with a broken mongot keeps sending its searches to it.** Failover covers a lost Envoy, not a lost
   mongot behind a ready Envoy. To cover both, Envoy's readiness would have to follow its mongot's, which the
   operator's Envoy does not do today.
@@ -218,7 +223,12 @@ What this trades:
   longest wait was 11.5 s, 9.7 s and 22.8 s. With the defaults no write failed either, but one waited 37.7 s (freeze)
   and 47.2 s (partition) on its connection to the lost primary. `timeoutMS=10000`, or 5 s connect and socket
   timeouts, cap the wait at 10.0 s, but up to 4 writes failed per run, so the application must retry them. One run per
-  setting, mongosh 2.6.0; another driver should be measured the same way (`kind-mesh-cilium/drills.sh primary`).
+  setting, mongosh 2.6.0; another driver should be measured the same way, with this drill:
+
+  ```bash
+  kind-mesh-cilium/drills.sh primary
+  ```
+
 - **Elected is not writable.** A new primary accepts writes only after its catch-up, which waits for a heartbeat
   result from every member; a member that does not answer gives one after `heartbeatTimeoutSecs` (10 s). After a
   partition at the defaults, the new primary was elected at 15.0 s and accepted writes at 23.2 s.
@@ -253,7 +263,7 @@ What this trades:
 | Envoy | the chart's default | 19 to 21 Mi | — |
 | The whole lab: 3 clusters, 6 nodes, two mongot per cluster, Cilium, cert-manager, OLM, the GUI, the observability stack | | 13.1 of 16 GiB in the VM on 2026-10-21 (24 GiB since 2026-10-22, #162); 37 of 60 GB of disk (100 GiB since 2026-10-22, #182; each node keeps its own copy of every image) | |
 
-Read with `kubectl top` and `free -m` (`kind-mesh/scripts/evidence.sh`, `kind-mesh/output/evidence-2026-10-21.txt`). These fit 24 documents and two indexes. Production sizing follows the chart's own guidance
+Read with kubectl top and free -m (`kind-mesh/scripts/evidence.sh`, `kind-mesh/output/evidence-2026-10-21.txt`). These fit 24 documents and two indexes. Production sizing follows the chart's own guidance
 (`chart/mongodb-search-helm/production-settings.md`), per cluster.
 
 ## From the lab to production
@@ -285,6 +295,9 @@ Read with `kubectl top` and `free -m` (`kind-mesh/scripts/evidence.sh`, `kind-me
 
 ## Diagram sources
 
-The two figures are drawn in `docs/diagrams/kind-mesh/source.html` and rendered with diagram-kit
-(`diagram-render docs/diagrams/kind-mesh/source.html docs/diagrams/kind-mesh design,drills`). The page, the PNGs and
-this document change together.
+The two figures are drawn in `docs/diagrams/kind-mesh/source.html` and rendered with diagram-kit. The page, the PNGs
+and this document change together:
+
+```bash
+diagram-render docs/diagrams/kind-mesh/source.html docs/diagrams/kind-mesh design,drills
+```
