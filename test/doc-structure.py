@@ -12,9 +12,11 @@ Three checks:
            (kubectl, helm, oc, bash, curl, ...) or a repository script path and goes on with an argument. A name, a
            flag or a script's path alone is fine.
   rule 12  inside every ```bash, ```sh and ```shell block: no prompt ($, or # before a command); trailing comments
-           on one column, two spaces or more after their command; no line over 120 characters; a continuation line
-           indented two spaces from its command's first line; no blank line at the start or end, nor two in a row.
-           A # inside quotes or in ${#var} is not a comment, and a heredoc's body is not read.
+           on one column, two spaces or more after their command; no line over 120 characters; a space before a
+           continuation backslash, and the continuation line indented two spaces from its command's first line; no
+           blank line at the start or end, nor two in a row. A # inside quotes, in ${#var} or after an escaped space
+           is not a comment, << inside $(( )) is a shift, a heredoc's body is not read, and quoted data spanning
+           lines is checked for length only.
   shape    the page's kind (guide, record or reference; decided by KIND_BY_PATH, or --kind) has its H2s in order,
            and for a guide each step is "### N. <Imperative...>" with a fenced block and a "Result:" line.
 
@@ -102,6 +104,7 @@ def parse(text):
     """The page's lines with fenced blocks and HTML comments blanked (line numbers kept), its fences as
     (line index of the opener, info word), and its shell blocks as [(line index, the line as the reader copies it)]:
     without the blockquote markers and the indent of the fence (a fence in a list item is indented)."""
+    text = text.replace("\r\n", "\n")  # the CLI's read_text() does this; a caller with the bytes may not
     raw = text.split("\n")
     text = re.sub(r"<!--.*?-->", lambda m: re.sub(r"[^\n]", " ", m.group(0)), text, flags=re.S)
     outside, fences, blocks, fence, block, indent, quoted = [], [], [], None, None, 0, False
@@ -155,16 +158,24 @@ def inline_commands(outside):
 
 
 def lex(line, quote):
-    """Read one line of shell, starting in the quote the line before left open (None, ', ", ` or $').
-    Returns (the column of the # that starts a comment, or None; whether a backslash outside quotes continues the
-    command on the next line; the heredocs the line opens, as delimiter words; the quote left open)."""
-    i, heredocs = 0, []
+    """Read one line of shell, starting in the quote the line before left open: None, ', ", `, $', or for an
+    arithmetic $(( or (( one ) per parenthesis still open. Returns (the column of the # that starts a comment, or
+    None; whether a backslash at the end continues the line; the heredocs the line opens, as (delimiter, whether
+    <<- strips its tabs); the quote left open)."""
+    i, heredocs, word_start = 0, [], quote is None
     while i < len(line):
         c = line[i]
-        if quote == "'":
+        if quote and quote.startswith(")"):  # inside arithmetic: << is a shift, # is not a comment
+            if c == "(":
+                quote += ")"
+            elif c == ")":
+                quote = quote[:-1] or None
+        elif quote == "'":
             quote = None if c == "'" else quote
         elif quote:  # ", ` and $' take backslash escapes
             if c == "\\":
+                if i == len(line) - 1 and quote in ('"', "`"):
+                    return None, True, heredocs, quote
                 i += 1
             elif c == quote[-1]:
                 quote = None
@@ -172,16 +183,22 @@ def lex(line, quote):
             if i == len(line) - 1:
                 return None, True, heredocs, None
             i += 1
-        elif c == "#" and (i == 0 or line[i - 1] in WORD_START):
+            word_start = False  # an escaped space or tab does not start a word
+        elif c == "#" and word_start:
             return i, False, heredocs, None
+        elif line.startswith("$((", i) or (word_start and line.startswith("((", i)):
+            i += 2 if c == "$" else 1
+            quote, word_start = "))", False
         elif c == "$" and line[i + 1:i + 2] == "'":
-            quote, i = "$'", i + 1
+            quote, i, word_start = "$'", i + 1, False
         elif c in "'\"`":
-            quote = c
+            quote, word_start = c, False
         elif m := HEREDOC.match(line, i):
-            heredocs.append(m.group(2))
-            i = m.end()
+            heredocs.append((m.group(2), line.startswith("<<-", i)))
+            i, word_start = m.end(), False
             continue
+        else:
+            word_start = c in WORD_START
         i += 1
     return None, False, heredocs, quote
 
@@ -189,16 +206,17 @@ def lex(line, quote):
 def bash_block(block):
     """(line index, normalised description, detail) for each rule-12 problem in one shell block, given as
     [(line index, line)]. A heredoc's body is not read; a line that starts inside a quote is data, so it is not
-    checked for a prompt or a continuation's indent."""
+    checked for a prompt, a continuation's indent or as a blank line."""
     found, trailing = [], []
     quote, pending, heredoc, start, continued, blank = None, [], None, 0, False, False
     for k, (i, line) in enumerate(block):
-        if heredoc:
-            if line.strip() == heredoc:
+        if heredoc:  # it ends on its delimiter alone; <<- strips leading tabs, nothing else
+            delimiter, strip_tabs = heredoc
+            if (line.lstrip("\t") if strip_tabs else line) == delimiter:
                 heredoc = pending.pop(0) if pending else None
             blank = False
             continue
-        if not line.strip():
+        if not line.strip() and quote is None:  # a blank line in quoted data is the data's
             where = "start" if k == 0 else "end" if k == len(block) - 1 else None
             if where:
                 found.append((i, f"a blank line at the {where} of the block", ""))
@@ -223,6 +241,8 @@ def bash_block(block):
                     found.append((i, "a prompt at the start of a line", " (# before a command: a root prompt or a "
                                   "commented-out command)"))
         col, continued, opened, quote = lex(line, quote)
+        if continued and quote is None and not line.endswith(" \\"):
+            found.append((i, "no space before a continuation backslash", ""))
         if col is not None and line[:col].strip():
             trailing.append((i, col))
             if not line[:col].endswith("  "):

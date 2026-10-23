@@ -156,8 +156,8 @@ One H1, an intro of two to four sentences before the first H2, then the page's o
 11. **The checks pass after writing**: `scripts/mdfmt` fixes what it can and reports the rest, and
     `test/doc-structure.py` passes (heading order, the optional H2s in their place too; one H3 per step; a `bash`
     block, a `Result:` line at the start of a line and no "first apply" or "second run" in every guide step; a
-    `bash` and a `text` block in every recorded step; no command inline; rule 12's a, c, d and e). The commands are
-    under "The checks and their baseline".
+    `bash` and a `text` block in every recorded step; no command inline; the mechanical checks listed under rule
+    12). The commands are under "The checks and their baseline".
 12. **Inside a `bash` block, commands are laid out for the reader** (the owner, 2026-10-22: *"the bash commands well
     formatted now and no bloat"*, *"Proper spacing and inline comment placed right"*; comments precede the command,
     [Google Shell Style Guide](https://google.github.io/styleguide/shellguide.html); lines kept short,
@@ -174,6 +174,11 @@ One H1, an intro of two to four sentences before the first H2, then the page's o
     - f. No bloat: only what the reader runs. No echo banners, no commented-out commands (a comment that starts with
       a command word and an argument reads as one, and fails as a prompt); a page's variables are set once, in
       *Prerequisites* or its first step.
+
+    The checker enforces prompt detection using its command-word list (including `for`), trailing-comment spacing
+    and alignment, physical line length, continuation spacing and indentation outside quoted data, and leading,
+    trailing or consecutive blank lines outside quoted data and heredoc bodies. Command/output separation,
+    related-command grouping, comment placement, banners and variable reuse require review.
 
     ```bash
     # The namespace every later step uses

@@ -375,6 +375,44 @@ check fx12/quoted.md
 expect "rule 12: a block in a blockquote is checked" 1 "fx12/quoted.md:6: bash block (rule 12): a prompt"
 reset
 
+# The reader itself, on a page's text as given (a CRLF kept): "L<n>: <what>" per finding, or "none".
+read12() {
+  run python3 -c 'import importlib.util, sys
+s = importlib.util.spec_from_file_location("d", "test/doc-structure.py")
+d = importlib.util.module_from_spec(s)
+s.loader.exec_module(d)
+found = [f"L{i + 1}: {w}{x}" for b in d.parse(sys.argv[1])[2] for i, w, x in d.bash_block(b)]
+print("\n".join(found) or "none")' "$1"
+}
+read12 "$(printf '~~~bash\necho $((1<<bits))\n$ oc get pods\n~~~\n')"
+expect "rule 12: << in \$(( )) opens no heredoc" 0 "L3: a prompt at the start of a line (\$)"
+read12 "$(printf '~~~bash\ncat <<EOF\n EOF\n# kubectl get pods\nEOF\n~~~\n')"
+expect "rule 12: a heredoc does not end on ' EOF'" 0 "none"
+read12 "$(printf '~~~bash\ncat <<-EOF\n EOF\n# kubectl get pods\nEOF\n~~~\n')"
+expect "rule 12: <<- strips tabs only, not a space" 0 "none"
+read12 "$(printf '~~~bash\ncat <<-EOF\n\tEOF \n# kubectl get pods\nEOF\n~~~\n')"
+expect "rule 12: a heredoc does not end on 'EOF '" 0 "none"
+read12 "$(printf '~~~bash\necho a\\ #b\n~~~\n')"
+expect "rule 12: an escaped space does not start a word" 0 "none"
+read12 "$(printf "~~~bash\necho 'a\n\n\nb'\n~~~\n")"
+expect "rule 12: blank lines in quoted data pass" 0 "none"
+read12 "$(printf '~~~bash\necho ab\\\n  cd\n~~~\n')"
+expect "rule 12: a continuation backslash without a space before it fails" 0 \
+  "L2: no space before a continuation backslash"
+read12 "$(printf '~~~bash\necho %sa\nb%s\\\n  c\n~~~\n' "'" "'")"
+expect "rule 12: so does one after a quote that closes on the line" 0 "L3: no space before a continuation backslash"
+read12 "$(printf '~~~bash\r\n%s\r\n~~~\r\n' "${long%x}")"
+expect "rule 12: a CRLF is not a character of the line" 0 "none"
+read12 "$(printf '~~~bash\r\noc get pods \\\r\n    -n x\r\n~~~\r\n')"
+expect "rule 12: a CRLF does not hide a continuation" 0 \
+  "L3: a continuation line not indented two spaces from the command's first line (4)"
+run python3 -c 'import importlib.util, sys
+s = importlib.util.spec_from_file_location("d", "test/doc-structure.py")
+d = importlib.util.module_from_spec(s)
+s.loader.exec_module(d)
+print("continues:", d.lex(sys.argv[1], None)[1])' "echo \"a\\"
+expect "rule 12: a backslash at the end of a double-quoted line continues it" 0 "continues: True"
+
 printf '\n```bash\n%s\n```\n' "${long}" >> "${REPO}/README.md"
 check
 expect "rule 12: a new problem in a tracked page fails against the baseline" 1 \
