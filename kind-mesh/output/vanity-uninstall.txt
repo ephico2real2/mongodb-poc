@@ -1,0 +1,43 @@
+== 2026-10-23T03:26:57Z K10: helm uninstall mongot-public
+pod "vanity-probe" deleted from vanity-lab namespace
+release "mongot-public" uninstalled
+exit=0
+== 2026-10-23T03:27:28Z what is left in vanity-lab
+NAME                                          READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/mongodb-kubernetes-operator   1/1     1            1           9m52s
+deployment.apps/mongot-search-lb-0            1/1     1            1           9m51s
+
+NAME                                          TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)                       AGE
+service/mongodb-kubernetes-operator-service   ClusterIP   10.31.78.206   <none>        443/TCP                       9m55s
+service/mongot-search-0-proxy-svc             ClusterIP   10.31.159.91   <none>        27028/TCP                     9m51s
+service/mongot-search-0-svc                   ClusterIP   None           <none>        27028/TCP,9946/TCP,8080/TCP   9m51s
+
+NAME                                              TYPE                 DATA   AGE
+secret/ent-mongot-search-cert                     kubernetes.io/tls    3      10m
+secret/ent-mongot-search-lb-0-cert                kubernetes.io/tls    3      10m
+secret/ent-mongot-search-lb-0-client-cert         kubernetes.io/tls    3      10m
+secret/mongodb-kubernetes-operator-service-cert   kubernetes.io/tls    3      9m52s
+secret/mongot-search-certificate-key              Opaque               1      9m51s
+secret/search-sync-source-password                Opaque               1      10m
+secret/sh.helm.release.v1.mongot.v1               helm.sh/release.v1   1      10m
+
+NAME                                              DATA   AGE
+configmap/ent-trust-bundle                        1      10m
+configmap/kube-root-ca.crt                        1      11m
+configmap/mongodb-enterprise-operator-telemetry   6      9m51s
+configmap/mongot-search-0-config                  1      9m51s
+configmap/mongot-search-lb-0-config               3      9m51s
+
+NAME                               PHASE     VERSION   LOADBALANCER   METRICSFORWARDER   AGE
+mongodbsearch.mongodb.com/mongot   Running   1.70.1    Running        Running            10m
+
+NAME                                              READY   STATUS        RESTARTS   AGE
+pod/mongodb-kubernetes-operator-8f58755dd-ccjzq   1/1     Running       0          9m52s
+pod/mongot-mongodb-search-helm-approver-85xg7     0/1     Completed     0          10m
+pod/mongot-mongodb-search-helm-wait-g9g6w         0/1     Completed     0          9m47s
+pod/mongot-public-lb-7886bc55b4-v5cqd             1/1     Terminating   0          6m10s
+pod/mongot-public-lb-7886bc55b4-xzjrg             1/1     Terminating   0          6m10s
+pod/mongot-public-preflight-w4bk7                 0/1     Completed     0          3m10s
+pod/mongot-search-0-0                             1/1     Running       0          9m51s
+pod/mongot-search-0-1                             1/1     Running       0          9m24s
+pod/mongot-search-lb-0-6fd8d5568d-gvgzp           1/1     Running       0          9m51s

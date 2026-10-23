@@ -1,0 +1,17 @@
+apiVersion: v2
+name: mongot-envoy-vanity-url-helm
+description: >-
+  A second Envoy for a vanity hostname in front of MongoDB Search (mongot) on OpenShift, beside the operator's Envoy,
+  which it never touches: the operator's own Envoy configuration as static resources, the existing TLS secrets,
+  a passthrough Route (or an Ingress of class openshift-default), and a preflight that refuses an install when a
+  secret is missing or the server certificate does not name the hostname.
+type: application
+version: 0.1.0
+# The Envoy the chart runs: the tag v1.37-latest of the image in values.yaml, measured as 1.37.6 on 2026-10-22.
+appVersion: "1.37"
+keywords: [openshift, mongodb, mongot, search, envoy, sni, route, ingress]
+home: https://github.com/ephico2real2/mongodb-poc
+sources:
+  - https://github.com/ephico2real2/mongodb-poc/tree/main/chart/mongot-envoy-vanity-url-helm
+maintainers:
+  - name: ephico2real2

@@ -1,0 +1,57 @@
+== 2026-10-23T03:17:18Z helm install mongot chart/mongodb-search-helm -n vanity-lab --kube-context kind-mesh2 -f kind-mesh/values/vanity-lab-search.yaml --timeout 20m
+NAME: mongot
+LAST DEPLOYED: Thu Oct 22 22:17:18 2026
+NAMESPACE: vanity-lab
+STATUS: deployed
+REVISION: 1
+DESCRIPTION: Install complete
+TEST SUITE: None
+NOTES:
+MongoDB Search "mongot" in vanity-lab: mongot x2 behind Envoy x1.
+
+  The gate's verdict:  oc logs -n vanity-lab job/mongot-mongodb-search-helm-wait   (kept 600 s)
+  The resource:        oc get mongodbsearch mongot -n vanity-lab
+  The operator:        oc get subscription,installplan,csv -n vanity-lab
+
+Upgrades: only operator 1.13.0 is approved. A newer version OLM stages waits; to take it, set
+operator.version and upgrade this release.
+mongot is pinned to 1.70.1 (search.version).
+
+Still by hand (docs/mongot-envoy-mtls-fresh-install-runbook.md): point DNS for mongot-search.vanity-lab.example at the router, and
+have the mongod hosts trust the company CA and use mongot-search.vanity-lab.example:443 for search (Steps 6c, 6d).
+
+`helm uninstall` removes the MongoDBSearch, and the operator then deletes the mongot volumes and the index.
+exit=0 at 2026-10-23T03:19:29Z
+NAME                               PHASE     VERSION   LOADBALANCER   METRICSFORWARDER   AGE
+mongodbsearch.mongodb.com/mongot   Running   1.70.1    Running        Running            2m6s
+
+NAME                                          READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/mongodb-kubernetes-operator   1/1     1            1           113s
+deployment.apps/mongot-search-lb-0            1/1     1            1           112s
+
+NAME                               READY   AGE
+statefulset.apps/mongot-search-0   2/2     112s
+
+NAME                                               READY   STATUS      RESTARTS   AGE
+pod/mongodb-kubernetes-operator-8f58755dd-ccjzq    1/1     Running     0          113s
+pod/mongot-mongodb-search-helm-approver-85xg7      0/1     Completed   0          2m3s
+pod/mongot-mongodb-search-helm-csv-reclaim-qr4mb   0/1     Completed   0          2m6s
+pod/mongot-mongodb-search-helm-preflight-qvl72     0/1     Completed   0          2m10s
+pod/mongot-mongodb-search-helm-wait-g9g6w          0/1     Completed   0          108s
+pod/mongot-search-0-0                              1/1     Running     0          112s
+pod/mongot-search-0-1                              1/1     Running     0          85s
+pod/mongot-search-lb-0-6fd8d5568d-gvgzp            1/1     Running     0          112s
+
+NAME                                          TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)                       AGE
+service/mongodb-kubernetes-operator-service   ClusterIP   10.31.78.206   <none>        443/TCP                       116s
+service/mongot-search-0-proxy-svc             ClusterIP   10.31.159.91   <none>        27028/TCP                     112s
+service/mongot-search-0-svc                   ClusterIP   None           <none>        27028/TCP,9946/TCP,8080/TCP   112s
+
+NAME                                               STATUS     COMPLETIONS   DURATION   AGE
+job.batch/mongot-mongodb-search-helm-approver      Complete   1/1           15s        2m3s
+job.batch/mongot-mongodb-search-helm-csv-reclaim   Complete   1/1           3s         2m6s
+job.batch/mongot-mongodb-search-helm-preflight     Complete   1/1           4s         2m10s
+job.batch/mongot-mongodb-search-helm-wait          Complete   1/1           108s       108s
+
+NAME                                                                    DISPLAY                              VERSION   RELEASE   REPLACES                     PHASE
+clusterserviceversion.operators.coreos.com/mongodb-kubernetes.v1.13.0   MongoDB Controllers for Kubernetes   1.13.0              mongodb-kubernetes.v1.12.0   Succeeded

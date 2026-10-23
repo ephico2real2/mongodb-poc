@@ -43,6 +43,8 @@ across the `mongot` pods.
 |---|---|
 | [chart/mongodb-search-helm](chart/mongodb-search-helm/README.md) | the Helm chart: its values, monitoring, and the dashboard in Perses and Grafana, with screenshots |
 | [docs/prerequisite-and-setup-doc.md](docs/prerequisite-and-setup-doc.md) | creating the prerequisites by hand, then installing, upgrading and removing the chart |
+| [chart/mongot-envoy-vanity-url-helm](chart/mongot-envoy-vanity-url-helm/README.md) | a second chart: our own Envoy for a vanity hostname beside the operator's, which accepts one SNI name only; its values, Route or Ingress, rotation |
+| [docs/mongot-envoy-vanity-url.md](docs/mongot-envoy-vanity-url.md) | why the vanity hostname needs a second Envoy, the design, and the step-by-step install on OpenShift |
 | [docs/grafana-to-perses-conversion.md](docs/grafana-to-perses-conversion.md) | converting the Grafana dashboard to Perses, and how both were validated |
 
 **Background**

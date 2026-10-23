@@ -1,0 +1,10 @@
+# Story #198: Cilium's own Ingress controller, added to one cluster's Cilium release (helm upgrade
+# --reset-then-reuse-values, kind-mesh-cilium/scripts/ingress-up.sh), so that the vanity chart's Ingress
+# (expose.type=ingress, class cilium, the annotation ingress.cilium.io/tls-passthrough: enabled) is served on kind,
+# which has no OpenShift router. Shared mode: one Service, cilium-ingress in kube-system, of type LoadBalancer, whose
+# address LB-IPAM takes from the cluster's pool (mesh-pool) and L2 announces; every Ingress of class cilium is served
+# on it (Cilium docs, network/servicemesh/ingress). Not the default class: an Ingress must ask for cilium by name.
+ingressController:
+  enabled: true
+  loadbalancerMode: shared
+  default: false

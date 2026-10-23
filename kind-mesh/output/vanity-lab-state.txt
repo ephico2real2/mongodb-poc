@@ -1,0 +1,21 @@
+== 2026-10-23T03:15:23Z headroom before the vanity-lab install (B: the VM and every node)
+               total        used        free      shared  buff/cache   available
+Mem:           23981       13140        1923          91        9322       10840
+Swap:              0           0           0
+NAME                  CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
+mesh0-control-plane   112m         1%       2682Mi          11%         
+mesh0-worker          169m         2%       2941Mi          12%         
+NAME                  CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
+mesh1-control-plane   141m         1%       2934Mi          12%         
+mesh1-worker          63m          0%       1661Mi          6%          
+NAME                  CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
+mesh2-control-plane   137m         1%       2968Mi          12%         
+mesh2-worker          61m          0%       1801Mi          7%          
+== the replica set's primary (term, member)
+157 mongo-mesh0.mongodb.svc.cluster.local:27017 (measured with rs.status() through mesh1's member)
+== mesh2: the operator's scope, the LB pool, the existing LoadBalancer Services, the IngressClasses
+mongot-mongodb-search-helm targets ["search"]
+installModes OwnNamespace=true SingleNamespace=true MultiNamespace=false AllNamespaces=true 
+mesh-pool [{"start":"172.18.255.72","stop":"172.18.255.111"}]
+No resources found
+No resources found

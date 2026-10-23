@@ -1,0 +1,9 @@
+== 2026-10-23T03:22:54Z K7: our Deployment before
+generation 1, ownerReferences 
+== 2026-10-23T03:22:54Z an annotation on the operator's Envoy, then a JSON patch of the MongoDBSearch's Envoy replica count (1, as it is)
+deployment.apps/mongot-search-lb-0 annotated
+mongodbsearch.mongodb.com/mongot patched (no change)
+== 2026-10-23T03:23:14Z our Deployment after
+generation 1, ownerReferences 
+== 2026-10-23T03:23:14Z the operator's Deployment
+generation 2, annotation test=x, ownerReferences mongot

@@ -1,0 +1,235 @@
+{{- /*
+The preflight: fails the install, before anything is created, when a secret Envoy mounts is missing or lacks a
+key, when the server certificate does not name a server name the chart would accept (a pod would start and every
+client would then fail certificate validation), or when the mongot Service the cluster dials does not exist.
+It runs in the cluster, so it needs no oc and no pull secret: Red Hat's public UBI 9 image, curl against the API
+server with the pod's ServiceAccount token, python3 for the API's JSON, openssl for the certificate's names. It
+reads four objects by name (the Role names them), prints key names and the certificate's DNS names, never a key
+or the token, and refuses with a message naming what is missing. The main chart's 00-preflight.yaml pattern: a
+pre-install/pre-upgrade hook, its RBAC hooks too, created first (weight -10) and removed once the hooks have
+succeeded; a failed Job is kept for its log. Argo CD: PreSync.
+*/ -}}
+{{- if .Values.preflight.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "vanity.preflight" . }}
+  namespace: {{ include "vanity.namespace" . }}
+  labels:
+    {{- include "vanity.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "vanity.preflight" . }}
+  namespace: {{ include "vanity.namespace" . }}
+  labels:
+    {{- include "vanity.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+rules:
+  # get, by name: the two secrets Envoy mounts, the trust bundle, the mongot Service, and nothing else.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames:
+      - {{ include "vanity.serverCertSecret" . | quote }}
+      - {{ include "vanity.clientCertSecret" . | quote }}
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: [{{ .Values.tls.trustBundleConfigMap | quote }}]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["services"]
+    resourceNames: [{{ include "vanity.mongotService" . | quote }}]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "vanity.preflight" . }}
+  namespace: {{ include "vanity.namespace" . }}
+  labels:
+    {{- include "vanity.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "vanity.preflight" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vanity.preflight" . }}
+    namespace: {{ include "vanity.namespace" . }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "vanity.preflight" . }}
+  namespace: {{ include "vanity.namespace" . }}
+  labels:
+    {{- include "vanity.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 180
+  ttlSecondsAfterFinished: {{ .Values.jobs.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "vanity.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "vanity.preflight" . }}
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        {{- with .Values.jobs.runAsUser }}
+        runAsUser: {{ . }}
+        runAsGroup: {{ . }}
+        {{- end }}
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: preflight
+          image: {{ .Values.jobs.image | quote }}
+          resources:
+            {{- toYaml .Values.jobs.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: NAMESPACE
+              value: {{ include "vanity.namespace" . | quote }}
+            - name: SERVER_SECRET
+              value: {{ include "vanity.serverCertSecret" . | quote }}
+            - name: CLIENT_SECRET
+              value: {{ include "vanity.clientCertSecret" . | quote }}
+            - name: TRUST_CM
+              value: {{ .Values.tls.trustBundleConfigMap | quote }}
+            - name: MONGOT_SERVICE
+              value: {{ include "vanity.mongotService" . | quote }}
+            - name: SERVER_NAMES
+              value: {{ include "vanity.serverNames" . | fromJsonArray | join " " | quote }}
+            - name: JOB_IMAGE
+              value: {{ .Values.jobs.image | quote }}
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -uo pipefail
+              : "${NAMESPACE:?}" "${SERVER_SECRET:?}" "${CLIENT_SECRET:?}" "${TRUST_CM:?}" "${MONGOT_SERVICE:?}" "${SERVER_NAMES:?}" "${JOB_IMAGE:?}"
+              log() { printf '[preflight %s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
+              PROBLEMS=0
+              bad() { printf '[preflight] MISSING: %s\n' "$*" >&2; PROBLEMS=$((PROBLEMS + 1)); }
+              refuse() { printf '[preflight] REFUSED: %s Nothing was changed.\n' "$*" >&2; exit 1; }
+
+              # The image: curl for the API server, python3 for its JSON, openssl for the certificate. An override
+              # image without one of them is refused, never worked around.
+              for t in curl python3 openssl; do
+                command -v "$t" >/dev/null 2>&1 || refuse "the Job image ${JOB_IMAGE} has no ${t}: jobs.image needs curl, python3 and openssl."
+              done
+              # The pod's ServiceAccount: its token and the API server's CA, mounted by Kubernetes.
+              SA="${SA_DIR:-/var/run/secrets/kubernetes.io/serviceaccount}"
+              [ -r "${SA}/token" ] && [ -r "${SA}/ca.crt" ] || refuse "no readable ServiceAccount token or CA under ${SA}: the preflight reads the API server as its ServiceAccount, from inside the cluster."
+              API="${API_SERVER:-https://kubernetes.default.svc}"
+              work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
+              # The token goes to curl in a header file, on no command line.
+              printf 'Authorization: Bearer %s\n' "$(cat "${SA}/token")" > "${work}/auth"
+
+              # get <kind-plural> <name>: GET the object; its JSON is left in ${work}/<kind>.<name>.json on 200, and
+              # otherwise the API's reason and message (NotFound, Forbidden) or curl's error are printed, with 1.
+              # Each GET is bounded (4 of them stay inside the Job's 180 s deadline): curl's own connect timeout is
+              # 300 s, and a network policy that drops the packets would end the Job with no line at all. curl's
+              # first line names the error; a certificate error (60) adds a paragraph after it.
+              get() {
+                local body="${work}/$1.$2.json" code
+                if ! code="$(curl -sS --connect-timeout 10 --max-time 30 --cacert "${SA}/ca.crt" -H "@${work}/auth" -o "$body" -w '%{http_code}' "${API}/api/v1/namespaces/${NAMESPACE}/$1/$2" 2>"${work}/curl.err")"; then
+                  printf 'the API server did not answer: %s\n' "$(head -1 "${work}/curl.err")"; return 1
+                fi
+                [ "$code" = 200 ] && return 0
+                python3 -c 'import json, sys
+              d = json.load(open(sys.argv[1])); print(d.get("reason") or sys.argv[2], d.get("message") or "")' "$body" "HTTP ${code}" 2>/dev/null || printf 'HTTP %s\n' "$code"
+                return 1
+              }
+              # keys_of <kind-plural> <name>: the key names of .data, one per line; the values stay in the file.
+              keys_of() { python3 -c 'import json, sys
+              print("\n".join(sorted((json.load(open(sys.argv[1])).get("data") or {}).keys())))' "${work}/$1.$2.json"; }
+              # need_keys <kind> <name> <key>...: reports the object when absent, else each key it lacks. Returns 1 when absent.
+              need_keys() {
+                local kind="$1" name="$2" why keys k; shift 2
+                if ! why="$(get "${kind}s" "$name")"; then
+                  bad "${kind} ${name}: ${why}"
+                  return 1
+                fi
+                keys="$(keys_of "${kind}s" "$name")"
+                for k in "$@"; do
+                  grep -qxF "$k" <<<"$keys" || bad "${kind} ${name}: no key ${k} (it has: $(printf '%s' "$keys" | tr '\n' ' '))"
+                done
+                log "ok: ${kind} ${name} ($(printf '%s' "$keys" | tr '\n' ' '))"
+              }
+
+              log "checking what Envoy for ${SERVER_NAMES} mounts and dials in ${NAMESPACE}"
+              need_keys secret "$CLIENT_SECRET" tls.crt tls.key
+              need_keys configmap "$TRUST_CM" ca.crt
+              if why="$(get services "$MONGOT_SERVICE")"; then
+                log "ok: service ${MONGOT_SERVICE} (the mongot pods Envoy dials)"
+              else
+                bad "service ${MONGOT_SERVICE}: ${why}; it is the mongot Service the main chart's operator makes: is search.name right, and the MongoDBSearch installed in ${NAMESPACE}?"
+              fi
+
+              # The server certificate must name every server name Envoy accepts: a SAN equal to it, or a one-label
+              # wildcard (*.example.com covers a.example.com, not a.b.example.com), as TLS has it. Only the public
+              # certificate is decoded; the key stays in the file, which goes with the Job. The SAN line as
+              # `openssl x509 -text` prints it (the line after its heading), read as the main chart's prerequisites
+              # script reads it.
+              if need_keys secret "$SERVER_SECRET" tls.crt tls.key; then
+                if ! sans="$(python3 -c 'import base64, json, sys
+              sys.stdout.write(base64.b64decode(json.load(open(sys.argv[1]))["data"]["tls.crt"]).decode())' "${work}/secrets.${SERVER_SECRET}.json" \
+                     | openssl x509 -noout -text 2>/dev/null | awk 'index($0, "X509v3 Subject Alternative Name") {getline; print; exit}' \
+                     | tr ',' '\n' | sed -n 's/^ *DNS://p' | tr '[:upper:]' '[:lower:]')"; then
+                  sans=""
+                fi
+                log "secret ${SERVER_SECRET} names: $(printf '%s' "$sans" | tr '\n' ' ')"
+                for want in $SERVER_NAMES; do
+                  want="$(tr '[:upper:]' '[:lower:]' <<<"$want")"; found=""
+                  while IFS= read -r san; do
+                    [ -n "$san" ] || continue
+                    [ "$san" = "$want" ] && { found=1; break; }
+                    case "$san" in \*.*)
+                      case "$want" in *.*) [ -n "${want%%.*}" ] && [ "${want#*.}" = "${san#\*.}" ] && { found=1; break; } ;; esac ;;
+                    esac
+                  done <<<"$sans"
+                  [ -n "$found" ] && log "ok: ${want} is a name of the certificate in ${SERVER_SECRET}" \
+                    || bad "secret ${SERVER_SECRET}: its certificate does not name ${want} (SANs: $(printf '%s' "$sans" | tr '\n' ' ')); every client would refuse it. Issue a certificate with that name, or set vanityHostname to one it has"
+                done
+              fi
+
+              if [ "$PROBLEMS" -gt 0 ]; then
+                printf '[preflight] FAILED: %s problem(s). The secrets and the trust bundle are the main chart'"'"'s (its generate-mongodbsearch-prerequisites.sh makes them); nothing was installed.\n' "$PROBLEMS" >&2
+                exit 1
+              fi
+              log "everything Envoy mounts and dials is present, and the certificate names every server name"
+{{- end }}

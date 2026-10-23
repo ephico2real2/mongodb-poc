@@ -45,6 +45,7 @@ phases=(
   "cleartext-l7|kind-mesh-cilium/scripts/cleartext-l7.sh"
   "chart-up|kind-mesh-cilium/scripts/chart-up.sh"
   "mongot-ingress|mongot_ingress"
+  "ingress-up|ingress_up"
   "check|kind-mesh/check.sh"
 )
 plan() {
@@ -116,6 +117,11 @@ mongot_ingress() {
   for c in "${clusters[@]}"; do
     kubectl --context "kind-$c" apply -f kind-mesh-cilium/manifests/60-mongot-ingress.yaml || return $?
   done
+}
+# Step 17 of docs/building-the-kind-mesh-lab.md: Cilium's Ingress controller on the last cluster (mesh2), where story
+# #198's vanity chart is tested through an Ingress of class cilium; the other two clusters stay without it.
+ingress_up() {
+  kind-mesh-cilium/scripts/ingress-up.sh "${clusters[${#clusters[@]} - 1]}"
 }
 
 n=0

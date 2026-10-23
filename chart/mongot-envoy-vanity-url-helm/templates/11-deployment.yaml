@@ -1,0 +1,96 @@
+{{- /*
+Our Envoy: the image the main chart gives the operator's Envoy, the bootstrap of 10-envoy-config.yaml, and the
+same four mounts as the operator's pod (ENVOY-FLOW.md: /etc/envoy, and tls/server, tls/client, tls/ca under it).
+Readiness is Envoy's admin /ready, as the operator's: it says Envoy is up, not that mongot answers. The image's
+entrypoint runs envoy with these args; the image's user is root, so runAsNonRoot needs a uid from the cluster:
+under OpenShift's restricted-v2 the namespace's (envoy needs no particular one), elsewhere envoy.runAsUser. The pods prefer different nodes; the budget of
+13-poddisruptionbudget.yaml keeps one through a drain.
+*/ -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vanity.deployment" . }}
+  namespace: {{ include "vanity.namespace" . }}
+  labels:
+    {{- include "vanity.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  replicas: {{ .Values.envoy.replicas }}
+  selector:
+    matchLabels:
+      app: {{ include "vanity.deployment" . }}
+  template:
+    metadata:
+      labels:
+        {{- include "vanity.labels" . | nindent 8 }}
+        app: {{ include "vanity.deployment" . }}
+      annotations:
+        # A changed bootstrap restarts the pods: static resources are read once, at start.
+        checksum/config: {{ include (print $.Template.BasePath "/10-envoy-config.yaml") . | sha256sum }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        {{- with .Values.envoy.runAsUser }}
+        runAsUser: {{ . }}
+        runAsGroup: {{ . }}
+        {{- end }}
+        seccompProfile:
+          type: RuntimeDefault
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: {{ include "vanity.deployment" . }}
+      containers:
+        - name: envoy
+          image: {{ .Values.envoy.image | quote }}
+          args: ["-c", "/etc/envoy/bootstrap.yaml"]
+          ports:
+            - name: mongot-grpc
+              containerPort: {{ .Values.mongot.port }}
+              protocol: TCP
+            - name: admin
+              containerPort: 9901
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: admin
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.envoy.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: envoy-config
+              mountPath: /etc/envoy
+              readOnly: true
+            - name: envoy-server-cert
+              mountPath: /etc/envoy/tls/server
+              readOnly: true
+            - name: envoy-client-cert
+              mountPath: /etc/envoy/tls/client
+              readOnly: true
+            - name: ca-cert
+              mountPath: /etc/envoy/tls/ca
+              readOnly: true
+      volumes:
+        - name: envoy-config
+          configMap:
+            name: {{ include "vanity.configMap" . }}
+        - name: envoy-server-cert
+          secret:
+            secretName: {{ include "vanity.serverCertSecret" . }}
+        - name: envoy-client-cert
+          secret:
+            secretName: {{ include "vanity.clientCertSecret" . }}
+        - name: ca-cert
+          configMap:
+            name: {{ .Values.tls.trustBundleConfigMap }}

@@ -1,0 +1,42 @@
+{{- /*
+The same entry as an Ingress, for a platform that manages Ingresses rather than Routes. OpenShift's router makes a
+Route from it, named <ingress>-<suffix> and deleted with it, and copies the Ingress's annotations onto that Route
+(docs/mongot-route-balance-rationale.md, Sources): the termination annotation makes it passthrough (without it
+OpenShift makes an edge Route, which has no HTTP/2 to Envoy and cuts a stream at the router's 30 s), and the
+balance annotation reaches it. The path is '' with pathType ImplementationSpecific, as Red Hat's "Creating a route
+through an Ingress object" writes a passthrough one, or / with Prefix (expose.ingressPath) for a controller such as
+Cilium's, which ignores any other path; no spec.tls: the router terminates nothing. The two OpenShift annotations
+are inert on another controller.
+*/ -}}
+{{- if and .Values.expose.enabled (eq .Values.expose.type "ingress") }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "vanity.exposeName" . }}
+  namespace: {{ include "vanity.namespace" . }}
+  labels:
+    {{- include "vanity.labels" . | nindent 4 }}
+    {{- with .Values.expose.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    route.openshift.io/termination: passthrough
+    haproxy.router.openshift.io/balance: {{ .Values.expose.balance }}
+    {{- with (omit .Values.expose.annotations "argocd.argoproj.io/sync-wave" "haproxy.router.openshift.io/balance" "route.openshift.io/termination") }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.expose.ingressClassName }}
+  rules:
+    - host: {{ .Values.vanityHostname }}
+      http:
+        paths:
+          - path: {{ .Values.expose.ingressPath | quote }}
+            pathType: {{ ternary "Prefix" "ImplementationSpecific" (eq .Values.expose.ingressPath "/") }}
+            backend:
+              service:
+                name: {{ include "vanity.deployment" . }}
+                port:
+                  name: mongot-grpc
+{{- end }}

@@ -1,0 +1,64 @@
+== 2026-10-23T03:16:36Z the prerequisites of chart/mongodb-search-helm in vanity-lab on mesh2, from throwaway PEMs signed by the lab CA (CN=mongodb-mesh-root-ca)
+--- bash generate-mongodbsearch-prerequisites.sh --trustca ../ca.crt --target-namespace vanity-lab --apply --yes
+ent-trust-bundle (ConfigMap, key ca.crt) for vanity-lab: 1 CA certificate(s)
+  CN=mongodb-mesh-root-ca  (expires Oct 18 23:43:36 2036 GMT)
+  file      vanity-lab/ent-trust-bundle.configmap.yaml
+cluster https://127.0.0.1:56331, as kubernetes-admin, namespace vanity-lab
+configmap/ent-trust-bundle created
+it holds: ca.crt 
+exit=0
+--- bash generate-mongodbsearch-prerequisites.sh --mongot ../mongot.pem --target-namespace vanity-lab --apply --yes
+WARNING: it expires within 30 days (Nov 22 03:15:24 2026 GMT)
+ent-mongot-search-cert (Secret, kubernetes.io/tls) for vanity-lab
+  subject   CN=mongot-search-0-svc.vanity-lab.svc.cluster.local
+  names     mongot-search-0-svc.vanity-lab.svc.cluster.local *.mongot-search-0-svc.vanity-lab.svc.cluster.local mongot-search-0-proxy-svc.vanity-lab.svc.cluster.local 
+  expires   Nov 22 03:15:24 2026 GMT
+  chain     1 CA certificate(s); the leaf verifies against them; the key is the leaf's
+  file      vanity-lab/ent-mongot-search-cert.secret.yaml  (it holds the key with no password: mode 600)
+cluster https://127.0.0.1:56331, as kubernetes-admin, namespace vanity-lab
+secret/ent-mongot-search-cert created
+it holds: ca.crt tls.crt tls.key 
+exit=0
+--- bash generate-mongodbsearch-prerequisites.sh --envoy ../envoy.pem --target-namespace vanity-lab --apply --yes
+WARNING: it expires within 30 days (Nov 22 03:15:24 2026 GMT)
+ent-mongot-search-lb-0-client-cert (Secret, kubernetes.io/tls) for vanity-lab
+  subject   CN=envoy-client
+  names     mongot-search-0-proxy-svc.vanity-lab.svc.cluster.local 
+  expires   Nov 22 03:15:24 2026 GMT
+  chain     1 CA certificate(s); the leaf verifies against them; the key is the leaf's
+  file      vanity-lab/ent-mongot-search-lb-0-client-cert.secret.yaml  (it holds the key with no password: mode 600)
+cluster https://127.0.0.1:56331, as kubernetes-admin, namespace vanity-lab
+secret/ent-mongot-search-lb-0-client-cert created
+it holds: ca.crt tls.crt tls.key 
+exit=0
+--- bash generate-mongodbsearch-prerequisites.sh --route ../route.pem --hostname mongot-search.vanity-lab.example --target-namespace vanity-lab --apply --yes
+WARNING: it expires within 30 days (Nov 22 03:15:24 2026 GMT)
+ent-mongot-search-lb-0-cert (Secret, kubernetes.io/tls) for vanity-lab
+  subject   CN=mongot-search.vanity-lab.example
+  names     mongot-search.vanity-lab.example mongot-public.lab.example 
+  expires   Nov 22 03:15:24 2026 GMT
+  chain     1 CA certificate(s); the leaf verifies against them; the key is the leaf's
+  values    loadBalancer.externalHostname: mongot-search.vanity-lab.example
+  file      vanity-lab/ent-mongot-search-lb-0-cert.secret.yaml  (it holds the key with no password: mode 600)
+cluster https://127.0.0.1:56331, as kubernetes-admin, namespace vanity-lab
+secret/ent-mongot-search-lb-0-cert created
+it holds: ca.crt tls.crt tls.key 
+exit=0
+--- bash generate-mongodbsearch-prerequisites.sh --dbcred --username search-sync-source --password-file ../dbpw --target-namespace vanity-lab --apply --yes
+search-sync-source-password (Secret, key password) for vanity-lab: 48 bytes, for search-sync-source
+  values    source.username: search-sync-source
+  file      vanity-lab/search-sync-source-password.secret.yaml  (mode 600)
+cluster https://127.0.0.1:56331, as kubernetes-admin, namespace vanity-lab
+secret/search-sync-source-password created
+it holds: password 
+exit=0
+--- kubectl -n vanity-lab get secret,configmap
+NAME                                        TYPE                DATA   AGE
+secret/ent-mongot-search-cert               kubernetes.io/tls   3      2s
+secret/ent-mongot-search-lb-0-cert          kubernetes.io/tls   3      0s
+secret/ent-mongot-search-lb-0-client-cert   kubernetes.io/tls   3      1s
+secret/search-sync-source-password          Opaque              1      0s
+
+NAME                         DATA   AGE
+configmap/ent-trust-bundle   1      3s
+configmap/kube-root-ca.crt   1      21s

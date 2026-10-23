@@ -1,0 +1,61 @@
+== 2026-10-23T03:24:09Z K9: the DR toggle: helm upgrade --reuse-values --set expose.enabled=false
+Release "mongot-public" has been upgraded. Happy Helming!
+NAME: mongot-public
+LAST DEPLOYED: Thu Oct 22 22:24:09 2026
+NAMESPACE: vanity-lab
+STATUS: deployed
+REVISION: 4
+DESCRIPTION: Upgrade complete
+TEST SUITE: None
+NOTES:
+Envoy x2 for mongot-public.lab.example in vanity-lab, in front of the mongot pods of MongoDB Search "mongot" (mongot-search-0-svc.vanity-lab.svc.cluster.local:27028); NOT exposed (expose.enabled=false, the troubleshooting and DR-test switch): no Route, no Ingress, a mongod using mongot-public.lab.example does not reach search until it is set back to true; the Service mongot-public-lb is reachable in the cluster only.
+TLS server names accepted: ["mongot-public.lab.example"]
+
+  The preflight's verdict:  oc logs -n vanity-lab job/mongot-public-preflight   (kept 600 s)
+  The pods:                 oc get deploy,pods -n vanity-lab -l app=mongot-public-lb
+
+After a certificate rotation, restart the pods: Envoy reads the certificate files once, at start.
+  oc rollout restart deploy/mongot-public-lb -n vanity-lab
+exit=0
+== 2026-10-23T03:24:12Z the Ingress
+No resources found in vanity-lab namespace.
+== 2026-10-23T03:24:17Z the health check at 172.18.255.72, by the vanity name
+* Added mongot-public.lab.example:443:172.18.255.72 to DNS cache
+* Hostname mongot-public.lab.example was found in DNS cache
+*   Trying 172.18.255.72:443...
+* Immediate connect fail for 172.18.255.72: No route to host
+* Closing connection 0
+curl exit=7
+(no body)
+== 2026-10-23T03:24:17Z helm upgrade --reuse-values --set expose.enabled=true
+Release "mongot-public" has been upgraded. Happy Helming!
+NAME: mongot-public
+LAST DEPLOYED: Thu Oct 22 22:24:17 2026
+NAMESPACE: vanity-lab
+STATUS: deployed
+REVISION: 5
+DESCRIPTION: Upgrade complete
+TEST SUITE: None
+NOTES:
+Envoy x2 for mongot-public.lab.example in vanity-lab, in front of the mongot pods of MongoDB Search "mongot" (mongot-search-0-svc.vanity-lab.svc.cluster.local:27028), reached through Ingress mongot-public on mongot-public.lab.example:443.
+TLS server names accepted: ["mongot-public.lab.example"]
+
+  The preflight's verdict:  oc logs -n vanity-lab job/mongot-public-preflight   (kept 600 s)
+  The pods:                 oc get deploy,pods -n vanity-lab -l app=mongot-public-lb
+  The entry:                oc get ingress mongot-public -n vanity-lab   (and the Route OpenShift made from it: oc get route -n vanity-lab)
+
+Still by hand: point DNS for mongot-public.lab.example at the router, and have the mongod hosts use
+mongot-public.lab.example:443 for search (mongotHost) with the company CA trusted.
+
+After a certificate rotation, restart the pods: Envoy reads the certificate files once, at start.
+  oc rollout restart deploy/mongot-public-lb -n vanity-lab
+exit=0
+== 2026-10-23T03:24:21Z the Ingress
+NAME            CLASS    HOSTS                       ADDRESS         PORTS   AGE
+mongot-public   cilium   mongot-public.lab.example   172.18.255.72   80      0s
+== 2026-10-23T03:24:21Z the health check again
+* ALPN, offering h2
+* ALPN, offering http/1.1
+curl exit=35
+== 2026-10-23T03:26:37Z K9 follow-up: the health check again, after the Ingress returned (the first, 4 s after the upgrade, failed at the handshake, exit 35: Cilium's Envoy had not yet programmed the listener)
+03:26:37Z try 1: < HTTP/2 200  < grpc-status: 0 curl exit=0  00 00 00 00 02 08 01 

@@ -1,0 +1,16 @@
+# What must never be packaged with the chart, even if it is left in its directory: keys, certificates, passphrase
+# files, and what generate-mongodbsearch-prerequisites.sh (the main chart) writes.
+*.secret.yaml
+*.configmap.yaml
+*.pem
+*.key
+*.crt
+*.csr
+*.pass
+.DS_Store
+# Pictures: `helm install` stores the whole chart in the release's record and refuses a large one ("Request entity
+# too large"). The README links its figure instead.
+*.png
+*.jpg
+*.jpeg
+*.gif

@@ -352,9 +352,32 @@ Three settings, one script, in the order the script enforces (A, C, B):
   (the replica set goes back to the defaults at its end: no profile is part of the lab),
   `kind-mesh-cilium/scripts/blip-test.sh`.
 
+## 17. Cilium's Ingress controller on mesh2 (story #198)
+
+- **Sets:** `ingressController.enabled=true`, shared mode, not the default class, on mesh2's Cilium release only
+  (`kind-mesh-cilium/cilium/values-ingress.yaml`): the IngressClass `cilium`, and one Service `cilium-ingress` in
+  `kube-system` of type LoadBalancer with an address from the cluster's pool (`172.18.255.72` on 2026-10-23).
+- **Why:** the vanity chart (`chart/mongot-envoy-vanity-url-helm`) is tested on kind through an Ingress of class
+  `cilium` with TLS passthrough, the lab having no OpenShift router; the owner, 2026-10-22: no Route CRD on kind.
+- **Command:**
+
+  ```bash
+  kind-mesh-cilium/scripts/ingress-up.sh mesh2 2>&1 | tee kind-mesh-cilium/output/ingress-up-mesh2.txt
+  ```
+
+  One Helm upgrade with `--reset-then-reuse-values`, as `cilium-build.sh` does, then a restart of the operator and
+  the agents: the flag lands in `cilium-config`, which both read at start, and the chart's DaemonSet template does
+  not change with it (measured: the upgrade alone left the agents' pods as they were,
+  `ingress-up-mesh2.run1-no-restart.txt`). The release's values before and after are diffed: only `ingressController`
+  may differ. #187 applies: mesh2's search runs without Cilium's L7 proxy for about a minute after the restart (the
+  agents rolled 03:17:52 to 03:18:04Z, Cilium healthy 03:19:02Z on 2026-10-23).
+- **See it worked:** `ingress-up-mesh2.txt`: `keys that differ: none` on a second run, `cilium-ingress 172.18.255.72
+  (from the pool mesh-pool)`, and the IngressClass `cilium`. The Mac reaches the address through the route `up.sh`
+  prints. The chart's test through it: [testing-mongot-envoy-vanity-url.md](testing-mongot-envoy-vanity-url.md), K1 to K10.
+
 ## Tear down and rebuild
 
-`kind-mesh/scripts/rebuild.sh` runs steps 2 to 14 and 16 in this order, through the scripts named above, after
+`kind-mesh/scripts/rebuild.sh` runs steps 2 to 14, 17 and 16 in this order, through the scripts named above, after
 deleting the three clusters with `kind-mesh/scripts/down.sh`. It is orchestration only: each phase is one of the
 scripts above (the policy, the `kubectl apply` of step 14), timed and logged to `kind-mesh/output/rebuild-<date>.XXXXXX/`,
 and the run stops at the first failure, naming the phase.

@@ -1,0 +1,29 @@
+== 2026-10-23T03:30:55Z kind-mesh/check.sh after the vanity-lab run and its clean-up
+== the mesh
+PASS  mesh0 is connected to both other clusters                   2 of 2 peers, 2/2 nodes each
+PASS  mesh1 is connected to both other clusters                   2 of 2 peers, 2/2 nodes each
+PASS  mesh2 is connected to both other clusters                   2 of 2 peers, 2/2 nodes each
+== the replica set over three clusters
+PASS  rs0: one PRIMARY and two SECONDARY, all healthy             mongo-mesh0=PRIMARY/1 mongo-mesh1=SECONDARY/1 mongo-mesh2=SECONDARY/1 
+PASS  a write is on mesh0's member                                found on mongo-mesh0 (primary)
+PASS  a write is on mesh1's member                                found on mongo-mesh1 (secondary)
+PASS  a write is on mesh2's member                                found on mongo-mesh2 (secondary)
+== search in every cluster
+PASS  mesh0: MongoDBSearch Running, every mongot Ready            phase Running, 2 of 2 Ready
+PASS  mesh1: MongoDBSearch Running, every mongot Ready            phase Running, 2 of 2 Ready
+PASS  mesh2: MongoDBSearch Running, every mongot Ready            phase Running, 2 of 2 Ready
+PASS  mesh0's mongot-search-0-0 holds the indexes, STEADY         2 STEADY, 0 other
+PASS  mesh0's mongot-search-0-1 holds the indexes, STEADY         2 STEADY, 0 other
+PASS  mesh1's mongot-search-0-0 holds the indexes, STEADY         2 STEADY, 0 other
+PASS  mesh1's mongot-search-0-1 holds the indexes, STEADY         2 STEADY, 0 other
+PASS  mesh2's mongot-search-0-0 holds the indexes, STEADY         2 STEADY, 0 other
+PASS  mesh2's mongot-search-0-1 holds the indexes, STEADY         2 STEADY, 0 other
+PASS  $search through mesh0's member returns results              1 documents
+PASS  $search through mesh1's member returns results              1 documents
+PASS  $search through mesh2's member returns results              1 documents
+== volumes
+PASS  mesh0: no volume over 10Gi                                  mongodb/data-mongo-0=10Gi observability/storage-loki-0=2Gi search/data-mongot-search-0-0=10Gi search/data-mongot-search-0-1=10Gi 
+PASS  mesh1: no volume over 10Gi                                  mongodb/data-mongo-0=10Gi search/data-mongot-search-0-0=10Gi search/data-mongot-search-0-1=10Gi 
+PASS  mesh2: no volume over 10Gi                                  mongodb/data-mongo-0=10Gi search/data-mongot-search-0-0=10Gi search/data-mongot-search-0-1=10Gi 
+== 0 failed
+exit=0

@@ -1,0 +1,65 @@
+== 2026-10-23T03:21:49Z K2: a gRPC health check by the vanity name through Cilium's Ingress (172.18.255.72), from the probe pod
+* Added mongot-public.lab.example:443:172.18.255.72 to DNS cache
+* Hostname mongot-public.lab.example was found in DNS cache
+*   Trying 172.18.255.72:443...
+* Connected to mongot-public.lab.example (172.18.255.72) port 443 (#0)
+* ALPN, offering h2
+* ALPN, offering http/1.1
+*  CAfile: /tls/ca/ca.crt
+* TLSv1.0 (OUT), TLS header, Certificate Status (22):
+* TLSv1.2 (IN), TLS header, Certificate Status (22):
+* TLSv1.2 (IN), TLS header, Finished (20):
+* TLSv1.3 (IN), TLS change cipher, Change cipher spec (1):
+* TLSv1.2 (IN), TLS header, Unknown (23):
+* TLSv1.2 (OUT), TLS header, Finished (20):
+* TLSv1.3 (OUT), TLS change cipher, Change cipher spec (1):
+* TLSv1.2 (OUT), TLS header, Unknown (23):
+* TLSv1.2 (OUT), TLS header, Unknown (23):
+* TLSv1.2 (OUT), TLS header, Unknown (23):
+* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384
+* ALPN, server accepted to use h2
+* Server certificate:
+*  subject: CN=mongot-search.vanity-lab.example
+*  start date: Oct 23 03:15:24 2026 GMT
+*  expire date: Nov 22 03:15:24 2026 GMT
+*  subjectAltName: host "mongot-public.lab.example" matched cert's "mongot-public.lab.example"
+*  issuer: CN=mongodb-mesh-root-ca
+*  SSL certificate verify ok.
+* Using HTTP2, server supports multi-use
+* Connection state changed (HTTP/2 confirmed)
+* Copying HTTP/2 data in stream buffer to connection buffer after upgrade: len=0
+* TLSv1.2 (OUT), TLS header, Unknown (23):
+* TLSv1.2 (OUT), TLS header, Unknown (23):
+* TLSv1.2 (OUT), TLS header, Unknown (23):
+* Using Stream ID: 1 (easy handle 0xaf392be69430)
+* TLSv1.2 (OUT), TLS header, Unknown (23):
+> POST /grpc.health.v1.Health/Check HTTP/2
+> Host: mongot-public.lab.example
+> user-agent: curl/7.76.1
+> accept: */*
+> content-type: application/grpc
+> te: trailers
+> content-length: 5
+> 
+* TLSv1.2 (OUT), TLS header, Unknown (23):
+* We are completely uploaded and fine
+* TLSv1.2 (IN), TLS header, Unknown (23):
+* old SSL session ID is stale, removing
+* TLSv1.2 (IN), TLS header, Unknown (23):
+* Connection state changed (MAX_CONCURRENT_STREAMS == 1024)!
+* TLSv1.2 (OUT), TLS header, Unknown (23):
+* TLSv1.2 (IN), TLS header, Unknown (23):
+< HTTP/2 200 
+< content-type: application/grpc
+< grpc-encoding: identity
+< grpc-accept-encoding: gzip
+< x-envoy-upstream-service-time: 80
+< date: Fri, 23 Oct 2026 03:21:49 GMT
+< server: envoy
+< 
+< grpc-status: 0
+* Connection #0 to host mongot-public.lab.example left intact
+curl exit=0
+ 00 00 00 00 02 08 01
+== 2026-10-23T03:21:49Z our Envoy's access log, the last 3 lines
+{"bytes_in":5,"bytes_out":7,"client_id":null,"duration_ms":80,"grpc_status":"OK","level":"info","logger":"access","message":"stream upstream=10.30.0.118:27028 path=/grpc.health.v1.Health/Check resp=200 grpc=OK flags=- dur=80ms","path":"/grpc.health.v1.Health/Check","response_code":200,"response_flags":"-","time":"2026-10-23T03:21:49.418+00:00","upstream_host":"10.30.0.118:27028"}

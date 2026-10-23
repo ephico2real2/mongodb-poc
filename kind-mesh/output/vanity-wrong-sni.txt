@@ -1,0 +1,63 @@
+== 2026-10-23T03:22:13Z K3: the stats before
+--- mongot-public-lb-7886bc55b4-v5cqd
+cluster.mongot_rs_cluster.membership_healthy: 2
+cluster.mongot_rs_cluster.upstream_cx_total: 1
+cluster.mongot_rs_cluster.upstream_rq_total: 1
+http.ingress_rs.downstream_rq_total: 1
+listener.0.0.0.0_27028.downstream_cx_total: 1
+listener.0.0.0.0_27028.no_filter_chain_match: 0
+listener.0.0.0.0_27028.ssl.handshake: 1
+--- mongot-public-lb-7886bc55b4-xzjrg
+cluster.mongot_rs_cluster.membership_healthy: 2
+cluster.mongot_rs_cluster.upstream_cx_total: 0
+cluster.mongot_rs_cluster.upstream_rq_total: 0
+http.ingress_rs.downstream_rq_total: 0
+listener.0.0.0.0_27028.downstream_cx_total: 0
+listener.0.0.0.0_27028.no_filter_chain_match: 1
+listener.0.0.0.0_27028.ssl.handshake: 0
+== 2026-10-23T03:22:13Z a wrong SNI through the Ingress: wrong.lab.example at 172.18.255.72
+* Added wrong.lab.example:443:172.18.255.72 to DNS cache
+* Hostname wrong.lab.example was found in DNS cache
+*   Trying 172.18.255.72:443...
+* Connected to wrong.lab.example (172.18.255.72) port 443 (#0)
+* ALPN, offering h2
+* ALPN, offering http/1.1
+*  CAfile: /tls/ca/ca.crt
+* TLSv1.0 (OUT), TLS header, Certificate Status (22):
+* TLSv1.3 (OUT), TLS handshake, Client hello (1):
+* OpenSSL SSL_connect: Connection reset by peer in connection to wrong.lab.example:443 
+* Closing connection 0
+curl exit=35
+(no body)
+== 2026-10-23T03:22:13Z a wrong SNI straight at our Service, from the probe pod (the ClusterIP of mongot-public-lb:27028)
+* Added wrong.lab.example:27028:10.31.28.97 to DNS cache
+* Hostname wrong.lab.example was found in DNS cache
+*   Trying 10.31.28.97:27028...
+* Connected to wrong.lab.example (10.31.28.97) port 27028 (#0)
+* ALPN, offering h2
+* ALPN, offering http/1.1
+*  CAfile: /tls/ca/ca.crt
+* TLSv1.0 (OUT), TLS header, Certificate Status (22):
+* TLSv1.3 (OUT), TLS handshake, Client hello (1):
+* OpenSSL SSL_connect: Connection reset by peer in connection to wrong.lab.example:27028 
+* Closing connection 0
+curl exit=35
+== 2026-10-23T03:22:13Z the stats after
+--- mongot-public-lb-7886bc55b4-v5cqd
+cluster.mongot_rs_cluster.membership_healthy: 2
+cluster.mongot_rs_cluster.upstream_cx_total: 1
+cluster.mongot_rs_cluster.upstream_rq_total: 1
+http.ingress_rs.downstream_rq_total: 1
+listener.0.0.0.0_27028.downstream_cx_total: 1
+listener.0.0.0.0_27028.no_filter_chain_match: 0
+listener.0.0.0.0_27028.ssl.handshake: 1
+--- mongot-public-lb-7886bc55b4-xzjrg
+cluster.mongot_rs_cluster.membership_healthy: 2
+cluster.mongot_rs_cluster.upstream_cx_total: 0
+cluster.mongot_rs_cluster.upstream_rq_total: 0
+http.ingress_rs.downstream_rq_total: 0
+listener.0.0.0.0_27028.downstream_cx_total: 0
+listener.0.0.0.0_27028.no_filter_chain_match: 2
+listener.0.0.0.0_27028.ssl.handshake: 0
+== 2026-10-23T03:22:13Z access-log lines mentioning wrong.lab.example
+0

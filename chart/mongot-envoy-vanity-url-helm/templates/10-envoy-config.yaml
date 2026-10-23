@@ -1,0 +1,182 @@
+{{- /*
+Envoy's bootstrap: the operator's own configuration (docs/envoy/bootstrap.json, lds.json, cds.json, read from its
+running Envoy) as static resources in one file, so that `envoy --mode validate` checks it and the render test
+compares it with the capture field by field. What differs from the operator's: server_names is this chart's list
+(the one change the chart is for), the cluster's endpoint and SNI name the mongot Service in this release's
+namespace, and the listener and cluster are static instead of read from lds.json and cds.json. Everything else,
+the values included, is the operator's.
+
+A change of this ConfigMap restarts the Envoy pods (the Deployment hashes it): with static resources there is no
+watched directory to reload from. The certificates are read once, at start: after a rotation, restart the pods.
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "vanity.configMap" . }}
+  namespace: {{ include "vanity.namespace" . }}
+  labels:
+    {{- include "vanity.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  bootstrap.yaml: |
+    node:
+      id: envoy-search-proxy
+      cluster: search-proxy
+    layered_runtime:
+      layers:
+        - name: static_layer
+          static_layer:
+            overload:
+              global_downstream_max_connections: 50000
+    admin:
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 9901
+      allow_paths:
+        - exact: /ready
+        - prefix: /stats
+        - prefix: /drain_listeners
+        - prefix: /logging
+    static_resources:
+      listeners:
+        - name: mongod_listener
+          address:
+            socket_address:
+              address: 0.0.0.0
+              port_value: {{ .Values.mongot.port }}
+          listener_filters:
+            - name: envoy.filters.listener.tls_inspector
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.listener.tls_inspector.v3.TlsInspector
+          filter_chains:
+            - filter_chain_match:
+                server_names: {{ include "vanity.serverNames" . }}
+              filters:
+                - name: envoy.filters.network.http_connection_manager
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                    stat_prefix: ingress_rs
+                    route_config:
+                      name: rs_route
+                      validate_clusters: false
+                      virtual_hosts:
+                        - name: mongot_rs_backend
+                          domains: ["*"]
+                          include_request_attempt_count: true
+                          routes:
+                            - match:
+                                prefix: /
+                                grpc: {}
+                              route:
+                                cluster: mongot_rs_cluster
+                                timeout: {{ .Values.envoy.timeouts.route }}
+                                retry_policy:
+                                  retry_on: connect-failure,refused-stream,unavailable,reset,resource-exhausted
+                                  num_retries: {{ .Values.envoy.retryPolicy.numRetries }}
+                                  per_try_timeout: {{ .Values.envoy.retryPolicy.perTryTimeout }}
+                                  retry_host_predicate:
+                                    - name: envoy.retry_host_predicates.previous_hosts
+                                      typed_config:
+                                        "@type": type.googleapis.com/envoy.extensions.retry.host.previous_hosts.v3.PreviousHostsPredicate
+                                  host_selection_retry_max_attempts: "3"
+                    http_filters:
+                      - name: envoy.filters.http.router
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                    http2_protocol_options:
+                      initial_stream_window_size: 1048576
+                      initial_connection_window_size: 1048576
+                      connection_keepalive:
+                        interval: 60s
+                        timeout: 10s
+                    stream_idle_timeout: {{ .Values.envoy.timeouts.streamIdle }}
+                    request_timeout: {{ .Values.envoy.timeouts.request }}
+                    access_log:
+                      - name: envoy.access_loggers.stdout
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                          log_format:
+                            json_format:
+                              bytes_in: "%BYTES_RECEIVED%"
+                              bytes_out: "%BYTES_SENT%"
+                              client_id: "%REQ(MONGODB-CLIENTID)%"
+                              duration_ms: "%DURATION%"
+                              grpc_status: "%GRPC_STATUS%"
+                              level: info
+                              logger: access
+                              message: "stream upstream=%UPSTREAM_HOST% path=%REQ(:PATH)% resp=%RESPONSE_CODE% grpc=%GRPC_STATUS% flags=%RESPONSE_FLAGS% dur=%DURATION%ms"
+                              path: "%REQ(:PATH)%"
+                              response_code: "%RESPONSE_CODE%"
+                              response_flags: "%RESPONSE_FLAGS%"
+                              time: "%START_TIME(%Y-%m-%dT%H:%M:%E3S%Ez)%"
+                              upstream_host: "%UPSTREAM_HOST%"
+              transport_socket:
+                name: envoy.transport_sockets.tls
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+                  require_client_certificate: true
+                  common_tls_context:
+                    tls_params:
+                      tls_minimum_protocol_version: TLSv1_3
+                      tls_maximum_protocol_version: TLSv1_3
+                    tls_certificates:
+                      - certificate_chain:
+                          filename: /etc/envoy/tls/server/tls.crt
+                        private_key:
+                          filename: /etc/envoy/tls/server/tls.key
+                    validation_context:
+                      trusted_ca:
+                        filename: /etc/envoy/tls/ca/ca.crt
+                    alpn_protocols: [h2]
+      clusters:
+        - name: mongot_rs_cluster
+          type: STRICT_DNS
+          load_assignment:
+            cluster_name: mongot_rs_cluster
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: {{ include "vanity.mongotFQDN" . }}
+                          port_value: {{ .Values.mongot.port }}
+          circuit_breakers:
+            thresholds:
+              - max_connections: 1024
+                max_pending_requests: 1024
+                max_requests: 1024
+                max_retries: 3
+          typed_extension_protocol_options:
+            envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+              "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+              common_http_protocol_options:
+                idle_timeout: {{ .Values.envoy.timeouts.upstreamIdle }}
+              explicit_http_config:
+                http2_protocol_options:
+                  initial_stream_window_size: 1048576
+                  initial_connection_window_size: 1048576
+                  connection_keepalive:
+                    interval: 60s
+                    timeout: 10s
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+              sni: {{ include "vanity.mongotFQDN" . }}
+              common_tls_context:
+                tls_certificates:
+                  - certificate_chain:
+                      filename: /etc/envoy/tls/client/tls.crt
+                    private_key:
+                      filename: /etc/envoy/tls/client/tls.key
+                validation_context:
+                  trusted_ca:
+                    filename: /etc/envoy/tls/ca/ca.crt
+                alpn_protocols: [h2]
+          upstream_connection_options:
+            tcp_keepalive:
+              keepalive_probes: 3
+              keepalive_time: 10
+              keepalive_interval: 3

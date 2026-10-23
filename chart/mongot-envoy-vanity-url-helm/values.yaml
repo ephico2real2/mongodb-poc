@@ -1,0 +1,152 @@
+# mongot-envoy-vanity-url-helm: a second Envoy for a vanity hostname (a name the company's DNS points at the
+# OpenShift router) in front of the mongot pods that chart/mongodb-search-helm runs, beside the operator's Envoy,
+# which this chart never touches.
+#
+# The operator's Envoy accepts exactly one TLS server name (its filter chain's server_names is the MongoDBSearch's
+# externalHostname), so a client that dials an alias is refused. This chart runs its own Envoy with the operator's
+# own configuration, changed in one place: the accepted server name is vanityHostname. It mounts the secrets that
+# already exist and never creates a certificate, a secret or the trust bundle.
+#   helm install mongot-public chart/mongot-envoy-vanity-url-helm -n <namespace> --set vanityHostname=<name>
+
+# The namespace of the MongoDBSearch: every object of the chart goes there, and Envoy dials the mongot Service
+# there. It must already hold the secrets. Pass the same namespace to helm with -n, so Helm's record of the
+# release sits beside what it installed. Empty: the namespace given to helm with -n.
+namespace: ""
+
+search:
+  # The MongoDBSearch's metadata.name (search.name of the main chart). Every name of this chart derives from it:
+  # <name>-public-lb (the Deployment, its Service and budget), <name>-public (the Route or Ingress),
+  # <name>-public-envoy (the config), <name>-public-preflight (the Job); and so do the names of the secrets and of
+  # the mongot Service it reads. At most 43 characters, as the main chart has it.
+  name: mongot
+
+# REQUIRED. The vanity hostname mongod connects to, which the company's DNS points at the OpenShift router: the
+# Route's (or Ingress's) host, and the TLS server name Envoy accepts. A hostname, never an IP: Envoy selects by
+# SNI, and a client that dials an IP sends none. It must be a SAN of the server certificate (tls.serverCertSecret);
+# the preflight checks that, a one-label wildcard counting.
+vanityHostname: ""
+
+# Every TLS server name Envoy accepts, when one release serves more aliases than vanityHostname. It must hold
+# vanityHostname (the Route's clients send it), each name once, and each must be a SAN of the server certificate.
+# Empty: [vanityHostname].
+serverNames: []
+
+tls:
+  # The prefix of the main chart's TLS secrets (tls.certsSecretPrefix there): the two secrets below derive from it
+  # and search.name when they are left empty.
+  certsSecretPrefix: ent
+  # The server certificate Envoy presents to mongod (tls.crt, tls.key): the main chart's
+  # <prefix>-<search.name>-search-lb-0-cert. Its SANs must hold vanityHostname. Empty: derived.
+  serverCertSecret: ""
+  # The client certificate Envoy presents to mongot (tls.crt, tls.key): the main chart's
+  # <prefix>-<search.name>-search-lb-0-client-cert. mongot checks that it is signed by a trusted CA, not its name.
+  # Empty: derived.
+  clientCertSecret: ""
+  # The ConfigMap with key ca.crt: what Envoy trusts on both legs (mongod's client certificate, mongot's server
+  # certificate). The main chart's tls.trustBundleConfigMap.
+  trustBundleConfigMap: ent-trust-bundle
+
+mongot:
+  # The headless Service of the mongot pods, which the operator names <search.name>-search-0-svc. Envoy resolves
+  # it (STRICT_DNS) to one host per pod and round-robins the requests over them. Empty: derived.
+  service: ""
+  # mongot's gRPC port, and the port Envoy listens on.
+  port: 27028
+
+envoy:
+  # The Envoy image, as a full reference (name:tag or name@digest). The default is the main chart's: a copy on
+  # quay.io of the operator's own envoyproxy/envoy:v1.37-latest, for clusters that cannot pull from Docker Hub.
+  image: quay.io/ephico2real/envoy:v1.37-latest
+  # Two, so that one stays through a node drain with the budget below. A second pod is a standby, not capacity:
+  # one mongod sends every search through one connection, to one Envoy pod.
+  replicas: 2
+  # The uid (and gid) Envoy runs as. The image's own user is root, and its entrypoint drops to envoy (101), so
+  # runAsNonRoot needs a number from the cluster. Empty: OpenShift's restricted-v2 assigns one from the namespace's
+  # range. 101 where nothing assigns one, as on kind; never on OpenShift, which refuses a uid outside the range.
+  runAsUser: null
+  # CPU and memory of each Envoy pod: the operator's own defaults for its Envoy, written out. Every request and
+  # limit is set: a namespace whose ResourceQuota covers limits refuses a pod that leaves one out.
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 512Mi}
+  # The route's retry policy, the operator's values: a failed stream is retried on another mongot pod
+  # (connect-failure, refused-stream, unavailable, reset, resource-exhausted) at most numRetries times, each try
+  # within perTryTimeout.
+  retryPolicy:
+    numRetries: 2
+    perTryTimeout: 60s
+  # The operator's timeouts. route: the whole request, retries included. streamIdle and request: the HTTP
+  # connection manager's. upstreamIdle: a connection to mongot with no stream on it is closed after this.
+  timeouts:
+    route: 300s
+    streamIdle: 300s
+    request: 300s
+    upstreamIdle: 300s
+  # A PodDisruptionBudget for the Envoy pods: a node drain takes at most maxUnavailable of them at a time
+  # (the main chart's pattern: maxUnavailable, so that no number of pods refuses every eviction).
+  podDisruptionBudget:
+    enabled: true
+    maxUnavailable: 1
+
+# How Envoy is reached: through OpenShift's router, which forwards the TLS stream untouched (passthrough): Envoy
+# presents the certificate and matches the SNI, not the router. The chart is of no use without its Route (or
+# Ingress): the vanity hostname is what it exists for.
+expose:
+  # true, always, in use. false is a troubleshooting and DR-test switch, not a way to run the chart: it removes the
+  # Route (or Ingress) and leaves the Deployment and its ClusterIP Service, so that a mongod using the vanity
+  # hostname stops reaching search; set it back and the Route returns. That proves the vanity path carries the
+  # traffic (docs/mongot-envoy-vanity-url.md, "Prove which path the traffic takes").
+  enabled: true
+  # route: a passthrough Route with host vanityHostname. ingress: an Ingress of class ingressClassName with the
+  # passthrough annotation, from which OpenShift makes the Route (named <ingress>-<suffix>, deleted with it).
+  type: route
+  # The Route's or Ingress's name. Empty: <search.name>-public.
+  name: ""
+  # How the router places each new connection on an Envoy pod. A passthrough Route defaults to source, which put
+  # every connection on one Envoy pod (docs/mongot-route-balance-rationale.md). On an Ingress the annotation is
+  # copied to the generated Route.
+  balance: roundrobin
+  # The class of the Ingress (expose.type ingress): OpenShift's own router. cilium for Cilium's Ingress controller
+  # (the kind lab), with ingressPath "/" and the annotation ingress.cilium.io/tls-passthrough: enabled below.
+  ingressClassName: openshift-default
+  # The Ingress rule's path. "": path '' with pathType ImplementationSpecific, what OpenShift needs to make a
+  # passthrough Route from an Ingress (Red Hat, "Creating a route through an Ingress object"; a passthrough Route
+  # carries no path). "/": path / with pathType Prefix, for a controller such as Cilium's, which ignores a rule
+  # whose path is not / (Cilium docs, Ingress, TLS passthrough). Nothing else is accepted.
+  ingressPath: ""
+  # Added to the Route or Ingress. The two OpenShift annotations the chart sets on an Ingress are inert on another
+  # controller; Cilium's passthrough is asked for here: ingress.cilium.io/tls-passthrough: enabled.
+  annotations: {}
+  labels: {}
+
+# Checks, before anything is created, that the two secrets and the trust bundle exist with the keys Envoy reads,
+# that the server certificate names every server name (a SAN, or a one-label wildcard), and that the mongot
+# Service exists. It prints key names and the certificate's names, never a key. A failed check keeps its Job:
+# oc logs -n <namespace> job/<search.name>-public-preflight
+preflight:
+  enabled: true
+
+# Needs user workload monitoring on the cluster; without it the objects are created and nothing scrapes them.
+monitoring:
+  serviceMonitor:
+    # Scrapes each Envoy pod (admin port 9901, /stats/prometheus) through a ClusterIP Service the chart adds for
+    # the admin port, with the main chart's relabelling of Envoy's two counters to _total. Off by default.
+    enabled: false
+    interval: 15s
+    labels: {}
+
+# The preflight Job's image: a shell, curl (it reads the API server from inside the cluster, as its own
+# ServiceAccount), python3 (the API's JSON) and openssl (the certificate's names). Red Hat's public UBI 9, pinned by
+# digest: no oc, and no pull secret. Measured on 2026-10-22: OpenSSL 3.5.8, curl 7.76.1, python3 3.9.25. An
+# override needs the three tools, and the preflight refuses an image without one (ubi9-minimal has no openssl;
+# OKD's origin-cli 4.17 has all three).
+jobs:
+  image: registry.access.redhat.com/ubi9/ubi:9.8-1791888712@sha256:16e9e43d99e181463513cc84a514859b1abb9460f1c4d9e208da4b4e51cd5cc3
+  # The uid (and gid) the Job runs as. The image's own user is root, and the Job runs with runAsNonRoot, so it needs
+  # a number from the cluster. Empty: OpenShift's restricted-v2 assigns one from the namespace's range. 1001 where
+  # nothing assigns one, as on kind; never on OpenShift, which refuses a uid outside the range.
+  runAsUser: null
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: 500m, memory: 1024Mi}
+  ttlSecondsAfterFinished: 600

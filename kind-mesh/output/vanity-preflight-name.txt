@@ -1,0 +1,19 @@
+== 2026-10-23T03:22:51Z K6: helm upgrade --reuse-values --set vanityHostname=other.lab.example
+level=WARN msg="upgrade failed" name=mongot-public error="pre-upgrade hooks failed: resource Job/vanity-lab/mongot-public-preflight not ready. status: Failed, message: Job Failed. failed: 1/1"
+Error: UPGRADE FAILED: pre-upgrade hooks failed: resource Job/vanity-lab/mongot-public-preflight not ready. status: Failed, message: Job Failed. failed: 1/1
+exit=1
+== 2026-10-23T03:22:53Z the preflight's log
+[preflight 03:22:51] checking what Envoy for other.lab.example mounts and dials in vanity-lab
+[preflight 03:22:51] ok: secret ent-mongot-search-lb-0-client-cert (ca.crt tls.crt tls.key)
+[preflight 03:22:51] ok: configmap ent-trust-bundle (ca.crt)
+[preflight 03:22:51] ok: service mongot-search-0-svc (the mongot pods Envoy dials)
+[preflight 03:22:51] ok: secret ent-mongot-search-lb-0-cert (ca.crt tls.crt tls.key)
+[preflight 03:22:52] secret ent-mongot-search-lb-0-cert names: mongot-search.vanity-lab.example mongot-public.lab.example
+[preflight] MISSING: secret ent-mongot-search-lb-0-cert: its certificate does not name other.lab.example (SANs: mongot-search.vanity-lab.example mongot-public.lab.example); every client would refuse it. Issue a certificate with that name, or set vanityHostname to one it has
+[preflight] FAILED: 1 problem(s). The secrets and the trust bundle are the main chart's (its generate-mongodbsearch-prerequisites.sh makes them); nothing was installed.
+== 2026-10-23T03:22:53Z the Ingress, unchanged
+mongot-public.lab.example
+REVISION	UPDATED                 	STATUS  	CHART                             	APP VERSION	DESCRIPTION                                                                                                                                                          
+1       	Thu Oct 22 22:21:12 2026	deployed	mongot-envoy-vanity-url-helm-0.1.0	1.37       	Install complete                                                                                                                                                     
+2       	Thu Oct 22 22:22:47 2026	failed  	mongot-envoy-vanity-url-helm-0.1.0	1.37       	Upgrade "mongot-public" failed: pre-upgrade hooks failed: resource Job/vanity-lab/mongot-public-preflight not ready. status: Failed, message: Job Failed. failed: 1/1
+3       	Thu Oct 22 22:22:51 2026	failed  	mongot-envoy-vanity-url-helm-0.1.0	1.37       	Upgrade "mongot-public" failed: pre-upgrade hooks failed: resource Job/vanity-lab/mongot-public-preflight not ready. status: Failed, message: Job Failed. failed: 1/1

@@ -1,0 +1,21 @@
+
+== mesh2: the release's values before  (22:16:39)
+  revision 6, chart cilium 1.20.2
+
+== mesh2: helm upgrade --reset-then-reuse-values -f cilium/values-ingress.yaml (the agents restart)  (22:16:40)
+  start 2026-10-23T03:16:40Z
+daemon set "cilium" successfully rolled out
+  agents rolled 2026-10-23T03:16:41Z
+  cilium healthy 2026-10-23T03:16:41Z
+
+== mesh2: the release's values after, against before: only ingressController may differ  (22:16:41)
+  keys that differ: ['ingressController']
+  ingressController: {"default": false, "enabled": true, "loadbalancerMode": "shared"}
+
+== mesh2: the IngressClass and the shared Ingress Service's address  (22:16:41)
+NAME     CONTROLLER                     PARAMETERS   AGE
+cilium   cilium.io/ingress-controller   <none>       1s
+NAME             TYPE           CLUSTER-IP      EXTERNAL-IP     PORT(S)                      AGE
+cilium-ingress   LoadBalancer   10.31.129.141   172.18.255.72   80:31058/TCP,443:31603/TCP   1s
+  cilium-ingress 172.18.255.72 (from the pool mesh-pool)
+for the Mac to reach the clusters' LoadBalancer addresses, once per VM start: sudo route -n add -net 172.18.255.0/24 192.168.64.10
