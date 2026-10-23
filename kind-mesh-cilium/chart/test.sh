@@ -50,5 +50,12 @@ row $? "the CSV reclaim's script is chart/mongodb-search-helm's, unchanged"
 out=$(helm template t "$chart" "${lab[@]}" --set csvReclaim.enabled=false)
 ! has 'csv-reclaim' "$out" && has 'kind: Subscription' "$out"; row $? "csvReclaim.enabled false: no reclaim, the Subscription still"
 
+# The hooks' image is the one kind-mesh/scripts/search-up.sh builds and loads into every node (its repository and tag
+# in kind-mesh/values/search.yaml, read as search-up.sh reads them): another tag is on no node, and the hook waits on
+# a pull that cannot succeed.
+labvals=../../kind-mesh/values/search.yaml
+lab_oc="$(sed -n 's/^    repository: //p' "$labvals"):$(sed -n 's/^    tag: "\(.*\)"/\1/p' "$labvals")"
+has "image: ${lab_oc}" "$(helm template t "$chart" "${lab[@]}")"; row $? "lab: the hooks run the oc image search-up.sh loads (${lab_oc})"
+
 echo "== $fails failed"
 exit "$fails"

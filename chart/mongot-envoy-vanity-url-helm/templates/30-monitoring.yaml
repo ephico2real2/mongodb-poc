@@ -4,7 +4,7 @@ scrapes endpoints, not the Service's address, so each pod is its own series. The
 labels and not the main chart's mongodb.com/search-name, so the main chart's monitor does not also adopt it.
 */ -}}
 {{- if .Values.monitoring.serviceMonitor.enabled }}
-# Envoy's admin port, read-only: the bootstrap restricts it to /stats, /ready, /logging and /drain_listeners.
+# Envoy's admin port (includes mutating /logging and /drain_listeners): the bootstrap restricts it to /stats, /ready, /logging and /drain_listeners.
 # ClusterIP only; never give it a Route.
 apiVersion: v1
 kind: Service

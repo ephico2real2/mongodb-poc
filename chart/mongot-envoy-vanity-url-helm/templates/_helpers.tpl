@@ -52,7 +52,15 @@ the two charts read the same secrets; a value set by hand wins.
 {{ printf "%s.%s.svc.cluster.local" (include "vanity.mongotService" .) (include "vanity.namespace" .) }}
 {{- end -}}
 
-{{- /* The TLS server names Envoy accepts, as a JSON list: serverNames, or [publicHostname] when it is empty. */ -}}
+{{- /*
+The TLS server names Envoy accepts, as a JSON list: serverNames, or [publicHostname] when it is empty. The Route (or
+Ingress) sends every client with publicHostname as SNI, so a list without it is refused here: the preflight checks
+the certificate against this list only, and would pass while Envoy closed every handshake of the Route.
+*/ -}}
 {{- define "vanity.serverNames" -}}
-{{ .Values.serverNames | default (list .Values.publicHostname) | toJson }}
+{{- $names := .Values.serverNames | default (list .Values.publicHostname) -}}
+{{- if not (has .Values.publicHostname $names) -}}
+{{- fail (printf "serverNames must hold publicHostname %s: the Route (or Ingress) sends its clients with that name, and Envoy would refuse every one. serverNames: %s" .Values.publicHostname (toJson $names)) -}}
+{{- end -}}
+{{ toJson $names }}
 {{- end -}}

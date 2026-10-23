@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Template tests for chart/mongot-envoy-vanity-url-helm, no cluster needed:  test/vanity-chart.sh
 # Needs helm (3 or 4), python3, yq and openssl; uses shellcheck when it is installed, and docker or podman for
-# Envoy's own validation of the rendered bootstrap (CONTAINER_ENGINE picks one; without an engine that one check
-# is skipped and says so).
+# Envoy's own validation of the rendered bootstraps (CONTAINER_ENGINE picks one; with none set and no engine that
+# check is skipped and says so; an engine named by CONTAINER_ENGINE that does not answer is a failure, as in CI).
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 CHART=chart/mongot-envoy-vanity-url-helm
@@ -68,6 +68,16 @@ ingress="$(yq -o=json -I=0 'select(.kind == "Ingress") | {"name": .metadata.name
   && ok "expose.name and expose.ingressClassName reach the Ingress" || bad "expose.name/ingressClassName on the Ingress"
 refused "an expose.type that is neither route nor ingress" --set expose.type=loadbalancer
 refused "a balance the router does not know" --set expose.balance=sticky
+# The termination, balance and sync-wave annotations are the chart's: an expose.annotations entry of the same key
+# would otherwise be rendered twice, the last one winning in some parsers, and make the Ingress edge.
+[[ "$(render --set expose.type=ingress --set 'expose.annotations.route\.openshift\.io/termination=edge' --set 'expose.annotations.haproxy\.router\.openshift\.io/balance=source' --set 'expose.annotations.argocd\.argoproj\.io/sync-wave=9' --set expose.annotations.kept=yes | yq -N 'select(.kind == "Ingress") | .metadata.annotations | [.["route.openshift.io/termination"], .["haproxy.router.openshift.io/balance"], .["argocd.argoproj.io/sync-wave"], .kept] | join(" ")' | grep .)" == "passthrough roundrobin 2 yes" ]] \
+  && ok "expose.annotations cannot replace the Ingress's termination, balance or sync-wave; other keys pass" || bad "reserved annotations on the Ingress: $(render --set expose.type=ingress --set 'expose.annotations.route\.openshift\.io/termination=edge' | yq -N 'select(.kind == "Ingress") | .metadata.annotations' | tr '\n' ';')"
+[[ "$(render -s templates/20-route.yaml --set 'expose.annotations.haproxy\.router\.openshift\.io/balance=source' | grep -c 'haproxy.router.openshift.io/balance')" == 1 ]] && [[ "$(render -s templates/20-route.yaml --set 'expose.annotations.haproxy\.router\.openshift\.io/balance=source' | yq '.metadata.annotations["haproxy.router.openshift.io/balance"]')" == roundrobin ]] \
+  && ok "expose.annotations cannot replace the Route's balance, and the key is rendered once" || bad "reserved annotations on the Route"
+refused "an uppercase publicHostname" --set publicHostname=MONGOT.example.com
+refused "a trailing dot in publicHostname" --set publicHostname=mongot.example.com.
+refused "an uppercase server name" --set "publicHostname=${HOST}" --set "serverNames[0]=${HOST}" --set 'serverNames[1]=ALIAS.example.com'
+refused "a trailing dot in a server name" --set "serverNames[0]=${HOST}" --set 'serverNames[1]=alias.example.com.'
 
 # ------------------------------------------------------------------------------------------------ the secrets, the mounts, the Service
 dep() { render -s templates/11-deployment.yaml "$@"; }
@@ -94,6 +104,11 @@ envoy="$(dep | yq -o=json -I=0 '{"replicas": .spec.replicas, "image": .spec.temp
 containers="$(render --set monitoring.serviceMonitor.enabled=true | yq -N 'select(.kind == "Job" or .kind == "Deployment") | (.kind + "/" + .metadata.name) as $o | .spec.template.spec | ((.containers // []) + (.initContainers // [])) | .[] | $o + " " + .name + " " + ([.resources.requests.cpu, .resources.requests.memory, .resources.limits.cpu, .resources.limits.memory] | map(select(. != null)) | length | tostring)' 2>/dev/null)"
 [[ "$(wc -l <<<"${containers}" | tr -d ' ')" == 2 ]] && ! grep -qv ' 4$' <<<"${containers}" \
   && ok "every container (Envoy, the preflight) requests and limits CPU and memory" || bad "a container without all four of requests.cpu, requests.memory, limits.cpu, limits.memory: $(tr '\n' ';' <<<"${containers}")"
+# runAsNonRoot needs a numeric user: the image's is root (its entrypoint drops to envoy, 101), so a cluster that does
+# not assign one, as kind, takes envoy.runAsUser; OpenShift's restricted-v2 assigns its own and needs none.
+[[ "$(dep | yq '.spec.template.spec.securityContext.runAsUser')" == null ]] \
+  && [[ "$(dep --set envoy.runAsUser=101 | yq -o=json -I=0 '.spec.template.spec.securityContext | [.runAsNonRoot, .runAsUser, .runAsGroup]')" == '[true,101,101]' ]] \
+  && ok "no runAsUser by default (OpenShift assigns one); envoy.runAsUser sets the user and group" || bad "envoy.runAsUser: $(render --set envoy.runAsUser=101 | tail -1)"
 refused "an Envoy memory limit that is not a Kubernetes quantity (512MB)" --set-string envoy.resources.limits.memory=512MB
 refused "Envoy resources without limits" --set envoy.resources.limits=null
 
@@ -121,6 +136,12 @@ refused "a timeout that is not an Envoy duration" --set envoy.timeouts.route=300
 refused "a search.name of 44 characters" --set "search.name=$(printf 'n%.0s' {1..44})"
 refused "a mongot.port above 65535" --set mongot.port=70000
 refused "an invalid namespace" --set namespace=Not_A_Namespace
+refused "a server name given twice (Envoy refuses overlapping filter chains)" --set "serverNames[0]=${HOST}" --set "serverNames[1]=${HOST}"
+# The Route sends clients with publicHostname as SNI: a serverNames list without it would pass the preflight (which
+# checks serverNames) while Envoy refused every client of the Route.
+out="$(render --set 'serverNames[0]=a.example.com')"; rc=$?
+[[ ${rc} -ne 0 ]] && grep -q "serverNames must hold publicHostname" <<<"${out}" \
+  && ok "a serverNames list without publicHostname is refused, by name" || bad "serverNames without publicHostname: rc ${rc}, $(tail -1 <<<"${out}")"
 
 # ------------------------------------------------------------------------------------------------ the Envoy config
 # The rendered bootstrap against the operator's captured configuration, field by field. What may differ, and
@@ -129,7 +150,7 @@ refused "an invalid namespace" --set namespace=Not_A_Namespace
 # release's namespace. With the capture's own namespace and search name even those two are equal.
 bootstrap() { render -s templates/10-envoy-config.yaml "$@" | yq -N '.data["bootstrap.yaml"]' | yq -o=json -I=0 .; }
 bootstrap > "${tmp}/bootstrap.json"
-bootstrap --set namespace=team-a --set search.name=srch --set 'serverNames[0]=a.example.com' --set 'serverNames[1]=b.example.com' > "${tmp}/bootstrap-other.json"
+bootstrap --set namespace=team-a --set search.name=srch --set publicHostname=a.example.com --set 'serverNames[0]=a.example.com' --set 'serverNames[1]=b.example.com' > "${tmp}/bootstrap-other.json"
 python3 - "${CAPTURE}" "${tmp}" "${HOST}" <<'PY' && ok "the bootstrap equals the operator's captured config except server_names (and, in another namespace, the endpoint and SNI)" || bad "the bootstrap differs from the capture beyond the allowed fields (above)"
 import json, sys
 capture, tmp, host = sys.argv[1:4]
@@ -148,6 +169,10 @@ def diff(a, b, path=""):
     return [] if a == b else [f"{path}: {json.dumps(a)} != {json.dumps(b)}"]
 
 ok = True
+# A capture with more than one listener or cluster means the operator's Envoy changed shape: the static conversion
+# must then be revisited, not compared element by element.
+if len(lds["resources"]) != 1 or len(cds["resources"]) != 1:
+    print(f"the capture has {len(lds['resources'])} listener(s) and {len(cds['resources'])} cluster(s): the chart converts exactly one of each"); sys.exit(1)
 # What the capture says the listener and the cluster are, without the xDS envelope (@type names the resource's
 # kind; a static resource has none).
 listener = {k: v for k, v in lds["resources"][0].items() if k != "@type"}
@@ -163,11 +188,13 @@ for name, allowed in (("bootstrap.json", {".static_resources.listeners[0].filter
     # The mechanism: the capture reads lds.json and cds.json; the chart holds both as static resources.
     if "dynamic_resources" in got or set(got.get("static_resources", {})) != {"listeners", "clusters"}:
         print(f"{name}: expected static_resources with listeners and clusters, no dynamic_resources"); ok = False
-    for key in ("node", "admin", "layered_runtime"):
+    # Every top-level key of the captured bootstrap but dynamic_resources (replaced by static_resources), so that a
+    # setting the operator adds to its bootstrap at an upgrade is reported, not silently dropped.
+    for key in sorted(set(boot) - {"dynamic_resources"}):
         for d in diff(boot[key], got.get(key, "<absent>"), f".{key}"):
             print(f"{name}: {d}"); ok = False
-    if set(got) != {"node", "admin", "layered_runtime", "static_resources"}:
-        print(f"{name}: top-level keys {sorted(got)}"); ok = False
+    if set(got) != (set(boot) - {"dynamic_resources"}) | {"static_resources"}:
+        print(f"{name}: top-level keys {sorted(got)}, expected {sorted((set(boot) - {'dynamic_resources'}) | {'static_resources'})}"); ok = False
     if len(got["static_resources"]["listeners"]) != 1 or len(got["static_resources"]["clusters"]) != 1:
         print(f"{name}: one listener and one cluster expected"); ok = False
     diffs = diff(listener, got["static_resources"]["listeners"][0], ".static_resources.listeners[0]") \
@@ -209,6 +236,7 @@ for leg in server client; do
   openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=${leg}" -keyout "${tmp}/envoy/tls/${leg}/tls.key" -out "${tmp}/envoy/tls/${leg}/tls.crt" >/dev/null 2>&1
 done
 render -s templates/10-envoy-config.yaml | yq -N '.data["bootstrap.yaml"]' > "${tmp}/envoy/bootstrap.yaml"
+cp "${tmp}/bootstrap-other.json" "${tmp}/envoy/bootstrap-other.json"   # the other namespace, two server names
 sed 's/tls_inspector.v3.TlsInspector/tls_inspector.v3.NoSuchFilter/' "${tmp}/envoy/bootstrap.yaml" > "${tmp}/envoy/broken.yaml"
 chmod -R a+rX "${tmp}/envoy"
 validate() {  # <file under /etc/envoy>: Envoy's verdict on it, as the image's user
@@ -221,8 +249,15 @@ if command -v "${ENGINE}" >/dev/null 2>&1 && "${ENGINE}" info >/dev/null 2>&1; t
   else
     bad "envoy --mode validate: $(tail -3 <<<"${out}" | tr '\n' ' ')"
   fi
-  # And it refuses a broken one, so the pass above means something.
+  if out="$(validate bootstrap-other.json)"; then
+    ok "envoy --mode validate accepts the render for another namespace with two server names"
+  else
+    bad "envoy --mode validate (other namespace, two server names): $(tail -3 <<<"${out}" | tr '\n' ' ')"
+  fi
+  # And it refuses a broken one, so the passes above mean something.
   validate broken.yaml >/dev/null && bad "envoy --mode validate accepted a bootstrap with an unknown filter type" || ok "envoy --mode validate refuses a broken bootstrap"
+elif [ -n "${CONTAINER_ENGINE:-}" ]; then
+  bad "envoy --mode validate: CONTAINER_ENGINE=${ENGINE} is set but the engine does not answer (CI must run this check)"
 else
   printf 'skip  envoy --mode validate (no container engine: %s)\n' "${ENGINE}"
 fi
@@ -289,6 +324,15 @@ seed; rm "${tmp}/cluster/secret.ent-mongot-search-lb-0-client-cert" "${tmp}/clus
 seed; printf 'tls.crt\n' > "${tmp}/cluster/secret.ent-mongot-search-lb-0-client-cert"
 [[ "$(preflight)" == 1 ]] && grep -q 'secret ent-mongot-search-lb-0-client-cert: no key tls.key' "${tmp}/preflight.out" \
   && ok "preflight: a secret without tls.key is refused" || bad "preflight: missing key: $(grep MISSING "${tmp}/preflight.out" | tr '\n' ' ')"
+# A CN is not a name: a certificate whose subject is the hostname, with no SAN, is refused.
+seed; openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=${HOST}" -keyout "${tmp}/cn.key" -out "${tmp}/cluster/secret.ent-mongot-search-lb-0-cert.crt" >/dev/null 2>&1
+[[ "$(preflight)" == 1 ]] && grep -q "does not name ${HOST} (SANs: )" "${tmp}/preflight.out" && ok "preflight: a certificate with the hostname as CN and no SAN is refused" || bad "preflight: CN-only certificate: $(grep 'MISSING\|FAILED' "${tmp}/preflight.out" | tr '\n' ' ')"
+seed; printf 'tls.key\n' > "${tmp}/cluster/secret.ent-mongot-search-lb-0-client-cert"
+[[ "$(preflight)" == 1 ]] && grep -q 'client-cert: no key tls.crt' "${tmp}/preflight.out" && ok "preflight: a client secret without tls.crt is refused" || bad "preflight: client secret without tls.crt accepted"
+seed; : > "${tmp}/cluster/configmap.ent-trust-bundle"
+[[ "$(preflight)" == 1 ]] && grep -q 'ent-trust-bundle: no key ca.crt' "${tmp}/preflight.out" && ok "preflight: a trust bundle without ca.crt is refused" || bad "preflight: trust bundle without ca.crt accepted"
+seed; printf 'tls.crt\n' > "${tmp}/cluster/secret.ent-mongot-search-lb-0-cert"
+[[ "$(preflight)" == 1 ]] && grep -q 'lb-0-cert: no key tls.key' "${tmp}/preflight.out" && ok "preflight: a server secret without tls.key is refused" || bad "preflight: server secret without tls.key accepted"
 # No openssl in the image: refused, naming the image, never skipped.
 seed; mkdir -p "${tmp}/noopenssl"; for t in bash base64 tr sed awk grep date cat tail cut printf env; do p="$(command -v "$t" 2>/dev/null)"; [ -n "$p" ] && ln -sf "$p" "${tmp}/noopenssl/$t"; done
 [[ "$(env -i PATH="${tmp}/bin:${tmp}/noopenssl" CLUSTER="${tmp}/cluster" NAMESPACE=mongodb-poc SERVER_SECRET=ent-mongot-search-lb-0-cert CLIENT_SECRET=ent-mongot-search-lb-0-client-cert TRUST_CM=ent-trust-bundle MONGOT_SERVICE=mongot-search-0-svc SERVER_NAMES="${HOST}" JOB_IMAGE=example/oc:1 bash "${tmp}/preflight.sh" > "${tmp}/preflight.out" 2>&1; echo $?)" == 1 ]] \

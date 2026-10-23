@@ -21,7 +21,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "2"
     route.openshift.io/termination: passthrough
     haproxy.router.openshift.io/balance: {{ .Values.expose.balance }}
-    {{- with .Values.expose.annotations }}
+    {{- with (omit .Values.expose.annotations "argocd.argoproj.io/sync-wave" "haproxy.router.openshift.io/balance" "route.openshift.io/termination") }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:

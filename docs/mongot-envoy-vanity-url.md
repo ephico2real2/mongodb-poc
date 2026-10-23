@@ -135,14 +135,16 @@ oc get secret ent-${NAME}-search-lb-0-cert -n $NS -o jsonpath='{.data.tls\.crt}'
 ```
 
 **It worked when** the output lists `DNS:<HOST>` (or `DNS:*.` and the rest of the name, for a one-label wildcard).
-Otherwise ask the company CA for a certificate that carries both names, make the secret from it with the main
-chart's `generate-mongodbsearch-prerequisites.sh --route <pem> --hostname <externalHostname> --apply --replace`,
-and restart the operator's Envoy, which reads it too: `oc rollout restart deploy/${NAME}-search-lb-0`.
+Otherwise ask the company CA for a certificate that carries both names and make the secret from it with the main
+chart's `generate-mongodbsearch-prerequisites.sh --route <pem> --hostname <externalHostname> --target-namespace $NS
+--apply --replace` (the script names the secret `ent-mongot-search-lb-0-cert`: it hard-codes the prefix `ent` and
+the name `mongot`; for another prefix or name, replace the secret the way it was first made). Then restart the
+operator's Envoy, which reads it too: `oc rollout restart deploy/${NAME}-search-lb-0 -n $NS`.
 
 ### Step 2: install the chart (Route)
 
 ```bash
-helm install ${NAME}-public chart/mongot-envoy-vanity-url-helm -n $NS --set publicHostname=$HOST
+helm install ${NAME}-public chart/mongot-envoy-vanity-url-helm -n $NS --set search.name=$NAME --set publicHostname=$HOST
 ```
 
 **It worked when** helm returns 0 and prints the release's notes. If it stops on the preflight:
@@ -185,7 +187,7 @@ Once DNS resolves `HOST` to the router:
 ```bash
 openssl s_client -connect $HOST:443 -servername $HOST -alpn h2 </dev/null 2>/dev/null \
   | openssl x509 -noout -subject -issuer -ext subjectAltName
-openssl s_client -connect $HOST:443 -servername $HOST -alpn h2 </dev/null 2>&1 | grep -E 'ALPN|Protocol  :'
+openssl s_client -connect $HOST:443 -servername $HOST -alpn h2 </dev/null 2>&1 | grep -E 'ALPN|Protocol *:|TLSv1\.3'
 ```
 
 **It worked when** the subject and SANs are the company certificate's (with `HOST` among the SANs), the issuer the
@@ -224,13 +226,18 @@ each line with an `upstream_host` that is a mongot pod IP on 27028.
 
 ### Step 7: the spread over the mongot pods
 
+The Envoy image has no `curl` or `wget`; the admin port is read through the API server's pod proxy, as
+`kind-mesh/drills.sh` reads the operator's Envoy:
+
 ```bash
 P=$(oc get pods -n $NS -l app=${NAME}-public-lb -o jsonpath='{.items[0].metadata.name}')
-oc exec -n $NS $P -- curl -s http://localhost:9901/stats | grep -E '^cluster\.mongot_rs_cluster\.(membership_healthy|upstream_rq_total)'
+oc get --raw "/api/v1/namespaces/$NS/pods/$P:9901/proxy/stats" | grep -E '^cluster\.mongot_rs_cluster\.(membership_healthy|upstream_rq_total)'
 ```
 
 **It worked when** `membership_healthy` equals the number of mongot pods and `upstream_rq_total` climbs with the
-searches. With `monitoring.serviceMonitor.enabled=true` the same is on the main chart's Envoy panels, per pod.
+searches. With `monitoring.serviceMonitor.enabled=true` the same counters are scraped per pod under
+`job="${NAME}-public-envoy-stats"`; the main chart's dashboard panels select `job="${NAME}-envoy-stats"` (the
+operator's Envoy) and do not show them.
 
 ### Step 8: the same through an Ingress
 

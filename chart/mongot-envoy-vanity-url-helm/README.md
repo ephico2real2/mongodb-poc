@@ -37,7 +37,7 @@ request lands on a mongot pod by Envoy's round robin, as it does behind the oper
 | 1 | Service | `<search.name>-public-lb` | ClusterIP, port `mongot-grpc` 27028, this Deployment's pods only |
 | 1 | PodDisruptionBudget | `<search.name>-public-lb` | A node drain takes one Envoy pod at a time |
 | 2 | Route, or Ingress | `<search.name>-public` | Passthrough, host `publicHostname`, `balance: roundrobin` |
-| 1 | Service, ServiceMonitor | `<search.name>-public-envoy-stats`, `<search.name>-public-envoy` | Per-pod scraping of Envoy's admin port; off by default |
+| 0 | Service, ServiceMonitor | `<search.name>-public-envoy-stats`, `<search.name>-public-envoy` | Per-pod scraping of Envoy's admin port; off by default |
 
 What it does not create: a certificate, a secret, the trust bundle, a MongoDBSearch, or anything of the operator's.
 
@@ -45,8 +45,8 @@ What it does not create: a certificate, a secret, the trust bundle, a MongoDBSea
 
 The main chart installed and serving in the namespace, with mutual TLS (its secrets are this chart's), and a
 server certificate whose SANs hold the vanity hostname: the company issues it with every name, and the main chart's
-`generate-mongodbsearch-prerequisites.sh --route <pem> --hostname <name>` makes the secret from it (a one-label
-wildcard counts there as it does in the preflight).
+`generate-mongodbsearch-prerequisites.sh --route <pem> --hostname <name> --target-namespace <namespace>` makes the
+secret from it (a one-label wildcard counts there as it does in the preflight).
 
 ```bash
 helm install mongot-public chart/mongot-envoy-vanity-url-helm -n <namespace> \
@@ -67,15 +67,16 @@ objects are all namespaced; there is no ClusterRole.
 | `namespace` | empty: the namespace given with `-n` | Where every object goes: the MongoDBSearch's, which holds the secrets and the mongot Service |
 | `search.name` | `mongot` | The MongoDBSearch's name; every name of this chart, of the secrets and of the mongot Service derives from it |
 | `publicHostname` | required | The vanity hostname: the Route's host and the TLS server name Envoy accepts. A DNS name of two labels or more, never an IP |
-| `serverNames` | `[]`: `[publicHostname]` | Every server name Envoy accepts, when one release serves more aliases; each must be a SAN of the server certificate |
+| `serverNames` | `[]`: `[publicHostname]` | Every server name Envoy accepts, when one release serves more aliases; it must hold `publicHostname`, each name once, and each must be a SAN of the server certificate |
 | `tls.certsSecretPrefix` | `ent` | The main chart's prefix: the two secrets below derive from it |
 | `tls.serverCertSecret` | empty: `<prefix>-<search.name>-search-lb-0-cert` | The server certificate Envoy presents to mongod |
 | `tls.clientCertSecret` | empty: `<prefix>-<search.name>-search-lb-0-client-cert` | The client certificate Envoy presents to mongot |
 | `tls.trustBundleConfigMap` | `ent-trust-bundle` | The ConfigMap with `ca.crt`, trusted on both legs |
 | `mongot.service` | empty: `<search.name>-search-0-svc` | The headless mongot Service Envoy resolves to one host per pod |
 | `mongot.port` | `27028` | mongot's gRPC port, and the port Envoy listens on |
-| `envoy.image` | `quay.io/ephico2real/envoy:v1.37-latest` | The main chart's Envoy image: a copy of the operator's `envoyproxy/envoy:v1.37-latest` (1.37.6 on 2026-10-22) |
-| `envoy.replicas` | `2` | One stays through a node drain. A second pod is a standby, not capacity: one mongod sends every search through one connection |
+| `envoy.image` | `quay.io/ephico2real/envoy:v1.37-latest` | The main chart's Envoy image: a copy of the operator's `envoyproxy/envoy:v1.37-latest`. A mutable tag (1.37.6 on 2026-10-22, digest `sha256:ea33a83e…`): record the resolved digest at deployment, or pin one here |
+| `envoy.runAsUser` | empty | The uid and gid Envoy runs as. Empty on OpenShift, which assigns one; `101` (the image's `envoy`) where nothing does, as on kind: the image's own user is root |
+| `envoy.replicas` | `2` | With two healthy pods and `maxUnavailable: 1`, one stays through a voluntary drain; with one pod a drain may interrupt service. A second pod is a standby, not capacity: one mongod sends every search through one connection |
 | `envoy.resources` | requests `100m`, `128Mi`; limits `500m`, `512Mi` | The operator's own defaults for its Envoy. Every request and limit is set |
 | `envoy.retryPolicy.numRetries`, `.perTryTimeout` | `2`, `60s` | The operator's: a failed stream is retried on another mongot pod |
 | `envoy.timeouts.route`, `.streamIdle`, `.request`, `.upstreamIdle` | `300s` each | The operator's |
@@ -85,7 +86,7 @@ objects are all namespaced; there is no ClusterRole.
 | `expose.name` | empty: `<search.name>-public` | The Route's or Ingress's name |
 | `expose.balance` | `roundrobin` | The router's balance annotation; its passthrough default `source` sent every connection to one Envoy pod ([rationale](../../docs/mongot-route-balance-rationale.md)) |
 | `expose.ingressClassName` | `openshift-default` | The Ingress's class: OpenShift's own router |
-| `expose.annotations`, `.labels` | `{}` | Added to the Route or Ingress |
+| `expose.annotations`, `.labels` | `{}` | Added to the Route or Ingress. The termination, balance and sync-wave annotations are the chart's own and are not overridable here: `expose.balance` sets the balance |
 | `preflight.enabled` | `true` | |
 | `monitoring.serviceMonitor.enabled`, `.interval`, `.labels` | `false`, `15s`, `{}` | Per-pod scraping of Envoy's `/stats/prometheus`, with the main chart's `_total` relabelling; needs user workload monitoring |
 | `jobs.image.repository`, `.tag` | `registry.redhat.io/openshift4/ose-cli`, `latest` | The preflight's image: a shell, `oc` and `openssl` (the certificate check). The main chart's default |
@@ -160,15 +161,21 @@ release's and stay.
 | preflight log | `MISSING: secret <name>: its certificate does not name <host> (SANs: ...)` | The server certificate has no SAN for the hostname: issue one with it, or set `publicHostname` to a name it has |
 | preflight log | `MISSING: service <name>-search-0-svc` | The operator has not made the mongot Service here: the MongoDBSearch is not installed, or `search.name` is wrong |
 | preflight log | `REFUSED: the Job image ... has no openssl` | `jobs.image` names an image without `openssl`, so the certificate cannot be checked; it is never skipped |
-| Envoy pod | `CreateContainerConfigError`, `secret "..." not found` | A secret was deleted after the preflight passed |
-| Envoy log | `Failed to load certificate chain` | A rotated secret with a key that does not match its certificate; restart after the fix |
+| Envoy pod | `ContainerCreating`, event `FailedMount`: `secret "..." not found` | A secret (or the trust bundle) was deleted after the preflight passed |
+| Envoy pod | `CreateContainerConfigError`: `container has runAsNonRoot and image will run as root` | A cluster that assigns no uid (not OpenShift): set `envoy.runAsUser=101` |
+| Envoy log | `Failed to load private key from /etc/envoy/tls/server/tls.key, Cause: ...KEY_VALUES_MISMATCH` | A rotated secret with a key that does not match its certificate; restart after the fix |
 | client | handshake closed, no certificate served | The client's SNI is not in `serverNames`, or it dialled an IP and sent none |
 | client | the router's default certificate (`CN=*.apps...`), no ALPN | Through the Route, the SNI matches no passthrough Route's host: the Route is not admitted, or DNS points at another router |
 | client | `UNAVAILABLE` on every search | Envoy is up and mongot is not: readiness follows Envoy, not mongot. `oc get mongodbsearch`, and Envoy's `/stats` for `membership_healthy` |
 
-Envoy's admin port answers `/ready`, `/stats`, `/logging` and `/drain_listeners`, and nothing else, as the
-operator's; `/config_dump` returns 403. `membership_healthy` under `cluster.mongot_rs_cluster` is the number of mongot
-pods Envoy can choose between.
+The Secret volumes are mounted read-only with Kubernetes' default file mode (0644, the private keys included), so
+that the uid OpenShift assigns can read them; the pod drops every capability, forbids privilege escalation and runs
+the RuntimeDefault seccomp profile. The keys stay inside the pod's volumes.
+
+Envoy's admin port answers `/ready` (exact) and the prefixes `/stats`, `/logging` and `/drain_listeners`, as the
+operator's, and nothing else (`/config_dump` returns 403). `/logging` and `/drain_listeners` change state, so the
+optional stats Service is not a read-only endpoint: keep it ClusterIP. `membership_healthy` under
+`cluster.mongot_rs_cluster` is the number of mongot pods Envoy can choose between.
 
 ## What it does not do
 

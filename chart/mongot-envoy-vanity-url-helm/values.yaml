@@ -24,8 +24,9 @@ search:
 # SAN of the server certificate (tls.serverCertSecret); the preflight checks that, a one-label wildcard counting.
 publicHostname: ""
 
-# Every TLS server name Envoy accepts, when one release serves more aliases than publicHostname. Each must also be
-# a SAN of the server certificate. Empty: [publicHostname].
+# Every TLS server name Envoy accepts, when one release serves more aliases than publicHostname. It must hold
+# publicHostname (the Route's clients send it), each name once, and each must be a SAN of the server certificate.
+# Empty: [publicHostname].
 serverNames: []
 
 tls:
@@ -57,6 +58,10 @@ envoy:
   # Two, so that one stays through a node drain with the budget below. A second pod is a standby, not capacity:
   # one mongod sends every search through one connection, to one Envoy pod.
   replicas: 2
+  # The uid (and gid) Envoy runs as. The image's own user is root, and its entrypoint drops to envoy (101), so
+  # runAsNonRoot needs a number from the cluster. Empty: OpenShift's restricted-v2 assigns one from the namespace's
+  # range. 101 where nothing assigns one, as on kind; never on OpenShift, which refuses a uid outside the range.
+  runAsUser: null
   # CPU and memory of each Envoy pod: the operator's own defaults for its Envoy, written out. Every request and
   # limit is set: a namespace whose ResourceQuota covers limits refuses a pod that leaves one out.
   resources:

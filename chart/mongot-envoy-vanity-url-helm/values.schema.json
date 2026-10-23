@@ -68,7 +68,8 @@
     "serverNames": {
       "type": "array",
       "items": {"$ref": "#/definitions/dnsName"},
-      "description": "Every TLS server name Envoy accepts; empty: [publicHostname]"
+      "uniqueItems": true,
+      "description": "Every TLS server name Envoy accepts, publicHostname among them; empty: [publicHostname]. A name twice is refused: Envoy refuses overlapping filter chains"
     },
     "tls": {
       "type": "object",
@@ -97,6 +98,7 @@
       "properties": {
         "image": {"type": "string", "minLength": 1},
         "replicas": {"type": "integer", "minimum": 1},
+        "runAsUser": {"type": ["integer", "null"], "minimum": 1, "description": "The uid and gid Envoy runs as; empty on OpenShift, which assigns one; 101 (the image's envoy) where nothing assigns one, as kind"},
         "resources": {"$ref": "#/definitions/resources"},
         "retryPolicy": {
           "type": "object",

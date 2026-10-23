@@ -2,8 +2,8 @@
 Our Envoy: the image the main chart gives the operator's Envoy, the bootstrap of 10-envoy-config.yaml, and the
 same four mounts as the operator's pod (ENVOY-FLOW.md: /etc/envoy, and tls/server, tls/client, tls/ca under it).
 Readiness is Envoy's admin /ready, as the operator's: it says Envoy is up, not that mongot answers. The image's
-entrypoint runs envoy with these args as the image's own non-root user; under OpenShift's restricted-v2 the uid
-is the namespace's, and envoy needs no particular one. The pods prefer different nodes; the budget of
+entrypoint runs envoy with these args; the image's user is root, so runAsNonRoot needs a uid from the cluster:
+under OpenShift's restricted-v2 the namespace's (envoy needs no particular one), elsewhere envoy.runAsUser. The pods prefer different nodes; the budget of
 13-poddisruptionbudget.yaml keeps one through a drain.
 */ -}}
 apiVersion: apps/v1
@@ -31,6 +31,10 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        {{- with .Values.envoy.runAsUser }}
+        runAsUser: {{ . }}
+        runAsGroup: {{ . }}
+        {{- end }}
         seccompProfile:
           type: RuntimeDefault
       affinity:

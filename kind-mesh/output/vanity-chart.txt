@@ -1,0 +1,81 @@
+ok    helm lint
+ok    the defaults alone are refused (no publicHostname)
+ok    renders with publicHostname alone
+ok    .helmignore keeps keys, certificates and pictures out of the package; the README travels with it
+ok    by default: the config, the Deployment, its Service and budget, the Route and the preflight, every name from search.name
+ok    search.name renames everything; expose.name names the Route
+ok    expose.enabled=false: no Route and no Ingress, the Service stays
+ok    preflight.enabled=false renders no Job and no RBAC
+ok    the budget can be turned off
+ok    no ClusterRole or ClusterRoleBinding anywhere
+ok    the namespace value places every object, whatever -n says
+ok    an empty namespace value falls back to -n
+ok    the Route: host publicHostname, passthrough, no wildcard, balance roundrobin, to the chart's own Service
+ok    expose.balance, annotations and labels reach the Route
+ok    expose.type=ingress: an Ingress and no Route
+ok    the Ingress: class openshift-default, the passthrough and balance annotations, path '' with ImplementationSpecific, no spec.tls
+ok    expose.name and expose.ingressClassName reach the Ingress
+ok    the schema refuses an expose.type that is neither route nor ingress
+ok    the schema refuses a balance the router does not know
+ok    expose.annotations cannot replace the Ingress's termination, balance or sync-wave; other keys pass
+ok    expose.annotations cannot replace the Route's balance, and the key is rendered once
+ok    the schema refuses an uppercase publicHostname
+ok    the schema refuses a trailing dot in publicHostname
+ok    the schema refuses an uppercase server name
+ok    the schema refuses a trailing dot in a server name
+ok    the secrets derive as the main chart's helpers (<prefix>-<name>-search-lb-0-cert, -client-cert, ent-trust-bundle) and mount where the operator's Envoy mounts them
+ok    tls.certsSecretPrefix and search.name change the derived secret names
+ok    tls.serverCertSecret, clientCertSecret and trustBundleConfigMap override the derived names
+ok    the preflight's Role and env follow the override
+ok    the Service is ClusterIP, port mongot-grpc 27028, selecting this Deployment's pods only
+ok    Envoy: the quay.io image, 2 replicas, readiness on admin /ready
+ok    the budget selects the Deployment's pods, maxUnavailable 1, AlwaysAllow
+ok    a changed bootstrap changes the pod template (checksum/config), so the pods restart
+ok    every container (Envoy, the preflight) requests and limits CPU and memory
+ok    no runAsUser by default (OpenShift assigns one); envoy.runAsUser sets the user and group
+ok    the schema refuses an Envoy memory limit that is not a Kubernetes quantity (512MB)
+ok    the schema refuses Envoy resources without limits
+ok    no stats Service and no ServiceMonitor by default
+ok    the stats Service is ClusterIP 9901 on this Deployment's pods
+ok    the ServiceMonitor scrapes /stats/prometheus on admin with the main chart's _total relabel, and selects only this chart's stats Service
+ok    the stats Service does not carry mongodb.com/search-name, so the main chart's monitor does not adopt it
+ok    never a Route to the admin port
+ok    the schema refuses an IP as publicHostname
+ok    the schema refuses a one-label publicHostname
+ok    the schema refuses an unknown top-level key
+ok    the schema refuses an unknown key under envoy
+ok    the schema refuses an unknown key under expose
+ok    the schema refuses a serverNames entry that is an IP
+ok    the schema refuses 0 Envoy replicas
+ok    the schema refuses a maxUnavailable of 0 (every drain would block)
+ok    the schema refuses a timeout that is not an Envoy duration
+ok    the schema refuses a search.name of 44 characters
+ok    the schema refuses a mongot.port above 65535
+ok    the schema refuses an invalid namespace
+ok    the schema refuses a server name given twice (Envoy refuses overlapping filter chains)
+ok    a serverNames list without publicHostname is refused, by name
+bootstrap.json: 1 field(s) differ from the capture: ['.static_resources.listeners[0].filter_chains[0].filter_chain_match.server_names[0]']
+bootstrap-other.json: 3 field(s) differ from the capture: ['.static_resources.clusters[0].load_assignment.endpoints[0].lb_endpoints[0].endpoint.address.socket_address.address', '.static_resources.clusters[0].transport_socket.typed_config.sni', '.static_resources.listeners[0].filter_chains[0].filter_chain_match.server_names']
+ok    the bootstrap equals the operator's captured config except server_names (and, in another namespace, the endpoint and SNI)
+ok    the retry, timeout and port values reach the bootstrap where the operator's values sit
+ok    envoy --mode validate accepts the rendered bootstrap (configuration '/etc/envoy/bootstrap.yaml' OK)
+ok    envoy --mode validate accepts the render for another namespace with two server names
+ok    envoy --mode validate refuses a broken bootstrap
+ok    bash -n preflight
+ok    shellcheck preflight
+ok    preflight: everything present and the certificate naming the hostname passes
+ok    the preflight prints names and keys' names, never a certificate or a key
+ok    preflight: a one-label wildcard SAN covers x.apps.example.com
+ok    preflight: a wildcard covers one label only; a.b.apps.example.com is refused
+ok    preflight: a certificate without the name is refused, the message naming the SANs it has
+ok    preflight: a missing server secret is refused by name, and its certificate is not then checked
+ok    preflight: a missing client secret, trust bundle and mongot Service are each named, and counted
+ok    preflight: a secret without tls.key is refused
+ok    preflight: a certificate with the hostname as CN and no SAN is refused
+ok    preflight: a client secret without tls.crt is refused
+ok    preflight: a trust bundle without ca.crt is refused
+ok    preflight: a server secret without tls.key is refused
+ok    preflight: an image without openssl is refused, by name
+ok    NOTES and the README say to restart the pods after a certificate rotation
+ok    the main README and the main chart's README link the chart and its document
+all vanity chart tests passed
