@@ -1142,6 +1142,13 @@ what you put here. Running on names requires the set to *advertise* names.
 | `docs/diagrams/` | 4 figure sources and 32 rendered PNGs |
 | `docs/screenshots/` | 15 captures: pods, Services, the Route, the CR, alert rules, three metrics views, and five GUI searches |
 
+### Writing documents
+
+Every document follows [the doc-guide skill](.claude/skills/doc-guide/SKILL.md): a guide, a record or a reference,
+each in a fixed shape, and every command in a `bash` fenced block, never inline. CI checks it with
+`test/doc-structure.py` and `scripts/mdfmt` (markdownlint-cli2); the pages written before
+[#199](https://github.com/ephico2real2/mongodb-poc/issues/199) are listed in its baselines until they are rewritten.
+
 ---
 
 ## Status

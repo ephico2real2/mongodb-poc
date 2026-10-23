@@ -67,9 +67,49 @@ jobs:
           "${BASH_UNDER_TEST}" test/expand-volumes.sh
       - name: The tests left the tree as it was
         run: git status --porcelain && git diff --exit-code
+  # The documents' shape and format (.claude/skills/doc-guide/SKILL.md). Each check has a baseline of the pages
+  # written before #199; a new violation fails, and so does a listed one that is gone, so the lists only shrink.
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # markdownlint-cli2 0.23.3 needs Node 22 or later; 24.21.0 is the newest Node 24 LTS at least two weeks old.
+      NODE_VERSION: '24.21.0'
+      # The newest markdownlint-cli2 at least two weeks old (2026-09-20), the engine of scripts/mdfmt.
+      MARKDOWNLINT_CLI2_VERSION: '0.23.3'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install markdownlint-cli2
+        run: npm install --global --no-audit --no-fund "markdownlint-cli2@${MARKDOWNLINT_CLI2_VERSION}"
+      # Rule 3 (no command inline) on every tracked page, and each guide's and record's headings and steps.
+      - name: Document structure, against test/doc-structure-baseline.txt
+        run: python3 test/doc-structure.py
+      # Neither baseline may gain an entry against the pull request's base. The checkout is the merge commit, one
+      # commit deep; its first parent is the base it was merged onto, whatever main has become since, so a re-run
+      # compares with the same base. Not on a push to main: that is the base.
+      - name: The baselines did not grow
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=2 origin "${GITHUB_SHA}"
+          python3 test/doc-structure.py --guard "${GITHUB_SHA}^1"
+      # The two checks' own tests, on a copy of the tree under mktemp.
+      - name: The document checks' tests
+        if: ${{ !cancelled() }}
+        run: test/doc-structure-test.sh
+      # Every page not in test/markdownlint-baseline.txt passes; a listed page must still fail, or its line is stale.
+      - name: mdfmt baseline
+        if: ${{ !cancelled() }}
+        run: scripts/mdfmt baseline
+      - name: The tests left the tree as it was
+        if: ${{ !cancelled() }}
+        run: git status --porcelain && git diff --exit-code
   # Publishes the chart when its version is new: the package of this commit, as the release
   # mongodb-search-helm-<version>. A version that is already released is left alone. Only on main, and only after
-  # the other jobs passed. To release: change `version` in chart/mongodb-search-helm/Chart.yaml and merge.
+  # the chart, prerequisites and diagrams jobs passed (the docs job does not hold a release back). To release: change `version` in chart/mongodb-search-helm/Chart.yaml and merge.
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [chart, prerequisites, diagrams]

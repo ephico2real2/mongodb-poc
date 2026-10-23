@@ -1,0 +1,18 @@
+# The documents markdownlint-cli2 (.markdownlint-cli2.yaml) did not pass when the check came in (#199). CI lints
+# every other document, and fails when a page listed here passes: then remove its line. Only ever remove lines.
+chart/mongodb-search-helm/docs/testing-mongot-storage-resize.md
+chart/mongodb-search-helm/README.md
+DEMO.md
+DEPLOYMENT.md
+docs/investigating-automatic-volume-expansion.md
+docs/reference-architecture-search-on-cluster-mesh.md
+docs/testing-kind-mesh-cilium.md
+enhancement/README.md
+ENVOY-FLOW.md
+kind-mesh-cilium/README.md
+mongoT-setup.md
+OBSERVE.md
+README.md
+REQUEST-PATH.md
+SYNC.md
+TESTING.md
