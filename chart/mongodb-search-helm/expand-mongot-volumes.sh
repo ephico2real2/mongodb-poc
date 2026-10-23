@@ -4,7 +4,7 @@
 # data, and nothing here changes the number of pods.
 # It is packaged with the chart. helm stores a chart's files without the executable bit: run it with bash.
 #
-#   export TargetNamespace=dvh-vectordb-qa        # or --target-namespace <ns> on each command; there is no default
+#   export TargetNamespace=search-qa              # or --target-namespace <ns> on each command; there is no default
 #   X=<the chart>/expand-mongot-volumes.sh
 #
 #   bash $X --check                --statefulset <name>

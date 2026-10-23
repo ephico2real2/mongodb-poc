@@ -9,7 +9,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 CHART=chart/mongodb-search-helm
 PKG=mongodb-kubernetes
-NS=vectordb-test
+NS=search-test
 fails=0
 ok()  { printf 'ok    %s\n' "$1"; }
 bad() { printf 'FAIL  %s\n' "$1"; fails=$((fails + 1)); }

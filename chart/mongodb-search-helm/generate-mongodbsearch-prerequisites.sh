@@ -4,18 +4,18 @@
 # It is packaged with the chart. helm stores a chart's files without the executable bit: run it with bash, from a
 # directory OUTSIDE the chart (helm packages every file of a chart's directory).
 #
-#   mkdir -m 700 dvh-vectordb-qa                  # this script never creates the folder; the PEMs may go in it
+#   mkdir -m 700 search-qa                        # this script never creates the folder; the PEMs may go in it
 #   P=<the chart>/generate-mongodbsearch-prerequisites.sh
 #
-#   bash $P --check dvh-vectordb-qa               # finds the three PEMs and checks them; no passphrase, writes nothing
-#   bash $P --all   --dry-run | --apply dvh-vectordb-qa      # --trustca, --mongot, --envoy, --route, --dbcred in turn
-#   bash $P --trustca [<pem>...] [--check-source <host:port>]  --dry-run | --apply dvh-vectordb-qa
-#   bash $P --mongot  [<pem>]                     --dry-run | --apply dvh-vectordb-qa
-#   bash $P --envoy   [<pem>] [--route-reference <public pem>] --dry-run | --apply dvh-vectordb-qa
-#   bash $P --route   [<pem>] [--hostname <fqdn>] --dry-run | --apply dvh-vectordb-qa
-#   bash $P --dbcred  [--username mongotuser]     --dry-run | --apply dvh-vectordb-qa
-#   bash $P --clean dvh-vectordb-qa
-#   bash $P --check [--mongot <pem>] [--envoy <pem> [--route-reference <public pem>]] [--route <pem>] dvh-vectordb-qa
+#   bash $P --check search-qa                     # finds the three PEMs and checks them; no passphrase, writes nothing
+#   bash $P --all   --dry-run | --apply search-qa            # --trustca, --mongot, --envoy, --route, --dbcred in turn
+#   bash $P --trustca [<pem>...] [--check-source <host:port>]  --dry-run | --apply search-qa
+#   bash $P --mongot  [<pem>]                     --dry-run | --apply search-qa
+#   bash $P --envoy   [<pem>] [--route-reference <public pem>] --dry-run | --apply search-qa
+#   bash $P --route   [<pem>] [--hostname <fqdn>] --dry-run | --apply search-qa
+#   bash $P --dbcred  [--username mongotuser]     --dry-run | --apply search-qa
+#   bash $P --clean search-qa
+#   bash $P --check [--mongot <pem>] [--envoy <pem> [--route-reference <public pem>]] [--route <pem>] search-qa
 #
 # The namespace has no default. Name it as above, with --target-namespace <ns>, or once with
 # export TargetNamespace=<ns>; two that differ are refused.
